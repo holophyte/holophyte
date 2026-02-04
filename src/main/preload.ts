@@ -1,7 +1,7 @@
 import { contextBridge, ipcRenderer } from "electron";
 
 contextBridge.exposeInMainWorld("electronAPI", {
-  // Example IPC methods - add your own as needed
+  // IPC communication
   send: (channel: string, data: unknown) => {
     const validChannels = ["toMain"];
     if (validChannels.includes(channel)) {
@@ -13,5 +13,11 @@ contextBridge.exposeInMainWorld("electronAPI", {
     if (validChannels.includes(channel)) {
       ipcRenderer.on(channel, (_event, ...args) => callback(...args));
     }
+  },
+
+  // Electron store
+  store: {
+    get: (key: string) => ipcRenderer.invoke("store:get", key),
+    set: (key: string, value: unknown) => ipcRenderer.invoke("store:set", key, value),
   },
 });
