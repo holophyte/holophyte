@@ -1,0 +1,84 @@
+import { useCallback, useEffect, useRef } from "react";
+import { Terminal } from "@xterm/xterm";
+import { FitAddon } from "@xterm/addon-fit";
+import "@xterm/xterm/css/xterm.css";
+
+export function useTerminal(sessionId: string | null) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const terminalRef = useRef<Terminal | null>(null);
+  const fitAddonRef = useRef<FitAddon | null>(null);
+  const wsRef = useRef<WebSocket | null>(null);
+
+  useEffect(() => {
+    if (!sessionId || !containerRef.current) return;
+
+    const terminal = new Terminal({
+      cursorBlink: true,
+      fontSize: 13,
+      fontFamily: "'SF Mono', Menlo, Monaco, 'Courier New', monospace",
+      theme: {
+        background: "#000000",
+        foreground: "#cccccc",
+      },
+    });
+
+    const fitAddon = new FitAddon();
+    terminal.loadAddon(fitAddon);
+    terminal.open(containerRef.current);
+    fitAddon.fit();
+
+    terminalRef.current = terminal;
+    fitAddonRef.current = fitAddon;
+
+    // Connect WebSocket
+    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+    const ws = new WebSocket(
+      `${protocol}//${window.location.host}/ws/terminal/${sessionId}`,
+    );
+
+    ws.onopen = () => {
+      terminal.writeln("\x1b[32mConnected to session.\x1b[0m");
+    };
+
+    ws.onmessage = (event) => {
+      terminal.write(event.data);
+    };
+
+    ws.onclose = () => {
+      terminal.writeln("\r\n\x1b[31mSession disconnected.\x1b[0m");
+    };
+
+    terminal.onData((data) => {
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.send(data);
+      }
+    });
+
+    wsRef.current = ws;
+
+    // Handle resize
+    const resizeObserver = new ResizeObserver(() => {
+      fitAddon.fit();
+      if (ws.readyState === WebSocket.OPEN) {
+        const { cols, rows } = terminal;
+        fetch(`/api/sessions/${sessionId}/resize`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ cols, rows }),
+        });
+      }
+    });
+    resizeObserver.observe(containerRef.current);
+
+    return () => {
+      resizeObserver.disconnect();
+      ws.close();
+      terminal.dispose();
+      terminalRef.current = null;
+      fitAddonRef.current = null;
+      wsRef.current = null;
+    };
+  }, [sessionId]);
+
+  return containerRef;
+}

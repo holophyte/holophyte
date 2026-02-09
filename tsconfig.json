@@ -20,7 +20,12 @@
 
     "noUnusedLocals": false,
     "noUnusedParameters": false,
-    "noPropertyAccessFromIndexSignature": false
+    "noPropertyAccessFromIndexSignature": false,
+
+    "paths": {
+      "@/*": ["./src/*"],
+      "@convex/*": ["./convex/*"]
+    }
   },
   "include": ["src/**/*", "convex/**/*", "vitest.config.ts", "playwright.config.ts", "e2e/**/*"]
 }

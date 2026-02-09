@@ -1,0 +1,79 @@
+import { useMutation } from "convex/react";
+import { useState } from "react";
+import { api } from "@convex/_generated/api";
+import type { Doc, Id } from "@convex/_generated/dataModel";
+import { TaskCard } from "./TaskCard";
+import { cn } from "@/frontend/lib/utils";
+
+type TaskStatus = "backlog" | "todo" | "in_progress" | "review" | "done";
+
+interface KanbanColumnProps {
+  status: TaskStatus;
+  label: string;
+  tasks: Doc<"tasks">[];
+  repoMap: Map<Id<"repos">, Doc<"repos">>;
+  showRepoBadge: boolean;
+}
+
+export function KanbanColumn({
+  status,
+  label,
+  tasks,
+  repoMap,
+  showRepoBadge,
+}: KanbanColumnProps) {
+  const moveTask = useMutation(api.tasks.move);
+  const [dragOver, setDragOver] = useState(false);
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    setDragOver(true);
+  };
+
+  const handleDragLeave = () => {
+    setDragOver(false);
+  };
+
+  const handleDrop = async (e: React.DragEvent) => {
+    e.preventDefault();
+    setDragOver(false);
+
+    const taskId = e.dataTransfer.getData("text/plain") as Id<"tasks">;
+    if (!taskId) return;
+
+    // Calculate position: place at end
+    const maxPosition = tasks.reduce((max, t) => Math.max(max, t.position), 0);
+    const newPosition = maxPosition + 1;
+
+    await moveTask({ id: taskId, status, position: newPosition });
+  };
+
+  return (
+    <div
+      className={cn(
+        "flex-1 min-w-[260px] max-w-[350px] flex flex-col rounded-lg bg-muted/50 border",
+        dragOver && "ring-2 ring-primary/50 bg-muted/80",
+      )}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+    >
+      <div className="px-3 py-2 flex items-center justify-between">
+        <h2 className="text-sm font-medium text-muted-foreground">{label}</h2>
+        <span className="text-xs text-muted-foreground bg-muted rounded-full px-2 py-0.5">
+          {tasks.length}
+        </span>
+      </div>
+      <div className="flex-1 overflow-y-auto p-2 space-y-2">
+        {tasks.map((task) => (
+          <TaskCard
+            key={task._id}
+            task={task}
+            repoName={showRepoBadge ? repoMap.get(task.repoId)?.name : undefined}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
