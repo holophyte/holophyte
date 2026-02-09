@@ -1,5 +1,5 @@
+import path from "node:path";
 import { app, BrowserWindow, ipcMain } from "electron";
-import path from "path";
 import { store } from "./store";
 
 function createWindow() {
