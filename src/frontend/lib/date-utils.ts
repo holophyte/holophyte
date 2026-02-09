@@ -29,5 +29,8 @@ export function timestampToDateInput(timestamp: number): string {
 export function dateInputToTimestamp(value: string): number {
   // Parse as local date at start of day
   const parts = value.split("-").map(Number);
-  return new Date(parts[0] ?? 0, (parts[1] ?? 1) - 1, parts[2] ?? 1).getTime();
+  if (parts.length !== 3 || parts.some(Number.isNaN)) {
+    throw new Error("Invalid date format");
+  }
+  return new Date(parts[0], parts[1] - 1, parts[2]).getTime();
 }

@@ -12,6 +12,26 @@ export const listByTask = query({
   },
 });
 
+export const countsByTasks = query({
+  args: { taskIds: v.array(v.id("tasks")) },
+  handler: async (ctx, args) => {
+    const counts: Record<string, { total: number; completed: number }> = {};
+    for (const taskId of args.taskIds) {
+      const subtasks = await ctx.db
+        .query("subtasks")
+        .withIndex("by_task", (q) => q.eq("taskId", taskId))
+        .collect();
+      if (subtasks.length > 0) {
+        counts[taskId] = {
+          total: subtasks.length,
+          completed: subtasks.filter((s) => s.completed).length,
+        };
+      }
+    }
+    return counts;
+  },
+});
+
 export const create = mutation({
   args: {
     taskId: v.id("tasks"),

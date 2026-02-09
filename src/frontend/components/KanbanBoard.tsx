@@ -84,16 +84,25 @@ export function KanbanBoard() {
     [labels],
   );
 
+  const taskIds = useMemo(() => (allTasks ?? []).map((t) => t._id), [allTasks]);
+  const subtaskCounts = useQuery(
+    api.subtasks.countsByTasks,
+    taskIds.length > 0 ? { taskIds } : "skip",
+  );
+
   const enrichedTasks: EnrichedTask[] = useMemo(() => {
-    return (allTasks ?? []).map((t) => ({
-      ...t,
-      labels: (t.labelIds ?? [])
-        .map((id) => labelMap.get(id))
-        .filter((l): l is Doc<"labels"> => l != null),
-      subtaskTotal: 0,
-      subtaskCompleted: 0,
-    }));
-  }, [allTasks, labelMap]);
+    return (allTasks ?? []).map((t) => {
+      const counts = subtaskCounts?.[t._id];
+      return {
+        ...t,
+        labels: (t.labelIds ?? [])
+          .map((id) => labelMap.get(id))
+          .filter((l): l is Doc<"labels"> => l != null),
+        subtaskTotal: counts?.total ?? 0,
+        subtaskCompleted: counts?.completed ?? 0,
+      };
+    });
+  }, [allTasks, labelMap, subtaskCounts]);
 
   const getColumnTasks = (status: string): EnrichedTask[] => {
     let filtered = enrichedTasks.filter((t) => t.status === status);
