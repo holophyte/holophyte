@@ -18,6 +18,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   // Electron store
   store: {
     get: (key: string) => ipcRenderer.invoke("store:get", key),
-    set: (key: string, value: unknown) => ipcRenderer.invoke("store:set", key, value),
+    set: (key: string, value: unknown) =>
+      ipcRenderer.invoke("store:set", key, value),
   },
 });

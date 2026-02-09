@@ -8,7 +8,6 @@ interface StoreSchema {
     y?: number;
   };
   settings: {
-    theme: "light" | "dark";
     fontSize: number;
   };
 }
@@ -20,7 +19,6 @@ export const store = new Store<StoreSchema>({
       height: 800,
     },
     settings: {
-      theme: "dark",
       fontSize: 14,
     },
   },

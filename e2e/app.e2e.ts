@@ -1,5 +1,5 @@
-import { test, expect, _electron as electron } from "@playwright/test";
-import path from "path";
+import path from "node:path";
+import { _electron as electron, expect, test } from "@playwright/test";
 
 test.describe("Electron App", () => {
   test("should launch and display main window", async () => {
