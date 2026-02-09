@@ -27,34 +27,40 @@ Set up a new git worktree for working on a feature in parallel.
 
 Use `$ARGUMENTS` if provided, otherwise ask the user.
 
-### 2. Create Worktree
+### 2. Derive Repo Name
 
 ```bash
-git worktree add ../holophyte-<feature-name> -b feat/<feature-name>
+REPO=$(basename "$(git rev-parse --show-toplevel)")
 ```
 
-### 3. Copy Essential Files
+### 3. Create Worktree
 
 ```bash
-cp ../holophyte/.env ../holophyte-<feature-name>/ 2>/dev/null || true
-cp ../holophyte/.env.local ../holophyte-<feature-name>/ 2>/dev/null || true
+git worktree add ../$REPO-<feature-name> -b feat/<feature-name>
+```
+
+### 4. Copy Essential Files
+
+```bash
+cp .env ../$REPO-<feature-name>/ 2>/dev/null || true
+cp .env.local ../$REPO-<feature-name>/ 2>/dev/null || true
 ```
 
 Note: CLAUDE.md, .claude/, and other tracked files come with the worktree automatically.
 
-### 4. Install Dependencies
+### 5. Install Dependencies
 
 ```bash
-cd ../holophyte-<feature-name> && bun install
+cd ../$REPO-<feature-name> && bun install
 ```
 
-### 5. Verify Setup
+### 6. Verify Setup
 
 ```bash
-cd ../holophyte-<feature-name> && ls -la .env* CLAUDE.md
+cd ../$REPO-<feature-name> && ls -la .env* CLAUDE.md
 ```
 
 ## After Creation
 
 - Run `bun run dev` and `bun run convex:dev` in the new worktree
-- The main holophyte directory remains on its current branch
+- The main directory remains on its current branch

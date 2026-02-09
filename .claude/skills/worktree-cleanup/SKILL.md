@@ -49,7 +49,8 @@ Always ask for explicit confirmation before proceeding, especially if warnings a
 ### 5. Remove Worktree and Branch
 
 ```bash
-git worktree remove ../holophyte-<feature-name>
+REPO=$(basename "$(git rev-parse --show-toplevel)")
+git worktree remove ../$REPO-<feature-name>
 git branch -D feat/<feature-name>
 ```
 
