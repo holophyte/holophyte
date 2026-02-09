@@ -2,10 +2,12 @@ import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
 import { useMutation, useQuery } from "convex/react";
 import {
+  Eye,
   FolderGit2,
   LayoutDashboard,
   Lightbulb,
   Plus,
+  Sprout,
   Trash2,
 } from "lucide-react";
 import { useState } from "react";
@@ -35,6 +37,15 @@ export function Sidebar() {
     }
     await removeRepo({ id: repoId });
   };
+
+  // Group active tasks by repo
+  const activeTasksByRepo = new Map<string, typeof activeTasks>();
+  for (const task of activeTasks ?? []) {
+    const repoId = String(task.repoId);
+    const existing = activeTasksByRepo.get(repoId) ?? [];
+    existing.push(task);
+    activeTasksByRepo.set(repoId, existing);
+  }
 
   return (
     <aside className="w-64 border-r bg-muted/30 flex flex-col">
@@ -66,57 +77,10 @@ export function Sidebar() {
         </Button>
       </div>
 
-      {/* Active tasks section */}
-      {activeTasks && activeTasks.length > 0 && (
-        <>
-          <Separator />
-          <div className="flex items-center justify-between px-4 py-2">
-            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-              Active
-            </span>
-            <span className="text-xs text-muted-foreground bg-muted rounded-full px-2 py-0.5">
-              {activeTasks.length}
-            </span>
-          </div>
-          <div className="px-2 space-y-0.5">
-            {activeTasks.map((task) => (
-              <button
-                key={task._id}
-                type="button"
-                onClick={() => selectTask(task._id)}
-                className={cn(
-                  "w-full text-left rounded-md px-2 py-1.5 transition-colors",
-                  selectedTaskId === task._id
-                    ? "bg-accent"
-                    : "hover:bg-accent/50",
-                )}
-              >
-                <div className="flex items-center gap-1.5">
-                  <span
-                    className={cn(
-                      "w-1.5 h-1.5 rounded-full shrink-0",
-                      task.status === "in_progress"
-                        ? "bg-blue-500"
-                        : "bg-amber-500",
-                    )}
-                  />
-                  <span className="truncate text-sm">{task.title}</span>
-                </div>
-                {task.repoName && (
-                  <span className="text-[10px] text-muted-foreground ml-3">
-                    {task.repoName}
-                  </span>
-                )}
-              </button>
-            ))}
-          </div>
-        </>
-      )}
-
       <Separator />
       <div className="flex items-center justify-between px-4 py-2">
         <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-          Repos
+          Projects
         </span>
         <Button
           variant="ghost"
@@ -129,29 +93,68 @@ export function Sidebar() {
       </div>
       <ScrollArea className="flex-1">
         <div className="p-2 space-y-1">
-          {repos?.map((repo) => (
-            <div key={repo._id} className="group relative">
-              <Button
-                variant={selectedRepoId === repo._id ? "secondary" : "ghost"}
-                className={cn("w-full justify-start gap-2 text-sm pr-8")}
-                onClick={() => selectRepo(repo._id)}
-              >
-                <FolderGit2 className="h-4 w-4 shrink-0" />
-                <span className="truncate">{repo.name}</span>
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="absolute right-1 top-1/2 -translate-y-1/2 h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive"
-                onClick={(e) => handleRemove(e, repo._id)}
-              >
-                <Trash2 className="h-3 w-3" />
-              </Button>
-            </div>
-          ))}
+          {repos?.map((repo) => {
+            const repoActiveTasks =
+              activeTasksByRepo.get(String(repo._id)) ?? [];
+            return (
+              <div key={repo._id}>
+                <div className="group relative">
+                  <Button
+                    variant={
+                      selectedRepoId === repo._id ? "secondary" : "ghost"
+                    }
+                    className={cn("w-full justify-start gap-2 text-sm pr-8")}
+                    onClick={() => selectRepo(repo._id)}
+                  >
+                    <FolderGit2 className="h-4 w-4 shrink-0" />
+                    <span className="truncate">{repo.name}</span>
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="absolute right-1 top-1/2 -translate-y-1/2 h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive"
+                    onClick={(e) => handleRemove(e, repo._id)}
+                  >
+                    <Trash2 className="h-3 w-3" />
+                  </Button>
+                </div>
+                {repoActiveTasks.length > 0 && (
+                  <div className="ml-4 pl-2 border-l border-border/50 space-y-0.5 my-0.5">
+                    {repoActiveTasks.map((task) => (
+                      <button
+                        key={task._id}
+                        type="button"
+                        onClick={() => selectTask(task._id)}
+                        className={cn(
+                          "w-full text-left rounded-md px-2 py-1 transition-colors flex items-center gap-1.5",
+                          selectedTaskId === task._id
+                            ? "bg-accent"
+                            : "hover:bg-accent/50",
+                        )}
+                      >
+                        {task.status === "in_progress" ? (
+                          <Sprout
+                            className={cn(
+                              "h-3 w-3 shrink-0 text-green-500",
+                              task.hasRunningSession && "animate-pulse",
+                            )}
+                          />
+                        ) : (
+                          <Eye className="h-3 w-3 shrink-0 text-amber-500" />
+                        )}
+                        <span className="truncate text-xs text-muted-foreground">
+                          {task.title}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
           {repos?.length === 0 && (
             <p className="text-xs text-muted-foreground px-2 py-4 text-center">
-              No repos added yet.
+              No projects added yet.
               <br />
               Click + to add one.
             </p>

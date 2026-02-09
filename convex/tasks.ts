@@ -114,7 +114,14 @@ export const listActive = query({
     return Promise.all(
       tasks.map(async (t) => {
         const repo = await ctx.db.get(t.repoId);
-        return { ...t, repoName: repo?.name };
+        const sessions = await ctx.db
+          .query("sessions")
+          .withIndex("by_task", (q) => q.eq("taskId", t._id))
+          .collect();
+        const hasRunningSession = sessions.some(
+          (s) => s.status === "running",
+        );
+        return { ...t, repoName: repo?.name, hasRunningSession };
       }),
     );
   },
