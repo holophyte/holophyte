@@ -199,7 +199,7 @@ describe("tasks.remove", () => {
 
     await t.mutation(api.tasks.remove, { id: taskId });
 
-    const tasks = await t.query(api.tasks.listAll);
+    const tasks = await t.query(api.tasks.listAll, {});
     expect(tasks).toHaveLength(0);
 
     // Sessions should be cleaned up too
