@@ -34,7 +34,7 @@ describe("tasks.create", () => {
       position: 1,
       repoId,
     });
-    expect(tasks[0]._id).toBe(taskId);
+    expect(tasks[0]!._id).toBe(taskId);
   });
 
   it("auto-increments position for multiple tasks", async () => {
@@ -127,8 +127,8 @@ describe("tasks.listActive", () => {
 
     const titles = active.map((t) => t.title).sort();
     expect(titles).toEqual(["Reviewing", "Working"]);
-    expect(active[0].repoName).toBe("test-repo");
-    expect(active[0].hasRunningSession).toBe(false);
+    expect(active[0]!.repoName).toBe("test-repo");
+    expect(active[0]!.hasRunningSession).toBe(false);
   });
 
   it("detects running sessions", async () => {
@@ -156,7 +156,7 @@ describe("tasks.listActive", () => {
 
     const active = await t.query(api.tasks.listActive);
     expect(active).toHaveLength(1);
-    expect(active[0].hasRunningSession).toBe(true);
+    expect(active[0]!.hasRunningSession).toBe(true);
   });
 
   it("excludes done and backlog tasks", async () => {

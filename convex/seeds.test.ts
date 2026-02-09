@@ -150,6 +150,6 @@ describe("seeds.plant", () => {
 
     const tasks = await t.query(api.tasks.listByRepo, { repoId });
     const positions = tasks.map((t) => t.position).sort((a, b) => a - b);
-    expect(positions[1]).toBeGreaterThan(positions[0]);
+    expect(positions[1]).toBeGreaterThan(positions[0]!);
   });
 });
