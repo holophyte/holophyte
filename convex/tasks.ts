@@ -118,9 +118,7 @@ export const listActive = query({
           .query("sessions")
           .withIndex("by_task", (q) => q.eq("taskId", t._id))
           .collect();
-        const hasRunningSession = sessions.some(
-          (s) => s.status === "running",
-        );
+        const hasRunningSession = sessions.some((s) => s.status === "running");
         return { ...t, repoName: repo?.name, hasRunningSession };
       }),
     );

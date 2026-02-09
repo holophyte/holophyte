@@ -10,8 +10,13 @@ export default defineConfig({
   },
   test: {
     environment: "jsdom",
+    environmentMatchGlobs: [["convex/**", "edge-runtime"]],
     globals: true,
     setupFiles: ["./src/test/setup.ts"],
-    include: ["src/**/*.{test,spec}.{ts,tsx}"],
+    include: [
+      "src/**/*.{test,spec}.{ts,tsx}",
+      "convex/**/*.{test,spec}.{ts,tsx}",
+    ],
+    server: { deps: { inline: ["convex-test"] } },
   },
 });
