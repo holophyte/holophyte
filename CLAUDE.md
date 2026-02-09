@@ -6,6 +6,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Project management app for running parallel Claude Code sessions. A kanban board UI lets you create tasks with prompts, launch Claude Code in PTY terminals per task, and stream output to the browser via WebSocket.
 
+## Development Principles
+
+- **KISS** — Write simple, readable code over clever solutions. Prefer straightforward implementations that are easy to understand and maintain.
+- **DRY** — Eliminate code duplication through shared utilities and components. Use existing patterns from `src/frontend/lib/`, `src/frontend/hooks/`, and `src/frontend/components/`.
+- **Do what was asked; nothing more, nothing less** — Avoid over-engineering, premature optimization, and unsolicited refactoring.
+
 ## Commands
 
 ```bash
@@ -41,6 +47,13 @@ Enforced by **Biome** (no ESLint/Prettier). Run `bun run lint:fix` before commit
 - Props typed with `interface ComponentNameProps`
 - Use `import type` for type-only imports (`verbatimModuleSyntax` is on)
 - Combine classNames with `cn()` helper from `@/frontend/lib/utils` (clsx + tailwind-merge)
+
+**Import ordering** (top to bottom):
+1. External type imports (`import type { Doc } from "@convex/_generated/dataModel"`)
+2. External value imports (`import { useQuery } from "convex/react"`)
+3. Internal type imports (`import type { Session } from "@/claude/manager"`)
+4. Internal value imports — `@/` aliases (`import { cn } from "@/frontend/lib/utils"`)
+5. Relative imports (`import { Badge } from "./ui/badge"`)
 
 ## TypeScript
 
@@ -109,6 +122,59 @@ convex/{repos,tasks,sessions}.ts → Convex queries and mutations
 - Chromium only, base URL `http://localhost:3000`
 - Auto-starts the dev server, but **`bun run convex:dev` must be running separately**
 - Use `waitForApp(page)` helper to wait for hydration before assertions
+
+## Error Handling
+
+**Server routes** (`src/server.ts`): Catch errors and return structured JSON responses. Always log with `console.error` before returning a 500.
+```typescript
+try {
+  // ...
+  return Response.json(result);
+} catch (err) {
+  console.error("Failed to do X:", err);
+  return Response.json({ error: String(err) }, { status: 500 });
+}
+```
+
+**Convex functions**: Throw descriptive `Error` messages — Convex surfaces these to the client. No try/catch needed around database operations (Convex handles transactions).
+```typescript
+const task = await ctx.db.get(args.id);
+if (!task) throw new Error("Task not found");
+```
+
+**Frontend**: Convex `useMutation` errors surface via the Convex error boundary. For API calls to the Bun server, catch and display via UI state.
+
+## Logging
+
+Use `console.error` for errors that need attention in server-side code. Use `console.log` sparingly — only for startup messages and significant lifecycle events (server start, session spawn/exit). No logging in Convex functions (Convex has its own dashboard logging). No `console.log` in frontend code (use React DevTools / Convex dashboard instead).
+
+## Constants
+
+Extract shared values to avoid magic numbers and duplicated strings:
+- **Task/session statuses**: Import `taskStatusValidator` from `convex/schema.ts` — don't redeclare status literals elsewhere
+- **Terminal defaults** (cols, rows): Define once and import where needed
+- **ANSI escape codes**: Use helper functions rather than inline escape sequences
+
+## Configuration
+
+Server configuration lives in environment variables with sensible defaults:
+- `PORT` (default: `3000`) — server port
+- `CONVEX_URL` — Convex deployment URL (served to frontend via `/api/config`)
+- `SHELL` (default: `/bin/zsh`) — login shell for PTY env resolution
+- `CONVEX_DEPLOYMENT` — managed by `convex dev` in `.env.local`
+
+## Git Workflow
+
+- **Features/refactors**: Use worktrees (`/worktree` skill) for parallel development on `feat/<name>` branches
+- **Quick fixes**: Work directly on a branch from main — no worktree needed
+- Worktrees are for multi-file features you want to run in parallel, not for every change
+
+## Commit Guidelines
+
+- Run `bun run lint:fix` and `bunx tsc --noEmit` before committing
+- Use conventional commit prefixes: `feat:`, `fix:`, `refactor:`, `test:`, `chore:`, `docs:`
+- Commit frequently with descriptive messages — incremental changes over large batches
+- Stage specific files rather than `git add .`
 
 ## Key Gotchas
 
