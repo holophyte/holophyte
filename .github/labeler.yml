@@ -1,0 +1,30 @@
+frontend:
+  - changed-files:
+      - any-glob-to-any-file: "src/frontend/**"
+
+backend:
+  - changed-files:
+      - any-glob-to-any-file: "src/server.ts"
+
+claude-integration:
+  - changed-files:
+      - any-glob-to-any-file: "src/claude/**"
+
+convex:
+  - changed-files:
+      - any-glob-to-any-file: "convex/**"
+
+e2e-tests:
+  - changed-files:
+      - any-glob-to-any-file: "e2e/**"
+
+docs:
+  - changed-files:
+      - any-glob-to-any-file: "docs/**"
+
+config:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "*.json"
+          - "*.toml"
+          - ".github/**"

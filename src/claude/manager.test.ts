@@ -75,7 +75,6 @@ beforeEach(() => {
   mockTerminal = createMockTerminal();
   mockProc = createMockProc(mockTerminal);
 
-  // @ts-expect-error -- mocking Bun globals for tests
   globalThis.Bun = {
     ...globalThis.Bun,
     spawn: vi.fn().mockReturnValue(mockProc.proc),
