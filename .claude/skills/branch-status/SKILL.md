@@ -17,7 +17,7 @@ Show a comprehensive overview of all branches, their PR status, and active workt
 ### 1. Fetch Latest
 
 ```bash
-git fetch --all --prune
+git fetch --all
 ```
 
 ### 2. List All Local Branches

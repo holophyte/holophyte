@@ -52,12 +52,12 @@ Check if `node_modules` is in sync with `bun.lock`.
 
 ### 6. Convex Status
 
-Check if Convex is configured:
+Check if Convex is configured (never print the actual values):
 ```bash
-cat .env.local
+grep -q '^CONVEX_DEPLOYMENT=' .env.local
 ```
 
-Verify `CONVEX_DEPLOYMENT` is set.
+Report whether `CONVEX_DEPLOYMENT` is set or missing — do NOT print its value.
 
 ## Report Format
 

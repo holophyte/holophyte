@@ -13,7 +13,7 @@ Generate a human-readable changelog from git commits, grouped by conventional co
 /changelog [range]
 
 - No argument: commits since last tag, or last 20 commits if no tags exist
-- With argument: use as git log range (e.g., `v1.0..HEAD`, `main..feat/branch`, `--since="2 weeks ago"`)
+- With argument: use as git log range (e.g., `v1.0..HEAD`, `main..feat/branch`)
 
 ## Process
 
