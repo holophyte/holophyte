@@ -71,7 +71,8 @@ export const update = mutation({
     const { id, ...fields } = args;
     const updates: Record<string, string | number> = { updatedAt: Date.now() };
     if (fields.title !== undefined) updates.title = fields.title;
-    if (fields.description !== undefined) updates.description = fields.description;
+    if (fields.description !== undefined)
+      updates.description = fields.description;
     if (fields.prompt !== undefined) updates.prompt = fields.prompt;
     await ctx.db.patch(id, updates);
   },
@@ -95,6 +96,32 @@ export const move = mutation({
       position: args.position,
       updatedAt: Date.now(),
     });
+  },
+});
+
+export const listActive = query({
+  args: {},
+  handler: async (ctx) => {
+    const inProgress = await ctx.db
+      .query("tasks")
+      .withIndex("by_status", (q) => q.eq("status", "in_progress"))
+      .collect();
+    const inReview = await ctx.db
+      .query("tasks")
+      .withIndex("by_status", (q) => q.eq("status", "review"))
+      .collect();
+    const tasks = [...inProgress, ...inReview];
+    return Promise.all(
+      tasks.map(async (t) => {
+        const repo = await ctx.db.get(t.repoId);
+        const sessions = await ctx.db
+          .query("sessions")
+          .withIndex("by_task", (q) => q.eq("taskId", t._id))
+          .collect();
+        const hasRunningSession = sessions.some((s) => s.status === "running");
+        return { ...t, repoName: repo?.name, hasRunningSession };
+      }),
+    );
   },
 });
 

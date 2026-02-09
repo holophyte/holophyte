@@ -27,6 +27,14 @@ export default defineSchema({
     .index("by_repo_status", ["repoId", "status"])
     .index("by_status", ["status"]),
 
+  seeds: defineTable({
+    title: v.string(),
+    description: v.string(),
+    status: v.union(v.literal("active"), v.literal("planted")),
+    plantedToTaskId: v.optional(v.id("tasks")),
+    createdAt: v.number(),
+  }).index("by_status", ["status"]),
+
   sessions: defineTable({
     taskId: v.id("tasks"),
     status: v.union(

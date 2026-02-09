@@ -1,6 +1,7 @@
 import { api } from "@convex/_generated/api";
 import type { Doc, Id } from "@convex/_generated/dataModel";
 import { useMutation } from "convex/react";
+import { PanelLeftClose } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/frontend/lib/utils";
 import { TaskCard } from "./TaskCard";
@@ -13,6 +14,8 @@ interface KanbanColumnProps {
   tasks: Doc<"tasks">[];
   repoMap: Map<Id<"repos">, Doc<"repos">>;
   showRepoBadge: boolean;
+  collapsible?: boolean;
+  onCollapse?: () => void;
 }
 
 export function KanbanColumn({
@@ -21,6 +24,8 @@ export function KanbanColumn({
   tasks,
   repoMap,
   showRepoBadge,
+  collapsible,
+  onCollapse,
 }: KanbanColumnProps) {
   const moveTask = useMutation(api.tasks.move);
   const [dragOver, setDragOver] = useState(false);
@@ -63,9 +68,20 @@ export function KanbanColumn({
     >
       <div className="px-3 py-2 flex items-center justify-between">
         <h2 className="text-sm font-medium text-muted-foreground">{label}</h2>
-        <span className="text-xs text-muted-foreground bg-muted rounded-full px-2 py-0.5">
-          {tasks.length}
-        </span>
+        <div className="flex items-center gap-1">
+          <span className="text-xs text-muted-foreground bg-muted rounded-full px-2 py-0.5">
+            {tasks.length}
+          </span>
+          {collapsible && onCollapse && (
+            <button
+              type="button"
+              onClick={onCollapse}
+              className="p-0.5 rounded text-muted-foreground/50 hover:text-muted-foreground transition-colors"
+            >
+              <PanelLeftClose className="h-3.5 w-3.5" />
+            </button>
+          )}
+        </div>
       </div>
       <div className="flex-1 overflow-y-auto p-2 space-y-2">
         {tasks.map((task) => (
