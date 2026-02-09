@@ -89,9 +89,7 @@ export function KanbanColumn({
             key={task._id}
             task={task}
             repoName={
-              showRepoBadge && task.repoId
-                ? repoMap.get(task.repoId)?.name
-                : undefined
+              showRepoBadge ? repoMap.get(task.repoId)?.name : undefined
             }
           />
         ))}
