@@ -40,14 +40,29 @@ export const update = mutation({
 export const remove = mutation({
   args: { id: v.id("labels") },
   handler: async (ctx, args) => {
-    // Remove this label ID from all tasks that reference it
-    const allTasks = await ctx.db.query("tasks").collect();
-    for (const task of allTasks) {
-      const labelIds = task.labelIds ?? [];
-      if (labelIds.includes(args.id)) {
-        await ctx.db.patch(task._id, {
-          labelIds: labelIds.filter((lid) => lid !== args.id),
-        });
+    // Convex doesn't support indexing into arrays, so we query by each
+    // status via the by_status index rather than doing a full table scan.
+    // Only tasks that actually reference this label get patched.
+    const statuses = [
+      "backlog",
+      "todo",
+      "in_progress",
+      "review",
+      "done",
+      "archived",
+    ] as const;
+    for (const status of statuses) {
+      const tasks = await ctx.db
+        .query("tasks")
+        .withIndex("by_status", (q) => q.eq("status", status))
+        .collect();
+      for (const task of tasks) {
+        const labelIds = task.labelIds ?? [];
+        if (labelIds.includes(args.id)) {
+          await ctx.db.patch(task._id, {
+            labelIds: labelIds.filter((lid) => lid !== args.id),
+          });
+        }
       }
     }
     await ctx.db.delete(args.id);
