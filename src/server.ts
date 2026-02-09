@@ -26,6 +26,52 @@ const server = Bun.serve<WsData>({
       },
     },
 
+    "/api/browse": {
+      async POST(req: Request) {
+        const { path: dirPath } = await req.json();
+        const target = dirPath || process.env.HOME || "/";
+        try {
+          const { readdir, stat } = await import("node:fs/promises");
+          const { resolve } = await import("node:path");
+          const entries = await readdir(target);
+          const dirs: {
+            name: string;
+            path: string;
+            isGitRepo: boolean;
+          }[] = [];
+          for (const entry of entries) {
+            if (entry.startsWith(".")) continue;
+            const fullPath = resolve(target, entry);
+            try {
+              const s = await stat(fullPath);
+              if (s.isDirectory()) {
+                const gitHead = Bun.file(`${fullPath}/.git/HEAD`);
+                const isGitRepo = await gitHead.exists();
+                dirs.push({
+                  name: entry,
+                  path: fullPath,
+                  isGitRepo,
+                });
+              }
+            } catch {
+              // skip inaccessible entries
+            }
+          }
+          dirs.sort((a, b) => a.name.localeCompare(b.name));
+          return Response.json({
+            current: target,
+            parent: target === "/" ? null : resolve(target, ".."),
+            dirs,
+          });
+        } catch {
+          return Response.json(
+            { error: "Could not read directory." },
+            { status: 400 },
+          );
+        }
+      },
+    },
+
     "/api/validate-repo": {
       async POST(req: Request) {
         const { path } = await req.json();
