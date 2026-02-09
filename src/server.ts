@@ -18,6 +18,14 @@ const server = Bun.serve<WsData>({
   routes: {
     "/": homepage,
 
+    "/api/config": {
+      GET() {
+        return Response.json({
+          convexUrl: process.env.CONVEX_URL ?? "",
+        });
+      },
+    },
+
     "/api/validate-repo": {
       async POST(req: Request) {
         const { path } = await req.json();
