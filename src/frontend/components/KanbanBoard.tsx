@@ -1,12 +1,21 @@
 import { api } from "@convex/_generated/api";
-import { useQuery } from "convex/react";
-import { ChevronsRight, Plus } from "lucide-react";
-import { useState } from "react";
+import type { Doc } from "@convex/_generated/dataModel";
+import { useMutation, useQuery } from "convex/react";
+import { Archive, ChevronsRight, Plus } from "lucide-react";
+import { useMemo, useState } from "react";
 import { cn } from "@/frontend/lib/utils";
 import { useAppStore } from "@/frontend/stores/app";
+import { ArchivePanel } from "./ArchivePanel";
 import { CreateTaskDialog } from "./CreateTaskDialog";
 import { KanbanColumn } from "./KanbanColumn";
+import { SearchFilterBar } from "./SearchFilterBar";
 import { Button } from "./ui/button";
+
+export interface EnrichedTask extends Doc<"tasks"> {
+  labels: Doc<"labels">[];
+  subtaskTotal: number;
+  subtaskCompleted: number;
+}
 
 const COLUMNS = [
   { status: "backlog" as const, label: "Backlog" },
@@ -50,6 +59,10 @@ export function KanbanBoard() {
   const selectedRepoId = useAppStore((s) => s.selectedRepoId);
   const backlogCollapsed = useAppStore((s) => s.backlogCollapsed);
   const toggleBacklog = useAppStore((s) => s.toggleBacklog);
+  const showArchive = useAppStore((s) => s.showArchive);
+  const toggleArchive = useAppStore((s) => s.toggleArchive);
+  const searchQuery = useAppStore((s) => s.searchQuery);
+  const filterLabelIds = useAppStore((s) => s.filterLabelIds);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
 
   const repoTasks = useQuery(
@@ -65,27 +78,95 @@ export function KanbanBoard() {
   const repos = useQuery(api.repos.list);
   const repoMap = new Map(repos?.map((r) => [r._id, r]) ?? []);
 
-  const getColumnTasks = (status: string) =>
-    (allTasks ?? [])
-      .filter((t) => t.status === status)
-      .sort((a, b) => a.position - b.position);
+  const labels = useQuery(api.labels.list);
+  const labelMap = useMemo(
+    () => new Map(labels?.map((l) => [l._id, l]) ?? []),
+    [labels],
+  );
+
+  const taskIds = useMemo(() => (allTasks ?? []).map((t) => t._id), [allTasks]);
+  const subtaskCounts = useQuery(
+    api.subtasks.countsByTasks,
+    taskIds.length > 0 ? { taskIds } : "skip",
+  );
+
+  const enrichedTasks: EnrichedTask[] = useMemo(() => {
+    return (allTasks ?? []).map((t) => {
+      const counts = subtaskCounts?.[t._id];
+      return {
+        ...t,
+        labels: (t.labelIds ?? [])
+          .map((id) => labelMap.get(id))
+          .filter((l): l is Doc<"labels"> => l != null),
+        subtaskTotal: counts?.total ?? 0,
+        subtaskCompleted: counts?.completed ?? 0,
+      };
+    });
+  }, [allTasks, labelMap, subtaskCounts]);
+
+  const getColumnTasks = (status: string): EnrichedTask[] => {
+    let filtered = enrichedTasks.filter((t) => t.status === status);
+
+    // Text search
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      filtered = filtered.filter(
+        (t) =>
+          t.title.toLowerCase().includes(q) ||
+          t.description.toLowerCase().includes(q) ||
+          t.prompt.toLowerCase().includes(q) ||
+          t.labels.some((l) => l.name.toLowerCase().includes(q)),
+      );
+    }
+
+    // Label filter
+    if (filterLabelIds.length > 0) {
+      filtered = filtered.filter((t) =>
+        filterLabelIds.some((lid) => (t.labelIds ?? []).includes(lid)),
+      );
+    }
+
+    return filtered.sort((a, b) => a.position - b.position);
+  };
+
+  const archiveAllDone = useMutation(api.tasks.archiveAllDone);
+
+  const handleArchiveAll = async () => {
+    if (!selectedRepoId) return;
+    await archiveAllDone({ repoId: selectedRepoId });
+  };
+
+  if (showArchive) {
+    return <ArchivePanel />;
+  }
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
-      <div className="flex items-center justify-between px-6 py-3 border-b">
-        <h1 className="text-lg font-semibold">
+      <div className="flex items-center justify-between px-6 py-3 border-b gap-3">
+        <h1 className="text-lg font-semibold shrink-0">
           {selectedRepoId
             ? (repoMap.get(selectedRepoId)?.name ?? "Tasks")
             : "All Tasks"}
         </h1>
-        <Button
-          size="sm"
-          onClick={() => setCreateDialogOpen(true)}
-          disabled={!selectedRepoId}
-        >
-          <Plus className="h-4 w-4 mr-1" />
-          New Task
-        </Button>
+        <SearchFilterBar />
+        <div className="flex items-center gap-2 shrink-0">
+          <Button
+            size="sm"
+            variant={showArchive ? "secondary" : "ghost"}
+            onClick={toggleArchive}
+          >
+            <Archive className="h-4 w-4 mr-1" />
+            Archive
+          </Button>
+          <Button
+            size="sm"
+            onClick={() => setCreateDialogOpen(true)}
+            disabled={!selectedRepoId}
+          >
+            <Plus className="h-4 w-4 mr-1" />
+            New Task
+          </Button>
+        </div>
       </div>
       <div className="flex-1 flex gap-4 p-4 overflow-x-auto">
         {COLUMNS.map((col) =>
@@ -106,6 +187,11 @@ export function KanbanBoard() {
               showRepoBadge={selectedRepoId === null}
               collapsible={col.status === "backlog"}
               onCollapse={col.status === "backlog" ? toggleBacklog : undefined}
+              onArchiveAll={
+                col.status === "done" && selectedRepoId
+                  ? handleArchiveAll
+                  : undefined
+              }
             />
           ),
         )}

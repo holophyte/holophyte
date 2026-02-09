@@ -12,6 +12,12 @@ interface AppState {
   terminalSessionId: string | null;
   terminalMinimized: boolean;
 
+  // Search and filter state
+  searchQuery: string;
+  filterLabelIds: Id<"labels">[];
+  showArchive: boolean;
+  doneColumnCollapsed: boolean;
+
   selectRepo: (id: Id<"repos"> | null) => void;
   selectSeedBox: () => void;
   selectTask: (id: Id<"tasks"> | null) => void;
@@ -19,6 +25,13 @@ interface AppState {
   openTerminal: (sessionId: string) => void;
   closeTerminal: () => void;
   toggleTerminalMinimized: () => void;
+
+  // Search and filter actions
+  setSearchQuery: (query: string) => void;
+  toggleFilterLabel: (labelId: Id<"labels">) => void;
+  clearFilters: () => void;
+  toggleArchive: () => void;
+  toggleDoneCollapsed: () => void;
 }
 
 export const useAppStore = create<AppState>()(
@@ -30,6 +43,11 @@ export const useAppStore = create<AppState>()(
       backlogCollapsed: true,
       terminalSessionId: null,
       terminalMinimized: false,
+
+      searchQuery: "",
+      filterLabelIds: [],
+      showArchive: false,
+      doneColumnCollapsed: false,
 
       selectRepo: (id) => set({ selectedRepoId: id, viewMode: "board" }),
       selectSeedBox: () =>
@@ -43,6 +61,19 @@ export const useAppStore = create<AppState>()(
         set({ terminalSessionId: null, terminalMinimized: false }),
       toggleTerminalMinimized: () =>
         set((state) => ({ terminalMinimized: !state.terminalMinimized })),
+
+      setSearchQuery: (query) => set({ searchQuery: query }),
+      toggleFilterLabel: (labelId) =>
+        set((state) => ({
+          filterLabelIds: state.filterLabelIds.includes(labelId)
+            ? state.filterLabelIds.filter((id) => id !== labelId)
+            : [...state.filterLabelIds, labelId],
+        })),
+      clearFilters: () => set({ searchQuery: "", filterLabelIds: [] }),
+      toggleArchive: () =>
+        set((state) => ({ showArchive: !state.showArchive })),
+      toggleDoneCollapsed: () =>
+        set((state) => ({ doneColumnCollapsed: !state.doneColumnCollapsed })),
     }),
     {
       name: "holophyte-app",
@@ -50,6 +81,8 @@ export const useAppStore = create<AppState>()(
         selectedRepoId: state.selectedRepoId,
         viewMode: state.viewMode,
         backlogCollapsed: state.backlogCollapsed,
+        showArchive: state.showArchive,
+        doneColumnCollapsed: state.doneColumnCollapsed,
       }),
     },
   ),
