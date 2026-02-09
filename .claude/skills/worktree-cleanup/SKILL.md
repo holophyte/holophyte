@@ -25,7 +25,7 @@ Remove a git worktree along with its associated branch and directory.
 git worktree list
 ```
 
-Present worktrees to user (excluding main directory `/Users/ko/Development/holophyte`).
+Present worktrees to user (excluding main directory).
 
 ### 2. Safety Checks
 
@@ -62,7 +62,7 @@ git branch -a
 
 ## Safety Rules
 
-- **Never** delete the main worktree (`/Users/ko/Development/holophyte`)
+- **Never** delete the main worktree
 - **Always** warn if PR may not be complete (unmerged remote branch)
 - **Always** warn if there are uncommitted changes
 - **Always** require explicit confirmation
