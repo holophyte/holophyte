@@ -30,7 +30,7 @@ export const listArchived = query({
       ? await ctx.db
           .query("tasks")
           .withIndex("by_repo_status", (q) =>
-            q.eq("repoId", args.repoId).eq("status", "archived"),
+            q.eq("repoId", args.repoId!).eq("status", "archived"),
           )
           .collect()
       : await ctx.db
