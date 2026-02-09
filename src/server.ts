@@ -26,70 +26,41 @@ const server = Bun.serve<WsData>({
       },
     },
 
-    "/api/browse": {
-      async POST(req: Request) {
-        const { path: dirPath } = await req.json();
-        const target = dirPath || process.env.HOME || "/";
+    "/api/pick-directory": {
+      async POST() {
         try {
-          const { readdir, stat } = await import("node:fs/promises");
-          const { resolve } = await import("node:path");
-          const entries = await readdir(target);
-          const dirs: {
-            name: string;
-            path: string;
-            isGitRepo: boolean;
-          }[] = [];
-          for (const entry of entries) {
-            if (entry.startsWith(".")) continue;
-            const fullPath = resolve(target, entry);
-            try {
-              const s = await stat(fullPath);
-              if (s.isDirectory()) {
-                const gitHead = Bun.file(`${fullPath}/.git/HEAD`);
-                const isGitRepo = await gitHead.exists();
-                dirs.push({
-                  name: entry,
-                  path: fullPath,
-                  isGitRepo,
-                });
-              }
-            } catch {
-              // skip inaccessible entries
-            }
+          const proc = Bun.spawn(
+            [
+              "osascript",
+              "-e",
+              'POSIX path of (choose folder with prompt "Select a git repository")',
+            ],
+            { stdout: "pipe", stderr: "pipe" },
+          );
+          const exitCode = await proc.exited;
+          if (exitCode !== 0) {
+            // User cancelled the dialog
+            return Response.json({ cancelled: true });
           }
-          dirs.sort((a, b) => a.name.localeCompare(b.name));
+          const raw = await new Response(proc.stdout).text();
+          // osascript returns path with trailing newline and slash
+          const dirPath = raw.trim().replace(/\/$/, "");
+          const { basename } = await import("node:path");
+
+          const gitHead = Bun.file(`${dirPath}/.git/HEAD`);
+          const isGitRepo = await gitHead.exists();
+
           return Response.json({
-            current: target,
-            parent: target === "/" ? null : resolve(target, ".."),
-            dirs,
+            cancelled: false,
+            path: dirPath,
+            name: basename(dirPath),
+            isGitRepo,
           });
         } catch {
           return Response.json(
-            { error: "Could not read directory." },
-            { status: 400 },
+            { error: "Failed to open directory picker." },
+            { status: 500 },
           );
-        }
-      },
-    },
-
-    "/api/validate-repo": {
-      async POST(req: Request) {
-        const { path } = await req.json();
-        try {
-          const gitHead = Bun.file(`${path}/.git/HEAD`);
-          const exists = await gitHead.exists();
-          if (!exists) {
-            return Response.json({
-              valid: false,
-              error: "Not a git repository (no .git/HEAD found).",
-            });
-          }
-          return Response.json({ valid: true });
-        } catch {
-          return Response.json({
-            valid: false,
-            error: "Could not access path.",
-          });
         }
       },
     },
