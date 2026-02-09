@@ -45,10 +45,11 @@ export function KanbanColumn({
   const getDropIndex = useCallback(
     (clientY: number): number => {
       if (!containerRef.current) return tasks.length;
-      const cards =
-        containerRef.current.querySelectorAll("[data-task-id]");
+      const cards = containerRef.current.querySelectorAll("[data-task-id]");
       for (let i = 0; i < cards.length; i++) {
-        const rect = cards[i]!.getBoundingClientRect();
+        const card = cards[i];
+        if (!card) continue;
+        const rect = card.getBoundingClientRect();
         const midY = rect.top + rect.height / 2;
         if (clientY < midY) return i;
       }

@@ -5,11 +5,7 @@ import { cn } from "@/frontend/lib/utils";
 import { useAppStore } from "@/frontend/stores/app";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "./ui/popover";
+import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 
 export function SearchFilterBar() {
   const searchQuery = useAppStore((s) => s.searchQuery);

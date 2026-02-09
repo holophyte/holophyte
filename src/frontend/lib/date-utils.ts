@@ -28,6 +28,6 @@ export function timestampToDateInput(timestamp: number): string {
 
 export function dateInputToTimestamp(value: string): number {
   // Parse as local date at start of day
-  const [year, month, day] = value.split("-").map(Number);
-  return new Date(year!, month! - 1, day!).getTime();
+  const parts = value.split("-").map(Number);
+  return new Date(parts[0] ?? 0, (parts[1] ?? 1) - 1, parts[2] ?? 1).getTime();
 }

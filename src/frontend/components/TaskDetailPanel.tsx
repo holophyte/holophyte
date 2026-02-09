@@ -132,7 +132,10 @@ export function TaskDetailPanel() {
             </div>
           )}
           <div className="flex-1">
-            <Label htmlFor="detail-due-date" className="text-xs text-muted-foreground">
+            <Label
+              htmlFor="detail-due-date"
+              className="text-xs text-muted-foreground"
+            >
               Due Date
             </Label>
             <div className="flex items-center gap-1 mt-0.5">

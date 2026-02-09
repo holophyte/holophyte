@@ -6,11 +6,7 @@ import { useState } from "react";
 import { cn } from "@/frontend/lib/utils";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "./ui/popover";
+import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 
 const LABEL_COLORS = [
   { name: "Red", hex: "#ef4444" },
@@ -36,7 +32,7 @@ export function LabelPicker({
   const createLabel = useMutation(api.labels.create);
   const [creating, setCreating] = useState(false);
   const [newName, setNewName] = useState("");
-  const [newColor, setNewColor] = useState(LABEL_COLORS[0]!.hex);
+  const [newColor, setNewColor] = useState(LABEL_COLORS[0]?.hex ?? "#ef4444");
 
   const toggleLabel = (labelId: Id<"labels">) => {
     if (currentLabelIds.includes(labelId)) {

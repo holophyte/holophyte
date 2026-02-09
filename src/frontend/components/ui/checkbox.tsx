@@ -1,6 +1,6 @@
+import { Check } from "lucide-react";
 import { Checkbox as RadixCheckbox } from "radix-ui";
 import type React from "react";
-import { Check } from "lucide-react";
 import { cn } from "../../lib/utils";
 
 function Checkbox({

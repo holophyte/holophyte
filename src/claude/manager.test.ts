@@ -1,5 +1,8 @@
 // @vitest-environment node
+import type { Id } from "@convex/_generated/dataModel";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+const mockTaskId = "task-id" as unknown as Id<"tasks">;
 
 // Mock convex before importing manager
 const mockMutation = vi.fn().mockResolvedValue("mock-session-id");
@@ -37,7 +40,7 @@ function createMockTerminal() {
 }
 
 function createMockProc(terminal: ReturnType<typeof createMockTerminal>) {
-  let resolveExited: (code: number) => void;
+  let resolveExited: ((code: number) => void) | undefined;
   const exited = new Promise<number>((resolve) => {
     resolveExited = resolve;
   });
@@ -61,15 +64,12 @@ function createMockProc(terminal: ReturnType<typeof createMockTerminal>) {
       resourceUsage: vi.fn(),
       [Symbol.asyncDispose]: vi.fn(),
     },
-    resolveExited: resolveExited!,
+    resolveExited: resolveExited as unknown as (code: number) => void,
   };
 }
 
 let mockTerminal: ReturnType<typeof createMockTerminal>;
 let mockProc: ReturnType<typeof createMockProc>;
-
-const originalBunSpawn = globalThis.Bun?.spawn;
-const originalBunFile = globalThis.Bun?.file;
 
 beforeEach(() => {
   mockTerminal = createMockTerminal();
@@ -100,7 +100,7 @@ describe("claude/manager", () => {
       );
 
       const result = await startSession({
-        taskId: "task-id" as any,
+        taskId: mockTaskId,
         repoPath: "/tmp/test-repo",
         prompt: "fix the bug",
       });
@@ -130,7 +130,7 @@ describe("claude/manager", () => {
       );
 
       const { sessionId } = await startSession({
-        taskId: "task-id" as any,
+        taskId: mockTaskId,
         repoPath: "/tmp/test-repo",
         prompt: "fix the bug",
       });
@@ -154,7 +154,7 @@ describe("claude/manager", () => {
       const { startSession, subscribe } = await import("./manager");
 
       const { sessionId } = await startSession({
-        taskId: "task-id" as any,
+        taskId: mockTaskId,
         repoPath: "/tmp/test-repo",
         prompt: "test",
       });
@@ -181,7 +181,7 @@ describe("claude/manager", () => {
       const { startSession, writeToSession } = await import("./manager");
 
       const { sessionId } = await startSession({
-        taskId: "task-id" as any,
+        taskId: mockTaskId,
         repoPath: "/tmp/test-repo",
         prompt: "test",
       });
@@ -202,7 +202,7 @@ describe("claude/manager", () => {
       const { startSession, resizeSession } = await import("./manager");
 
       const { sessionId } = await startSession({
-        taskId: "task-id" as any,
+        taskId: mockTaskId,
         repoPath: "/tmp/test-repo",
         prompt: "test",
       });
@@ -223,7 +223,7 @@ describe("claude/manager", () => {
       const { startSession, getSession } = await import("./manager");
 
       const { sessionId } = await startSession({
-        taskId: "task-id" as any,
+        taskId: mockTaskId,
         repoPath: "/tmp/test-repo",
         prompt: "test",
       });

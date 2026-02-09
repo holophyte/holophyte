@@ -25,7 +25,8 @@ export function SubtaskList({ taskId }: SubtaskListProps) {
 
   const completedCount = subtasks.filter((s) => s.completed).length;
   const totalCount = subtasks.length;
-  const progressPercent = totalCount > 0 ? (completedCount / totalCount) * 100 : 0;
+  const progressPercent =
+    totalCount > 0 ? (completedCount / totalCount) * 100 : 0;
 
   const handleAdd = async () => {
     const trimmed = newTitle.trim();
@@ -84,26 +85,19 @@ export function SubtaskList({ taskId }: SubtaskListProps) {
                 autoFocus
               />
             ) : (
-              <span
+              <button
+                type="button"
                 className={cn(
-                  "text-xs flex-1 cursor-pointer",
+                  "text-xs flex-1 cursor-pointer text-left bg-transparent border-none p-0",
                   subtask.completed && "line-through text-muted-foreground",
                 )}
                 onClick={() => {
                   setEditingId(subtask._id);
                   setEditingTitle(subtask.title);
                 }}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    setEditingId(subtask._id);
-                    setEditingTitle(subtask.title);
-                  }
-                }}
-                role="button"
-                tabIndex={0}
               >
                 {subtask.title}
-              </span>
+              </button>
             )}
             <button
               type="button"

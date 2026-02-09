@@ -26,20 +26,17 @@ export const listAll = query({
 export const listArchived = query({
   args: { repoId: v.optional(v.id("repos")) },
   handler: async (ctx, args) => {
-    let tasks;
-    if (args.repoId) {
-      tasks = await ctx.db
-        .query("tasks")
-        .withIndex("by_repo_status", (q) =>
-          q.eq("repoId", args.repoId).eq("status", "archived"),
-        )
-        .collect();
-    } else {
-      tasks = await ctx.db
-        .query("tasks")
-        .withIndex("by_status", (q) => q.eq("status", "archived"))
-        .collect();
-    }
+    const tasks = args.repoId
+      ? await ctx.db
+          .query("tasks")
+          .withIndex("by_repo_status", (q) =>
+            q.eq("repoId", args.repoId).eq("status", "archived"),
+          )
+          .collect()
+      : await ctx.db
+          .query("tasks")
+          .withIndex("by_status", (q) => q.eq("status", "archived"))
+          .collect();
     return tasks.sort((a, b) => (b.archivedAt ?? 0) - (a.archivedAt ?? 0));
   },
 });

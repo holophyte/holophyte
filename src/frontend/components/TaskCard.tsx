@@ -1,9 +1,8 @@
 import { api } from "@convex/_generated/api";
-import type { Doc } from "@convex/_generated/dataModel";
 import { useQuery } from "convex/react";
 import { CheckSquare, Clock, Terminal } from "lucide-react";
-import { cn } from "@/frontend/lib/utils";
 import { formatRelativeDate } from "@/frontend/lib/date-utils";
+import { cn } from "@/frontend/lib/utils";
 import { useAppStore } from "@/frontend/stores/app";
 import type { EnrichedTask } from "./KanbanBoard";
 import { Badge } from "./ui/badge";
