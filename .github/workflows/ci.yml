@@ -30,6 +30,7 @@ jobs:
       - run: bunx convex codegen
         env:
           CONVEX_DEPLOYMENT: ${{ vars.CONVEX_DEPLOYMENT }}
+          CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY }}
       - run: bunx tsc --noEmit
 
   test:
@@ -42,4 +43,5 @@ jobs:
       - run: bunx convex codegen
         env:
           CONVEX_DEPLOYMENT: ${{ vars.CONVEX_DEPLOYMENT }}
+          CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY }}
       - run: bun run test --run
