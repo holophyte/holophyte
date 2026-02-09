@@ -6,6 +6,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Project management app for running parallel Claude Code sessions. A kanban board UI lets you create tasks with prompts, launch Claude Code in PTY terminals per task, and stream output to the browser via WebSocket.
 
+## Development Principles
+
+- **KISS** — Write simple, readable code over clever solutions. Prefer straightforward implementations that are easy to understand and maintain.
+- **DRY** — Eliminate code duplication through shared utilities and components. Use existing patterns from `src/frontend/lib/`, `src/frontend/hooks/`, and `src/frontend/components/`.
+- **Do what was asked; nothing more, nothing less** — Avoid over-engineering, premature optimization, and unsolicited refactoring.
+
 ## Commands
 
 ```bash
@@ -109,6 +115,13 @@ convex/{repos,tasks,sessions}.ts → Convex queries and mutations
 - Chromium only, base URL `http://localhost:3000`
 - Auto-starts the dev server, but **`bun run convex:dev` must be running separately**
 - Use `waitForApp(page)` helper to wait for hydration before assertions
+
+## Commit Guidelines
+
+- Run `bun run lint:fix` and `bunx tsc --noEmit` before committing
+- Use conventional commit prefixes: `feat:`, `fix:`, `refactor:`, `test:`, `chore:`, `docs:`
+- Commit frequently with descriptive messages — incremental changes over large batches
+- Stage specific files rather than `git add .`
 
 ## Key Gotchas
 
