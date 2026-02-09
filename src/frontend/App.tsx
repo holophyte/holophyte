@@ -1,11 +1,10 @@
-import { Sidebar } from "./components/Sidebar";
+import { useAppStore } from "@/frontend/stores/app";
 import { KanbanBoard } from "./components/KanbanBoard";
+import { Sidebar } from "./components/Sidebar";
 import { TaskDetailPanel } from "./components/TaskDetailPanel";
 import { TerminalPanel } from "./components/TerminalPanel";
-import { useAppStore } from "@/frontend/stores/app";
 
 export function App() {
-  const selectedRepoId = useAppStore((s) => s.selectedRepoId);
   const selectedTaskId = useAppStore((s) => s.selectedTaskId);
   const terminalSessionId = useAppStore((s) => s.terminalSessionId);
 

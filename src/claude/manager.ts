@@ -1,7 +1,7 @@
-import * as pty from "node-pty";
-import { ConvexHttpClient } from "convex/browser";
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
+import { ConvexHttpClient } from "convex/browser";
+import * as pty from "node-pty";
 
 interface Session {
   pty: pty.IPty;
@@ -10,7 +10,7 @@ interface Session {
   subscribers: Set<(data: string) => void>;
 }
 
-const convex = new ConvexHttpClient(process.env.CONVEX_URL!);
+const convex = new ConvexHttpClient(process.env.CONVEX_URL ?? "");
 
 const sessions = new Map<string, Session>();
 

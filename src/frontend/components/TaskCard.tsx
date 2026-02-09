@@ -1,10 +1,10 @@
-import { useQuery } from "convex/react";
-import { Terminal } from "lucide-react";
 import { api } from "@convex/_generated/api";
 import type { Doc } from "@convex/_generated/dataModel";
+import { useQuery } from "convex/react";
+import { Terminal } from "lucide-react";
+import { cn } from "@/frontend/lib/utils";
 import { useAppStore } from "@/frontend/stores/app";
 import { Badge } from "./ui/badge";
-import { cn } from "@/frontend/lib/utils";
 
 interface TaskCardProps {
   task: Doc<"tasks">;
@@ -22,9 +22,17 @@ export function TaskCard({ task, repoName }: TaskCardProps) {
 
   return (
     <div
+      role="button"
+      tabIndex={0}
       draggable
       onDragStart={handleDragStart}
       onClick={() => selectTask(task._id)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          selectTask(task._id);
+        }
+      }}
       className={cn(
         "bg-background rounded-md border p-3 cursor-pointer hover:border-foreground/20 transition-colors shadow-sm",
         "active:cursor-grabbing",

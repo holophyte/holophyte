@@ -1,6 +1,6 @@
+import { api } from "@convex/_generated/api";
 import { useMutation } from "convex/react";
 import { useState } from "react";
-import { api } from "@convex/_generated/api";
 import { Button } from "./ui/button";
 import {
   Dialog,
@@ -84,9 +84,7 @@ export function AddRepoDialog({ open, onOpenChange }: AddRepoDialogProps) {
                 onChange={(e) => setPath(e.target.value)}
               />
             </div>
-            {error && (
-              <p className="text-sm text-destructive">{error}</p>
-            )}
+            {error && <p className="text-sm text-destructive">{error}</p>}
           </div>
           <DialogFooter>
             <Button

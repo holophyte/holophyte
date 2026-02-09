@@ -1,20 +1,25 @@
 import homepage from "../public/index.html";
 import {
+  getSession,
+  resizeSession,
   startSession,
   stopSession,
-  resizeSession,
-  getSession,
   subscribe,
   writeToSession,
 } from "./claude/manager";
 
-const server = Bun.serve({
+interface WsData {
+  sessionId: string;
+  unsubscribe?: () => void;
+}
+
+const server = Bun.serve<WsData>({
   port: Number(process.env.PORT) || 3000,
   routes: {
     "/": homepage,
 
     "/api/validate-repo": {
-      async POST(req) {
+      async POST(req: Request) {
         const { path } = await req.json();
         try {
           const gitHead = Bun.file(`${path}/.git/HEAD`);
@@ -36,7 +41,7 @@ const server = Bun.serve({
     },
 
     "/api/sessions/start": {
-      async POST(req) {
+      async POST(req: Request) {
         try {
           const { taskId, repoPath, prompt } = await req.json();
           if (!taskId || !repoPath || !prompt) {
@@ -49,10 +54,7 @@ const server = Bun.serve({
           return Response.json(result);
         } catch (err) {
           console.error("Failed to start session:", err);
-          return Response.json(
-            { error: String(err) },
-            { status: 500 },
-          );
+          return Response.json({ error: String(err) }, { status: 500 });
         }
       },
     },
@@ -64,7 +66,7 @@ const server = Bun.serve({
     // POST /api/sessions/:id/stop
     const stopMatch = url.pathname.match(/^\/api\/sessions\/(.+)\/stop$/);
     if (stopMatch && req.method === "POST") {
-      const sessionId = stopMatch[1]!;
+      const sessionId = stopMatch[1] ?? "";
       stopSession(sessionId);
       return Response.json({ ok: true });
     }
@@ -73,7 +75,7 @@ const server = Bun.serve({
     const resizeMatch = url.pathname.match(/^\/api\/sessions\/(.+)\/resize$/);
     if (resizeMatch && req.method === "POST") {
       return (async () => {
-        const sessionId = resizeMatch[1]!;
+        const sessionId = resizeMatch[1] ?? "";
         const { cols, rows } = await req.json();
         resizeSession(sessionId, cols, rows);
         return Response.json({ ok: true });
@@ -93,7 +95,7 @@ const server = Bun.serve({
 
   websocket: {
     open(ws) {
-      const { sessionId } = ws.data as { sessionId: string };
+      const { sessionId } = ws.data;
       const session = getSession(sessionId);
       if (!session) {
         ws.send("\x1b[31mSession not found.\x1b[0m");
@@ -101,22 +103,17 @@ const server = Bun.serve({
         return;
       }
 
-      const unsubscribe = subscribe(sessionId, (data) => {
+      ws.data.unsubscribe = subscribe(sessionId, (data) => {
         ws.send(data);
       });
-
-      // Store cleanup function on the ws data
-      (ws.data as any).unsubscribe = unsubscribe;
     },
 
     message(ws, message) {
-      const { sessionId } = ws.data as { sessionId: string };
-      writeToSession(sessionId, String(message));
+      writeToSession(ws.data.sessionId, String(message));
     },
 
     close(ws) {
-      const { unsubscribe } = ws.data as { unsubscribe?: () => void };
-      unsubscribe?.();
+      ws.data.unsubscribe?.();
     },
   },
 

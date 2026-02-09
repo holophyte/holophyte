@@ -1,13 +1,13 @@
+import { api } from "@convex/_generated/api";
 import { useQuery } from "convex/react";
 import { FolderGit2, LayoutDashboard, Plus } from "lucide-react";
 import { useState } from "react";
-import { api } from "@convex/_generated/api";
+import { cn } from "@/frontend/lib/utils";
 import { useAppStore } from "@/frontend/stores/app";
 import { AddRepoDialog } from "./AddRepoDialog";
 import { Button } from "./ui/button";
 import { ScrollArea } from "./ui/scroll-area";
 import { Separator } from "./ui/separator";
-import { cn } from "@/frontend/lib/utils";
 
 export function Sidebar() {
   const repos = useQuery(api.repos.list);

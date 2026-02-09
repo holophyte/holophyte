@@ -1,8 +1,8 @@
-import { useQuery } from "convex/react";
-import { Play, Square, Loader2 } from "lucide-react";
-import { useState } from "react";
 import { api } from "@convex/_generated/api";
 import type { Doc } from "@convex/_generated/dataModel";
+import { useQuery } from "convex/react";
+import { Loader2, Play, Square } from "lucide-react";
+import { useState } from "react";
 import { useAppStore } from "@/frontend/stores/app";
 import { Button } from "./ui/button";
 
@@ -74,11 +74,7 @@ export function ClaudeButton({ task }: ClaudeButtonProps) {
           <Play className="h-4 w-4 mr-1" />
           View Terminal
         </Button>
-        <Button
-          size="sm"
-          variant="destructive"
-          onClick={handleStop}
-        >
+        <Button size="sm" variant="destructive" onClick={handleStop}>
           <Square className="h-4 w-4" />
         </Button>
       </div>

@@ -1,7 +1,7 @@
+import { api } from "@convex/_generated/api";
 import { useQuery } from "convex/react";
 import { Plus } from "lucide-react";
 import { useState } from "react";
-import { api } from "@convex/_generated/api";
 import { useAppStore } from "@/frontend/stores/app";
 import { CreateTaskDialog } from "./CreateTaskDialog";
 import { KanbanColumn } from "./KanbanColumn";
@@ -19,10 +19,15 @@ export function KanbanBoard() {
   const selectedRepoId = useAppStore((s) => s.selectedRepoId);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
 
-  const allTasks = useQuery(
-    selectedRepoId ? api.tasks.listByRepo : api.tasks.listAll,
-    selectedRepoId ? { repoId: selectedRepoId } : {},
+  const repoTasks = useQuery(
+    api.tasks.listByRepo,
+    selectedRepoId ? { repoId: selectedRepoId } : "skip",
   );
+  const allTasksQuery = useQuery(
+    api.tasks.listAll,
+    selectedRepoId ? "skip" : {},
+  );
+  const allTasks = selectedRepoId ? repoTasks : allTasksQuery;
 
   const repos = useQuery(api.repos.list);
   const repoMap = new Map(repos?.map((r) => [r._id, r]) ?? []);
@@ -32,7 +37,7 @@ export function KanbanBoard() {
       <div className="flex items-center justify-between px-6 py-3 border-b">
         <h1 className="text-lg font-semibold">
           {selectedRepoId
-            ? repoMap.get(selectedRepoId)?.name ?? "Tasks"
+            ? (repoMap.get(selectedRepoId)?.name ?? "Tasks")
             : "All Tasks"}
         </h1>
         <Button
@@ -50,7 +55,9 @@ export function KanbanBoard() {
             key={col.status}
             status={col.status}
             label={col.label}
-            tasks={(allTasks ?? []).filter((t) => t.status === col.status).sort((a, b) => a.position - b.position)}
+            tasks={(allTasks ?? [])
+              .filter((t) => t.status === col.status)
+              .sort((a, b) => a.position - b.position)}
             repoMap={repoMap}
             showRepoBadge={selectedRepoId === null}
           />

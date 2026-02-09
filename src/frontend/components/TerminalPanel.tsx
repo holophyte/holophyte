@@ -1,8 +1,8 @@
 import { ChevronDown, ChevronUp, X } from "lucide-react";
-import { useAppStore } from "@/frontend/stores/app";
 import { useTerminal } from "@/frontend/hooks/useTerminal";
-import { Button } from "./ui/button";
 import { cn } from "@/frontend/lib/utils";
+import { useAppStore } from "@/frontend/stores/app";
+import { Button } from "./ui/button";
 
 export function TerminalPanel() {
   const terminalSessionId = useAppStore((s) => s.terminalSessionId);

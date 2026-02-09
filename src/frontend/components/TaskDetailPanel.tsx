@@ -1,7 +1,7 @@
-import { useMutation, useQuery } from "convex/react";
-import { Play, Square, X } from "lucide-react";
-import { useEffect, useState } from "react";
 import { api } from "@convex/_generated/api";
+import { useMutation, useQuery } from "convex/react";
+import { X } from "lucide-react";
+import { useEffect, useState } from "react";
 import { useAppStore } from "@/frontend/stores/app";
 import { ClaudeButton } from "./ClaudeButton";
 import { Button } from "./ui/button";
@@ -111,18 +111,10 @@ export function TaskDetailPanel() {
         </div>
       </div>
       <div className="border-t p-4 flex items-center gap-2">
-        <Button
-          size="sm"
-          onClick={handleSave}
-          disabled={!hasChanges}
-        >
+        <Button size="sm" onClick={handleSave} disabled={!hasChanges}>
           Save
         </Button>
-        <Button
-          size="sm"
-          variant="destructive"
-          onClick={handleDelete}
-        >
+        <Button size="sm" variant="destructive" onClick={handleDelete}>
           Delete
         </Button>
       </div>

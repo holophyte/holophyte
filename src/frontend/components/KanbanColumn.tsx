@@ -1,9 +1,9 @@
-import { useMutation } from "convex/react";
-import { useState } from "react";
 import { api } from "@convex/_generated/api";
 import type { Doc, Id } from "@convex/_generated/dataModel";
-import { TaskCard } from "./TaskCard";
+import { useMutation } from "convex/react";
+import { useState } from "react";
 import { cn } from "@/frontend/lib/utils";
+import { TaskCard } from "./TaskCard";
 
 type TaskStatus = "backlog" | "todo" | "in_progress" | "review" | "done";
 
@@ -51,6 +51,8 @@ export function KanbanColumn({
 
   return (
     <div
+      role="group"
+      aria-label={`${label} column`}
       className={cn(
         "flex-1 min-w-[260px] max-w-[350px] flex flex-col rounded-lg bg-muted/50 border",
         dragOver && "ring-2 ring-primary/50 bg-muted/80",
@@ -70,7 +72,9 @@ export function KanbanColumn({
           <TaskCard
             key={task._id}
             task={task}
-            repoName={showRepoBadge ? repoMap.get(task.repoId)?.name : undefined}
+            repoName={
+              showRepoBadge ? repoMap.get(task.repoId)?.name : undefined
+            }
           />
         ))}
       </div>
