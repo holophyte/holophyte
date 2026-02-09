@@ -1,10 +1,10 @@
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
+import type { Subprocess } from "bun";
 import { ConvexHttpClient } from "convex/browser";
-import * as pty from "node-pty";
 
 interface Session {
-  pty: pty.IPty;
+  proc: Subprocess;
   taskId: Id<"tasks">;
   convexSessionId: Id<"sessions">;
   subscribers: Set<(data: string) => void>;
@@ -14,7 +14,7 @@ const convex = new ConvexHttpClient(process.env.CONVEX_URL ?? "");
 
 const sessions = new Map<string, Session>();
 
-// Resolve the user's login shell and PATH so spawned processes can find `claude`
+// Resolve the user's login shell env so spawned processes can find `claude`
 async function getShellEnv(): Promise<Record<string, string>> {
   const shell = process.env.SHELL ?? "/bin/zsh";
   const proc = Bun.spawn([shell, "-ilc", "env"], {
@@ -39,7 +39,6 @@ async function getEnv(): Promise<Record<string, string>> {
     try {
       shellEnvCache = await getShellEnv();
     } catch {
-      // Fallback to process.env
       shellEnvCache = process.env as Record<string, string>;
     }
   }
@@ -57,7 +56,7 @@ async function resolveClaudePath(): Promise<string> {
       return candidate;
     }
   }
-  return "claude"; // fallback, let it fail with a clear error
+  return "claude";
 }
 
 export function getSession(sessionId: string): Session | undefined {
@@ -83,36 +82,37 @@ export async function startSession(opts: {
 
   const sessionId = convexSessionId;
 
-  // Spawn claude with node-pty using the resolved path and full shell env
-  const shell = pty.spawn(claudePath, [opts.prompt], {
-    name: "xterm-256color",
-    cols: 120,
-    rows: 30,
-    cwd: opts.repoPath,
-    env: {
-      ...env,
-      TERM: "xterm-256color",
-    },
-  });
-
   const session: Session = {
-    pty: shell,
+    proc: null as unknown as Subprocess,
     taskId: opts.taskId,
     convexSessionId,
     subscribers: new Set(),
   };
 
-  sessions.set(sessionId, session);
-
-  // Forward PTY output to all subscribers
-  shell.onData((data) => {
-    for (const cb of session.subscribers) {
-      cb(data);
-    }
+  // Use Bun's native PTY support (available since Bun v1.3.5)
+  const proc = Bun.spawn([claudePath, opts.prompt], {
+    cwd: opts.repoPath,
+    env: {
+      ...env,
+      TERM: "xterm-256color",
+    },
+    terminal: {
+      cols: 120,
+      rows: 30,
+      data(_terminal, data) {
+        const text = new TextDecoder().decode(data);
+        for (const cb of session.subscribers) {
+          cb(text);
+        }
+      },
+    },
   });
 
+  session.proc = proc;
+  sessions.set(sessionId, session);
+
   // Handle process exit
-  shell.onExit(async ({ exitCode }) => {
+  proc.exited.then(async (exitCode) => {
     const status = exitCode === 0 ? "completed" : "failed";
     try {
       await convex.mutation(api.sessions.updateStatus, {
@@ -122,6 +122,7 @@ export async function startSession(opts: {
     } catch (err) {
       console.error("Failed to update session status:", err);
     }
+    proc.terminal?.close();
     sessions.delete(sessionId);
   });
 
@@ -132,7 +133,7 @@ export async function stopSession(sessionId: string): Promise<void> {
   const session = sessions.get(sessionId);
   if (!session) return;
 
-  session.pty.kill();
+  session.proc.kill();
 
   try {
     await convex.mutation(api.sessions.updateStatus, {
@@ -143,6 +144,7 @@ export async function stopSession(sessionId: string): Promise<void> {
     console.error("Failed to update session status:", err);
   }
 
+  session.proc.terminal?.close();
   sessions.delete(sessionId);
 }
 
@@ -153,7 +155,7 @@ export function resizeSession(
 ): void {
   const session = sessions.get(sessionId);
   if (!session) return;
-  session.pty.resize(cols, rows);
+  session.proc.terminal?.resize(cols, rows);
 }
 
 export function subscribe(
@@ -171,5 +173,5 @@ export function subscribe(
 export function writeToSession(sessionId: string, data: string): void {
   const session = sessions.get(sessionId);
   if (!session) return;
-  session.pty.write(data);
+  session.proc.terminal?.write(data);
 }
