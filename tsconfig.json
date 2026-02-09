@@ -22,5 +22,5 @@
     "noUnusedParameters": false,
     "noPropertyAccessFromIndexSignature": false
   },
-  "include": ["src/**/*", "dev-server.ts", "vitest.config.ts", "playwright.config.ts", "e2e/**/*"]
+  "include": ["src/**/*", "convex/**/*", "vitest.config.ts", "playwright.config.ts", "e2e/**/*"]
 }
