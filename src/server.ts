@@ -50,10 +50,32 @@ const server = Bun.serve<WsData>({
           const gitHead = Bun.file(`${dirPath}/.git/HEAD`);
           const isGitRepo = await gitHead.exists();
 
+          // Try to get the repo name from the git remote URL
+          let name = basename(dirPath);
+          if (isGitRepo) {
+            try {
+              const gitConfig = await Bun.file(`${dirPath}/.git/config`).text();
+              const remoteMatch = gitConfig.match(
+                /\[remote "origin"\][^[]*url\s*=\s*(.+)/,
+              );
+              if (remoteMatch?.[1]) {
+                const url = remoteMatch[1].trim();
+                // Handle git@host:org/repo.git or https://host/org/repo.git
+                const repoName = url
+                  .split("/")
+                  .pop()
+                  ?.replace(/\.git$/, "");
+                if (repoName) name = repoName;
+              }
+            } catch {
+              // fall back to folder name
+            }
+          }
+
           return Response.json({
             cancelled: false,
             path: dirPath,
-            name: basename(dirPath),
+            name,
             isGitRepo,
           });
         } catch {
