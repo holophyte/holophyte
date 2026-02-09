@@ -170,3 +170,8 @@ const server = Bun.serve<WsData>({
 });
 
 console.log(`Holophyte running at http://localhost:${server.port}`);
+
+process.on("SIGINT", () => {
+  server.stop();
+  process.exit(0);
+});

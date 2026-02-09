@@ -29,7 +29,10 @@ test("new task button is disabled without repo selected", async ({ page }) => {
 test("add repo dialog opens", async ({ page }) => {
   await page.goto("/");
   // Click the + button next to "Repos"
-  const addButton = page.locator("button").filter({ has: page.locator("svg") }).nth(1);
+  const addButton = page
+    .locator("button")
+    .filter({ has: page.locator("svg") })
+    .nth(1);
   await addButton.click();
   await expect(page.locator("text=Add Repository")).toBeVisible();
 });

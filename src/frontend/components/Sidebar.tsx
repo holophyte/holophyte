@@ -1,7 +1,13 @@
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
 import { useMutation, useQuery } from "convex/react";
-import { FolderGit2, LayoutDashboard, Plus, Trash2 } from "lucide-react";
+import {
+  FolderGit2,
+  LayoutDashboard,
+  Lightbulb,
+  Plus,
+  Trash2,
+} from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/frontend/lib/utils";
 import { useAppStore } from "@/frontend/stores/app";
@@ -12,9 +18,14 @@ import { Separator } from "./ui/separator";
 
 export function Sidebar() {
   const repos = useQuery(api.repos.list);
+  const activeTasks = useQuery(api.tasks.listActive);
   const removeRepo = useMutation(api.repos.remove);
   const selectedRepoId = useAppStore((s) => s.selectedRepoId);
+  const selectedTaskId = useAppStore((s) => s.selectedTaskId);
+  const viewMode = useAppStore((s) => s.viewMode);
   const selectRepo = useAppStore((s) => s.selectRepo);
+  const selectSeedBox = useAppStore((s) => s.selectSeedBox);
+  const selectTask = useAppStore((s) => s.selectTask);
   const [addRepoOpen, setAddRepoOpen] = useState(false);
 
   const handleRemove = async (e: React.MouseEvent, repoId: Id<"repos">) => {
@@ -32,16 +43,76 @@ export function Sidebar() {
         Holophyte
       </div>
       <Separator />
-      <div className="p-2">
+      <div className="p-2 space-y-1">
         <Button
-          variant={selectedRepoId === null ? "secondary" : "ghost"}
+          variant={
+            viewMode === "board" && selectedRepoId === null
+              ? "secondary"
+              : "ghost"
+          }
           className="w-full justify-start gap-2"
           onClick={() => selectRepo(null)}
         >
           <LayoutDashboard className="h-4 w-4" />
           All Tasks
         </Button>
+        <Button
+          variant={viewMode === "seeds" ? "secondary" : "ghost"}
+          className="w-full justify-start gap-2"
+          onClick={() => selectSeedBox()}
+        >
+          <Lightbulb className="h-4 w-4" />
+          Seed Box
+        </Button>
       </div>
+
+      {/* Active tasks section */}
+      {activeTasks && activeTasks.length > 0 && (
+        <>
+          <Separator />
+          <div className="flex items-center justify-between px-4 py-2">
+            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+              Active
+            </span>
+            <span className="text-xs text-muted-foreground bg-muted rounded-full px-2 py-0.5">
+              {activeTasks.length}
+            </span>
+          </div>
+          <div className="px-2 space-y-0.5">
+            {activeTasks.map((task) => (
+              <button
+                key={task._id}
+                type="button"
+                onClick={() => selectTask(task._id)}
+                className={cn(
+                  "w-full text-left rounded-md px-2 py-1.5 transition-colors",
+                  selectedTaskId === task._id
+                    ? "bg-accent"
+                    : "hover:bg-accent/50",
+                )}
+              >
+                <div className="flex items-center gap-1.5">
+                  <span
+                    className={cn(
+                      "w-1.5 h-1.5 rounded-full shrink-0",
+                      task.status === "in_progress"
+                        ? "bg-blue-500"
+                        : "bg-amber-500",
+                    )}
+                  />
+                  <span className="truncate text-sm">{task.title}</span>
+                </div>
+                {task.repoName && (
+                  <span className="text-[10px] text-muted-foreground ml-3">
+                    {task.repoName}
+                  </span>
+                )}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+
       <Separator />
       <div className="flex items-center justify-between px-4 py-2">
         <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
