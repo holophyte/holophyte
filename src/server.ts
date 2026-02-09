@@ -114,8 +114,7 @@ const server = Bun.serve<WsData>({
     const stopMatch = url.pathname.match(/^\/api\/sessions\/(.+)\/stop$/);
     if (stopMatch && req.method === "POST") {
       const sessionId = stopMatch[1] ?? "";
-      stopSession(sessionId);
-      return Response.json({ ok: true });
+      return stopSession(sessionId).then(() => Response.json({ ok: true }));
     }
 
     // POST /api/sessions/:id/resize

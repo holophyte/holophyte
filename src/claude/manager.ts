@@ -133,7 +133,8 @@ export async function stopSession(sessionId: string): Promise<void> {
   const session = sessions.get(sessionId);
   if (!session) return;
 
-  session.proc.kill();
+  session.proc.terminal?.close();
+  session.proc.kill("SIGKILL");
 
   try {
     await convex.mutation(api.sessions.updateStatus, {
@@ -144,7 +145,6 @@ export async function stopSession(sessionId: string): Promise<void> {
     console.error("Failed to update session status:", err);
   }
 
-  session.proc.terminal?.close();
   sessions.delete(sessionId);
 }
 
