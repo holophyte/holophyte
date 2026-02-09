@@ -1,6 +1,15 @@
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 
+export const taskStatusValidator = v.union(
+  v.literal("backlog"),
+  v.literal("todo"),
+  v.literal("in_progress"),
+  v.literal("review"),
+  v.literal("done"),
+  v.literal("archived"),
+);
+
 export default defineSchema({
   repos: defineTable({
     name: v.string(),
@@ -13,19 +22,37 @@ export default defineSchema({
     title: v.string(),
     description: v.string(),
     prompt: v.string(),
-    status: v.union(
-      v.literal("backlog"),
-      v.literal("todo"),
-      v.literal("in_progress"),
-      v.literal("review"),
-      v.literal("done"),
-    ),
+    status: taskStatusValidator,
     position: v.number(),
     createdAt: v.number(),
     updatedAt: v.number(),
+    // Labels (many-to-many via ID array)
+    labelIds: v.optional(v.array(v.id("labels"))),
+    // Due date (ms timestamp)
+    dueAt: v.optional(v.number()),
+    // Time tracking: when task last entered in_progress
+    inProgressSince: v.optional(v.number()),
+    // Time tracking: accumulated ms spent in in_progress
+    totalInProgressMs: v.optional(v.number()),
+    // Archive timestamp
+    archivedAt: v.optional(v.number()),
   })
     .index("by_repo_status", ["repoId", "status"])
     .index("by_status", ["status"]),
+
+  labels: defineTable({
+    name: v.string(),
+    color: v.string(),
+    createdAt: v.number(),
+  }),
+
+  subtasks: defineTable({
+    taskId: v.id("tasks"),
+    title: v.string(),
+    completed: v.boolean(),
+    position: v.number(),
+    createdAt: v.number(),
+  }).index("by_task", ["taskId"]),
 
   seeds: defineTable({
     title: v.string(),
