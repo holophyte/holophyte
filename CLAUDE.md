@@ -13,13 +13,13 @@ bun run dev              # Start server with HMR (port 3000)
 bun run convex:dev       # Start Convex local dev (run alongside dev server)
 bun run test             # Run unit tests (vitest)
 bun run test:ui          # Vitest UI dashboard
-bun run test:e2e         # Playwright E2E tests
+bun run test:e2e         # Playwright E2E tests (requires convex:dev running)
 bun run lint             # Biome check
 bun run lint:fix         # Biome auto-fix
 bun run convex:deploy    # Deploy Convex to production
 ```
 
-To run a single test file: `bunx vitest run src/claude/manager.test.ts`
+Single test file: `bunx vitest run src/claude/manager.test.ts`
 
 ## Runtime
 
@@ -30,6 +30,24 @@ Use **Bun** for everything — never Node.js, npm, vite, or express. Bun auto-lo
 - `Bun.$\`cmd\`` over execa
 - `bun install`, `bun run`, `bunx` over npm/yarn/pnpm equivalents
 - HTML imports with `Bun.serve()` for frontend bundling (not vite/webpack)
+
+## Code Style
+
+Enforced by **Biome** (no ESLint/Prettier). Run `bun run lint:fix` before committing.
+
+- 2 spaces, double quotes, semicolons always
+- Named exports only — no default exports
+- PascalCase component files (`TaskCard.tsx`), kebab-case for non-components
+- Props typed with `interface ComponentNameProps`
+- Use `import type` for type-only imports (`verbatimModuleSyntax` is on)
+- Combine classNames with `cn()` helper from `@/frontend/lib/utils` (clsx + tailwind-merge)
+
+## TypeScript
+
+Strict mode with additional checks:
+- `noUncheckedIndexedAccess: true` — array/object indexing returns `T | undefined`
+- `noImplicitOverride: true`
+- `noFallthroughCasesInSwitch: true`
 
 ## Architecture
 
@@ -58,18 +76,39 @@ convex/{repos,tasks,sessions}.ts → Convex queries and mutations
 ## Convex (Real-time Database)
 
 - Three tables: `repos`, `tasks` (with kanban statuses), `sessions`
-- Repo/task deletions cascade (repo → tasks → sessions)
+- Repo/task deletions cascade manually (repo → tasks → sessions)
+- All functions use object-style with `args` (validated with `v` from `convex/values`) and `handler`
+- Timestamps stored as `v.number()` using `Date.now()`
+- Indexes named descriptively: `by_repo_status`, `by_task`, `by_path`
+- Import generated types: `import type { Doc, Id } from "@convex/_generated/dataModel"`
 - Convex URL is served via `/api/config` endpoint because browser bundles can't access env vars
 - `.env.local` is managed by `convex dev` — only contains `CONVEX_DEPLOYMENT`
 - Schema changes that conflict with existing data block deployment. To fix: temporarily remove `schema.ts`, deploy with `--typecheck=disable`, clear data, restore schema.
 
-## Frontend Stack
+## Frontend Patterns
 
 - **React 19** with Convex `useQuery`/`useMutation` for real-time data
-- **Zustand** for UI-only state (selections, terminal panel visibility)
+- **Zustand** for UI-only state — persists `selectedRepoId`, `viewMode`, `backlogCollapsed` to localStorage (key: `"holophyte-app"`)
+- **Zustand selectors**: always use inline selectors for minimal re-renders: `useAppStore((s) => s.selectTask)`
 - **Tailwind v4** via CSS-first config in `src/frontend/styles.css` (`@theme inline {}` block) — no `tailwind.config.ts`
-- **Radix UI** + class-variance-authority for component primitives
+- **Radix UI** (umbrella `radix-ui` package) + class-variance-authority for component variants
+- **Icons**: `lucide-react`
 - **xterm.js** + FitAddon for terminal rendering
+
+## Testing
+
+**Unit tests (Vitest):**
+- Test globals enabled — no need to import `describe`/`it`/`expect`
+- Default environment: `jsdom` (frontend), `edge-runtime` (convex/)
+- Override per-file with `// @vitest-environment node` at top
+- Convex tests use `convex-test`: `const t = convexTest(schema);`
+- Tests co-located with source: `manager.ts` → `manager.test.ts`
+
+**E2E tests (Playwright):**
+- Tests in `e2e/` directory, pattern `*.spec.ts`
+- Chromium only, base URL `http://localhost:3000`
+- Auto-starts the dev server, but **`bun run convex:dev` must be running separately**
+- Use `waitForApp(page)` helper to wait for hydration before assertions
 
 ## Key Gotchas
 
@@ -80,3 +119,4 @@ convex/{repos,tasks,sessions}.ts → Convex queries and mutations
 - Biome doesn't understand CSS `theme()` function — use `var()` instead
 - `useSemanticElements` biome rule is set to "warn" (kanban board needs div-based drag-drop)
 - `bunfig.toml` configures `bun-plugin-tailwind` under `[serve.static]`
+- No CI/CD, Docker, or pre-commit hooks configured
