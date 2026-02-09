@@ -12,6 +12,8 @@ export function useTerminal(sessionId: string | null) {
   useEffect(() => {
     if (!sessionId || !containerRef.current) return;
 
+    const container = containerRef.current;
+
     const terminal = new Terminal({
       cursorBlink: true,
       fontSize: 13,
@@ -24,11 +26,24 @@ export function useTerminal(sessionId: string | null) {
 
     const fitAddon = new FitAddon();
     terminal.loadAddon(fitAddon);
-    terminal.open(containerRef.current);
-    fitAddon.fit();
+    terminal.open(container);
 
     terminalRef.current = terminal;
     fitAddonRef.current = fitAddon;
+
+    // Fit only when container has dimensions
+    const safeFit = () => {
+      if (container.clientWidth > 0 && container.clientHeight > 0) {
+        try {
+          fitAddon.fit();
+        } catch {
+          // ignore fit errors during layout transitions
+        }
+      }
+    };
+
+    // Defer initial fit to next frame so layout is settled
+    requestAnimationFrame(safeFit);
 
     // Connect WebSocket
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
@@ -38,6 +53,7 @@ export function useTerminal(sessionId: string | null) {
 
     ws.onopen = () => {
       terminal.writeln("\x1b[32mConnected to session.\x1b[0m");
+      safeFit();
     };
 
     ws.onmessage = (event) => {
@@ -58,17 +74,16 @@ export function useTerminal(sessionId: string | null) {
 
     // Handle resize
     const resizeObserver = new ResizeObserver(() => {
-      fitAddon.fit();
-      if (ws.readyState === WebSocket.OPEN) {
-        const { cols, rows } = terminal;
+      safeFit();
+      if (ws.readyState === WebSocket.OPEN && terminal.cols && terminal.rows) {
         fetch(`/api/sessions/${sessionId}/resize`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ cols, rows }),
+          body: JSON.stringify({ cols: terminal.cols, rows: terminal.rows }),
         });
       }
     });
-    resizeObserver.observe(containerRef.current);
+    resizeObserver.observe(container);
 
     return () => {
       resizeObserver.disconnect();
