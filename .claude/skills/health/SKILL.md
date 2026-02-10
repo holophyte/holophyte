@@ -71,7 +71,7 @@ Present results as a checklist:
 - [ ] Tests — 2 failing (describe briefly)
 - [x] Git — clean, up to date with remote
 - [x] Dependencies — in sync
-- [x] Convex — configured (deployment: dev:xxx)
+- [x] Convex — configured
 ```
 
 For any failing check, include a brief summary of what's wrong (first few lines of error output, not the full log).
