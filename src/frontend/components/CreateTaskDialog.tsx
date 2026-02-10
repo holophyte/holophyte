@@ -2,6 +2,7 @@ import { api } from '@convex/_generated/api';
 import type { Id } from '@convex/_generated/dataModel';
 import { useMutation } from 'convex/react';
 import { useState } from 'react';
+import { PromptTemplatePicker } from './PromptTemplatePicker';
 import Button from './ui/Button';
 import {
   Dialog,
@@ -80,7 +81,13 @@ export function CreateTaskDialog({
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="task-prompt">Claude Prompt</Label>
+              <div className="flex items-center justify-between">
+                <Label htmlFor="task-prompt">Claude Prompt</Label>
+                <PromptTemplatePicker
+                  repoId={repoId}
+                  onApply={setPrompt}
+                />
+              </div>
               <Textarea
                 id="task-prompt"
                 placeholder="Prompt to send to Claude Code..."

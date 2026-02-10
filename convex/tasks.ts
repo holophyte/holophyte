@@ -88,7 +88,7 @@ export const create = mutation({
       0,
     );
     const now = Date.now();
-    return await ctx.db.insert('tasks', {
+    const taskId = await ctx.db.insert('tasks', {
       repoId: args.repoId,
       title: args.title,
       description: args.description ?? '',
@@ -101,6 +101,18 @@ export const create = mutation({
       dueAt: args.dueAt,
       totalInProgressMs: 0,
     });
+
+    // Record initial prompt history
+    const prompt = args.prompt?.trim();
+    if (prompt) {
+      await ctx.db.insert('promptHistory', {
+        taskId,
+        prompt,
+        createdAt: now,
+      });
+    }
+
+    return taskId;
   },
 });
 
@@ -116,7 +128,8 @@ export const update = mutation({
   },
   handler: async (ctx, args) => {
     const { id, clearDueAt, ...fields } = args;
-    const updates: Record<string, unknown> = { updatedAt: Date.now() };
+    const now = Date.now();
+    const updates: Record<string, unknown> = { updatedAt: now };
     if (fields.title !== undefined) updates.title = fields.title;
     if (fields.description !== undefined)
       updates.description = fields.description;
@@ -125,6 +138,23 @@ export const update = mutation({
     if (fields.dueAt !== undefined) updates.dueAt = fields.dueAt;
     if (clearDueAt) updates.dueAt = undefined;
     await ctx.db.patch(id, updates);
+
+    // Record prompt history when prompt changes
+    const prompt = fields.prompt?.trim();
+    if (prompt) {
+      const existing = await ctx.db
+        .query('promptHistory')
+        .withIndex('by_task', (q) => q.eq('taskId', id))
+        .collect();
+      const latest = existing.sort((a, b) => b.createdAt - a.createdAt)[0];
+      if (!latest || latest.prompt !== prompt) {
+        await ctx.db.insert('promptHistory', {
+          taskId: id,
+          prompt,
+          createdAt: now,
+        });
+      }
+    }
   },
 });
 
