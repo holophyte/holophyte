@@ -177,7 +177,7 @@ export function KanbanColumn({
           <button
             type="button"
             onClick={onAddTask}
-            className="w-full flex items-center justify-center gap-1 py-1.5 rounded-md text-xs text-muted-foreground bg-muted/60 hover:bg-muted hover:text-foreground transition-colors"
+            className="w-full flex items-center justify-center gap-1 py-1.5 rounded-md text-xs text-muted-foreground bg-muted/60 hover:bg-muted hover:text-foreground transition-colors border border-dashed border-muted-foreground/30"
           >
             <Plus className="h-3.5 w-3.5" />
             Add
