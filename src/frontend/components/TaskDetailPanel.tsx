@@ -106,13 +106,12 @@ export function TaskDetailPanel() {
 
   if (!task) return null;
 
-  // Manual save for description + prompt
-  const handleSave = async () => {
-    await updateTask({
-      id: task._id,
-      description: description.trim(),
-      prompt: prompt.trim(),
-    });
+  const handleSaveDescription = async () => {
+    await updateTask({ id: task._id, description: description.trim() });
+  };
+
+  const handleSavePrompt = async () => {
+    await updateTask({ id: task._id, prompt: prompt.trim() });
   };
 
   const handleDelete = async () => {
@@ -120,8 +119,8 @@ export function TaskDetailPanel() {
     selectTask(null);
   };
 
-  const hasTextChanges =
-    description !== task.description || prompt !== task.prompt;
+  const descriptionChanged = description !== task.description;
+  const promptChanged = prompt !== task.prompt;
 
   // Time tracking display
   const currentInProgressMs =
@@ -280,6 +279,20 @@ export function TaskDetailPanel() {
             onChange={(e) => setDescription(e.target.value)}
             rows={4}
           />
+          {descriptionChanged && (
+            <div className="flex gap-1">
+              <Button size="sm" onClick={handleSaveDescription}>
+                Save
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => setDescription(task.description)}
+              >
+                Cancel
+              </Button>
+            </div>
+          )}
         </div>
         <div className="space-y-2">
           <Label htmlFor="detail-prompt">Claude Prompt</Label>
@@ -290,12 +303,21 @@ export function TaskDetailPanel() {
             rows={6}
             className="font-mono text-xs"
           />
+          {promptChanged && (
+            <div className="flex gap-1">
+              <Button size="sm" onClick={handleSavePrompt}>
+                Save
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => setPrompt(task.prompt)}
+              >
+                Cancel
+              </Button>
+            </div>
+          )}
         </div>
-        {hasTextChanges && (
-          <Button size="sm" onClick={handleSave}>
-            Save
-          </Button>
-        )}
         <Separator />
 
         {/* Subtasks */}
