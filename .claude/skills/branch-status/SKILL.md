@@ -17,7 +17,7 @@ Show a comprehensive overview of all branches, their PR status, and active workt
 ### 1. Fetch Latest
 
 ```bash
-git fetch --all
+git fetch --all --prune
 ```
 
 ### 2. List All Local Branches
@@ -78,8 +78,8 @@ Organize branches into categories:
 
 ## Notes
 
-- Always run `git fetch --all` first to get accurate remote status
-- Note: `gone` tracking status (remote deleted) requires the user to have previously run `git fetch --prune` — this skill does not prune automatically
+- Always run `git fetch --all --prune` first to get accurate remote status
+- Flag branches where the remote has been deleted (`gone` in tracking status)
 - For branches with PRs, show the review decision (approved, changes requested, pending)
 - Sort stale branches by last commit date
 - This is read-only — never delete branches or worktrees automatically
