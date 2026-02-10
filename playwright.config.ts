@@ -9,7 +9,7 @@ export default defineConfig({
   workers: process.env.CI ? 1 : undefined,
   reporter: 'html',
   use: {
-    baseURL: 'http://localhost:3000',
+    baseURL: 'http://localhost:8080',
     trace: 'on-first-retry',
   },
   projects: [
@@ -21,7 +21,7 @@ export default defineConfig({
   // E2E tests expect `bun run convex:dev` to be running separately
   webServer: {
     command: 'bun run src/server.ts',
-    port: 3000,
+    port: 8080,
     reuseExistingServer: !process.env.CI,
   },
 });

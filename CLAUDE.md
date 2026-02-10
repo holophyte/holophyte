@@ -15,7 +15,7 @@ Project management app for running parallel Claude Code sessions. A kanban board
 ## Commands
 
 ```bash
-bun run dev              # Start server with HMR (port 3000)
+bun run dev              # Start server with HMR (port 8080)
 bun run convex:dev       # Start Convex local dev (run alongside dev server)
 bun run test             # Run unit tests (vitest)
 bun run test:ui          # Vitest UI dashboard
@@ -119,7 +119,7 @@ convex/{repos,tasks,sessions}.ts → Convex queries and mutations
 
 **E2E tests (Playwright):**
 - Tests in `e2e/` directory, pattern `*.spec.ts`
-- Chromium only, base URL `http://localhost:3000`
+- Chromium only, base URL `http://localhost:8080`
 - Auto-starts the dev server, but **`bun run convex:dev` must be running separately**
 - Use `waitForApp(page)` helper to wait for hydration before assertions
 
@@ -158,7 +158,7 @@ Extract shared values to avoid magic numbers and duplicated strings:
 ## Configuration
 
 Server configuration lives in environment variables with sensible defaults:
-- `PORT` (default: `3000`) — server port
+- `PORT` (default: `8080`) — server port
 - `CONVEX_URL` — Convex deployment URL (served to frontend via `/api/config`)
 - `SHELL` (default: `/bin/zsh`) — login shell for PTY env resolution
 - `CONVEX_DEPLOYMENT` — managed by `convex dev` in `.env.local`
