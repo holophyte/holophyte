@@ -79,14 +79,17 @@ export const useAppStore = create<AppState>()(
       toggleTerminalMinimized: () =>
         set((state) => ({ terminalMinimized: !state.terminalMinimized })),
 
-      setSearchQuery: (query) => set({ searchQuery: query }),
+      setSearchQuery: (query) =>
+        set({ searchQuery: query, bulkSelectedTaskIds: [] }),
       toggleFilterLabel: (labelId) =>
         set((state) => ({
           filterLabelIds: state.filterLabelIds.includes(labelId)
             ? state.filterLabelIds.filter((id) => id !== labelId)
             : [...state.filterLabelIds, labelId],
+          bulkSelectedTaskIds: [],
         })),
-      clearFilters: () => set({ searchQuery: '', filterLabelIds: [] }),
+      clearFilters: () =>
+        set({ searchQuery: '', filterLabelIds: [], bulkSelectedTaskIds: [] }),
       toggleArchive: () =>
         set((state) => ({ showArchive: !state.showArchive })),
       toggleDoneCollapsed: () =>

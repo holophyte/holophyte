@@ -42,7 +42,7 @@ export function TaskCard({ task, repoName }: TaskCardProps) {
     }
   };
 
-  const handleCheckboxClick = (e: React.MouseEvent) => {
+  const handleCheckboxChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     e.stopPropagation();
     toggleBulkSelectTask(task._id);
   };
@@ -76,8 +76,8 @@ export function TaskCard({ task, repoName }: TaskCardProps) {
         type="checkbox"
         checked={isSelected}
         aria-label={`Select task: ${task.title}`}
-        onClick={handleCheckboxClick}
-        onChange={() => {}}
+        onClick={(e) => e.stopPropagation()}
+        onChange={handleCheckboxChange}
         className={cn(
           'absolute top-2 right-2 h-4 w-4 accent-primary cursor-pointer transition-opacity',
           isBulkMode ? 'opacity-100' : 'opacity-0 group-hover/card:opacity-100',
