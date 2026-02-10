@@ -72,43 +72,17 @@ export function TaskCard({ task, repoName }: TaskCardProps) {
       )}
     >
       {/* Bulk selection checkbox */}
-      <div
-        role="checkbox"
-        aria-checked={isSelected}
-        tabIndex={-1}
+      <input
+        type="checkbox"
+        checked={isSelected}
+        aria-label={`Select task: ${task.title}`}
         onClick={handleCheckboxClick}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter' || e.key === ' ') {
-            e.preventDefault();
-            e.stopPropagation();
-            toggleBulkSelectTask(task._id);
-          }
-        }}
+        onChange={() => {}}
         className={cn(
-          'absolute top-2 right-2 h-4 w-4 rounded border flex items-center justify-center transition-all',
-          isSelected
-            ? 'bg-primary border-primary text-primary-foreground'
-            : 'border-muted-foreground/30 bg-background',
+          'absolute top-2 right-2 h-4 w-4 accent-primary cursor-pointer transition-opacity',
           isBulkMode ? 'opacity-100' : 'opacity-0 group-hover/card:opacity-100',
         )}
-      >
-        {isSelected && (
-          <svg
-            aria-hidden="true"
-            className="h-3 w-3"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-            strokeWidth={3}
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="M5 13l4 4L19 7"
-            />
-          </svg>
-        )}
-      </div>
+      />
       {/* Tag pills */}
       {task.labels && task.labels.length > 0 && (
         <div className="flex gap-1 mb-1.5 flex-wrap">

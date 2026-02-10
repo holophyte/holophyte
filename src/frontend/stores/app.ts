@@ -63,7 +63,12 @@ export const useAppStore = create<AppState>()(
       selectRepo: (id) =>
         set({ selectedRepoId: id, viewMode: 'board', bulkSelectedTaskIds: [] }),
       selectSeedBox: () =>
-        set({ selectedRepoId: null, viewMode: 'seeds', selectedTaskId: null }),
+        set({
+          selectedRepoId: null,
+          viewMode: 'seeds',
+          selectedTaskId: null,
+          bulkSelectedTaskIds: [],
+        }),
       selectTask: (id) => set({ selectedTaskId: id }),
       toggleBacklog: () =>
         set((state) => ({ backlogCollapsed: !state.backlogCollapsed })),
