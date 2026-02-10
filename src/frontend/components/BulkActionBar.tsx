@@ -64,9 +64,11 @@ export default function BulkActionBar({ allTasks }: BulkActionBarProps) {
           : [...current, labelId];
       return { id: task._id, labelIds: updated };
     });
-    for (const u of updates) {
-      await bulkUpdateLabels({ ids: [u.id], labelIds: u.labelIds });
-    }
+    await Promise.all(
+      updates.map((u) =>
+        bulkUpdateLabels({ ids: [u.id], labelIds: u.labelIds }),
+      ),
+    );
   };
 
   return (
