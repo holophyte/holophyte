@@ -150,7 +150,7 @@ export function KanbanColumn({
     >
       <div className="px-3 py-2 flex items-center justify-between">
         <div className="flex items-center gap-1.5">
-          {(isBulkMode || tasks.length > 0) && (
+          {isBulkMode && tasks.length > 0 && (
             <button
               type="button"
               onClick={handleSelectAll}
@@ -161,9 +161,6 @@ export function KanbanColumn({
                   : someSelected
                     ? 'bg-primary/50 border-primary text-primary-foreground'
                     : 'border-muted-foreground/30 bg-background',
-                isBulkMode
-                  ? 'opacity-100'
-                  : 'opacity-0 group-hover:opacity-100',
               )}
               title={allSelected ? 'Deselect all' : 'Select all'}
             >
