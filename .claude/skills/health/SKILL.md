@@ -45,10 +45,10 @@ Report: uncommitted changes, untracked files, divergence from remote.
 ### 5. Dependencies
 
 ```bash
-bun install --dry-run
+bun install --frozen-lockfile
 ```
 
-Check if `node_modules` is in sync with `bun.lock`.
+Verify dependencies match the lockfile. A non-zero exit means dependencies are out of sync.
 
 ### 6. Convex Status
 

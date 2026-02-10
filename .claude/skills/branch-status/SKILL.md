@@ -24,9 +24,10 @@ git fetch --all
 
 ```bash
 git branch -vv
+git for-each-ref --format='%(refname:short) %(committerdate:relative)' refs/heads
 ```
 
-Capture: branch name, last commit, tracking status (ahead/behind/gone).
+Capture: branch name, last commit, tracking status (ahead/behind/gone), last commit date.
 
 ### 3. List Worktrees
 

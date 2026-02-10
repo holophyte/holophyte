@@ -27,7 +27,7 @@ git describe --tags --abbrev=0 2>/dev/null
 ```
 
 - If a tag exists, use `<tag>..HEAD`
-- If no tags, use the last 20 commits: `HEAD~20..HEAD`
+- If no tags, use `--max-count 20` (no range, safe for repos with fewer than 20 commits)
 
 ### 2. Fetch Commits
 
