@@ -31,8 +31,14 @@ git describe --tags --abbrev=0 2>/dev/null
 
 ### 2. Fetch Commits
 
+If a range was determined:
 ```bash
 git log <range> --pretty=format:"%h %s" --no-merges
+```
+
+If no tags and no argument (fallback):
+```bash
+git log --max-count 20 --pretty=format:"%h %s" --no-merges
 ```
 
 Exclude merge commits to keep the changelog clean.
