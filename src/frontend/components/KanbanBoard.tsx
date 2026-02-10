@@ -171,7 +171,7 @@ export function KanbanBoard() {
       </div>
       <div className="flex-1 flex gap-4 p-4 overflow-x-auto">
         {COLUMNS.map((col) =>
-          col.status === 'backlog' && backlogCollapsed ? (
+          col.status === TaskStatus.Backlog && backlogCollapsed ? (
             <CollapsedColumn
               key={col.status}
               label={col.label}
@@ -186,10 +186,12 @@ export function KanbanBoard() {
               tasks={getColumnTasks(col.status)}
               repoMap={repoMap}
               showRepoBadge={selectedRepoId === null}
-              collapsible={col.status === 'backlog'}
-              onCollapse={col.status === 'backlog' ? toggleBacklog : undefined}
+              collapsible={col.status === TaskStatus.Backlog}
+              onCollapse={
+                col.status === TaskStatus.Backlog ? toggleBacklog : undefined
+              }
               onArchiveAll={
-                col.status === 'done' && selectedRepoId
+                col.status === TaskStatus.Done && selectedRepoId
                   ? handleArchiveAll
                   : undefined
               }

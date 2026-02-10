@@ -1,6 +1,6 @@
 import { api } from '@convex/_generated/api';
 import type { Doc, Id } from '@convex/_generated/dataModel';
-import type { TaskStatus } from '@convex/schema';
+import { TaskStatus } from '@convex/schema';
 import { useMutation } from 'convex/react';
 import { Archive, PanelLeftClose } from 'lucide-react';
 import { useCallback, useRef, useState } from 'react';
@@ -117,7 +117,7 @@ export function KanbanColumn({
           <span className="text-xs text-muted-foreground bg-muted rounded-full px-2 py-0.5">
             {tasks.length}
           </span>
-          {status === 'done' && tasks.length > 0 && onArchiveAll && (
+          {status === TaskStatus.Done && tasks.length > 0 && onArchiveAll && (
             <button
               type="button"
               onClick={onArchiveAll}

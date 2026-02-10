@@ -1,5 +1,6 @@
 import { api } from '@convex/_generated/api';
 import type { Id } from '@convex/_generated/dataModel';
+import { TaskStatus } from '@convex/schema';
 import { useMutation, useQuery } from 'convex/react';
 import { X } from 'lucide-react';
 import { useEffect, useState } from 'react';
@@ -78,7 +79,7 @@ export function TaskDetailPanel() {
 
   // Time tracking display
   const currentInProgressMs =
-    task.status === 'in_progress' && task.inProgressSince
+    task.status === TaskStatus.InProgress && task.inProgressSince
       ? Date.now() - task.inProgressSince
       : 0;
   const totalTimeMs = (task.totalInProgressMs ?? 0) + currentInProgressMs;
