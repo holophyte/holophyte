@@ -1,5 +1,5 @@
 import { api } from '@convex/_generated/api';
-import { TaskStatus } from '@convex/schema';
+import { PRIORITY_CONFIG, TaskPriority, TaskStatus } from '@convex/schema';
 import { useQuery } from 'convex/react';
 import { CheckSquare, Clock, Terminal } from 'lucide-react';
 import { formatRelativeDate } from '@/frontend/lib/dateUtils';
@@ -48,16 +48,17 @@ export function TaskCard({ task, repoName }: TaskCardProps) {
         'active:cursor-grabbing',
       )}
     >
-      {/* Label color dots */}
+      {/* Tag pills */}
       {task.labels && task.labels.length > 0 && (
-        <div className="flex gap-1 mb-1.5">
+        <div className="flex gap-1 mb-1.5 flex-wrap">
           {task.labels.map((label) => (
             <span
               key={label._id}
-              className="h-1.5 w-6 rounded-full"
+              className="inline-flex items-center rounded-full px-1.5 py-0 text-[10px] font-medium text-white leading-relaxed"
               style={{ backgroundColor: label.color }}
-              title={label.name}
-            />
+            >
+              {label.name}
+            </span>
           ))}
         </div>
       )}
@@ -73,6 +74,18 @@ export function TaskCard({ task, repoName }: TaskCardProps) {
         </p>
       )}
       <div className="flex items-center gap-1.5 mt-2 flex-wrap">
+        {task.priority &&
+          task.priority !== TaskPriority.None &&
+          (() => {
+            const config = PRIORITY_CONFIG[task.priority];
+            return (
+              <span
+                className="h-2.5 w-2.5 rounded-full shrink-0"
+                style={{ backgroundColor: config.color }}
+                title={config.label}
+              />
+            );
+          })()}
         {repoName && (
           <Badge variant="outline" className="text-[10px] px-1.5 py-0">
             {repoName}

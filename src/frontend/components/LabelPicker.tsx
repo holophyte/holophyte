@@ -56,7 +56,7 @@ export function LabelPicker({
       <PopoverTrigger asChild>
         <Button variant="outline" size="sm" className="h-8 gap-1.5">
           <Tag className="h-3.5 w-3.5" />
-          Labels
+          Tags
           {currentLabelIds.length > 0 && (
             <span className="ml-1 bg-muted rounded-full px-1.5 text-[10px]">
               {currentLabelIds.length}
@@ -90,7 +90,7 @@ export function LabelPicker({
         {creating ? (
           <div className="mt-2 space-y-2 border-t pt-2">
             <Input
-              placeholder="Label name"
+              placeholder="Tag name"
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
               onKeyDown={(e) => {
@@ -143,7 +143,7 @@ export function LabelPicker({
             className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-sm text-muted-foreground hover:bg-muted transition-colors mt-1 border-t pt-2"
           >
             <Plus className="h-3.5 w-3.5" />
-            Create new label
+            Create new tag
           </button>
         )}
       </PopoverContent>

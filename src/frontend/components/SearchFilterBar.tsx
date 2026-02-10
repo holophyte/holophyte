@@ -46,7 +46,7 @@ export function SearchFilterBar() {
               className="h-8 px-2"
             >
               <Tag className="h-3.5 w-3.5 mr-1" />
-              {filterLabelIds.length > 0 ? filterLabelIds.length : 'Labels'}
+              {filterLabelIds.length > 0 ? filterLabelIds.length : 'Tags'}
             </Button>
           </PopoverTrigger>
           <PopoverContent className="w-56 p-2" align="start">

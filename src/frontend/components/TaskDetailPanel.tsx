@@ -1,14 +1,15 @@
 import { api } from '@convex/_generated/api';
 import type { Id } from '@convex/_generated/dataModel';
-import { TaskStatus } from '@convex/schema';
+import { PRIORITY_CONFIG, TaskPriority, TaskStatus } from '@convex/schema';
 import { useMutation, useQuery } from 'convex/react';
-import { X } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { ChevronDown, X } from 'lucide-react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   dateInputToTimestamp,
   formatDuration,
   timestampToDateInput,
 } from '@/frontend/lib/dateUtils';
+import { cn } from '@/frontend/lib/utils';
 import { useAppStore } from '@/frontend/stores/app';
 import { ClaudeButton } from './ClaudeButton';
 import { LabelDots, LabelPicker } from './LabelPicker';
@@ -16,6 +17,7 @@ import { SubtaskList } from './SubtaskList';
 import Button from './ui/Button';
 import Input from './ui/Input';
 import Label from './ui/Label';
+import { Popover, PopoverContent, PopoverTrigger } from './ui/Popover';
 import Separator from './ui/Separator';
 import Textarea from './ui/Textarea';
 
@@ -34,35 +36,83 @@ export function TaskDetailPanel() {
   const [prompt, setPrompt] = useState('');
   const [labelIds, setLabelIds] = useState<Id<'labels'>[]>([]);
   const [dueDate, setDueDate] = useState('');
+  const [priority, setPriority] = useState<TaskPriority>(TaskPriority.None);
+  const [priorityOpen, setPriorityOpen] = useState(false);
+
+  // Track the task ID we've synced from to avoid re-syncing our own auto-saves
+  const syncedTaskRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (task) {
-      setTitle(task.title);
-      setDescription(task.description);
-      setPrompt(task.prompt);
-      setLabelIds(task.labelIds ?? []);
-      setDueDate(task.dueAt ? timestampToDateInput(task.dueAt) : '');
+      // Always sync when task ID changes; for same task, only sync fields
+      // that aren't being auto-saved (description/prompt are manual-save)
+      if (syncedTaskRef.current !== task._id) {
+        // New task selected — sync everything
+        setTitle(task.title);
+        setDescription(task.description);
+        setPrompt(task.prompt);
+        setLabelIds(task.labelIds ?? []);
+        setDueDate(task.dueAt ? timestampToDateInput(task.dueAt) : '');
+        setPriority((task.priority as TaskPriority) ?? TaskPriority.None);
+        syncedTaskRef.current = task._id;
+      } else {
+        // Same task updated from server — sync description/prompt
+        // (auto-saved fields are already in sync)
+        setDescription(task.description);
+        setPrompt(task.prompt);
+      }
     }
   }, [task]);
 
+  // Auto-save helper for instant fields
+  const autoSave = useCallback(
+    (fields: Partial<Parameters<typeof updateTask>[0]>) => {
+      if (!task) return;
+      updateTask({ id: task._id, ...fields });
+    },
+    [task, updateTask],
+  );
+
+  // Auto-save title on blur
+  const handleTitleBlur = () => {
+    const trimmed = title.trim();
+    if (task && trimmed && trimmed !== task.title) {
+      autoSave({ title: trimmed });
+    }
+  };
+
+  // Auto-save labels
+  const handleLabelChange = (newLabelIds: Id<'labels'>[]) => {
+    setLabelIds(newLabelIds);
+    autoSave({ labelIds: newLabelIds });
+  };
+
+  // Auto-save priority
+  const handlePriorityChange = (p: TaskPriority) => {
+    setPriority(p);
+    setPriorityOpen(false);
+    autoSave({ priority: p });
+  };
+
+  // Auto-save due date
+  const handleDueDateChange = (value: string) => {
+    setDueDate(value);
+    if (value) {
+      autoSave({ dueAt: dateInputToTimestamp(value) });
+    } else if (task?.dueAt) {
+      autoSave({ clearDueAt: true });
+    }
+  };
+
   if (!task) return null;
 
+  // Manual save for description + prompt
   const handleSave = async () => {
-    const updates: Parameters<typeof updateTask>[0] = {
+    await updateTask({
       id: task._id,
-      title: title.trim(),
       description: description.trim(),
       prompt: prompt.trim(),
-      labelIds,
-    };
-
-    if (dueDate) {
-      updates.dueAt = dateInputToTimestamp(dueDate);
-    } else if (task.dueAt && !dueDate) {
-      updates.clearDueAt = true;
-    }
-
-    await updateTask(updates);
+    });
   };
 
   const handleDelete = async () => {
@@ -70,12 +120,8 @@ export function TaskDetailPanel() {
     selectTask(null);
   };
 
-  const hasChanges =
-    title !== task.title ||
-    description !== task.description ||
-    prompt !== task.prompt ||
-    JSON.stringify(labelIds) !== JSON.stringify(task.labelIds ?? []) ||
-    dueDate !== (task.dueAt ? timestampToDateInput(task.dueAt) : '');
+  const hasTextChanges =
+    description !== task.description || prompt !== task.prompt;
 
   // Time tracking display
   const currentInProgressMs =
@@ -83,6 +129,9 @@ export function TaskDetailPanel() {
       ? Date.now() - task.inProgressSince
       : 0;
   const totalTimeMs = (task.totalInProgressMs ?? 0) + currentInProgressMs;
+
+  const currentPriorityConfig =
+    PRIORITY_CONFIG[priority] ?? PRIORITY_CONFIG[TaskPriority.None];
 
   return (
     <div className="w-96 border-l bg-background flex flex-col overflow-hidden">
@@ -98,6 +147,16 @@ export function TaskDetailPanel() {
         </Button>
       </div>
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
+        {/* Title at top */}
+        <Input
+          id="detail-title"
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          onBlur={handleTitleBlur}
+          className="text-base font-semibold h-auto py-1.5"
+          placeholder="Task title"
+        />
+
         {task.repo && (
           <div>
             <Label className="text-xs text-muted-foreground">Repository</Label>
@@ -108,16 +167,68 @@ export function TaskDetailPanel() {
           </div>
         )}
 
-        {/* Labels */}
+        {/* Tags — visible pills + picker */}
         <div className="space-y-2">
           <div className="flex items-center justify-between">
-            <Label className="text-xs text-muted-foreground">Labels</Label>
+            <Label className="text-xs text-muted-foreground">Tags</Label>
             <LabelPicker
               currentLabelIds={labelIds}
-              onChangeLabelIds={setLabelIds}
+              onChangeLabelIds={handleLabelChange}
             />
           </div>
-          {task.labels && <LabelDots labels={task.labels} />}
+          {task.labels && task.labels.length > 0 && (
+            <LabelDots labels={task.labels} />
+          )}
+        </div>
+
+        {/* Priority dropdown */}
+        <div className="space-y-2">
+          <Label className="text-xs text-muted-foreground">Priority</Label>
+          <Popover open={priorityOpen} onOpenChange={setPriorityOpen}>
+            <PopoverTrigger asChild>
+              <button
+                type="button"
+                className="flex items-center gap-2 px-2.5 py-1.5 rounded-md border text-sm hover:bg-muted/50 transition-colors w-full"
+              >
+                {currentPriorityConfig.color && (
+                  <span
+                    className="h-2.5 w-2.5 rounded-full shrink-0"
+                    style={{ backgroundColor: currentPriorityConfig.color }}
+                  />
+                )}
+                <span className="flex-1 text-left">
+                  {currentPriorityConfig.label}
+                </span>
+                <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+              </button>
+            </PopoverTrigger>
+            <PopoverContent className="w-44 p-1" align="start">
+              {Object.values(TaskPriority).map((p) => {
+                const config = PRIORITY_CONFIG[p];
+                return (
+                  <button
+                    key={p}
+                    type="button"
+                    onClick={() => handlePriorityChange(p)}
+                    className={cn(
+                      'w-full flex items-center gap-2 px-2.5 py-1.5 rounded text-sm hover:bg-muted transition-colors text-left',
+                      priority === p && 'bg-muted',
+                    )}
+                  >
+                    {config.color ? (
+                      <span
+                        className="h-2.5 w-2.5 rounded-full shrink-0"
+                        style={{ backgroundColor: config.color }}
+                      />
+                    ) : (
+                      <span className="h-2.5 w-2.5 shrink-0" />
+                    )}
+                    {config.label}
+                  </button>
+                );
+              })}
+            </PopoverContent>
+          </Popover>
         </div>
 
         {/* Time tracking + due date row */}
@@ -144,13 +255,13 @@ export function TaskDetailPanel() {
                 id="detail-due-date"
                 type="date"
                 value={dueDate}
-                onChange={(e) => setDueDate(e.target.value)}
+                onChange={(e) => handleDueDateChange(e.target.value)}
                 className="h-7 text-xs"
               />
               {dueDate && (
                 <button
                   type="button"
-                  onClick={() => setDueDate('')}
+                  onClick={() => handleDueDateChange('')}
                   className="p-1 text-muted-foreground hover:text-foreground"
                 >
                   <X className="h-3 w-3" />
@@ -161,14 +272,6 @@ export function TaskDetailPanel() {
         </div>
 
         <Separator />
-        <div className="space-y-2">
-          <Label htmlFor="detail-title">Title</Label>
-          <Input
-            id="detail-title"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-          />
-        </div>
         <div className="space-y-2">
           <Label htmlFor="detail-description">Description</Label>
           <Textarea
@@ -188,6 +291,11 @@ export function TaskDetailPanel() {
             className="font-mono text-xs"
           />
         </div>
+        {hasTextChanges && (
+          <Button size="sm" onClick={handleSave}>
+            Save
+          </Button>
+        )}
         <Separator />
 
         {/* Subtasks */}
@@ -203,9 +311,6 @@ export function TaskDetailPanel() {
         </div>
       </div>
       <div className="border-t p-4 flex items-center gap-2">
-        <Button size="sm" onClick={handleSave} disabled={!hasChanges}>
-          Save
-        </Button>
         <Button size="sm" variant="destructive" onClick={handleDelete}>
           Delete
         </Button>
