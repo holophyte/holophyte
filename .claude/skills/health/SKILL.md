@@ -45,10 +45,10 @@ Report: uncommitted changes, untracked files, divergence from remote.
 ### 5. Dependencies
 
 ```bash
-bun install --frozen-lockfile
+bun install --dry-run --frozen-lockfile
 ```
 
-Verify dependencies match the lockfile. A non-zero exit means dependencies are out of sync.
+Check whether dependencies would change without actually installing. A non-zero exit means dependencies are out of sync.
 
 ### 6. Convex Status
 
