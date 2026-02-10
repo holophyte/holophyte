@@ -1,16 +1,16 @@
-import { api } from "@convex/_generated/api";
-import { useMutation, useQuery } from "convex/react";
-import { ArchiveRestore, ArrowLeft, Search, Trash2 } from "lucide-react";
-import { useState } from "react";
-import { useAppStore } from "@/frontend/stores/app";
-import { Badge } from "./ui/badge";
-import { Button } from "./ui/button";
-import { Input } from "./ui/input";
+import { api } from '@convex/_generated/api';
+import { useMutation, useQuery } from 'convex/react';
+import { ArchiveRestore, ArrowLeft, Search, Trash2 } from 'lucide-react';
+import { useState } from 'react';
+import { useAppStore } from '@/frontend/stores/app';
+import Badge from './ui/Badge';
+import Button from './ui/Button';
+import Input from './ui/Input';
 
 export function ArchivePanel() {
   const selectedRepoId = useAppStore((s) => s.selectedRepoId);
   const toggleArchive = useAppStore((s) => s.toggleArchive);
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useState('');
 
   const archivedTasks = useQuery(
     api.tasks.listArchived,
@@ -42,7 +42,7 @@ export function ArchivePanel() {
         </Button>
         <h1 className="text-lg font-semibold">Archive</h1>
         <span className="text-sm text-muted-foreground">
-          {filteredTasks.length} task{filteredTasks.length !== 1 ? "s" : ""}
+          {filteredTasks.length} task{filteredTasks.length !== 1 ? 's' : ''}
         </span>
         <div className="flex-1" />
         <div className="relative w-64">
@@ -79,11 +79,11 @@ export function ArchivePanel() {
                       variant="outline"
                       className="text-[10px] px-1.5 py-0"
                     >
-                      {repoMap.get(task.repoId)?.name ?? "Unknown"}
+                      {repoMap.get(task.repoId)?.name ?? 'Unknown'}
                     </Badge>
                     {task.archivedAt && (
                       <span className="text-[10px] text-muted-foreground">
-                        Archived{" "}
+                        Archived{' '}
                         {new Date(task.archivedAt).toLocaleDateString()}
                       </span>
                     )}

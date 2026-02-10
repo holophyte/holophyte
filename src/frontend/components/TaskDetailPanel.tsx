@@ -1,38 +1,39 @@
-import { api } from "@convex/_generated/api";
-import type { Id } from "@convex/_generated/dataModel";
-import { useMutation, useQuery } from "convex/react";
-import { X } from "lucide-react";
-import { useEffect, useState } from "react";
+import { api } from '@convex/_generated/api';
+import type { Id } from '@convex/_generated/dataModel';
+import { TaskStatus } from '@convex/schema';
+import { useMutation, useQuery } from 'convex/react';
+import { X } from 'lucide-react';
+import { useEffect, useState } from 'react';
 import {
   dateInputToTimestamp,
   formatDuration,
   timestampToDateInput,
-} from "@/frontend/lib/date-utils";
-import { useAppStore } from "@/frontend/stores/app";
-import { ClaudeButton } from "./ClaudeButton";
-import { LabelDots, LabelPicker } from "./LabelPicker";
-import { SubtaskList } from "./SubtaskList";
-import { Button } from "./ui/button";
-import { Input } from "./ui/input";
-import { Label } from "./ui/label";
-import { Separator } from "./ui/separator";
-import { Textarea } from "./ui/textarea";
+} from '@/frontend/lib/dateUtils';
+import { useAppStore } from '@/frontend/stores/app';
+import { ClaudeButton } from './ClaudeButton';
+import { LabelDots, LabelPicker } from './LabelPicker';
+import { SubtaskList } from './SubtaskList';
+import Button from './ui/Button';
+import Input from './ui/Input';
+import Label from './ui/Label';
+import Separator from './ui/Separator';
+import Textarea from './ui/Textarea';
 
 export function TaskDetailPanel() {
   const selectedTaskId = useAppStore((s) => s.selectedTaskId);
   const selectTask = useAppStore((s) => s.selectTask);
   const task = useQuery(
     api.tasks.get,
-    selectedTaskId ? { id: selectedTaskId } : "skip",
+    selectedTaskId ? { id: selectedTaskId } : 'skip',
   );
   const updateTask = useMutation(api.tasks.update);
   const removeTask = useMutation(api.tasks.remove);
 
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
-  const [prompt, setPrompt] = useState("");
-  const [labelIds, setLabelIds] = useState<Id<"labels">[]>([]);
-  const [dueDate, setDueDate] = useState("");
+  const [title, setTitle] = useState('');
+  const [description, setDescription] = useState('');
+  const [prompt, setPrompt] = useState('');
+  const [labelIds, setLabelIds] = useState<Id<'labels'>[]>([]);
+  const [dueDate, setDueDate] = useState('');
 
   useEffect(() => {
     if (task) {
@@ -40,7 +41,7 @@ export function TaskDetailPanel() {
       setDescription(task.description);
       setPrompt(task.prompt);
       setLabelIds(task.labelIds ?? []);
-      setDueDate(task.dueAt ? timestampToDateInput(task.dueAt) : "");
+      setDueDate(task.dueAt ? timestampToDateInput(task.dueAt) : '');
     }
   }, [task]);
 
@@ -74,11 +75,11 @@ export function TaskDetailPanel() {
     description !== task.description ||
     prompt !== task.prompt ||
     JSON.stringify(labelIds) !== JSON.stringify(task.labelIds ?? []) ||
-    dueDate !== (task.dueAt ? timestampToDateInput(task.dueAt) : "");
+    dueDate !== (task.dueAt ? timestampToDateInput(task.dueAt) : '');
 
   // Time tracking display
   const currentInProgressMs =
-    task.status === "in_progress" && task.inProgressSince
+    task.status === TaskStatus.InProgress && task.inProgressSince
       ? Date.now() - task.inProgressSince
       : 0;
   const totalTimeMs = (task.totalInProgressMs ?? 0) + currentInProgressMs;
@@ -149,7 +150,7 @@ export function TaskDetailPanel() {
               {dueDate && (
                 <button
                   type="button"
-                  onClick={() => setDueDate("")}
+                  onClick={() => setDueDate('')}
                   className="p-1 text-muted-foreground hover:text-foreground"
                 >
                   <X className="h-3 w-3" />

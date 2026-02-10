@@ -1,11 +1,12 @@
-import { api } from "@convex/_generated/api";
-import { useQuery } from "convex/react";
-import { CheckSquare, Clock, Terminal } from "lucide-react";
-import { formatRelativeDate } from "@/frontend/lib/date-utils";
-import { cn } from "@/frontend/lib/utils";
-import { useAppStore } from "@/frontend/stores/app";
-import type { EnrichedTask } from "./KanbanBoard";
-import { Badge } from "./ui/badge";
+import { api } from '@convex/_generated/api';
+import { TaskStatus } from '@convex/schema';
+import { useQuery } from 'convex/react';
+import { CheckSquare, Clock, Terminal } from 'lucide-react';
+import { formatRelativeDate } from '@/frontend/lib/dateUtils';
+import { cn } from '@/frontend/lib/utils';
+import { useAppStore } from '@/frontend/stores/app';
+import type { EnrichedTask } from './KanbanBoard';
+import Badge from './ui/Badge';
 
 interface TaskCardProps {
   task: EnrichedTask;
@@ -19,13 +20,13 @@ export function TaskCard({ task, repoName }: TaskCardProps) {
   const isOverdue =
     task.dueAt &&
     task.dueAt < Date.now() &&
-    task.status !== "done" &&
-    task.status !== "archived";
+    task.status !== TaskStatus.Done &&
+    task.status !== TaskStatus.Archived;
 
   const handleDragStart = (e: React.DragEvent) => {
-    e.dataTransfer.setData("text/plain", task._id);
-    e.dataTransfer.setData("application/x-status", task.status);
-    e.dataTransfer.effectAllowed = "move";
+    e.dataTransfer.setData('text/plain', task._id);
+    e.dataTransfer.setData('application/x-status', task.status);
+    e.dataTransfer.effectAllowed = 'move';
   };
 
   return (
@@ -37,14 +38,14 @@ export function TaskCard({ task, repoName }: TaskCardProps) {
       onDragStart={handleDragStart}
       onClick={() => selectTask(task._id)}
       onKeyDown={(e) => {
-        if (e.key === "Enter" || e.key === " ") {
+        if (e.key === 'Enter' || e.key === ' ') {
           e.preventDefault();
           selectTask(task._id);
         }
       }}
       className={cn(
-        "bg-background rounded-md border p-3 cursor-pointer hover:border-foreground/20 transition-colors shadow-sm",
-        "active:cursor-grabbing",
+        'bg-background rounded-md border p-3 cursor-pointer hover:border-foreground/20 transition-colors shadow-sm',
+        'active:cursor-grabbing',
       )}
     >
       {/* Label color dots */}
@@ -62,7 +63,7 @@ export function TaskCard({ task, repoName }: TaskCardProps) {
       )}
       <div className="flex items-start justify-between gap-2">
         <h3 className="text-sm font-medium leading-snug">{task.title}</h3>
-        {session?.status === "running" && (
+        {session?.status === 'running' && (
           <Terminal className="h-3.5 w-3.5 text-green-500 shrink-0 mt-0.5" />
         )}
       </div>
@@ -92,8 +93,8 @@ export function TaskCard({ task, repoName }: TaskCardProps) {
           <Badge
             variant="outline"
             className={cn(
-              "text-[10px] px-1.5 py-0 gap-0.5",
-              isOverdue && "text-red-600 border-red-300 bg-red-50",
+              'text-[10px] px-1.5 py-0 gap-0.5',
+              isOverdue && 'text-red-600 border-red-300 bg-red-50',
             )}
           >
             <Clock className="h-2.5 w-2.5" />
@@ -102,12 +103,12 @@ export function TaskCard({ task, repoName }: TaskCardProps) {
         )}
         {session && (
           <Badge
-            variant={session.status === "running" ? "default" : "outline"}
+            variant={session.status === 'running' ? 'default' : 'outline'}
             className={cn(
-              "text-[10px] px-1.5 py-0",
-              session.status === "completed" && "text-green-600",
-              session.status === "failed" && "text-red-600",
-              session.status === "stopped" && "text-yellow-600",
+              'text-[10px] px-1.5 py-0',
+              session.status === 'completed' && 'text-green-600',
+              session.status === 'failed' && 'text-red-600',
+              session.status === 'stopped' && 'text-yellow-600',
             )}
           >
             {session.status}

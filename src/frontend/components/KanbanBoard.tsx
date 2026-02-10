@@ -1,28 +1,29 @@
-import { api } from "@convex/_generated/api";
-import type { Doc } from "@convex/_generated/dataModel";
-import { useMutation, useQuery } from "convex/react";
-import { Archive, ChevronsRight, Plus } from "lucide-react";
-import { useMemo, useState } from "react";
-import { cn } from "@/frontend/lib/utils";
-import { useAppStore } from "@/frontend/stores/app";
-import { ArchivePanel } from "./ArchivePanel";
-import { CreateTaskDialog } from "./CreateTaskDialog";
-import { KanbanColumn } from "./KanbanColumn";
-import { SearchFilterBar } from "./SearchFilterBar";
-import { Button } from "./ui/button";
+import { api } from '@convex/_generated/api';
+import type { Doc } from '@convex/_generated/dataModel';
+import { TaskStatus } from '@convex/schema';
+import { useMutation, useQuery } from 'convex/react';
+import { Archive, ChevronsRight, Plus } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { cn } from '@/frontend/lib/utils';
+import { useAppStore } from '@/frontend/stores/app';
+import { ArchivePanel } from './ArchivePanel';
+import { CreateTaskDialog } from './CreateTaskDialog';
+import { KanbanColumn } from './KanbanColumn';
+import { SearchFilterBar } from './SearchFilterBar';
+import Button from './ui/Button';
 
-export interface EnrichedTask extends Doc<"tasks"> {
-  labels: Doc<"labels">[];
+export interface EnrichedTask extends Doc<'tasks'> {
+  labels: Doc<'labels'>[];
   subtaskTotal: number;
   subtaskCompleted: number;
 }
 
 const COLUMNS = [
-  { status: "backlog" as const, label: "Backlog" },
-  { status: "todo" as const, label: "To Do" },
-  { status: "in_progress" as const, label: "In Progress" },
-  { status: "review" as const, label: "Review" },
-  { status: "done" as const, label: "Done" },
+  { status: TaskStatus.Backlog, label: 'Backlog' },
+  { status: TaskStatus.Todo, label: 'To Do' },
+  { status: TaskStatus.InProgress, label: 'In Progress' },
+  { status: TaskStatus.Review, label: 'Review' },
+  { status: TaskStatus.Done, label: 'Done' },
 ];
 
 function CollapsedColumn({
@@ -39,9 +40,9 @@ function CollapsedColumn({
       type="button"
       onClick={onExpand}
       className={cn(
-        "w-10 min-w-[40px] min-h-full rounded-lg bg-muted/50 border",
-        "flex flex-col items-center justify-center gap-2",
-        "hover:bg-muted/80 transition-colors cursor-pointer",
+        'w-10 min-w-[40px] min-h-full rounded-lg bg-muted/50 border',
+        'flex flex-col items-center justify-center gap-2',
+        'hover:bg-muted/80 transition-colors cursor-pointer',
       )}
     >
       <span className="text-xs text-muted-foreground bg-muted rounded-full px-1.5 py-0.5">
@@ -67,11 +68,11 @@ export function KanbanBoard() {
 
   const repoTasks = useQuery(
     api.tasks.listByRepo,
-    selectedRepoId ? { repoId: selectedRepoId } : "skip",
+    selectedRepoId ? { repoId: selectedRepoId } : 'skip',
   );
   const allTasksQuery = useQuery(
     api.tasks.listAll,
-    selectedRepoId ? "skip" : {},
+    selectedRepoId ? 'skip' : {},
   );
   const allTasks = selectedRepoId ? repoTasks : allTasksQuery;
 
@@ -87,7 +88,7 @@ export function KanbanBoard() {
   const taskIds = useMemo(() => (allTasks ?? []).map((t) => t._id), [allTasks]);
   const subtaskCounts = useQuery(
     api.subtasks.countsByTasks,
-    taskIds.length > 0 ? { taskIds } : "skip",
+    taskIds.length > 0 ? { taskIds } : 'skip',
   );
 
   const enrichedTasks: EnrichedTask[] = useMemo(() => {
@@ -97,7 +98,7 @@ export function KanbanBoard() {
         ...t,
         labels: (t.labelIds ?? [])
           .map((id) => labelMap.get(id))
-          .filter((l): l is Doc<"labels"> => l != null),
+          .filter((l): l is Doc<'labels'> => l != null),
         subtaskTotal: counts?.total ?? 0,
         subtaskCompleted: counts?.completed ?? 0,
       };
@@ -145,14 +146,14 @@ export function KanbanBoard() {
       <div className="flex items-center justify-between px-6 py-3 border-b gap-3">
         <h1 className="text-lg font-semibold shrink-0">
           {selectedRepoId
-            ? (repoMap.get(selectedRepoId)?.name ?? "Tasks")
-            : "All Tasks"}
+            ? (repoMap.get(selectedRepoId)?.name ?? 'Tasks')
+            : 'All Tasks'}
         </h1>
         <SearchFilterBar />
         <div className="flex items-center gap-2 shrink-0">
           <Button
             size="sm"
-            variant={showArchive ? "secondary" : "ghost"}
+            variant={showArchive ? 'secondary' : 'ghost'}
             onClick={toggleArchive}
           >
             <Archive className="h-4 w-4 mr-1" />
@@ -170,7 +171,7 @@ export function KanbanBoard() {
       </div>
       <div className="flex-1 flex gap-4 p-4 overflow-x-auto">
         {COLUMNS.map((col) =>
-          col.status === "backlog" && backlogCollapsed ? (
+          col.status === TaskStatus.Backlog && backlogCollapsed ? (
             <CollapsedColumn
               key={col.status}
               label={col.label}
@@ -185,10 +186,12 @@ export function KanbanBoard() {
               tasks={getColumnTasks(col.status)}
               repoMap={repoMap}
               showRepoBadge={selectedRepoId === null}
-              collapsible={col.status === "backlog"}
-              onCollapse={col.status === "backlog" ? toggleBacklog : undefined}
+              collapsible={col.status === TaskStatus.Backlog}
+              onCollapse={
+                col.status === TaskStatus.Backlog ? toggleBacklog : undefined
+              }
               onArchiveAll={
-                col.status === "done" && selectedRepoId
+                col.status === TaskStatus.Done && selectedRepoId
                   ? handleArchiveAll
                   : undefined
               }

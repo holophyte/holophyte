@@ -1,10 +1,11 @@
-import { v } from "convex/values";
-import { mutation, query } from "./_generated/server";
+import { v } from 'convex/values';
+import { mutation, query } from './_generated/server';
+import { TaskStatus } from './schema';
 
 export const list = query({
   args: {},
   handler: async (ctx) => {
-    return await ctx.db.query("seeds").collect();
+    return await ctx.db.query('seeds').collect();
   },
 });
 
@@ -14,10 +15,10 @@ export const create = mutation({
     description: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    return await ctx.db.insert("seeds", {
+    return await ctx.db.insert('seeds', {
       title: args.title,
-      description: args.description ?? "",
-      status: "active",
+      description: args.description ?? '',
+      status: 'active',
       createdAt: Date.now(),
     });
   },
@@ -25,7 +26,7 @@ export const create = mutation({
 
 export const update = mutation({
   args: {
-    id: v.id("seeds"),
+    id: v.id('seeds'),
     title: v.optional(v.string()),
     description: v.optional(v.string()),
   },
@@ -40,7 +41,7 @@ export const update = mutation({
 });
 
 export const remove = mutation({
-  args: { id: v.id("seeds") },
+  args: { id: v.id('seeds') },
   handler: async (ctx, args) => {
     await ctx.db.delete(args.id);
   },
@@ -48,19 +49,19 @@ export const remove = mutation({
 
 export const plant = mutation({
   args: {
-    id: v.id("seeds"),
-    repoId: v.id("repos"),
+    id: v.id('seeds'),
+    repoId: v.id('repos'),
     prompt: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const seed = await ctx.db.get(args.id);
-    if (!seed) throw new Error("Seed not found");
+    if (!seed) throw new Error('Seed not found');
 
     // Calculate position for new task in backlog
     const existing = await ctx.db
-      .query("tasks")
-      .withIndex("by_repo_status", (q) =>
-        q.eq("repoId", args.repoId).eq("status", "backlog"),
+      .query('tasks')
+      .withIndex('by_repo_status', (q) =>
+        q.eq('repoId', args.repoId).eq('status', TaskStatus.Backlog),
       )
       .collect();
     const maxPosition = existing.reduce(
@@ -69,19 +70,19 @@ export const plant = mutation({
     );
 
     const now = Date.now();
-    const taskId = await ctx.db.insert("tasks", {
+    const taskId = await ctx.db.insert('tasks', {
       repoId: args.repoId,
       title: seed.title,
       description: seed.description,
-      prompt: args.prompt ?? "",
-      status: "backlog",
+      prompt: args.prompt ?? '',
+      status: TaskStatus.Backlog,
       position: maxPosition + 1,
       createdAt: now,
       updatedAt: now,
     });
 
     await ctx.db.patch(args.id, {
-      status: "planted",
+      status: 'planted',
       plantedToTaskId: taskId,
     });
 

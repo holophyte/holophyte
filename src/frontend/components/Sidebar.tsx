@@ -1,6 +1,7 @@
-import { api } from "@convex/_generated/api";
-import type { Id } from "@convex/_generated/dataModel";
-import { useMutation, useQuery } from "convex/react";
+import { api } from '@convex/_generated/api';
+import type { Id } from '@convex/_generated/dataModel';
+import { TaskStatus } from '@convex/schema';
+import { useMutation, useQuery } from 'convex/react';
 import {
   Eye,
   FolderGit2,
@@ -9,14 +10,14 @@ import {
   Plus,
   Sprout,
   Trash2,
-} from "lucide-react";
-import { useState } from "react";
-import { cn } from "@/frontend/lib/utils";
-import { useAppStore } from "@/frontend/stores/app";
-import { AddRepoDialog } from "./AddRepoDialog";
-import { Button } from "./ui/button";
-import { ScrollArea } from "./ui/scroll-area";
-import { Separator } from "./ui/separator";
+} from 'lucide-react';
+import { useState } from 'react';
+import { cn } from '@/frontend/lib/utils';
+import { useAppStore } from '@/frontend/stores/app';
+import { AddRepoDialog } from './AddRepoDialog';
+import Button from './ui/Button';
+import ScrollArea from './ui/ScrollArea';
+import Separator from './ui/Separator';
 
 export function Sidebar() {
   const repos = useQuery(api.repos.list);
@@ -30,7 +31,7 @@ export function Sidebar() {
   const selectTask = useAppStore((s) => s.selectTask);
   const [addRepoOpen, setAddRepoOpen] = useState(false);
 
-  const handleRemove = async (e: React.MouseEvent, repoId: Id<"repos">) => {
+  const handleRemove = async (e: React.MouseEvent, repoId: Id<'repos'>) => {
     e.stopPropagation();
     if (selectedRepoId === repoId) {
       selectRepo(null);
@@ -57,9 +58,9 @@ export function Sidebar() {
       <div className="p-2 space-y-1">
         <Button
           variant={
-            viewMode === "board" && selectedRepoId === null
-              ? "secondary"
-              : "ghost"
+            viewMode === 'board' && selectedRepoId === null
+              ? 'secondary'
+              : 'ghost'
           }
           className="w-full justify-start gap-2"
           onClick={() => selectRepo(null)}
@@ -68,7 +69,7 @@ export function Sidebar() {
           All Tasks
         </Button>
         <Button
-          variant={viewMode === "seeds" ? "secondary" : "ghost"}
+          variant={viewMode === 'seeds' ? 'secondary' : 'ghost'}
           className="w-full justify-start gap-2"
           onClick={() => selectSeedBox()}
         >
@@ -101,9 +102,9 @@ export function Sidebar() {
                 <div className="group relative">
                   <Button
                     variant={
-                      selectedRepoId === repo._id ? "secondary" : "ghost"
+                      selectedRepoId === repo._id ? 'secondary' : 'ghost'
                     }
-                    className={cn("w-full justify-start gap-2 text-sm pr-8")}
+                    className={cn('w-full justify-start gap-2 text-sm pr-8')}
                     onClick={() => selectRepo(repo._id)}
                   >
                     <FolderGit2 className="h-4 w-4 shrink-0" />
@@ -126,17 +127,17 @@ export function Sidebar() {
                         type="button"
                         onClick={() => selectTask(task._id)}
                         className={cn(
-                          "w-full text-left rounded-md px-2 py-1 transition-colors flex items-center gap-1.5",
+                          'w-full text-left rounded-md px-2 py-1 transition-colors flex items-center gap-1.5',
                           selectedTaskId === task._id
-                            ? "bg-accent"
-                            : "hover:bg-accent/50",
+                            ? 'bg-accent'
+                            : 'hover:bg-accent/50',
                         )}
                       >
-                        {task.status === "in_progress" ? (
+                        {task.status === TaskStatus.InProgress ? (
                           <Sprout
                             className={cn(
-                              "h-3 w-3 shrink-0 text-green-500",
-                              task.hasRunningSession && "animate-pulse",
+                              'h-3 w-3 shrink-0 text-green-500',
+                              task.hasRunningSession && 'animate-pulse',
                             )}
                           />
                         ) : (

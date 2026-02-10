@@ -1,8 +1,8 @@
-import { api } from "@convex/_generated/api";
-import { useMutation } from "convex/react";
-import { FolderOpen, Loader2 } from "lucide-react";
-import { useState } from "react";
-import { Button } from "./ui/button";
+import { api } from '@convex/_generated/api';
+import { useMutation } from 'convex/react';
+import { FolderOpen, Loader2 } from 'lucide-react';
+import { useState } from 'react';
+import Button from './ui/Button';
 import {
   Dialog,
   DialogContent,
@@ -10,9 +10,9 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "./ui/dialog";
-import { Input } from "./ui/input";
-import { Label } from "./ui/label";
+} from './ui/Dialog';
+import Input from './ui/Input';
+import Label from './ui/Label';
 
 interface AddRepoDialogProps {
   open: boolean;
@@ -20,7 +20,7 @@ interface AddRepoDialogProps {
 }
 
 export function AddRepoDialog({ open, onOpenChange }: AddRepoDialogProps) {
-  const [name, setName] = useState("");
+  const [name, setName] = useState('');
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [picking, setPicking] = useState(false);
@@ -31,7 +31,7 @@ export function AddRepoDialog({ open, onOpenChange }: AddRepoDialogProps) {
     setPicking(true);
     setError(null);
     try {
-      const res = await fetch("/api/pick-directory", { method: "POST" });
+      const res = await fetch('/api/pick-directory', { method: 'POST' });
       const data = await res.json();
 
       if (data.cancelled) {
@@ -46,7 +46,7 @@ export function AddRepoDialog({ open, onOpenChange }: AddRepoDialogProps) {
       }
 
       if (!data.isGitRepo) {
-        setError("Selected folder is not a git repository.");
+        setError('Selected folder is not a git repository.');
         setPicking(false);
         return;
       }
@@ -54,7 +54,7 @@ export function AddRepoDialog({ open, onOpenChange }: AddRepoDialogProps) {
       setSelectedPath(data.path);
       setName(data.name);
     } catch {
-      setError("Failed to open directory picker.");
+      setError('Failed to open directory picker.');
     } finally {
       setPicking(false);
     }
@@ -65,7 +65,7 @@ export function AddRepoDialog({ open, onOpenChange }: AddRepoDialogProps) {
     setError(null);
 
     if (!name.trim() || !selectedPath) {
-      setError("Select a git repository and provide a name.");
+      setError('Select a git repository and provide a name.');
       return;
     }
 
@@ -75,9 +75,9 @@ export function AddRepoDialog({ open, onOpenChange }: AddRepoDialogProps) {
       handleClose();
     } catch (err) {
       const message =
-        err instanceof Error ? err.message : "Failed to add repo.";
-      if (message.includes("already exists")) {
-        setError("This repository has already been added.");
+        err instanceof Error ? err.message : 'Failed to add repo.';
+      if (message.includes('already exists')) {
+        setError('This repository has already been added.');
       } else {
         setError(message);
       }
@@ -87,7 +87,7 @@ export function AddRepoDialog({ open, onOpenChange }: AddRepoDialogProps) {
   };
 
   const handleClose = () => {
-    setName("");
+    setName('');
     setSelectedPath(null);
     setError(null);
     onOpenChange(false);
@@ -156,7 +156,7 @@ export function AddRepoDialog({ open, onOpenChange }: AddRepoDialogProps) {
                   Adding...
                 </>
               ) : (
-                "Add Repo"
+                'Add Repo'
               )}
             </Button>
           </DialogFooter>

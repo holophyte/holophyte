@@ -1,37 +1,46 @@
-import { api } from "@convex/_generated/api";
-import type { Doc } from "@convex/_generated/dataModel";
-import { useQuery } from "convex/react";
-import { Loader2, Play, Square } from "lucide-react";
-import { useState } from "react";
-import { useAppStore } from "@/frontend/stores/app";
-import { Button } from "./ui/button";
+import { api } from '@convex/_generated/api';
+import type { Doc } from '@convex/_generated/dataModel';
+import { useQuery } from 'convex/react';
+import { Loader2, Play, Square } from 'lucide-react';
+import { useState } from 'react';
+import { useAppStore } from '@/frontend/stores/app';
+import Button from './ui/Button';
 
 interface ClaudeButtonProps {
-  task: Doc<"tasks"> & { repo?: Doc<"repos"> | null };
+  task: Doc<'tasks'> & { repo?: Doc<'repos'> | null };
 }
 
 export function ClaudeButton({ task }: ClaudeButtonProps) {
   const session = useQuery(api.sessions.getByTask, { taskId: task._id });
   const openTerminal = useAppStore((s) => s.openTerminal);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const handleLaunch = async () => {
     if (!task.prompt || !task.repo) return;
     setLoading(true);
+    setError(null);
     try {
-      const res = await fetch("/api/sessions/start", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
+      const res = await fetch('/api/sessions/start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           taskId: task._id,
           repoPath: task.repo.path,
           prompt: task.prompt,
         }),
       });
+      if (!res.ok) {
+        const data = await res.json();
+        setError(data.error ?? 'Failed to launch session');
+        return;
+      }
       const data = await res.json();
       if (data.sessionId) {
         openTerminal(data.sessionId);
       }
+    } catch (err) {
+      setError(String(err));
     } finally {
       setLoading(false);
     }
@@ -40,8 +49,17 @@ export function ClaudeButton({ task }: ClaudeButtonProps) {
   const handleStop = async () => {
     if (!session) return;
     setLoading(true);
+    setError(null);
     try {
-      await fetch(`/api/sessions/${session._id}/stop`, { method: "POST" });
+      const res = await fetch(`/api/sessions/${session._id}/stop`, {
+        method: 'POST',
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        setError(data.error ?? 'Failed to stop session');
+      }
+    } catch (err) {
+      setError(String(err));
     } finally {
       setLoading(false);
     }
@@ -62,34 +80,40 @@ export function ClaudeButton({ task }: ClaudeButtonProps) {
     );
   }
 
-  if (session?.status === "running") {
+  if (session?.status === 'running') {
     return (
-      <div className="flex gap-2">
-        <Button
-          size="sm"
-          variant="outline"
-          className="flex-1"
-          onClick={handleResume}
-        >
-          <Play className="h-4 w-4 mr-1" />
-          View Terminal
-        </Button>
-        <Button size="sm" variant="destructive" onClick={handleStop}>
-          <Square className="h-4 w-4" />
-        </Button>
-      </div>
+      <>
+        <div className="flex gap-2">
+          <Button
+            size="sm"
+            variant="outline"
+            className="flex-1"
+            onClick={handleResume}
+          >
+            <Play className="h-4 w-4 mr-1" />
+            View Terminal
+          </Button>
+          <Button size="sm" variant="destructive" onClick={handleStop}>
+            <Square className="h-4 w-4" />
+          </Button>
+        </div>
+        {error && <p className="text-xs text-red-600 mt-1">{error}</p>}
+      </>
     );
   }
 
   return (
-    <Button
-      size="sm"
-      className="w-full"
-      onClick={handleLaunch}
-      disabled={!task.prompt || !task.repo}
-    >
-      <Play className="h-4 w-4 mr-1" />
-      Launch Claude Code
-    </Button>
+    <>
+      <Button
+        size="sm"
+        className="w-full"
+        onClick={handleLaunch}
+        disabled={!task.prompt || !task.repo}
+      >
+        <Play className="h-4 w-4 mr-1" />
+        Launch Claude Code
+      </Button>
+      {error && <p className="text-xs text-red-600 mt-1">{error}</p>}
+    </>
   );
 }

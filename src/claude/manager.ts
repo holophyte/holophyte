@@ -1,30 +1,34 @@
-import { api } from "@convex/_generated/api";
-import type { Id } from "@convex/_generated/dataModel";
-import type { Subprocess } from "bun";
-import { ConvexHttpClient } from "convex/browser";
+import { api } from '@convex/_generated/api';
+import type { Id } from '@convex/_generated/dataModel';
+import type { Subprocess } from 'bun';
+import { ConvexHttpClient } from 'convex/browser';
+import { TERMINAL_DEFAULTS } from '@/constants';
 
 interface Session {
   proc: Subprocess;
-  taskId: Id<"tasks">;
-  convexSessionId: Id<"sessions">;
+  taskId: Id<'tasks'>;
+  convexSessionId: Id<'sessions'>;
   subscribers: Set<(data: string) => void>;
 }
 
-const convex = new ConvexHttpClient(process.env.CONVEX_URL ?? "");
+if (!process.env.CONVEX_URL) {
+  throw new Error('CONVEX_URL environment variable is required');
+}
+const convex = new ConvexHttpClient(process.env.CONVEX_URL);
 
 const sessions = new Map<string, Session>();
 
 // Resolve the user's login shell env so spawned processes can find `claude`
 async function getShellEnv(): Promise<Record<string, string>> {
-  const shell = process.env.SHELL ?? "/bin/zsh";
-  const proc = Bun.spawn([shell, "-ilc", "env"], {
-    stdout: "pipe",
-    stderr: "pipe",
+  const shell = process.env.SHELL ?? '/bin/zsh';
+  const proc = Bun.spawn([shell, '-ilc', 'env'], {
+    stdout: 'pipe',
+    stderr: 'pipe',
   });
   const output = await new Response(proc.stdout).text();
   const env: Record<string, string> = {};
-  for (const line of output.split("\n")) {
-    const idx = line.indexOf("=");
+  for (const line of output.split('\n')) {
+    const idx = line.indexOf('=');
     if (idx > 0) {
       env[line.slice(0, idx)] = line.slice(idx + 1);
     }
@@ -48,7 +52,7 @@ async function getEnv(): Promise<Record<string, string>> {
 // Resolve full path to claude binary
 async function resolveClaudePath(): Promise<string> {
   const env = await getEnv();
-  const pathDirs = (env.PATH ?? "").split(":");
+  const pathDirs = (env.PATH ?? '').split(':');
   for (const dir of pathDirs) {
     const candidate = `${dir}/claude`;
     const file = Bun.file(candidate);
@@ -56,7 +60,7 @@ async function resolveClaudePath(): Promise<string> {
       return candidate;
     }
   }
-  return "claude";
+  return 'claude';
 }
 
 export function getSession(sessionId: string): Session | undefined {
@@ -68,7 +72,7 @@ export function getActiveSessions(): string[] {
 }
 
 export async function startSession(opts: {
-  taskId: Id<"tasks">;
+  taskId: Id<'tasks'>;
   repoPath: string;
   prompt: string;
 }): Promise<{ sessionId: string }> {
@@ -94,11 +98,11 @@ export async function startSession(opts: {
     cwd: opts.repoPath,
     env: {
       ...env,
-      TERM: "xterm-256color",
+      TERM: 'xterm-256color',
     },
     terminal: {
-      cols: 120,
-      rows: 30,
+      cols: TERMINAL_DEFAULTS.cols,
+      rows: TERMINAL_DEFAULTS.rows,
       data(_terminal, data) {
         const text = new TextDecoder().decode(data);
         for (const cb of session.subscribers) {
@@ -113,14 +117,14 @@ export async function startSession(opts: {
 
   // Handle process exit
   proc.exited.then(async (exitCode) => {
-    const status = exitCode === 0 ? "completed" : "failed";
+    const status = exitCode === 0 ? 'completed' : 'failed';
     try {
       await convex.mutation(api.sessions.updateStatus, {
         id: convexSessionId,
         status,
       });
     } catch (err) {
-      console.error("Failed to update session status:", err);
+      console.error('Failed to update session status:', err);
     }
     proc.terminal?.close();
     sessions.delete(sessionId);
@@ -134,15 +138,15 @@ export async function stopSession(sessionId: string): Promise<void> {
   if (!session) return;
 
   session.proc.terminal?.close();
-  session.proc.kill("SIGKILL");
+  session.proc.kill('SIGKILL');
 
   try {
     await convex.mutation(api.sessions.updateStatus, {
       id: session.convexSessionId,
-      status: "stopped",
+      status: 'stopped',
     });
   } catch (err) {
-    console.error("Failed to update session status:", err);
+    console.error('Failed to update session status:', err);
   }
 
   sessions.delete(sessionId);

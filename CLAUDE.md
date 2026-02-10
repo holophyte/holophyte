@@ -41,19 +41,19 @@ Use **Bun** for everything — never Node.js, npm, vite, or express. Bun auto-lo
 
 Enforced by **Biome** (no ESLint/Prettier). Run `bun run lint:fix` before committing.
 
-- 2 spaces, double quotes, semicolons always
-- Named exports only — no default exports
-- PascalCase component files (`TaskCard.tsx`), kebab-case for non-components
+- 2 spaces, single quotes, semicolons always
+- Default exports for React components; named exports for everything else
+- PascalCase component files (`TaskCard.tsx`), camelCase for non-component modules
 - Props typed with `interface ComponentNameProps`
 - Use `import type` for type-only imports (`verbatimModuleSyntax` is on)
 - Combine classNames with `cn()` helper from `@/frontend/lib/utils` (clsx + tailwind-merge)
 
 **Import ordering** (top to bottom):
-1. External type imports (`import type { Doc } from "@convex/_generated/dataModel"`)
-2. External value imports (`import { useQuery } from "convex/react"`)
-3. Internal type imports (`import type { Session } from "@/claude/manager"`)
-4. Internal value imports — `@/` aliases (`import { cn } from "@/frontend/lib/utils"`)
-5. Relative imports (`import { Badge } from "./ui/badge"`)
+1. External type imports (`import type { Doc } from '@convex/_generated/dataModel'`)
+2. External value imports (`import { useQuery } from 'convex/react'`)
+3. Internal type imports (`import type { Session } from '@/claude/manager'`)
+4. Internal value imports — `@/` aliases (`import { cn } from '@/frontend/lib/utils'`)
+5. Relative imports (`import Badge from './ui/Badge'`)
 
 ## TypeScript
 
@@ -72,7 +72,7 @@ src/frontend/App.tsx       → Main layout: Sidebar | KanbanBoard + TerminalPane
 src/frontend/stores/app.ts → Zustand store (selected repo/task, terminal state)
 src/frontend/hooks/        → useTerminal (xterm.js + WebSocket)
 src/frontend/components/   → UI components (Kanban*, Task*, Terminal*, Sidebar, dialogs)
-src/frontend/components/ui → Radix UI primitives (button, dialog, input, etc.)
+src/frontend/components/ui → Radix UI primitives (Button, Dialog, Input, etc.)
 convex/schema.ts           → Data model: repos, tasks, sessions
 convex/{repos,tasks,sessions}.ts → Convex queries and mutations
 ```

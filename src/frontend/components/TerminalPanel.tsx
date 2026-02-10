@@ -1,8 +1,8 @@
-import { ChevronDown, ChevronUp, X } from "lucide-react";
-import { useTerminal } from "@/frontend/hooks/useTerminal";
-import { cn } from "@/frontend/lib/utils";
-import { useAppStore } from "@/frontend/stores/app";
-import { Button } from "./ui/button";
+import { ChevronDown, ChevronUp, X } from 'lucide-react';
+import { useTerminal } from '@/frontend/hooks/useTerminal';
+import { cn } from '@/frontend/lib/utils';
+import { useAppStore } from '@/frontend/stores/app';
+import Button from './ui/Button';
 
 export function TerminalPanel() {
   const terminalSessionId = useAppStore((s) => s.terminalSessionId);
@@ -15,8 +15,8 @@ export function TerminalPanel() {
   return (
     <div
       className={cn(
-        "border-t bg-background flex flex-col transition-all",
-        terminalMinimized ? "h-10" : "h-80",
+        'border-t bg-background flex flex-col transition-all',
+        terminalMinimized ? 'h-10' : 'h-80',
       )}
     >
       <div className="flex items-center justify-between px-3 py-1 border-b bg-muted/50">

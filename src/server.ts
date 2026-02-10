@@ -1,4 +1,5 @@
-import homepage from "../public/index.html";
+import { ansi } from '@/constants';
+import homepage from '../public/index.html';
 import {
   getSession,
   resizeSession,
@@ -6,7 +7,7 @@ import {
   stopSession,
   subscribe,
   writeToSession,
-} from "./claude/manager";
+} from './claude/manager';
 
 interface WsData {
   sessionId: string;
@@ -16,26 +17,26 @@ interface WsData {
 const server = Bun.serve<WsData>({
   port: Number(process.env.PORT) || 3000,
   routes: {
-    "/": homepage,
+    '/': homepage,
 
-    "/api/config": {
+    '/api/config': {
       GET() {
         return Response.json({
-          convexUrl: process.env.CONVEX_URL ?? "",
+          convexUrl: process.env.CONVEX_URL ?? '',
         });
       },
     },
 
-    "/api/pick-directory": {
+    '/api/pick-directory': {
       async POST() {
         try {
           const proc = Bun.spawn(
             [
-              "osascript",
-              "-e",
+              'osascript',
+              '-e',
               'POSIX path of (choose folder with prompt "Select a git repository")',
             ],
-            { stdout: "pipe", stderr: "pipe" },
+            { stdout: 'pipe', stderr: 'pipe' },
           );
           const exitCode = await proc.exited;
           if (exitCode !== 0) {
@@ -44,8 +45,8 @@ const server = Bun.serve<WsData>({
           }
           const raw = await new Response(proc.stdout).text();
           // osascript returns path with trailing newline and slash
-          const dirPath = raw.trim().replace(/\/$/, "");
-          const { basename } = await import("node:path");
+          const dirPath = raw.trim().replace(/\/$/, '');
+          const { basename } = await import('node:path');
 
           const gitHead = Bun.file(`${dirPath}/.git/HEAD`);
           const isGitRepo = await gitHead.exists();
@@ -62,9 +63,9 @@ const server = Bun.serve<WsData>({
                 const url = remoteMatch[1].trim();
                 // Handle git@host:org/repo.git or https://host/org/repo.git
                 const repoName = url
-                  .split("/")
+                  .split('/')
                   .pop()
-                  ?.replace(/\.git$/, "");
+                  ?.replace(/\.git$/, '');
                 if (repoName) name = repoName;
               }
             } catch {
@@ -78,65 +79,75 @@ const server = Bun.serve<WsData>({
             name,
             isGitRepo,
           });
-        } catch {
+        } catch (err) {
+          console.error('Failed to open directory picker:', err);
           return Response.json(
-            { error: "Failed to open directory picker." },
+            { error: 'Failed to open directory picker.' },
             { status: 500 },
           );
         }
       },
     },
 
-    "/api/sessions/start": {
+    '/api/sessions/start': {
       async POST(req: Request) {
         try {
           const { taskId, repoPath, prompt } = await req.json();
           if (!taskId || !repoPath || !prompt) {
             return Response.json(
-              { error: "taskId, repoPath, and prompt are required" },
+              { error: 'taskId, repoPath, and prompt are required' },
               { status: 400 },
             );
           }
           const result = await startSession({ taskId, repoPath, prompt });
           return Response.json(result);
         } catch (err) {
-          console.error("Failed to start session:", err);
+          console.error('Failed to start session:', err);
           return Response.json({ error: String(err) }, { status: 500 });
         }
       },
     },
   },
 
-  fetch(req, server) {
+  async fetch(req, server) {
     const url = new URL(req.url);
 
     // POST /api/sessions/:id/stop
     const stopMatch = url.pathname.match(/^\/api\/sessions\/(.+)\/stop$/);
-    if (stopMatch && req.method === "POST") {
-      const sessionId = stopMatch[1] ?? "";
-      return stopSession(sessionId).then(() => Response.json({ ok: true }));
+    if (stopMatch && req.method === 'POST') {
+      const sessionId = stopMatch[1] ?? '';
+      try {
+        await stopSession(sessionId);
+        return Response.json({ ok: true });
+      } catch (err) {
+        console.error('Failed to stop session:', err);
+        return Response.json({ error: String(err) }, { status: 500 });
+      }
     }
 
     // POST /api/sessions/:id/resize
     const resizeMatch = url.pathname.match(/^\/api\/sessions\/(.+)\/resize$/);
-    if (resizeMatch && req.method === "POST") {
-      return (async () => {
-        const sessionId = resizeMatch[1] ?? "";
+    if (resizeMatch && req.method === 'POST') {
+      try {
+        const sessionId = resizeMatch[1] ?? '';
         const { cols, rows } = await req.json();
         resizeSession(sessionId, cols, rows);
         return Response.json({ ok: true });
-      })();
+      } catch (err) {
+        console.error('Failed to resize session:', err);
+        return Response.json({ error: String(err) }, { status: 500 });
+      }
     }
 
     // WebSocket upgrade for /ws/terminal/:sessionId
-    if (url.pathname.startsWith("/ws/terminal/")) {
-      const sessionId = url.pathname.slice("/ws/terminal/".length);
+    if (url.pathname.startsWith('/ws/terminal/')) {
+      const sessionId = url.pathname.slice('/ws/terminal/'.length);
       const upgraded = server.upgrade(req, { data: { sessionId } });
       if (upgraded) return undefined;
-      return new Response("WebSocket upgrade failed", { status: 400 });
+      return new Response('WebSocket upgrade failed', { status: 400 });
     }
 
-    return new Response("Not Found", { status: 404 });
+    return new Response('Not Found', { status: 404 });
   },
 
   websocket: {
@@ -144,7 +155,7 @@ const server = Bun.serve<WsData>({
       const { sessionId } = ws.data;
       const session = getSession(sessionId);
       if (!session) {
-        ws.send("\x1b[31mSession not found.\x1b[0m");
+        ws.send(ansi.red('Session not found.'));
         ws.close();
         return;
       }
@@ -171,7 +182,7 @@ const server = Bun.serve<WsData>({
 
 console.log(`Holophyte running at http://localhost:${server.port}`);
 
-process.on("SIGINT", () => {
+process.on('SIGINT', () => {
   server.stop();
   process.exit(0);
 });
