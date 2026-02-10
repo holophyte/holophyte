@@ -29,7 +29,7 @@ export default function BulkActionBar({ allTasks }: BulkActionBarProps) {
 
   const bulkMove = useMutation(api.tasks.bulkMove);
   const bulkDelete = useMutation(api.tasks.bulkDelete);
-  const bulkUpdateLabels = useMutation(api.tasks.bulkUpdateLabels);
+  const bulkToggleLabel = useMutation(api.tasks.bulkToggleLabel);
   const labels = useQuery(api.labels.list);
 
   const count = bulkSelectedTaskIds.length;
@@ -53,22 +53,12 @@ export default function BulkActionBar({ allTasks }: BulkActionBarProps) {
   };
 
   const handleToggleLabel = async (labelId: Id<'labels'>) => {
-    const isCommon = commonLabelIds.includes(labelId);
-    // Apply label changes per task
-    const updates = selectedTasks.map((task) => {
-      const current = task.labelIds ?? [];
-      const updated = isCommon
-        ? current.filter((id) => id !== labelId)
-        : current.includes(labelId)
-          ? current
-          : [...current, labelId];
-      return { id: task._id, labelIds: updated };
+    const action = commonLabelIds.includes(labelId) ? 'remove' : 'add';
+    await bulkToggleLabel({
+      ids: bulkSelectedTaskIds,
+      labelId,
+      action,
     });
-    await Promise.all(
-      updates.map((u) =>
-        bulkUpdateLabels({ ids: [u.id], labelIds: u.labelIds }),
-      ),
-    );
   };
 
   return (

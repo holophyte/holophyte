@@ -365,20 +365,25 @@ export const bulkDelete = mutation({
   },
 });
 
-export const bulkUpdateLabels = mutation({
+export const bulkToggleLabel = mutation({
   args: {
     ids: v.array(v.id('tasks')),
-    labelIds: v.array(v.id('labels')),
+    labelId: v.id('labels'),
+    action: v.union(v.literal('add'), v.literal('remove')),
   },
   handler: async (ctx, args) => {
     const now = Date.now();
     for (const id of args.ids) {
       const task = await ctx.db.get(id);
       if (!task) continue;
-      await ctx.db.patch(id, {
-        labelIds: args.labelIds,
-        updatedAt: now,
-      });
+      const current = task.labelIds ?? [];
+      const updated =
+        args.action === 'remove'
+          ? current.filter((lid) => lid !== args.labelId)
+          : current.includes(args.labelId)
+            ? current
+            : [...current, args.labelId];
+      await ctx.db.patch(id, { labelIds: updated, updatedAt: now });
     }
   },
 });
