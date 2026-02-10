@@ -1,7 +1,7 @@
 import { convexTest } from 'convex-test';
 import { describe, expect, it } from 'vitest';
 import { api } from './_generated/api';
-import schema, { TaskStatus } from './schema';
+import schema, { TaskPriority, TaskStatus } from './schema';
 
 // Helper to create a repo
 async function createRepo(t: ReturnType<typeof convexTest>) {
@@ -49,6 +49,66 @@ describe('tasks.create', () => {
     const positions = tasks.map((t) => t.position).sort((a, b) => a - b);
     expect(positions).toEqual([1, 2, 3]);
   });
+
+  it('creates a task with a specific status', async () => {
+    const t = convexTest(schema);
+    const repoId = await createRepo(t);
+
+    await t.mutation(api.tasks.create, {
+      repoId,
+      title: 'Todo task',
+      status: TaskStatus.Todo,
+    });
+
+    const tasks = await t.query(api.tasks.listByRepo, { repoId });
+    expect(tasks).toHaveLength(1);
+    expect(tasks[0]).toMatchObject({
+      title: 'Todo task',
+      status: TaskStatus.Todo,
+      position: 1,
+    });
+  });
+
+  it('creates a task with priority', async () => {
+    const t = convexTest(schema);
+    const repoId = await createRepo(t);
+
+    const id = await t.mutation(api.tasks.create, {
+      repoId,
+      title: 'Urgent bug',
+      priority: TaskPriority.Urgent,
+    });
+
+    const task = await t.query(api.tasks.get, { id });
+    expect(task).toMatchObject({
+      title: 'Urgent bug',
+      priority: TaskPriority.Urgent,
+    });
+  });
+
+  it('positions correctly within the target status lane', async () => {
+    const t = convexTest(schema);
+    const repoId = await createRepo(t);
+
+    await t.mutation(api.tasks.create, {
+      repoId,
+      title: 'Todo 1',
+      status: TaskStatus.Todo,
+    });
+    await t.mutation(api.tasks.create, {
+      repoId,
+      title: 'Todo 2',
+      status: TaskStatus.Todo,
+    });
+
+    const tasks = await t.query(api.tasks.listByRepo, { repoId });
+    const todoTasks = tasks
+      .filter((t) => t.status === TaskStatus.Todo)
+      .sort((a, b) => a.position - b.position);
+    expect(todoTasks).toHaveLength(2);
+    expect(todoTasks[0]?.position).toBe(1);
+    expect(todoTasks[1]?.position).toBe(2);
+  });
 });
 
 describe('tasks.update', () => {
@@ -73,6 +133,32 @@ describe('tasks.update', () => {
       description: 'Added desc',
       prompt: 'do something',
     });
+  });
+
+  it('updates task priority', async () => {
+    const t = convexTest(schema);
+    const repoId = await createRepo(t);
+    const id = await t.mutation(api.tasks.create, {
+      repoId,
+      title: 'Task',
+    });
+
+    await t.mutation(api.tasks.update, {
+      id,
+      priority: TaskPriority.High,
+    });
+
+    const task = await t.query(api.tasks.get, { id });
+    expect(task).toMatchObject({ priority: TaskPriority.High });
+
+    // Change priority again
+    await t.mutation(api.tasks.update, {
+      id,
+      priority: TaskPriority.None,
+    });
+
+    const updated = await t.query(api.tasks.get, { id });
+    expect(updated).toMatchObject({ priority: TaskPriority.None });
   });
 });
 

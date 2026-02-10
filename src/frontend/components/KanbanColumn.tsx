@@ -2,7 +2,7 @@ import { api } from '@convex/_generated/api';
 import type { Doc, Id } from '@convex/_generated/dataModel';
 import { TaskStatus } from '@convex/schema';
 import { useMutation } from 'convex/react';
-import { Archive, PanelLeftClose } from 'lucide-react';
+import { Archive, ChevronsLeft, Plus } from 'lucide-react';
 import { useCallback, useRef, useState } from 'react';
 import { cn } from '@/frontend/lib/utils';
 import type { EnrichedTask } from './KanbanBoard';
@@ -15,8 +15,10 @@ interface KanbanColumnProps {
   repoMap: Map<Id<'repos'>, Doc<'repos'>>;
   showRepoBadge: boolean;
   collapsible?: boolean;
+  variant?: 'default' | 'backlog';
   onCollapse?: () => void;
   onArchiveAll?: () => void;
+  onAddTask?: () => void;
 }
 
 export function KanbanColumn({
@@ -26,8 +28,10 @@ export function KanbanColumn({
   repoMap,
   showRepoBadge,
   collapsible,
+  variant = 'default',
   onCollapse,
   onArchiveAll,
+  onAddTask,
 }: KanbanColumnProps) {
   const moveTask = useMutation(api.tasks.move);
   const reorderTask = useMutation(api.tasks.reorder);
@@ -99,14 +103,23 @@ export function KanbanColumn({
     }
   };
 
+  const handleBackgroundClick = (e: React.MouseEvent) => {
+    if (!onCollapse || e.target !== e.currentTarget) return;
+    onCollapse();
+  };
+
   return (
     <div
       role="group"
       aria-label={`${label} column`}
       className={cn(
-        'flex-1 min-w-[260px] max-w-[350px] flex flex-col rounded-lg bg-muted/50 border',
+        'flex flex-col rounded-lg border',
+        variant === 'backlog'
+          ? 'bg-muted/30 border-dashed w-full h-full cursor-pointer'
+          : 'flex-1 min-w-[260px] max-w-[350px] bg-muted/50',
         dragOver && 'ring-2 ring-primary/50 bg-muted/80',
       )}
+      onMouseDown={handleBackgroundClick}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
@@ -133,12 +146,17 @@ export function KanbanColumn({
               onClick={onCollapse}
               className="p-0.5 rounded text-muted-foreground/50 hover:text-muted-foreground transition-colors"
             >
-              <PanelLeftClose className="h-3.5 w-3.5" />
+              <ChevronsLeft className="h-3.5 w-3.5" />
             </button>
           )}
         </div>
       </div>
-      <div ref={containerRef} className="flex-1 overflow-y-auto p-2 space-y-2">
+      {/* biome-ignore lint/a11y/noStaticElementInteractions: mouse-only shortcut, collapse button handles keyboard a11y */}
+      <div
+        ref={containerRef}
+        className="overflow-y-auto p-2 space-y-2"
+        onMouseDown={handleBackgroundClick}
+      >
         {tasks.map((task, i) => (
           <div key={task._id}>
             {dragOver && dropIndex === i && (
@@ -154,6 +172,16 @@ export function KanbanColumn({
         ))}
         {dragOver && dropIndex === tasks.length && (
           <div className="h-0.5 bg-primary rounded-full mx-1" />
+        )}
+        {onAddTask && (
+          <button
+            type="button"
+            onClick={onAddTask}
+            className="w-full flex items-center justify-center gap-1 py-1.5 rounded-md text-xs text-muted-foreground bg-muted/60 hover:bg-muted hover:text-foreground transition-colors border border-dashed border-muted-foreground/30"
+          >
+            <Plus className="h-3.5 w-3.5" />
+            Add
+          </button>
         )}
       </div>
     </div>
