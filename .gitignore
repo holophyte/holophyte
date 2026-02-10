@@ -31,6 +31,9 @@ convex/_generated
 test-results
 playwright-report
 
+# storybook
+storybook-static
+
 # caches
 .eslintcache
 .cache
