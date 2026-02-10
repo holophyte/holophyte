@@ -24,7 +24,7 @@ git fetch --all --prune
 
 ```bash
 git branch -vv
-git for-each-ref --format='%(refname:short) %(committerdate:relative)' refs/heads
+git for-each-ref --sort=-committerdate --format='%(refname:short) %(committerdate:iso8601) %(committerdate:relative)' refs/heads
 ```
 
 Capture: branch name, last commit, tracking status (ahead/behind/gone), last commit date.
