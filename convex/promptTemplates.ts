@@ -4,20 +4,10 @@ import { mutation, query } from './_generated/server';
 export const list = query({
   args: { repoId: v.optional(v.id('repos')) },
   handler: async (ctx, args) => {
-    // Get global templates
-    const global = await ctx.db
-      .query('promptTemplates')
-      .withIndex('by_repo', (q) => q.eq('repoId', undefined))
-      .collect();
-
+    const all = await ctx.db.query('promptTemplates').collect();
+    const global = all.filter((t) => !t.repoId);
     if (!args.repoId) return global;
-
-    // Get repo-specific templates
-    const repoTemplates = await ctx.db
-      .query('promptTemplates')
-      .withIndex('by_repo', (q) => q.eq('repoId', args.repoId))
-      .collect();
-
+    const repoTemplates = all.filter((t) => t.repoId === args.repoId);
     return [...repoTemplates, ...global];
   },
 });
