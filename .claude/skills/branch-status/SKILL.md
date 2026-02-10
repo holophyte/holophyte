@@ -45,7 +45,7 @@ gh pr list --json number,title,headRefName,state,url,isDraft,reviewDecision --li
 
 For each local branch (excluding main), check if merged:
 ```bash
-git branch --merged main
+git branch --merged origin/main
 ```
 
 ### 6. Present Report
