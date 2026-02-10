@@ -45,10 +45,13 @@ test('clicking collapsed backlog expands it', async ({ page }) => {
   await expect(columnHeader).toBeVisible();
 });
 
-test('new task button is disabled without repo selected', async ({ page }) => {
+test('per-lane add buttons are not visible without repo selected', async ({
+  page,
+}) => {
   await waitForApp(page);
-  const button = page.locator('button', { hasText: 'New Task' });
-  await expect(button).toBeDisabled();
+  // Without a repo, the "+ Add" buttons should not appear in any column
+  const addButtons = page.locator('button', { hasText: /^Add$/ });
+  await expect(addButtons).toHaveCount(0);
 });
 
 test('add repo dialog opens', async ({ page }) => {
@@ -105,4 +108,33 @@ test('seed box new idea inline form appears', async ({ page }) => {
   await expect(
     page.locator('input[placeholder="What\'s the idea?"]'),
   ).toBeVisible();
+});
+
+test('kanban columns show column headers with task counts', async ({
+  page,
+}) => {
+  await waitForApp(page);
+  // Each visible column should have a count badge (showing 0)
+  for (const label of ['To Do', 'In Progress', 'Review', 'Done']) {
+    const column = page.locator('[role="group"]', {
+      hasText: label,
+    });
+    await expect(column).toBeVisible();
+    // Count badge shows 0
+    await expect(column.locator('text=0')).toBeVisible();
+  }
+});
+
+test('collapsed backlog has dashed border styling', async ({ page }) => {
+  await waitForApp(page);
+  const collapsed = page.locator('button', { hasText: 'Backlog' });
+  await expect(collapsed).toBeVisible();
+  // The collapsed button should have border-dashed class
+  await expect(collapsed).toHaveClass(/border-dashed/);
+});
+
+test('archive button is visible in header', async ({ page }) => {
+  await waitForApp(page);
+  const archiveButton = page.locator('button', { hasText: 'Archive' });
+  await expect(archiveButton).toBeVisible();
 });
