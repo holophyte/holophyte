@@ -54,7 +54,7 @@ Check if `node_modules` is in sync with `bun.lock`.
 
 Check if Convex is configured (never print the actual values):
 ```bash
-grep -q '^CONVEX_DEPLOYMENT=' .env.local
+test -f .env.local && grep -q '^CONVEX_DEPLOYMENT=' .env.local
 ```
 
 Report whether `CONVEX_DEPLOYMENT` is set or missing — do NOT print its value.
