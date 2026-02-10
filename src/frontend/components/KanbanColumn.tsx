@@ -119,7 +119,7 @@ export function KanbanColumn({
           : 'flex-1 min-w-[260px] max-w-[350px] bg-muted/50',
         dragOver && 'ring-2 ring-primary/50 bg-muted/80',
       )}
-      onClick={handleBackgroundClick}
+      onMouseDown={handleBackgroundClick}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
@@ -151,10 +151,11 @@ export function KanbanColumn({
           )}
         </div>
       </div>
+      {/* biome-ignore lint/a11y/noStaticElementInteractions: mouse-only shortcut, collapse button handles keyboard a11y */}
       <div
         ref={containerRef}
         className="overflow-y-auto p-2 space-y-2"
-        onClick={handleBackgroundClick}
+        onMouseDown={handleBackgroundClick}
       >
         {tasks.map((task, i) => (
           <div key={task._id}>
