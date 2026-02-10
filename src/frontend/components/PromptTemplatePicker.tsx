@@ -19,7 +19,7 @@ import Textarea from './ui/Textarea';
 
 /** Extract {{placeholder}} names from template content */
 function extractPlaceholders(content: string): string[] {
-  const matches = content.match(/\{\{([^}]+)\}\}/g);
+  const matches = content.match(/\{\{([^{}]+)\}\}/g);
   if (!matches) return [];
   return [...new Set(matches.map((m) => m.slice(2, -2).trim()))];
 }
@@ -29,7 +29,7 @@ function fillPlaceholders(
   content: string,
   values: Record<string, string>,
 ): string {
-  return content.replace(/\{\{([^}]+)\}\}/g, (_, name: string) => {
+  return content.replace(/\{\{([^{}]+)\}\}/g, (_, name: string) => {
     return values[name.trim()] ?? `{{${name.trim()}}}`;
   });
 }
