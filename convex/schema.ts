@@ -21,6 +21,33 @@ export const taskStatusValidator = v.union(
   v.literal(TaskStatus.Archived),
 );
 
+export enum TaskPriority {
+  None = 'none',
+  Low = 'low',
+  Medium = 'medium',
+  High = 'high',
+  Urgent = 'urgent',
+}
+
+export const priorityValidator = v.union(
+  v.literal(TaskPriority.None),
+  v.literal(TaskPriority.Low),
+  v.literal(TaskPriority.Medium),
+  v.literal(TaskPriority.High),
+  v.literal(TaskPriority.Urgent),
+);
+
+export const PRIORITY_CONFIG: Record<
+  TaskPriority,
+  { label: string; color: string }
+> = {
+  [TaskPriority.None]: { label: 'None', color: '' },
+  [TaskPriority.Low]: { label: 'Low', color: '#3b82f6' },
+  [TaskPriority.Medium]: { label: 'Medium', color: '#eab308' },
+  [TaskPriority.High]: { label: 'High', color: '#f97316' },
+  [TaskPriority.Urgent]: { label: 'Urgent', color: '#ef4444' },
+};
+
 export default defineSchema({
   repos: defineTable({
     name: v.string(),
@@ -45,6 +72,8 @@ export default defineSchema({
     inProgressSince: v.optional(v.number()),
     // Time tracking: accumulated ms spent in in_progress
     totalInProgressMs: v.optional(v.number()),
+    // Priority
+    priority: v.optional(priorityValidator),
     // Archive timestamp
     archivedAt: v.optional(v.number()),
   })

@@ -1,6 +1,6 @@
 import { v } from 'convex/values';
 import { mutation, query } from './_generated/server';
-import { TaskStatus, taskStatusValidator } from './schema';
+import { priorityValidator, TaskStatus, taskStatusValidator } from './schema';
 
 export const listByRepo = query({
   args: { repoId: v.id('repos'), includeArchived: v.optional(v.boolean()) },
@@ -75,12 +75,15 @@ export const create = mutation({
     prompt: v.optional(v.string()),
     labelIds: v.optional(v.array(v.id('labels'))),
     dueAt: v.optional(v.number()),
+    status: v.optional(taskStatusValidator),
+    priority: v.optional(priorityValidator),
   },
   handler: async (ctx, args) => {
+    const targetStatus = args.status ?? TaskStatus.Backlog;
     const existing = await ctx.db
       .query('tasks')
       .withIndex('by_repo_status', (q) =>
-        q.eq('repoId', args.repoId).eq('status', TaskStatus.Backlog),
+        q.eq('repoId', args.repoId).eq('status', targetStatus),
       )
       .collect();
     const maxPosition = existing.reduce(
@@ -93,12 +96,13 @@ export const create = mutation({
       title: args.title,
       description: args.description ?? '',
       prompt: args.prompt ?? '',
-      status: TaskStatus.Backlog,
+      status: targetStatus,
       position: maxPosition + 1,
       createdAt: now,
       updatedAt: now,
       labelIds: args.labelIds,
       dueAt: args.dueAt,
+      priority: args.priority,
       totalInProgressMs: 0,
     });
 
@@ -125,6 +129,7 @@ export const update = mutation({
     labelIds: v.optional(v.array(v.id('labels'))),
     dueAt: v.optional(v.number()),
     clearDueAt: v.optional(v.boolean()),
+    priority: v.optional(priorityValidator),
   },
   handler: async (ctx, args) => {
     const { id, clearDueAt, ...fields } = args;
@@ -137,6 +142,7 @@ export const update = mutation({
     if (fields.labelIds !== undefined) updates.labelIds = fields.labelIds;
     if (fields.dueAt !== undefined) updates.dueAt = fields.dueAt;
     if (clearDueAt) updates.dueAt = undefined;
+    if (fields.priority !== undefined) updates.priority = fields.priority;
     await ctx.db.patch(id, updates);
 
     // Record prompt history when prompt changes
@@ -303,6 +309,14 @@ export const remove = mutation({
       .collect();
     for (const subtask of subtasks) {
       await ctx.db.delete(subtask._id);
+    }
+    // Delete prompt history
+    const promptHistory = await ctx.db
+      .query('promptHistory')
+      .withIndex('by_task', (q) => q.eq('taskId', args.id))
+      .collect();
+    for (const entry of promptHistory) {
+      await ctx.db.delete(entry._id);
     }
     await ctx.db.delete(args.id);
   },

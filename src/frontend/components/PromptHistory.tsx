@@ -2,8 +2,8 @@ import { api } from '@convex/_generated/api';
 import type { Id } from '@convex/_generated/dataModel';
 import { useQuery } from 'convex/react';
 import { History } from 'lucide-react';
-import { cn } from '@/frontend/lib/utils';
 import { formatRelativeDate } from '@/frontend/lib/dateUtils';
+import { cn } from '@/frontend/lib/utils';
 import Button from './ui/Button';
 import { Popover, PopoverContent, PopoverTrigger } from './ui/Popover';
 
@@ -50,9 +50,7 @@ export function PromptHistory({
                 disabled={isCurrent}
                 className={cn(
                   'w-full text-left px-2 py-1.5 rounded transition-colors',
-                  isCurrent
-                    ? 'bg-muted/50 cursor-default'
-                    : 'hover:bg-muted',
+                  isCurrent ? 'bg-muted/50 cursor-default' : 'hover:bg-muted',
                 )}
               >
                 <div className="flex items-center justify-between gap-2">

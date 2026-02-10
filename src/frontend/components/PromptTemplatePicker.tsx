@@ -43,16 +43,23 @@ export function PromptTemplatePicker({
   repoId,
   onApply,
 }: PromptTemplatePickerProps) {
-  const templates = useQuery(api.promptTemplates.list, repoId ? { repoId } : {});
+  const templates = useQuery(
+    api.promptTemplates.list,
+    repoId ? { repoId } : {},
+  );
   const createTemplate = useMutation(api.promptTemplates.create);
   const updateTemplate = useMutation(api.promptTemplates.update);
   const removeTemplate = useMutation(api.promptTemplates.remove);
 
   const [pickerOpen, setPickerOpen] = useState(false);
-  const [editingTemplate, setEditingTemplate] = useState<Doc<'promptTemplates'> | null>(null);
+  const [editingTemplate, setEditingTemplate] =
+    useState<Doc<'promptTemplates'> | null>(null);
   const [creating, setCreating] = useState(false);
-  const [fillTemplate, setFillTemplate] = useState<Doc<'promptTemplates'> | null>(null);
-  const [placeholderValues, setPlaceholderValues] = useState<Record<string, string>>({});
+  const [fillTemplate, setFillTemplate] =
+    useState<Doc<'promptTemplates'> | null>(null);
+  const [placeholderValues, setPlaceholderValues] = useState<
+    Record<string, string>
+  >({});
 
   // Create/edit form state
   const [formName, setFormName] = useState('');
@@ -116,7 +123,9 @@ export function PromptTemplatePicker({
     setPickerOpen(false);
   };
 
-  const placeholders = fillTemplate ? extractPlaceholders(fillTemplate.content) : [];
+  const placeholders = fillTemplate
+    ? extractPlaceholders(fillTemplate.content)
+    : [];
 
   return (
     <>
@@ -220,7 +229,9 @@ export function PromptTemplatePicker({
                 </Label>
                 <Textarea
                   id="template-content"
-                  placeholder={'Write comprehensive tests for {{module}}.\nInclude edge cases for {{scenario}}.'}
+                  placeholder={
+                    'Write comprehensive tests for {{module}}.\nInclude edge cases for {{scenario}}.'
+                  }
                   value={formContent}
                   onChange={(e) => setFormContent(e.target.value)}
                   rows={6}
@@ -247,7 +258,10 @@ export function PromptTemplatePicker({
                     onChange={(e) => setFormIsGlobal(e.target.checked)}
                     className="rounded"
                   />
-                  <Label htmlFor="template-global" className="text-sm font-normal">
+                  <Label
+                    htmlFor="template-global"
+                    className="text-sm font-normal"
+                  >
                     Global template (available in all repos)
                   </Label>
                 </div>
