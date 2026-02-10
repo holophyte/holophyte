@@ -82,4 +82,4 @@ Organize branches into categories:
 - For branches with PRs, show the review decision (approved, changes requested, pending)
 - Sort stale branches by last commit date
 - This is read-only — never delete branches or worktrees automatically
-- If the user wants to clean up, suggest `/worktree-cleanup` for worktrees or specific `git branch -d` commands
+- If the user wants to clean up, suggest `/worktree-cleanup` for worktrees (destructive — removes worktrees and deletes branches, requires confirmation)
