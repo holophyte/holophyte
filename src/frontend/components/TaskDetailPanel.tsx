@@ -2,8 +2,9 @@ import { api } from '@convex/_generated/api';
 import type { Id } from '@convex/_generated/dataModel';
 import { PRIORITY_CONFIG, TaskPriority, TaskStatus } from '@convex/schema';
 import { useMutation, useQuery } from 'convex/react';
+import type { FunctionReturnType } from 'convex/server';
 import { ChevronDown, X } from 'lucide-react';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import {
   dateInputToTimestamp,
   formatDuration,
@@ -21,90 +22,60 @@ import { Popover, PopoverContent, PopoverTrigger } from './ui/Popover';
 import Separator from './ui/Separator';
 import Textarea from './ui/Textarea';
 
+type Task = NonNullable<FunctionReturnType<typeof api.tasks.get>>;
+
 export function TaskDetailPanel() {
   const selectedTaskId = useAppStore((s) => s.selectedTaskId);
-  const selectTask = useAppStore((s) => s.selectTask);
   const task = useQuery(
     api.tasks.get,
     selectedTaskId ? { id: selectedTaskId } : 'skip',
   );
+
+  if (!task) return null;
+
+  return <TaskDetailInner key={task._id} task={task} />;
+}
+
+function TaskDetailInner({ task }: { task: Task }) {
+  const selectTask = useAppStore((s) => s.selectTask);
   const updateTask = useMutation(api.tasks.update);
   const removeTask = useMutation(api.tasks.remove);
 
-  const [title, setTitle] = useState('');
-  const [description, setDescription] = useState('');
-  const [prompt, setPrompt] = useState('');
-  const [labelIds, setLabelIds] = useState<Id<'labels'>[]>([]);
-  const [dueDate, setDueDate] = useState('');
-  const [priority, setPriority] = useState<TaskPriority>(TaskPriority.None);
+  // Local state only for fields that need controlled inputs:
+  // - title: controlled input, saves on blur
+  // - description/prompt: manual save with Save/Cancel buttons
+  const [title, setTitle] = useState(task.title);
+  const [description, setDescription] = useState(task.description);
+  const [prompt, setPrompt] = useState(task.prompt);
   const [priorityOpen, setPriorityOpen] = useState(false);
-
-  // Track the task ID we've synced from to avoid re-syncing our own auto-saves
-  const syncedTaskRef = useRef<string | null>(null);
-
-  useEffect(() => {
-    if (task) {
-      // Always sync when task ID changes; for same task, only sync fields
-      // that aren't being auto-saved (description/prompt are manual-save)
-      if (syncedTaskRef.current !== task._id) {
-        // New task selected — sync everything
-        setTitle(task.title);
-        setDescription(task.description);
-        setPrompt(task.prompt);
-        setLabelIds(task.labelIds ?? []);
-        setDueDate(task.dueAt ? timestampToDateInput(task.dueAt) : '');
-        setPriority((task.priority as TaskPriority) ?? TaskPriority.None);
-        syncedTaskRef.current = task._id;
-      } else {
-        // Same task updated from server — sync description/prompt
-        // (auto-saved fields are already in sync)
-        setDescription(task.description);
-        setPrompt(task.prompt);
-      }
-    }
-  }, [task]);
-
-  // Auto-save helper for instant fields
-  const autoSave = useCallback(
-    (fields: Partial<Parameters<typeof updateTask>[0]>) => {
-      if (!task) return;
-      updateTask({ id: task._id, ...fields });
-    },
-    [task, updateTask],
-  );
 
   // Auto-save title on blur
   const handleTitleBlur = () => {
     const trimmed = title.trim();
-    if (task && trimmed && trimmed !== task.title) {
-      autoSave({ title: trimmed });
+    if (trimmed && trimmed !== task.title) {
+      updateTask({ id: task._id, title: trimmed });
     }
   };
 
-  // Auto-save labels
+  // Auto-save labels directly — no local state needed
   const handleLabelChange = (newLabelIds: Id<'labels'>[]) => {
-    setLabelIds(newLabelIds);
-    autoSave({ labelIds: newLabelIds });
+    updateTask({ id: task._id, labelIds: newLabelIds });
   };
 
-  // Auto-save priority
+  // Auto-save priority directly
   const handlePriorityChange = (p: TaskPriority) => {
-    setPriority(p);
     setPriorityOpen(false);
-    autoSave({ priority: p });
+    updateTask({ id: task._id, priority: p });
   };
 
-  // Auto-save due date
+  // Auto-save due date directly
   const handleDueDateChange = (value: string) => {
-    setDueDate(value);
     if (value) {
-      autoSave({ dueAt: dateInputToTimestamp(value) });
-    } else if (task?.dueAt) {
-      autoSave({ clearDueAt: true });
+      updateTask({ id: task._id, dueAt: dateInputToTimestamp(value) });
+    } else if (task.dueAt) {
+      updateTask({ id: task._id, clearDueAt: true });
     }
   };
-
-  if (!task) return null;
 
   const handleSaveDescription = async () => {
     await updateTask({ id: task._id, description: description.trim() });
@@ -121,6 +92,11 @@ export function TaskDetailPanel() {
 
   const descriptionChanged = description !== task.description;
   const promptChanged = prompt !== task.prompt;
+
+  // Derived from task — no local state needed
+  const labelIds = task.labelIds ?? [];
+  const dueDate = task.dueAt ? timestampToDateInput(task.dueAt) : '';
+  const priority = (task.priority as TaskPriority) ?? TaskPriority.None;
 
   // Time tracking display
   const currentInProgressMs =
