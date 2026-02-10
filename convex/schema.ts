@@ -10,6 +10,8 @@ export enum TaskStatus {
   Archived = 'archived',
 }
 
+export const TASK_STATUSES = Object.values(TaskStatus);
+
 export const taskStatusValidator = v.union(
   v.literal(TaskStatus.Backlog),
   v.literal(TaskStatus.Todo),

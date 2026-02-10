@@ -1,6 +1,6 @@
 import { v } from 'convex/values';
 import { mutation, query } from './_generated/server';
-import { TaskStatus } from './schema';
+import { TASK_STATUSES } from './schema';
 
 export const list = query({
   args: {},
@@ -44,7 +44,7 @@ export const remove = mutation({
     // Convex doesn't support indexing into arrays, so we query by each
     // status via the by_status index rather than doing a full table scan.
     // Only tasks that actually reference this label get patched.
-    for (const status of Object.values(TaskStatus)) {
+    for (const status of TASK_STATUSES) {
       const tasks = await ctx.db
         .query('tasks')
         .withIndex('by_status', (q) => q.eq('status', status))
