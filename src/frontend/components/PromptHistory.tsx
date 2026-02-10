@@ -2,7 +2,7 @@ import { api } from '@convex/_generated/api';
 import type { Id } from '@convex/_generated/dataModel';
 import { useQuery } from 'convex/react';
 import { History } from 'lucide-react';
-import { formatRelativeDate } from '@/frontend/lib/dateUtils';
+import { formatTimeAgo } from '@/frontend/lib/dateUtils';
 import { cn } from '@/frontend/lib/utils';
 import Button from './ui/Button';
 import { Popover, PopoverContent, PopoverTrigger } from './ui/Popover';
@@ -58,7 +58,7 @@ export function PromptHistory({
                     {i === 0 ? 'Latest' : `v${history.length - i}`}
                   </span>
                   <span className="text-[10px] text-muted-foreground">
-                    {formatRelativeDate(entry.createdAt)}
+                    {formatTimeAgo(entry.createdAt)}
                   </span>
                 </div>
                 <p className="text-xs font-mono mt-0.5 line-clamp-2 whitespace-pre-wrap">
