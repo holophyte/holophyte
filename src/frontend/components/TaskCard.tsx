@@ -77,7 +77,9 @@ export function TaskCard({ task, repoName }: TaskCardProps) {
         {task.priority &&
           task.priority !== TaskPriority.None &&
           (() => {
-            const config = PRIORITY_CONFIG[task.priority];
+            const config =
+              PRIORITY_CONFIG[task.priority as TaskPriority] ??
+              PRIORITY_CONFIG[TaskPriority.None];
             return (
               <span
                 className="h-2.5 w-2.5 rounded-full shrink-0"

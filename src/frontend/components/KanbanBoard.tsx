@@ -133,7 +133,7 @@ export function KanbanBoard() {
     });
   }, [allTasks, labelMap, subtaskCounts]);
 
-  const getColumnTasks = (status: string): EnrichedTask[] => {
+  const getColumnTasks = (status: TaskStatus): EnrichedTask[] => {
     let filtered = enrichedTasks.filter((t) => t.status === status);
 
     // Text search
