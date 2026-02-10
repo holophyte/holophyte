@@ -4,12 +4,11 @@ import { mutation, query } from './_generated/server';
 export const listByTask = query({
   args: { taskId: v.id('tasks') },
   handler: async (ctx, args) => {
-    const entries = await ctx.db
+    return await ctx.db
       .query('promptHistory')
       .withIndex('by_task', (q) => q.eq('taskId', args.taskId))
+      .order('desc')
       .collect();
-    // Most recent first
-    return entries.sort((a, b) => b.createdAt - a.createdAt);
   },
 });
 
@@ -22,11 +21,11 @@ export const record = mutation({
     if (!args.prompt.trim()) return;
 
     // Check if latest entry is identical — skip duplicate
-    const existing = await ctx.db
+    const latest = await ctx.db
       .query('promptHistory')
       .withIndex('by_task', (q) => q.eq('taskId', args.taskId))
-      .collect();
-    const latest = existing.sort((a, b) => b.createdAt - a.createdAt)[0];
+      .order('desc')
+      .first();
     if (latest && latest.prompt === args.prompt) return;
 
     await ctx.db.insert('promptHistory', {

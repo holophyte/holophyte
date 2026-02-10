@@ -148,11 +148,11 @@ export const update = mutation({
     // Record prompt history when prompt changes
     const prompt = fields.prompt?.trim();
     if (prompt) {
-      const existing = await ctx.db
+      const latest = await ctx.db
         .query('promptHistory')
         .withIndex('by_task', (q) => q.eq('taskId', id))
-        .collect();
-      const latest = existing.sort((a, b) => b.createdAt - a.createdAt)[0];
+        .order('desc')
+        .first();
       if (!latest || latest.prompt !== prompt) {
         await ctx.db.insert('promptHistory', {
           taskId: id,

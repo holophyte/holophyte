@@ -115,7 +115,7 @@ export default defineSchema({
     taskId: v.id('tasks'),
     prompt: v.string(),
     createdAt: v.number(),
-  }).index('by_task', ['taskId']),
+  }).index('by_task', ['taskId', 'createdAt']),
 
   sessions: defineTable({
     taskId: v.id('tasks'),
