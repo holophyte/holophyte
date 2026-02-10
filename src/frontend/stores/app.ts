@@ -91,9 +91,15 @@ export const useAppStore = create<AppState>()(
       clearFilters: () =>
         set({ searchQuery: '', filterLabelIds: [], bulkSelectedTaskIds: [] }),
       toggleArchive: () =>
-        set((state) => ({ showArchive: !state.showArchive, bulkSelectedTaskIds: [] })),
+        set((state) => ({
+          showArchive: !state.showArchive,
+          bulkSelectedTaskIds: [],
+        })),
       toggleDoneCollapsed: () =>
-        set((state) => ({ doneColumnCollapsed: !state.doneColumnCollapsed, bulkSelectedTaskIds: [] })),
+        set((state) => ({
+          doneColumnCollapsed: !state.doneColumnCollapsed,
+          bulkSelectedTaskIds: [],
+        })),
 
       toggleBulkSelectTask: (id) =>
         set((state) => ({
