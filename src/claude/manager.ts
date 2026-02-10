@@ -11,7 +11,10 @@ interface Session {
   subscribers: Set<(data: string) => void>;
 }
 
-const convex = new ConvexHttpClient(process.env.CONVEX_URL ?? '');
+if (!process.env.CONVEX_URL) {
+  throw new Error('CONVEX_URL environment variable is required');
+}
+const convex = new ConvexHttpClient(process.env.CONVEX_URL);
 
 const sessions = new Map<string, Session>();
 

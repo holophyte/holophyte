@@ -2,6 +2,9 @@
 import type { Id } from '@convex/_generated/dataModel';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+// Set before manager module loads (guard requires CONVEX_URL)
+process.env.CONVEX_URL = 'https://test.convex.cloud';
+
 const mockTaskId = 'task-id' as unknown as Id<'tasks'>;
 
 // Mock convex before importing manager
