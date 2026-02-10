@@ -2,7 +2,7 @@ import { api } from '@convex/_generated/api';
 import type { Doc } from '@convex/_generated/dataModel';
 import { TaskStatus } from '@convex/schema';
 import { useMutation, useQuery } from 'convex/react';
-import { Archive, ChevronsRight, Plus } from 'lucide-react';
+import { Archive, ChevronsRight } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { cn } from '@/frontend/lib/utils';
 import { useAppStore } from '@/frontend/stores/app';
@@ -27,33 +27,58 @@ const COLUMNS = [
   { status: TaskStatus.Done, label: 'Done' },
 ];
 
-function CollapsedColumn({
+function BacklogColumn({
+  collapsed,
+  onToggle,
   label,
   count,
-  onExpand,
+  children,
 }: {
+  collapsed: boolean;
+  onToggle: () => void;
   label: string;
   count: number;
-  onExpand: () => void;
+  children: React.ReactNode;
 }) {
   return (
-    <button
-      type="button"
-      onClick={onExpand}
+    <div
       className={cn(
-        'w-10 min-w-[40px] min-h-full rounded-lg bg-muted/50 border',
-        'flex flex-col items-center justify-center gap-2',
-        'hover:bg-muted/80 transition-colors cursor-pointer',
+        'relative shrink-0 transition-[width,min-width,max-width,flex] duration-300 ease-in-out overflow-hidden',
+        collapsed
+          ? 'w-10 min-w-[40px] max-w-[40px] flex-none'
+          : 'w-[260px] min-w-[260px] max-w-[350px] flex-1',
       )}
     >
-      <span className="text-xs text-muted-foreground bg-muted rounded-full px-1.5 py-0.5">
-        {count}
-      </span>
-      <span className="text-xs font-medium text-muted-foreground [writing-mode:vertical-lr] rotate-180">
-        {label}
-      </span>
-      <ChevronsRight className="h-3.5 w-3.5 text-muted-foreground" />
-    </button>
+      {/* Collapsed pill — always rendered, fades in/out */}
+      <button
+        type="button"
+        onClick={onToggle}
+        className={cn(
+          'absolute inset-0 w-10 rounded-lg bg-muted/30 border border-dashed',
+          'flex flex-col items-center justify-center gap-2',
+          'hover:bg-muted/80 cursor-pointer',
+          'transition-opacity duration-300',
+          collapsed ? 'opacity-100 delay-100' : 'opacity-0 pointer-events-none',
+        )}
+      >
+        <span className="text-xs text-muted-foreground bg-muted rounded-full px-1.5 py-0.5">
+          {count}
+        </span>
+        <span className="text-xs font-medium text-muted-foreground [writing-mode:vertical-lr] rotate-180">
+          {label}
+        </span>
+        <ChevronsRight className="h-3.5 w-3.5 text-muted-foreground" />
+      </button>
+      {/* Expanded content — always rendered, fades in/out */}
+      <div
+        className={cn(
+          'h-full transition-opacity duration-300',
+          collapsed ? 'opacity-0 pointer-events-none' : 'opacity-100 delay-100',
+        )}
+      >
+        {children}
+      </div>
+    </div>
   );
 }
 
@@ -66,6 +91,9 @@ export function KanbanBoard() {
   const searchQuery = useAppStore((s) => s.searchQuery);
   const filterLabelIds = useAppStore((s) => s.filterLabelIds);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [createDialogStatus, setCreateDialogStatus] = useState<TaskStatus>(
+    TaskStatus.Backlog,
+  );
 
   const repoTasks = useQuery(
     api.tasks.listByRepo,
@@ -106,7 +134,7 @@ export function KanbanBoard() {
     });
   }, [allTasks, labelMap, subtaskCounts]);
 
-  const getColumnTasks = (status: string): EnrichedTask[] => {
+  const getColumnTasks = (status: TaskStatus): EnrichedTask[] => {
     let filtered = enrichedTasks.filter((t) => t.status === status);
 
     // Text search
@@ -160,26 +188,11 @@ export function KanbanBoard() {
             <Archive className="h-4 w-4 mr-1" />
             Archive
           </Button>
-          <Button
-            size="sm"
-            onClick={() => setCreateDialogOpen(true)}
-            disabled={!selectedRepoId}
-          >
-            <Plus className="h-4 w-4 mr-1" />
-            New Task
-          </Button>
         </div>
       </div>
       <div className="flex-1 flex gap-4 p-4 overflow-x-auto">
-        {COLUMNS.map((col) =>
-          col.status === TaskStatus.Backlog && backlogCollapsed ? (
-            <CollapsedColumn
-              key={col.status}
-              label={col.label}
-              count={getColumnTasks(col.status).length}
-              onExpand={toggleBacklog}
-            />
-          ) : (
+        {COLUMNS.map((col) => {
+          const columnEl = (
             <KanbanColumn
               key={col.status}
               status={col.status}
@@ -188,6 +201,9 @@ export function KanbanBoard() {
               repoMap={repoMap}
               showRepoBadge={selectedRepoId === null}
               collapsible={col.status === TaskStatus.Backlog}
+              variant={
+                col.status === TaskStatus.Backlog ? 'backlog' : 'default'
+              }
               onCollapse={
                 col.status === TaskStatus.Backlog ? toggleBacklog : undefined
               }
@@ -196,9 +212,33 @@ export function KanbanBoard() {
                   ? handleArchiveAll
                   : undefined
               }
+              onAddTask={
+                selectedRepoId
+                  ? () => {
+                      setCreateDialogStatus(col.status);
+                      setCreateDialogOpen(true);
+                    }
+                  : undefined
+              }
             />
-          ),
-        )}
+          );
+
+          if (col.status === TaskStatus.Backlog) {
+            return (
+              <BacklogColumn
+                key={col.status}
+                collapsed={backlogCollapsed}
+                onToggle={toggleBacklog}
+                label={col.label}
+                count={getColumnTasks(col.status).length}
+              >
+                {columnEl}
+              </BacklogColumn>
+            );
+          }
+
+          return columnEl;
+        })}
       </div>
       <BulkActionBar allTasks={enrichedTasks} />
       {selectedRepoId && (
@@ -206,6 +246,7 @@ export function KanbanBoard() {
           open={createDialogOpen}
           onOpenChange={setCreateDialogOpen}
           repoId={selectedRepoId}
+          initialStatus={createDialogStatus}
         />
       )}
     </div>

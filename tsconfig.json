@@ -27,5 +27,5 @@
       "@convex/*": ["./convex/*"]
     }
   },
-  "include": ["src/**/*", "convex/**/*", "vitest.config.ts", "playwright.config.ts", "e2e/**/*"]
+  "include": ["src/**/*", "convex/**/*", "vitest.config.ts", "playwright.config.ts", "e2e/**/*", ".storybook/**/*"]
 }
