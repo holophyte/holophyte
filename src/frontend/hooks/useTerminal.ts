@@ -1,7 +1,8 @@
-import { FitAddon } from "@xterm/addon-fit";
-import { Terminal } from "@xterm/xterm";
-import { useEffect, useRef } from "react";
-import "@xterm/xterm/css/xterm.css";
+import { FitAddon } from '@xterm/addon-fit';
+import { Terminal } from '@xterm/xterm';
+import { useEffect, useRef } from 'react';
+import { ansi } from '@/constants';
+import '@xterm/xterm/css/xterm.css';
 
 export function useTerminal(sessionId: string | null) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -19,8 +20,8 @@ export function useTerminal(sessionId: string | null) {
       fontSize: 13,
       fontFamily: "'SF Mono', Menlo, Monaco, 'Courier New', monospace",
       theme: {
-        background: "#000000",
-        foreground: "#cccccc",
+        background: '#000000',
+        foreground: '#cccccc',
       },
     });
 
@@ -46,13 +47,13 @@ export function useTerminal(sessionId: string | null) {
     requestAnimationFrame(safeFit);
 
     // Connect WebSocket
-    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const ws = new WebSocket(
       `${protocol}//${window.location.host}/ws/terminal/${sessionId}`,
     );
 
     ws.onopen = () => {
-      terminal.writeln("\x1b[32mConnected to session.\x1b[0m");
+      terminal.writeln(ansi.green('Connected to session.'));
       safeFit();
     };
 
@@ -61,7 +62,7 @@ export function useTerminal(sessionId: string | null) {
     };
 
     ws.onclose = () => {
-      terminal.writeln("\r\n\x1b[31mSession disconnected.\x1b[0m");
+      terminal.writeln(`\r\n${ansi.red('Session disconnected.')}`);
     };
 
     terminal.onData((data) => {
@@ -77,8 +78,8 @@ export function useTerminal(sessionId: string | null) {
       safeFit();
       if (ws.readyState === WebSocket.OPEN && terminal.cols && terminal.rows) {
         fetch(`/api/sessions/${sessionId}/resize`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ cols: terminal.cols, rows: terminal.rows }),
         });
       }

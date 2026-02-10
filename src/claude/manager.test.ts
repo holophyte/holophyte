@@ -1,12 +1,12 @@
 // @vitest-environment node
-import type { Id } from "@convex/_generated/dataModel";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { Id } from '@convex/_generated/dataModel';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const mockTaskId = "task-id" as unknown as Id<"tasks">;
+const mockTaskId = 'task-id' as unknown as Id<'tasks'>;
 
 // Mock convex before importing manager
-const mockMutation = vi.fn().mockResolvedValue("mock-session-id");
-vi.mock("convex/browser", () => {
+const mockMutation = vi.fn().mockResolvedValue('mock-session-id');
+vi.mock('convex/browser', () => {
   return {
     ConvexHttpClient: class {
       mutation = mockMutation;
@@ -14,11 +14,11 @@ vi.mock("convex/browser", () => {
   };
 });
 
-vi.mock("@convex/_generated/api", () => ({
+vi.mock('@convex/_generated/api', () => ({
   api: {
     sessions: {
-      create: "sessions:create",
-      updateStatus: "sessions:updateStatus",
+      create: 'sessions:create',
+      updateStatus: 'sessions:updateStatus',
     },
   },
 }));
@@ -84,35 +84,35 @@ beforeEach(() => {
 
 afterEach(async () => {
   // Clean up sessions between tests
-  const { getActiveSessions, stopSession } = await import("./manager");
+  const { getActiveSessions, stopSession } = await import('./manager');
   for (const id of getActiveSessions()) {
     await stopSession(id);
   }
   vi.restoreAllMocks();
 });
 
-describe("claude/manager", () => {
-  describe("startSession", () => {
-    it("spawns a process with terminal option and registers the session", async () => {
+describe('claude/manager', () => {
+  describe('startSession', () => {
+    it('spawns a process with terminal option and registers the session', async () => {
       const { startSession, getSession, getActiveSessions } = await import(
-        "./manager"
+        './manager'
       );
 
       const result = await startSession({
         taskId: mockTaskId,
-        repoPath: "/tmp/test-repo",
-        prompt: "fix the bug",
+        repoPath: '/tmp/test-repo',
+        prompt: 'fix the bug',
       });
 
-      expect(result.sessionId).toBe("mock-session-id");
-      expect(getSession("mock-session-id")).toBeDefined();
-      expect(getActiveSessions()).toContain("mock-session-id");
+      expect(result.sessionId).toBe('mock-session-id');
+      expect(getSession('mock-session-id')).toBeDefined();
+      expect(getActiveSessions()).toContain('mock-session-id');
 
       // Verify Bun.spawn was called with terminal option
       expect(Bun.spawn).toHaveBeenCalledWith(
-        expect.arrayContaining(["fix the bug"]),
+        expect.arrayContaining(['fix the bug']),
         expect.objectContaining({
-          cwd: "/tmp/test-repo",
+          cwd: '/tmp/test-repo',
           terminal: expect.objectContaining({
             cols: 120,
             rows: 30,
@@ -122,109 +122,109 @@ describe("claude/manager", () => {
     });
   });
 
-  describe("stopSession", () => {
-    it("closes terminal, kills process with SIGKILL, and removes session", async () => {
+  describe('stopSession', () => {
+    it('closes terminal, kills process with SIGKILL, and removes session', async () => {
       const { startSession, stopSession, getSession } = await import(
-        "./manager"
+        './manager'
       );
 
       const { sessionId } = await startSession({
         taskId: mockTaskId,
-        repoPath: "/tmp/test-repo",
-        prompt: "fix the bug",
+        repoPath: '/tmp/test-repo',
+        prompt: 'fix the bug',
       });
 
       await stopSession(sessionId);
 
       expect(mockTerminal.close).toHaveBeenCalled();
-      expect(mockProc.proc.kill).toHaveBeenCalledWith("SIGKILL");
+      expect(mockProc.proc.kill).toHaveBeenCalledWith('SIGKILL');
       expect(getSession(sessionId)).toBeUndefined();
     });
 
-    it("does nothing for a non-existent session", async () => {
-      const { stopSession } = await import("./manager");
+    it('does nothing for a non-existent session', async () => {
+      const { stopSession } = await import('./manager');
       // Should not throw
-      await stopSession("non-existent-id");
+      await stopSession('non-existent-id');
     });
   });
 
-  describe("subscribe", () => {
-    it("adds and removes subscribers", async () => {
-      const { startSession, subscribe } = await import("./manager");
+  describe('subscribe', () => {
+    it('adds and removes subscribers', async () => {
+      const { startSession, subscribe } = await import('./manager');
 
       const { sessionId } = await startSession({
         taskId: mockTaskId,
-        repoPath: "/tmp/test-repo",
-        prompt: "test",
+        repoPath: '/tmp/test-repo',
+        prompt: 'test',
       });
 
       const callback = vi.fn();
       const unsubscribe = subscribe(sessionId, callback);
 
-      expect(typeof unsubscribe).toBe("function");
+      expect(typeof unsubscribe).toBe('function');
 
       unsubscribe();
       // After unsubscribe, callback should not be in the set
     });
 
-    it("returns a no-op unsubscribe for non-existent session", async () => {
-      const { subscribe } = await import("./manager");
-      const unsubscribe = subscribe("non-existent", vi.fn());
-      expect(typeof unsubscribe).toBe("function");
+    it('returns a no-op unsubscribe for non-existent session', async () => {
+      const { subscribe } = await import('./manager');
+      const unsubscribe = subscribe('non-existent', vi.fn());
+      expect(typeof unsubscribe).toBe('function');
       unsubscribe(); // should not throw
     });
   });
 
-  describe("writeToSession", () => {
-    it("writes data to the terminal", async () => {
-      const { startSession, writeToSession } = await import("./manager");
+  describe('writeToSession', () => {
+    it('writes data to the terminal', async () => {
+      const { startSession, writeToSession } = await import('./manager');
 
       const { sessionId } = await startSession({
         taskId: mockTaskId,
-        repoPath: "/tmp/test-repo",
-        prompt: "test",
+        repoPath: '/tmp/test-repo',
+        prompt: 'test',
       });
 
-      writeToSession(sessionId, "hello\n");
-      expect(mockTerminal.write).toHaveBeenCalledWith("hello\n");
+      writeToSession(sessionId, 'hello\n');
+      expect(mockTerminal.write).toHaveBeenCalledWith('hello\n');
     });
 
-    it("does nothing for non-existent session", async () => {
-      const { writeToSession } = await import("./manager");
-      writeToSession("non-existent", "hello");
+    it('does nothing for non-existent session', async () => {
+      const { writeToSession } = await import('./manager');
+      writeToSession('non-existent', 'hello');
       // Should not throw
     });
   });
 
-  describe("resizeSession", () => {
-    it("resizes the terminal", async () => {
-      const { startSession, resizeSession } = await import("./manager");
+  describe('resizeSession', () => {
+    it('resizes the terminal', async () => {
+      const { startSession, resizeSession } = await import('./manager');
 
       const { sessionId } = await startSession({
         taskId: mockTaskId,
-        repoPath: "/tmp/test-repo",
-        prompt: "test",
+        repoPath: '/tmp/test-repo',
+        prompt: 'test',
       });
 
       resizeSession(sessionId, 200, 50);
       expect(mockTerminal.resize).toHaveBeenCalledWith(200, 50);
     });
 
-    it("does nothing for non-existent session", async () => {
-      const { resizeSession } = await import("./manager");
-      resizeSession("non-existent", 80, 24);
+    it('does nothing for non-existent session', async () => {
+      const { resizeSession } = await import('./manager');
+      resizeSession('non-existent', 80, 24);
       // Should not throw
     });
   });
 
-  describe("process exit handling", () => {
-    it("cleans up session on process exit with code 0", async () => {
-      const { startSession, getSession } = await import("./manager");
+  describe('process exit handling', () => {
+    it('cleans up session on process exit with code 0', async () => {
+      const { startSession, getSession } = await import('./manager');
 
       const { sessionId } = await startSession({
         taskId: mockTaskId,
-        repoPath: "/tmp/test-repo",
-        prompt: "test",
+        repoPath: '/tmp/test-repo',
+        prompt: 'test',
       });
 
       expect(getSession(sessionId)).toBeDefined();

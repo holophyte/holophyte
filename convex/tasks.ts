@@ -1,48 +1,48 @@
-import { v } from "convex/values";
-import { mutation, query } from "./_generated/server";
-import { taskStatusValidator } from "./schema";
+import { v } from 'convex/values';
+import { mutation, query } from './_generated/server';
+import { TaskStatus, taskStatusValidator } from './schema';
 
 export const listByRepo = query({
-  args: { repoId: v.id("repos"), includeArchived: v.optional(v.boolean()) },
+  args: { repoId: v.id('repos'), includeArchived: v.optional(v.boolean()) },
   handler: async (ctx, args) => {
     const tasks = await ctx.db
-      .query("tasks")
-      .withIndex("by_repo_status", (q) => q.eq("repoId", args.repoId))
+      .query('tasks')
+      .withIndex('by_repo_status', (q) => q.eq('repoId', args.repoId))
       .collect();
     if (args.includeArchived) return tasks;
-    return tasks.filter((t) => t.status !== "archived");
+    return tasks.filter((t) => t.status !== TaskStatus.Archived);
   },
 });
 
 export const listAll = query({
   args: { includeArchived: v.optional(v.boolean()) },
   handler: async (ctx, args) => {
-    const tasks = await ctx.db.query("tasks").collect();
+    const tasks = await ctx.db.query('tasks').collect();
     if (args.includeArchived) return tasks;
-    return tasks.filter((t) => t.status !== "archived");
+    return tasks.filter((t) => t.status !== TaskStatus.Archived);
   },
 });
 
 export const listArchived = query({
-  args: { repoId: v.optional(v.id("repos")) },
+  args: { repoId: v.optional(v.id('repos')) },
   handler: async (ctx, args) => {
     const tasks = args.repoId
       ? await ctx.db
-          .query("tasks")
-          .withIndex("by_repo_status", (q) =>
-            q.eq("repoId", args.repoId!).eq("status", "archived"),
+          .query('tasks')
+          .withIndex('by_repo_status', (q) =>
+            q.eq('repoId', args.repoId!).eq('status', TaskStatus.Archived),
           )
           .collect()
       : await ctx.db
-          .query("tasks")
-          .withIndex("by_status", (q) => q.eq("status", "archived"))
+          .query('tasks')
+          .withIndex('by_status', (q) => q.eq('status', TaskStatus.Archived))
           .collect();
     return tasks.sort((a, b) => (b.archivedAt ?? 0) - (a.archivedAt ?? 0));
   },
 });
 
 export const get = query({
-  args: { id: v.id("tasks") },
+  args: { id: v.id('tasks') },
   handler: async (ctx, args) => {
     const task = await ctx.db.get(args.id);
     if (!task) return null;
@@ -57,8 +57,8 @@ export const get = query({
 
     // Fetch subtask counts
     const subtasks = await ctx.db
-      .query("subtasks")
-      .withIndex("by_task", (q) => q.eq("taskId", args.id))
+      .query('subtasks')
+      .withIndex('by_task', (q) => q.eq('taskId', args.id))
       .collect();
     const subtaskTotal = subtasks.length;
     const subtaskCompleted = subtasks.filter((s) => s.completed).length;
@@ -69,18 +69,18 @@ export const get = query({
 
 export const create = mutation({
   args: {
-    repoId: v.id("repos"),
+    repoId: v.id('repos'),
     title: v.string(),
     description: v.optional(v.string()),
     prompt: v.optional(v.string()),
-    labelIds: v.optional(v.array(v.id("labels"))),
+    labelIds: v.optional(v.array(v.id('labels'))),
     dueAt: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
     const existing = await ctx.db
-      .query("tasks")
-      .withIndex("by_repo_status", (q) =>
-        q.eq("repoId", args.repoId).eq("status", "backlog"),
+      .query('tasks')
+      .withIndex('by_repo_status', (q) =>
+        q.eq('repoId', args.repoId).eq('status', TaskStatus.Backlog),
       )
       .collect();
     const maxPosition = existing.reduce(
@@ -88,12 +88,12 @@ export const create = mutation({
       0,
     );
     const now = Date.now();
-    return await ctx.db.insert("tasks", {
+    return await ctx.db.insert('tasks', {
       repoId: args.repoId,
       title: args.title,
-      description: args.description ?? "",
-      prompt: args.prompt ?? "",
-      status: "backlog",
+      description: args.description ?? '',
+      prompt: args.prompt ?? '',
+      status: TaskStatus.Backlog,
       position: maxPosition + 1,
       createdAt: now,
       updatedAt: now,
@@ -106,11 +106,11 @@ export const create = mutation({
 
 export const update = mutation({
   args: {
-    id: v.id("tasks"),
+    id: v.id('tasks'),
     title: v.optional(v.string()),
     description: v.optional(v.string()),
     prompt: v.optional(v.string()),
-    labelIds: v.optional(v.array(v.id("labels"))),
+    labelIds: v.optional(v.array(v.id('labels'))),
     dueAt: v.optional(v.number()),
     clearDueAt: v.optional(v.boolean()),
   },
@@ -130,13 +130,13 @@ export const update = mutation({
 
 export const move = mutation({
   args: {
-    id: v.id("tasks"),
+    id: v.id('tasks'),
     status: taskStatusValidator,
     position: v.number(),
   },
   handler: async (ctx, args) => {
     const task = await ctx.db.get(args.id);
-    if (!task) throw new Error("Task not found");
+    if (!task) throw new Error('Task not found');
 
     const now = Date.now();
     const updates: Record<string, unknown> = {
@@ -146,19 +146,25 @@ export const move = mutation({
     };
 
     // Time tracking: leaving in_progress
-    if (task.status === "in_progress" && args.status !== "in_progress") {
+    if (
+      task.status === TaskStatus.InProgress &&
+      args.status !== TaskStatus.InProgress
+    ) {
       const elapsed = task.inProgressSince ? now - task.inProgressSince : 0;
       updates.totalInProgressMs = (task.totalInProgressMs ?? 0) + elapsed;
       updates.inProgressSince = undefined;
     }
 
     // Time tracking: entering in_progress
-    if (task.status !== "in_progress" && args.status === "in_progress") {
+    if (
+      task.status !== TaskStatus.InProgress &&
+      args.status === TaskStatus.InProgress
+    ) {
       updates.inProgressSince = now;
     }
 
     // Archive timestamp
-    if (args.status === "archived") {
+    if (args.status === TaskStatus.Archived) {
       updates.archivedAt = now;
     }
 
@@ -168,7 +174,7 @@ export const move = mutation({
 
 export const reorder = mutation({
   args: {
-    id: v.id("tasks"),
+    id: v.id('tasks'),
     position: v.number(),
   },
   handler: async (ctx, args) => {
@@ -180,14 +186,14 @@ export const reorder = mutation({
 });
 
 export const unarchive = mutation({
-  args: { id: v.id("tasks") },
+  args: { id: v.id('tasks') },
   handler: async (ctx, args) => {
     const task = await ctx.db.get(args.id);
-    if (!task || task.status !== "archived") return;
+    if (!task || task.status !== TaskStatus.Archived) return;
     const doneTasks = await ctx.db
-      .query("tasks")
-      .withIndex("by_repo_status", (q) =>
-        q.eq("repoId", task.repoId).eq("status", "done"),
+      .query('tasks')
+      .withIndex('by_repo_status', (q) =>
+        q.eq('repoId', task.repoId).eq('status', TaskStatus.Done),
       )
       .collect();
     const maxPosition = doneTasks.reduce(
@@ -195,7 +201,7 @@ export const unarchive = mutation({
       0,
     );
     await ctx.db.patch(args.id, {
-      status: "done",
+      status: TaskStatus.Done,
       position: maxPosition + 1,
       archivedAt: undefined,
       updatedAt: Date.now(),
@@ -204,18 +210,18 @@ export const unarchive = mutation({
 });
 
 export const archiveAllDone = mutation({
-  args: { repoId: v.id("repos") },
+  args: { repoId: v.id('repos') },
   handler: async (ctx, args) => {
     const doneTasks = await ctx.db
-      .query("tasks")
-      .withIndex("by_repo_status", (q) =>
-        q.eq("repoId", args.repoId).eq("status", "done"),
+      .query('tasks')
+      .withIndex('by_repo_status', (q) =>
+        q.eq('repoId', args.repoId).eq('status', TaskStatus.Done),
       )
       .collect();
     const now = Date.now();
     for (const task of doneTasks) {
       await ctx.db.patch(task._id, {
-        status: "archived",
+        status: TaskStatus.Archived,
         archivedAt: now,
         updatedAt: now,
       });
@@ -227,22 +233,22 @@ export const listActive = query({
   args: {},
   handler: async (ctx) => {
     const inProgress = await ctx.db
-      .query("tasks")
-      .withIndex("by_status", (q) => q.eq("status", "in_progress"))
+      .query('tasks')
+      .withIndex('by_status', (q) => q.eq('status', TaskStatus.InProgress))
       .collect();
     const inReview = await ctx.db
-      .query("tasks")
-      .withIndex("by_status", (q) => q.eq("status", "review"))
+      .query('tasks')
+      .withIndex('by_status', (q) => q.eq('status', TaskStatus.Review))
       .collect();
     const tasks = [...inProgress, ...inReview];
     return Promise.all(
       tasks.map(async (t) => {
         const repo = await ctx.db.get(t.repoId);
         const sessions = await ctx.db
-          .query("sessions")
-          .withIndex("by_task", (q) => q.eq("taskId", t._id))
+          .query('sessions')
+          .withIndex('by_task', (q) => q.eq('taskId', t._id))
           .collect();
-        const hasRunningSession = sessions.some((s) => s.status === "running");
+        const hasRunningSession = sessions.some((s) => s.status === 'running');
         return { ...t, repoName: repo?.name, hasRunningSession };
       }),
     );
@@ -250,20 +256,20 @@ export const listActive = query({
 });
 
 export const remove = mutation({
-  args: { id: v.id("tasks") },
+  args: { id: v.id('tasks') },
   handler: async (ctx, args) => {
     // Delete sessions
     const sessions = await ctx.db
-      .query("sessions")
-      .withIndex("by_task", (q) => q.eq("taskId", args.id))
+      .query('sessions')
+      .withIndex('by_task', (q) => q.eq('taskId', args.id))
       .collect();
     for (const session of sessions) {
       await ctx.db.delete(session._id);
     }
     // Delete subtasks
     const subtasks = await ctx.db
-      .query("subtasks")
-      .withIndex("by_task", (q) => q.eq("taskId", args.id))
+      .query('subtasks')
+      .withIndex('by_task', (q) => q.eq('taskId', args.id))
       .collect();
     for (const subtask of subtasks) {
       await ctx.db.delete(subtask._id);

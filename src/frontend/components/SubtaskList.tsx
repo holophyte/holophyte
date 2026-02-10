@@ -1,14 +1,14 @@
-import { api } from "@convex/_generated/api";
-import type { Id } from "@convex/_generated/dataModel";
-import { useMutation, useQuery } from "convex/react";
-import { Plus, X } from "lucide-react";
-import { useState } from "react";
-import { cn } from "@/frontend/lib/utils";
-import { Checkbox } from "./ui/checkbox";
-import { Input } from "./ui/input";
+import { api } from '@convex/_generated/api';
+import type { Id } from '@convex/_generated/dataModel';
+import { useMutation, useQuery } from 'convex/react';
+import { Plus, X } from 'lucide-react';
+import { useState } from 'react';
+import { cn } from '@/frontend/lib/utils';
+import Checkbox from './ui/Checkbox';
+import Input from './ui/Input';
 
 interface SubtaskListProps {
-  taskId: Id<"tasks">;
+  taskId: Id<'tasks'>;
 }
 
 export function SubtaskList({ taskId }: SubtaskListProps) {
@@ -17,9 +17,9 @@ export function SubtaskList({ taskId }: SubtaskListProps) {
   const toggleSubtask = useMutation(api.subtasks.toggle);
   const updateTitle = useMutation(api.subtasks.updateTitle);
   const removeSubtask = useMutation(api.subtasks.remove);
-  const [newTitle, setNewTitle] = useState("");
-  const [editingId, setEditingId] = useState<Id<"subtasks"> | null>(null);
-  const [editingTitle, setEditingTitle] = useState("");
+  const [newTitle, setNewTitle] = useState('');
+  const [editingId, setEditingId] = useState<Id<'subtasks'> | null>(null);
+  const [editingTitle, setEditingTitle] = useState('');
 
   if (!subtasks) return null;
 
@@ -32,16 +32,16 @@ export function SubtaskList({ taskId }: SubtaskListProps) {
     const trimmed = newTitle.trim();
     if (!trimmed) return;
     await createSubtask({ taskId, title: trimmed });
-    setNewTitle("");
+    setNewTitle('');
   };
 
-  const handleEditSave = async (id: Id<"subtasks">) => {
+  const handleEditSave = async (id: Id<'subtasks'>) => {
     const trimmed = editingTitle.trim();
     if (trimmed) {
       await updateTitle({ id, title: trimmed });
     }
     setEditingId(null);
-    setEditingTitle("");
+    setEditingTitle('');
   };
 
   return (
@@ -75,10 +75,10 @@ export function SubtaskList({ taskId }: SubtaskListProps) {
                 onChange={(e) => setEditingTitle(e.target.value)}
                 onBlur={() => handleEditSave(subtask._id)}
                 onKeyDown={(e) => {
-                  if (e.key === "Enter") handleEditSave(subtask._id);
-                  if (e.key === "Escape") {
+                  if (e.key === 'Enter') handleEditSave(subtask._id);
+                  if (e.key === 'Escape') {
                     setEditingId(null);
-                    setEditingTitle("");
+                    setEditingTitle('');
                   }
                 }}
                 className="h-6 text-xs flex-1 px-1"
@@ -88,8 +88,8 @@ export function SubtaskList({ taskId }: SubtaskListProps) {
               <button
                 type="button"
                 className={cn(
-                  "text-xs flex-1 cursor-pointer text-left bg-transparent border-none p-0",
-                  subtask.completed && "line-through text-muted-foreground",
+                  'text-xs flex-1 cursor-pointer text-left bg-transparent border-none p-0',
+                  subtask.completed && 'line-through text-muted-foreground',
                 )}
                 onClick={() => {
                   setEditingId(subtask._id);
@@ -116,7 +116,7 @@ export function SubtaskList({ taskId }: SubtaskListProps) {
           value={newTitle}
           onChange={(e) => setNewTitle(e.target.value)}
           onKeyDown={(e) => {
-            if (e.key === "Enter") handleAdd();
+            if (e.key === 'Enter') handleAdd();
           }}
           className="h-7 text-xs flex-1 px-2"
         />

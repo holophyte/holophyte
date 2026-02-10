@@ -1,6 +1,6 @@
-import { api } from "@convex/_generated/api";
-import type { Doc, Id } from "@convex/_generated/dataModel";
-import { useMutation, useQuery } from "convex/react";
+import { api } from '@convex/_generated/api';
+import type { Doc, Id } from '@convex/_generated/dataModel';
+import { useMutation, useQuery } from 'convex/react';
 import {
   Check,
   Leaf,
@@ -10,11 +10,11 @@ import {
   Trash2,
   TreePine,
   X,
-} from "lucide-react";
-import { useEffect, useRef, useState } from "react";
-import { cn } from "@/frontend/lib/utils";
-import { Badge } from "./ui/badge";
-import { Button } from "./ui/button";
+} from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { cn } from '@/frontend/lib/utils';
+import Badge from './ui/Badge';
+import Button from './ui/Button';
 import {
   Dialog,
   DialogContent,
@@ -22,14 +22,14 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "./ui/dialog";
-import { Input } from "./ui/input";
-import { Label } from "./ui/label";
-import { Textarea } from "./ui/textarea";
+} from './ui/Dialog';
+import Input from './ui/Input';
+import Label from './ui/Label';
+import Textarea from './ui/Textarea';
 
 function timeAgo(timestamp: number): string {
   const seconds = Math.floor((Date.now() - timestamp) / 1000);
-  if (seconds < 60) return "just now";
+  if (seconds < 60) return 'just now';
   const minutes = Math.floor(seconds / 60);
   if (minutes < 60) return `${minutes}m ago`;
   const hours = Math.floor(minutes / 60);
@@ -43,7 +43,7 @@ function timeAgo(timestamp: number): string {
 // ── Create Seed Inline ──────────────────────────────────────────────
 
 function CreateSeedInline({ onDone }: { onDone: () => void }) {
-  const [title, setTitle] = useState("");
+  const [title, setTitle] = useState('');
   const createSeed = useMutation(api.seeds.create);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -54,7 +54,7 @@ function CreateSeedInline({ onDone }: { onDone: () => void }) {
   const handleSubmit = async () => {
     if (!title.trim()) return;
     await createSeed({ title: title.trim() });
-    setTitle("");
+    setTitle('');
     onDone();
   };
 
@@ -105,16 +105,16 @@ function PlantDialog({
   open,
   onOpenChange,
 }: {
-  seed: Doc<"seeds">;
+  seed: Doc<'seeds'>;
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
   const repos = useQuery(api.repos.list);
   const plantSeed = useMutation(api.seeds.plant);
-  const [selectedRepoId, setSelectedRepoId] = useState<Id<"repos"> | null>(
+  const [selectedRepoId, setSelectedRepoId] = useState<Id<'repos'> | null>(
     null,
   );
-  const [prompt, setPrompt] = useState("");
+  const [prompt, setPrompt] = useState('');
 
   const handlePlant = async () => {
     if (!selectedRepoId) return;
@@ -124,7 +124,7 @@ function PlantDialog({
       prompt: prompt.trim() || undefined,
     });
     setSelectedRepoId(null);
-    setPrompt("");
+    setPrompt('');
     onOpenChange(false);
   };
 
@@ -151,18 +151,18 @@ function PlantDialog({
                   type="button"
                   onClick={() => setSelectedRepoId(repo._id)}
                   className={cn(
-                    "flex items-center gap-2 rounded-md border px-3 py-2 text-sm text-left transition-colors",
+                    'flex items-center gap-2 rounded-md border px-3 py-2 text-sm text-left transition-colors',
                     selectedRepoId === repo._id
-                      ? "border-primary bg-primary/5 text-foreground"
-                      : "border-transparent bg-muted/50 text-muted-foreground hover:bg-muted hover:text-foreground",
+                      ? 'border-primary bg-primary/5 text-foreground'
+                      : 'border-transparent bg-muted/50 text-muted-foreground hover:bg-muted hover:text-foreground',
                   )}
                 >
                   <div
                     className={cn(
-                      "h-2 w-2 rounded-full shrink-0",
+                      'h-2 w-2 rounded-full shrink-0',
                       selectedRepoId === repo._id
-                        ? "bg-primary"
-                        : "bg-muted-foreground/30",
+                        ? 'bg-primary'
+                        : 'bg-muted-foreground/30',
                     )}
                   />
                   <span className="truncate">{repo.name}</span>
@@ -203,7 +203,7 @@ function PlantDialog({
 
 // ── Seed Card ────────────────────────────────────────────────────────
 
-function SeedCard({ seed }: { seed: Doc<"seeds"> }) {
+function SeedCard({ seed }: { seed: Doc<'seeds'> }) {
   const updateSeed = useMutation(api.seeds.update);
   const removeSeed = useMutation(api.seeds.remove);
   const [editing, setEditing] = useState(false);
@@ -211,7 +211,7 @@ function SeedCard({ seed }: { seed: Doc<"seeds"> }) {
   const [description, setDescription] = useState(seed.description);
   const [plantOpen, setPlantOpen] = useState(false);
 
-  const isPlanted = seed.status === "planted";
+  const isPlanted = seed.status === 'planted';
 
   useEffect(() => {
     setTitle(seed.title);
@@ -238,10 +238,10 @@ function SeedCard({ seed }: { seed: Doc<"seeds"> }) {
     <>
       <div
         className={cn(
-          "group relative rounded-lg border bg-background p-4 transition-all",
+          'group relative rounded-lg border bg-background p-4 transition-all',
           isPlanted
-            ? "opacity-50 border-dashed"
-            : "shadow-sm hover:shadow-md hover:border-foreground/15",
+            ? 'opacity-50 border-dashed'
+            : 'shadow-sm hover:shadow-md hover:border-foreground/15',
         )}
       >
         {/* Delete button */}
@@ -262,8 +262,8 @@ function SeedCard({ seed }: { seed: Doc<"seeds"> }) {
               className="h-8 text-sm font-medium"
               autoFocus
               onKeyDown={(e) => {
-                if (e.key === "Enter") handleSave();
-                if (e.key === "Escape") handleCancel();
+                if (e.key === 'Enter') handleSave();
+                if (e.key === 'Escape') handleCancel();
               }}
             />
             <Textarea
@@ -273,7 +273,7 @@ function SeedCard({ seed }: { seed: Doc<"seeds"> }) {
               rows={2}
               className="text-xs resize-none"
               onKeyDown={(e) => {
-                if (e.key === "Escape") handleCancel();
+                if (e.key === 'Escape') handleCancel();
               }}
             />
             <div className="flex items-center gap-1.5 justify-end">
@@ -300,8 +300,8 @@ function SeedCard({ seed }: { seed: Doc<"seeds"> }) {
             <div className="flex items-start gap-2 pr-6">
               <Sprout
                 className={cn(
-                  "h-3.5 w-3.5 mt-0.5 shrink-0",
-                  isPlanted ? "text-muted-foreground/50" : "text-green-600",
+                  'h-3.5 w-3.5 mt-0.5 shrink-0',
+                  isPlanted ? 'text-muted-foreground/50' : 'text-green-600',
                 )}
               />
               <h3 className="text-sm font-medium leading-snug">{seed.title}</h3>
@@ -365,8 +365,8 @@ export function SeedBoard() {
   const [creating, setCreating] = useState(false);
   const [showPlanted, setShowPlanted] = useState(true);
 
-  const activeSeeds = seeds?.filter((s) => s.status === "active") ?? [];
-  const plantedSeeds = seeds?.filter((s) => s.status === "planted") ?? [];
+  const activeSeeds = seeds?.filter((s) => s.status === 'active') ?? [];
+  const plantedSeeds = seeds?.filter((s) => s.status === 'planted') ?? [];
   const visibleSeeds = showPlanted ? seeds : activeSeeds;
   const sortedSeeds = [...(visibleSeeds ?? [])].sort(
     (a, b) => b.createdAt - a.createdAt,
@@ -392,12 +392,12 @@ export function SeedBoard() {
               size="sm"
               onClick={() => setShowPlanted(!showPlanted)}
               className={cn(
-                "text-xs gap-1.5",
-                !showPlanted && "text-muted-foreground",
+                'text-xs gap-1.5',
+                !showPlanted && 'text-muted-foreground',
               )}
             >
               <Leaf className="h-3.5 w-3.5" />
-              {showPlanted ? "Hide" : "Show"} planted
+              {showPlanted ? 'Hide' : 'Show'} planted
             </Button>
           )}
           <Button size="sm" onClick={() => setCreating(true)}>

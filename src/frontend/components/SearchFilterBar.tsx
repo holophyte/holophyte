@@ -1,11 +1,11 @@
-import { api } from "@convex/_generated/api";
-import { useQuery } from "convex/react";
-import { Search, Tag, X } from "lucide-react";
-import { cn } from "@/frontend/lib/utils";
-import { useAppStore } from "@/frontend/stores/app";
-import { Button } from "./ui/button";
-import { Input } from "./ui/input";
-import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
+import { api } from '@convex/_generated/api';
+import { useQuery } from 'convex/react';
+import { Search, Tag, X } from 'lucide-react';
+import { cn } from '@/frontend/lib/utils';
+import { useAppStore } from '@/frontend/stores/app';
+import Button from './ui/Button';
+import Input from './ui/Input';
+import { Popover, PopoverContent, PopoverTrigger } from './ui/Popover';
 
 export function SearchFilterBar() {
   const searchQuery = useAppStore((s) => s.searchQuery);
@@ -15,7 +15,7 @@ export function SearchFilterBar() {
   const clearFilters = useAppStore((s) => s.clearFilters);
 
   const labels = useQuery(api.labels.list);
-  const hasFilters = searchQuery !== "" || filterLabelIds.length > 0;
+  const hasFilters = searchQuery !== '' || filterLabelIds.length > 0;
 
   return (
     <div className="flex items-center gap-2 flex-1 min-w-0 max-w-md">
@@ -30,7 +30,7 @@ export function SearchFilterBar() {
         {searchQuery && (
           <button
             type="button"
-            onClick={() => setSearchQuery("")}
+            onClick={() => setSearchQuery('')}
             className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
           >
             <X className="h-3.5 w-3.5" />
@@ -42,11 +42,11 @@ export function SearchFilterBar() {
           <PopoverTrigger asChild>
             <Button
               size="sm"
-              variant={filterLabelIds.length > 0 ? "secondary" : "ghost"}
+              variant={filterLabelIds.length > 0 ? 'secondary' : 'ghost'}
               className="h-8 px-2"
             >
               <Tag className="h-3.5 w-3.5 mr-1" />
-              {filterLabelIds.length > 0 ? filterLabelIds.length : "Labels"}
+              {filterLabelIds.length > 0 ? filterLabelIds.length : 'Labels'}
             </Button>
           </PopoverTrigger>
           <PopoverContent className="w-56 p-2" align="start">
@@ -57,8 +57,8 @@ export function SearchFilterBar() {
                   type="button"
                   onClick={() => toggleFilterLabel(label._id)}
                   className={cn(
-                    "w-full flex items-center gap-2 px-2 py-1.5 rounded text-sm hover:bg-muted transition-colors text-left",
-                    filterLabelIds.includes(label._id) && "bg-muted",
+                    'w-full flex items-center gap-2 px-2 py-1.5 rounded text-sm hover:bg-muted transition-colors text-left',
+                    filterLabelIds.includes(label._id) && 'bg-muted',
                   )}
                 >
                   <span

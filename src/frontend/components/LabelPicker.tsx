@@ -1,27 +1,27 @@
-import { api } from "@convex/_generated/api";
-import type { Doc, Id } from "@convex/_generated/dataModel";
-import { useMutation, useQuery } from "convex/react";
-import { Plus, Tag } from "lucide-react";
-import { useState } from "react";
-import { cn } from "@/frontend/lib/utils";
-import { Button } from "./ui/button";
-import { Input } from "./ui/input";
-import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
+import { api } from '@convex/_generated/api';
+import type { Doc, Id } from '@convex/_generated/dataModel';
+import { useMutation, useQuery } from 'convex/react';
+import { Plus, Tag } from 'lucide-react';
+import { useState } from 'react';
+import { cn } from '@/frontend/lib/utils';
+import Button from './ui/Button';
+import Input from './ui/Input';
+import { Popover, PopoverContent, PopoverTrigger } from './ui/Popover';
 
 const LABEL_COLORS = [
-  { name: "Red", hex: "#ef4444" },
-  { name: "Orange", hex: "#f97316" },
-  { name: "Yellow", hex: "#eab308" },
-  { name: "Green", hex: "#22c55e" },
-  { name: "Blue", hex: "#3b82f6" },
-  { name: "Purple", hex: "#8b5cf6" },
-  { name: "Pink", hex: "#ec4899" },
-  { name: "Gray", hex: "#6b7280" },
+  { name: 'Red', hex: '#ef4444' },
+  { name: 'Orange', hex: '#f97316' },
+  { name: 'Yellow', hex: '#eab308' },
+  { name: 'Green', hex: '#22c55e' },
+  { name: 'Blue', hex: '#3b82f6' },
+  { name: 'Purple', hex: '#8b5cf6' },
+  { name: 'Pink', hex: '#ec4899' },
+  { name: 'Gray', hex: '#6b7280' },
 ];
 
 interface LabelPickerProps {
-  currentLabelIds: Id<"labels">[];
-  onChangeLabelIds: (labelIds: Id<"labels">[]) => void;
+  currentLabelIds: Id<'labels'>[];
+  onChangeLabelIds: (labelIds: Id<'labels'>[]) => void;
 }
 
 export function LabelPicker({
@@ -31,10 +31,10 @@ export function LabelPicker({
   const labels = useQuery(api.labels.list);
   const createLabel = useMutation(api.labels.create);
   const [creating, setCreating] = useState(false);
-  const [newName, setNewName] = useState("");
-  const [newColor, setNewColor] = useState(LABEL_COLORS[0]?.hex ?? "#ef4444");
+  const [newName, setNewName] = useState('');
+  const [newColor, setNewColor] = useState(LABEL_COLORS[0]?.hex ?? '#ef4444');
 
-  const toggleLabel = (labelId: Id<"labels">) => {
+  const toggleLabel = (labelId: Id<'labels'>) => {
     if (currentLabelIds.includes(labelId)) {
       onChangeLabelIds(currentLabelIds.filter((id) => id !== labelId));
     } else {
@@ -47,7 +47,7 @@ export function LabelPicker({
     if (!trimmed) return;
     const id = await createLabel({ name: trimmed, color: newColor });
     onChangeLabelIds([...currentLabelIds, id]);
-    setNewName("");
+    setNewName('');
     setCreating(false);
   };
 
@@ -72,8 +72,8 @@ export function LabelPicker({
               type="button"
               onClick={() => toggleLabel(label._id)}
               className={cn(
-                "w-full flex items-center gap-2 px-2 py-1.5 rounded text-sm hover:bg-muted transition-colors text-left",
-                currentLabelIds.includes(label._id) && "bg-muted",
+                'w-full flex items-center gap-2 px-2 py-1.5 rounded text-sm hover:bg-muted transition-colors text-left',
+                currentLabelIds.includes(label._id) && 'bg-muted',
               )}
             >
               <span
@@ -94,8 +94,8 @@ export function LabelPicker({
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
               onKeyDown={(e) => {
-                if (e.key === "Enter") handleCreateLabel();
-                if (e.key === "Escape") setCreating(false);
+                if (e.key === 'Enter') handleCreateLabel();
+                if (e.key === 'Escape') setCreating(false);
               }}
               className="h-7 text-xs"
               autoFocus
@@ -107,10 +107,10 @@ export function LabelPicker({
                   type="button"
                   onClick={() => setNewColor(c.hex)}
                   className={cn(
-                    "h-5 w-5 rounded-sm border-2 transition-colors",
+                    'h-5 w-5 rounded-sm border-2 transition-colors',
                     newColor === c.hex
-                      ? "border-foreground"
-                      : "border-transparent",
+                      ? 'border-foreground'
+                      : 'border-transparent',
                   )}
                   style={{ backgroundColor: c.hex }}
                   title={c.name}
@@ -151,7 +151,7 @@ export function LabelPicker({
   );
 }
 
-export function LabelDots({ labels }: { labels: Doc<"labels">[] }) {
+export function LabelDots({ labels }: { labels: Doc<'labels'>[] }) {
   if (labels.length === 0) return null;
   return (
     <div className="flex gap-1 flex-wrap">

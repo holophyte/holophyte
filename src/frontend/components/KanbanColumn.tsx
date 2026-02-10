@@ -1,25 +1,18 @@
-import { api } from "@convex/_generated/api";
-import type { Doc, Id } from "@convex/_generated/dataModel";
-import { useMutation } from "convex/react";
-import { Archive, PanelLeftClose } from "lucide-react";
-import { useCallback, useRef, useState } from "react";
-import { cn } from "@/frontend/lib/utils";
-import type { EnrichedTask } from "./KanbanBoard";
-import { TaskCard } from "./TaskCard";
-
-type TaskStatus =
-  | "backlog"
-  | "todo"
-  | "in_progress"
-  | "review"
-  | "done"
-  | "archived";
+import { api } from '@convex/_generated/api';
+import type { Doc, Id } from '@convex/_generated/dataModel';
+import type { TaskStatus } from '@convex/schema';
+import { useMutation } from 'convex/react';
+import { Archive, PanelLeftClose } from 'lucide-react';
+import { useCallback, useRef, useState } from 'react';
+import { cn } from '@/frontend/lib/utils';
+import type { EnrichedTask } from './KanbanBoard';
+import { TaskCard } from './TaskCard';
 
 interface KanbanColumnProps {
   status: TaskStatus;
   label: string;
   tasks: EnrichedTask[];
-  repoMap: Map<Id<"repos">, Doc<"repos">>;
+  repoMap: Map<Id<'repos'>, Doc<'repos'>>;
   showRepoBadge: boolean;
   collapsible?: boolean;
   onCollapse?: () => void;
@@ -45,7 +38,7 @@ export function KanbanColumn({
   const getDropIndex = useCallback(
     (clientY: number): number => {
       if (!containerRef.current) return tasks.length;
-      const cards = containerRef.current.querySelectorAll("[data-task-id]");
+      const cards = containerRef.current.querySelectorAll('[data-task-id]');
       for (let i = 0; i < cards.length; i++) {
         const card = cards[i];
         if (!card) continue;
@@ -68,7 +61,7 @@ export function KanbanColumn({
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
-    e.dataTransfer.dropEffect = "move";
+    e.dataTransfer.dropEffect = 'move';
     setDragOver(true);
     setDropIndex(getDropIndex(e.clientY));
   };
@@ -90,8 +83,8 @@ export function KanbanColumn({
     setDragOver(false);
     setDropIndex(null);
 
-    const taskId = e.dataTransfer.getData("text/plain") as Id<"tasks">;
-    const sourceStatus = e.dataTransfer.getData("application/x-status");
+    const taskId = e.dataTransfer.getData('text/plain') as Id<'tasks'>;
+    const sourceStatus = e.dataTransfer.getData('application/x-status');
     if (!taskId) return;
 
     const insertAt = getDropIndex(e.clientY);
@@ -111,8 +104,8 @@ export function KanbanColumn({
       role="group"
       aria-label={`${label} column`}
       className={cn(
-        "flex-1 min-w-[260px] max-w-[350px] flex flex-col rounded-lg bg-muted/50 border",
-        dragOver && "ring-2 ring-primary/50 bg-muted/80",
+        'flex-1 min-w-[260px] max-w-[350px] flex flex-col rounded-lg bg-muted/50 border',
+        dragOver && 'ring-2 ring-primary/50 bg-muted/80',
       )}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
@@ -124,7 +117,7 @@ export function KanbanColumn({
           <span className="text-xs text-muted-foreground bg-muted rounded-full px-2 py-0.5">
             {tasks.length}
           </span>
-          {status === "done" && tasks.length > 0 && onArchiveAll && (
+          {status === 'done' && tasks.length > 0 && onArchiveAll && (
             <button
               type="button"
               onClick={onArchiveAll}

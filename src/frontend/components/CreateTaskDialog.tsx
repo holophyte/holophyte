@@ -1,8 +1,8 @@
-import { api } from "@convex/_generated/api";
-import type { Id } from "@convex/_generated/dataModel";
-import { useMutation } from "convex/react";
-import { useState } from "react";
-import { Button } from "./ui/button";
+import { api } from '@convex/_generated/api';
+import type { Id } from '@convex/_generated/dataModel';
+import { useMutation } from 'convex/react';
+import { useState } from 'react';
+import Button from './ui/Button';
 import {
   Dialog,
   DialogContent,
@@ -10,15 +10,15 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "./ui/dialog";
-import { Input } from "./ui/input";
-import { Label } from "./ui/label";
-import { Textarea } from "./ui/textarea";
+} from './ui/Dialog';
+import Input from './ui/Input';
+import Label from './ui/Label';
+import Textarea from './ui/Textarea';
 
 interface CreateTaskDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  repoId: Id<"repos">;
+  repoId: Id<'repos'>;
 }
 
 export function CreateTaskDialog({
@@ -26,9 +26,9 @@ export function CreateTaskDialog({
   onOpenChange,
   repoId,
 }: CreateTaskDialogProps) {
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
-  const [prompt, setPrompt] = useState("");
+  const [title, setTitle] = useState('');
+  const [description, setDescription] = useState('');
+  const [prompt, setPrompt] = useState('');
   const createTask = useMutation(api.tasks.create);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -42,9 +42,9 @@ export function CreateTaskDialog({
       prompt: prompt.trim() || undefined,
     });
 
-    setTitle("");
-    setDescription("");
-    setPrompt("");
+    setTitle('');
+    setDescription('');
+    setPrompt('');
     onOpenChange(false);
   };
 
