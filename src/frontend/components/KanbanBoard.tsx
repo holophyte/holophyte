@@ -53,7 +53,7 @@ function BacklogColumn({
         type="button"
         onClick={onToggle}
         className={cn(
-          'absolute inset-0 w-10 rounded-lg bg-muted/50 border',
+          'absolute inset-0 w-10 rounded-lg bg-muted/30 border border-dashed',
           'flex flex-col items-center justify-center gap-2',
           'hover:bg-muted/80 cursor-pointer',
           'transition-opacity duration-300',

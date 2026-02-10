@@ -103,6 +103,11 @@ export function KanbanColumn({
     }
   };
 
+  const handleBackgroundClick = (e: React.MouseEvent) => {
+    if (!onCollapse || e.target !== e.currentTarget) return;
+    onCollapse();
+  };
+
   return (
     <div
       role="group"
@@ -110,10 +115,11 @@ export function KanbanColumn({
       className={cn(
         'flex flex-col rounded-lg border',
         variant === 'backlog'
-          ? 'bg-muted/30 border-dashed w-full h-full'
+          ? 'bg-muted/30 border-dashed w-full h-full cursor-pointer'
           : 'flex-1 min-w-[260px] max-w-[350px] bg-muted/50',
         dragOver && 'ring-2 ring-primary/50 bg-muted/80',
       )}
+      onClick={handleBackgroundClick}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
@@ -145,7 +151,11 @@ export function KanbanColumn({
           )}
         </div>
       </div>
-      <div ref={containerRef} className="overflow-y-auto p-2 space-y-2">
+      <div
+        ref={containerRef}
+        className="overflow-y-auto p-2 space-y-2"
+        onClick={handleBackgroundClick}
+      >
         {tasks.map((task, i) => (
           <div key={task._id}>
             {dragOver && dropIndex === i && (

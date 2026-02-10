@@ -135,7 +135,7 @@ export function CreateTaskDialog({
                         type="button"
                         onClick={() => setPriority(p)}
                         className={cn(
-                          'w-full flex items-center gap-2 px-2.5 py-1.5 rounded text-sm hover:bg-muted transition-colors text-left',
+                          'w-full flex items-center gap-2 px-2.5 py-1.5 rounded text-sm hover:bg-muted/50 transition-colors text-left',
                           priority === p && 'bg-muted',
                         )}
                       >

@@ -148,7 +148,7 @@ export function LabelPicker({
               <div
                 key={label._id}
                 className={cn(
-                  'group flex items-center gap-2 px-2 py-1.5 rounded text-sm hover:bg-muted transition-colors',
+                  'group flex items-center gap-2 px-2 py-1.5 rounded text-sm hover:bg-muted/50 transition-colors',
                   currentLabelIds.includes(label._id) && 'bg-muted',
                 )}
               >
