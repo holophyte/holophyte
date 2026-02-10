@@ -79,7 +79,7 @@ Organize branches into categories:
 ## Notes
 
 - Always run `git fetch --all` first to get accurate remote status
-- Flag branches where the remote has been deleted (`gone` in tracking status)
+- Note: `gone` tracking status (remote deleted) requires the user to have previously run `git fetch --prune` — this skill does not prune automatically
 - For branches with PRs, show the review decision (approved, changes requested, pending)
 - Sort stale branches by last commit date
 - This is read-only — never delete branches or worktrees automatically

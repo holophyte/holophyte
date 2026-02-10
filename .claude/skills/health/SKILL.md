@@ -48,7 +48,7 @@ Report: uncommitted changes, untracked files, divergence from remote.
 bun install --dry-run --frozen-lockfile
 ```
 
-Check whether dependencies would change without actually installing. A non-zero exit means dependencies are out of sync.
+Check whether the lockfile would change on install. A non-zero exit indicates a lockfile mismatch — does not verify on-disk `node_modules` state.
 
 ### 6. Convex Status
 
