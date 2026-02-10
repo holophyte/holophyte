@@ -277,3 +277,102 @@ export const remove = mutation({
     await ctx.db.delete(args.id);
   },
 });
+
+export const bulkMove = mutation({
+  args: {
+    ids: v.array(v.id('tasks')),
+    status: taskStatusValidator,
+  },
+  handler: async (ctx, args) => {
+    // Find max position in the target column to append after
+    const existing = await ctx.db
+      .query('tasks')
+      .withIndex('by_status', (q) => q.eq('status', args.status))
+      .collect();
+    let maxPosition = existing.reduce((max, t) => Math.max(max, t.position), 0);
+
+    const now = Date.now();
+    for (const id of args.ids) {
+      const task = await ctx.db.get(id);
+      if (!task) continue;
+      if (task.status === args.status) continue;
+
+      maxPosition += 1;
+      const updates: Record<string, unknown> = {
+        status: args.status,
+        position: maxPosition,
+        updatedAt: now,
+      };
+
+      // Time tracking: leaving in_progress
+      if (
+        task.status === TaskStatus.InProgress &&
+        args.status !== TaskStatus.InProgress
+      ) {
+        const elapsed = task.inProgressSince ? now - task.inProgressSince : 0;
+        updates.totalInProgressMs = (task.totalInProgressMs ?? 0) + elapsed;
+        updates.inProgressSince = undefined;
+      }
+
+      // Time tracking: entering in_progress
+      if (
+        task.status !== TaskStatus.InProgress &&
+        args.status === TaskStatus.InProgress
+      ) {
+        updates.inProgressSince = now;
+      }
+
+      // Archive timestamp
+      if (args.status === TaskStatus.Archived) {
+        updates.archivedAt = now;
+      }
+
+      await ctx.db.patch(id, updates);
+    }
+  },
+});
+
+export const bulkDelete = mutation({
+  args: { ids: v.array(v.id('tasks')) },
+  handler: async (ctx, args) => {
+    for (const id of args.ids) {
+      const task = await ctx.db.get(id);
+      if (!task) continue;
+      // Delete sessions
+      const sessions = await ctx.db
+        .query('sessions')
+        .withIndex('by_task', (q) => q.eq('taskId', id))
+        .collect();
+      for (const session of sessions) {
+        await ctx.db.delete(session._id);
+      }
+      // Delete subtasks
+      const subtasks = await ctx.db
+        .query('subtasks')
+        .withIndex('by_task', (q) => q.eq('taskId', id))
+        .collect();
+      for (const subtask of subtasks) {
+        await ctx.db.delete(subtask._id);
+      }
+      await ctx.db.delete(id);
+    }
+  },
+});
+
+export const bulkUpdateLabels = mutation({
+  args: {
+    ids: v.array(v.id('tasks')),
+    labelIds: v.array(v.id('labels')),
+  },
+  handler: async (ctx, args) => {
+    const now = Date.now();
+    for (const id of args.ids) {
+      const task = await ctx.db.get(id);
+      if (!task) continue;
+      await ctx.db.patch(id, {
+        labelIds: args.labelIds,
+        updatedAt: now,
+      });
+    }
+  },
+});

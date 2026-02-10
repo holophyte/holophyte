@@ -18,6 +18,9 @@ interface AppState {
   showArchive: boolean;
   doneColumnCollapsed: boolean;
 
+  // Bulk selection state
+  bulkSelectedTaskIds: Id<'tasks'>[];
+
   selectRepo: (id: Id<'repos'> | null) => void;
   selectSeedBox: () => void;
   selectTask: (id: Id<'tasks'> | null) => void;
@@ -32,6 +35,12 @@ interface AppState {
   clearFilters: () => void;
   toggleArchive: () => void;
   toggleDoneCollapsed: () => void;
+
+  // Bulk selection actions
+  toggleBulkSelectTask: (id: Id<'tasks'>) => void;
+  bulkSelectAll: (ids: Id<'tasks'>[]) => void;
+  bulkDeselectAll: (ids: Id<'tasks'>[]) => void;
+  clearBulkSelection: () => void;
 }
 
 export const useAppStore = create<AppState>()(
@@ -49,7 +58,10 @@ export const useAppStore = create<AppState>()(
       showArchive: false,
       doneColumnCollapsed: false,
 
-      selectRepo: (id) => set({ selectedRepoId: id, viewMode: 'board' }),
+      bulkSelectedTaskIds: [],
+
+      selectRepo: (id) =>
+        set({ selectedRepoId: id, viewMode: 'board', bulkSelectedTaskIds: [] }),
       selectSeedBox: () =>
         set({ selectedRepoId: null, viewMode: 'seeds', selectedTaskId: null }),
       selectTask: (id) => set({ selectedTaskId: id }),
@@ -74,6 +86,29 @@ export const useAppStore = create<AppState>()(
         set((state) => ({ showArchive: !state.showArchive })),
       toggleDoneCollapsed: () =>
         set((state) => ({ doneColumnCollapsed: !state.doneColumnCollapsed })),
+
+      toggleBulkSelectTask: (id) =>
+        set((state) => ({
+          bulkSelectedTaskIds: state.bulkSelectedTaskIds.includes(id)
+            ? state.bulkSelectedTaskIds.filter((tid) => tid !== id)
+            : [...state.bulkSelectedTaskIds, id],
+        })),
+      bulkSelectAll: (ids) =>
+        set((state) => {
+          const existing = new Set(state.bulkSelectedTaskIds);
+          for (const id of ids) existing.add(id);
+          return { bulkSelectedTaskIds: [...existing] };
+        }),
+      bulkDeselectAll: (ids) =>
+        set((state) => {
+          const toRemove = new Set(ids);
+          return {
+            bulkSelectedTaskIds: state.bulkSelectedTaskIds.filter(
+              (id) => !toRemove.has(id),
+            ),
+          };
+        }),
+      clearBulkSelection: () => set({ bulkSelectedTaskIds: [] }),
     }),
     {
       name: 'holophyte-app',

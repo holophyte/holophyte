@@ -3,8 +3,9 @@ import type { Doc, Id } from '@convex/_generated/dataModel';
 import { TaskStatus } from '@convex/schema';
 import { useMutation } from 'convex/react';
 import { Archive, PanelLeftClose } from 'lucide-react';
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { cn } from '@/frontend/lib/utils';
+import { useAppStore } from '@/frontend/stores/app';
 import type { EnrichedTask } from './KanbanBoard';
 import { TaskCard } from './TaskCard';
 
@@ -34,6 +35,29 @@ export function KanbanColumn({
   const [dragOver, setDragOver] = useState(false);
   const [dropIndex, setDropIndex] = useState<number | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+
+  const bulkSelectedTaskIds = useAppStore((s) => s.bulkSelectedTaskIds);
+  const bulkSelectAll = useAppStore((s) => s.bulkSelectAll);
+  const bulkDeselectAll = useAppStore((s) => s.bulkDeselectAll);
+
+  const isBulkMode = bulkSelectedTaskIds.length > 0;
+  const columnTaskIds = useMemo(() => tasks.map((t) => t._id), [tasks]);
+  const selectedInColumn = useMemo(
+    () => columnTaskIds.filter((id) => bulkSelectedTaskIds.includes(id)),
+    [columnTaskIds, bulkSelectedTaskIds],
+  );
+  const allSelected =
+    tasks.length > 0 && selectedInColumn.length === tasks.length;
+  const someSelected =
+    selectedInColumn.length > 0 && selectedInColumn.length < tasks.length;
+
+  const handleSelectAll = () => {
+    if (allSelected) {
+      bulkDeselectAll(columnTaskIds);
+    } else {
+      bulkSelectAll(columnTaskIds);
+    }
+  };
 
   const getDropIndex = useCallback(
     (clientY: number): number => {
@@ -104,7 +128,7 @@ export function KanbanColumn({
       role="group"
       aria-label={`${label} column`}
       className={cn(
-        'flex-1 min-w-[260px] max-w-[350px] flex flex-col rounded-lg bg-muted/50 border',
+        'group flex-1 min-w-[260px] max-w-[350px] flex flex-col rounded-lg bg-muted/50 border',
         dragOver && 'ring-2 ring-primary/50 bg-muted/80',
       )}
       onDragOver={handleDragOver}
@@ -112,7 +136,52 @@ export function KanbanColumn({
       onDrop={handleDrop}
     >
       <div className="px-3 py-2 flex items-center justify-between">
-        <h2 className="text-sm font-medium text-muted-foreground">{label}</h2>
+        <div className="flex items-center gap-1.5">
+          {(isBulkMode || tasks.length > 0) && (
+            <button
+              type="button"
+              onClick={handleSelectAll}
+              className={cn(
+                'h-4 w-4 rounded border flex items-center justify-center transition-all shrink-0',
+                allSelected
+                  ? 'bg-primary border-primary text-primary-foreground'
+                  : someSelected
+                    ? 'bg-primary/50 border-primary text-primary-foreground'
+                    : 'border-muted-foreground/30 bg-background',
+                isBulkMode
+                  ? 'opacity-100'
+                  : 'opacity-0 group-hover:opacity-100',
+              )}
+              title={allSelected ? 'Deselect all' : 'Select all'}
+            >
+              {(allSelected || someSelected) && (
+                <svg
+                  aria-hidden="true"
+                  className="h-3 w-3"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  strokeWidth={3}
+                >
+                  {allSelected ? (
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M5 13l4 4L19 7"
+                    />
+                  ) : (
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M5 12h14"
+                    />
+                  )}
+                </svg>
+              )}
+            </button>
+          )}
+          <h2 className="text-sm font-medium text-muted-foreground">{label}</h2>
+        </div>
         <div className="flex items-center gap-1">
           <span className="text-xs text-muted-foreground bg-muted rounded-full px-2 py-0.5">
             {tasks.length}

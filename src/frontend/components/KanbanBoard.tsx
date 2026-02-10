@@ -7,6 +7,7 @@ import { useMemo, useState } from 'react';
 import { cn } from '@/frontend/lib/utils';
 import { useAppStore } from '@/frontend/stores/app';
 import { ArchivePanel } from './ArchivePanel';
+import BulkActionBar from './BulkActionBar';
 import { CreateTaskDialog } from './CreateTaskDialog';
 import { KanbanColumn } from './KanbanColumn';
 import { SearchFilterBar } from './SearchFilterBar';
@@ -142,7 +143,7 @@ export function KanbanBoard() {
   }
 
   return (
-    <div className="flex-1 flex flex-col overflow-hidden">
+    <div className="flex-1 flex flex-col overflow-hidden relative">
       <div className="flex items-center justify-between px-6 py-3 border-b gap-3">
         <h1 className="text-lg font-semibold shrink-0">
           {selectedRepoId
@@ -199,6 +200,7 @@ export function KanbanBoard() {
           ),
         )}
       </div>
+      <BulkActionBar allTasks={enrichedTasks} />
       {selectedRepoId && (
         <CreateTaskDialog
           open={createDialogOpen}
