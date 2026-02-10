@@ -290,12 +290,8 @@ export const bulkMove = mutation({
     status: taskStatusValidator,
   },
   handler: async (ctx, args) => {
-    // Find max position in the target column to append after
-    const existing = await ctx.db
-      .query('tasks')
-      .withIndex('by_status', (q) => q.eq('status', args.status))
-      .collect();
-    let maxPosition = existing.reduce((max, t) => Math.max(max, t.position), 0);
+    // Track max position per repo so tasks land in correct repo-scoped order
+    const maxPositionByRepo = new Map<string, number>();
 
     const now = Date.now();
     for (const id of args.ids) {
@@ -303,10 +299,27 @@ export const bulkMove = mutation({
       if (!task) continue;
       if (task.status === args.status) continue;
 
-      maxPosition += 1;
+      // Compute max position scoped to (repoId, status)
+      const repoKey = task.repoId;
+      if (!maxPositionByRepo.has(repoKey)) {
+        const existing = await ctx.db
+          .query('tasks')
+          .withIndex('by_repo_status', (q) =>
+            q.eq('repoId', task.repoId).eq('status', args.status),
+          )
+          .collect();
+        maxPositionByRepo.set(
+          repoKey,
+          existing.reduce((max, t) => Math.max(max, t.position), 0),
+        );
+      }
+
+      const nextPos = (maxPositionByRepo.get(repoKey) ?? 0) + 1;
+      maxPositionByRepo.set(repoKey, nextPos);
+
       const updates: Record<string, unknown> = {
         status: args.status,
-        position: maxPosition,
+        position: nextPos,
         updatedAt: now,
       };
 
@@ -331,6 +344,14 @@ export const bulkMove = mutation({
       // Archive timestamp
       if (args.status === TaskStatus.Archived) {
         updates.archivedAt = now;
+      }
+
+      // Clear archive timestamp when leaving archived
+      if (
+        task.status === TaskStatus.Archived &&
+        args.status !== TaskStatus.Archived
+      ) {
+        updates.archivedAt = undefined;
       }
 
       await ctx.db.patch(id, updates);
