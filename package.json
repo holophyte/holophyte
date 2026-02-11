@@ -15,7 +15,9 @@
     "convex:dev": "convex dev",
     "convex:deploy": "convex deploy",
     "storybook": "storybook dev -p 6006",
-    "build-storybook": "storybook build"
+    "build-storybook": "storybook build",
+    "docs:dev": "cd docs && bunx docusaurus start",
+    "docs:build": "cd docs && bunx docusaurus build"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.3.14",
