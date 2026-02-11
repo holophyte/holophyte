@@ -25,7 +25,8 @@
       "Bash(cp *)",
       "Bash(mkdir *)",
       "Bash(basename *)",
-      "Bash(timeout *)"
+      "Bash(timeout * bun run *)",
+      "Bash(timeout * bunx *)"
     ]
   }
 }

@@ -79,25 +79,27 @@ gh pr list --head $(git branch --show-current) --json number --jq '.[0].number'
 
 Wait for Greptile to post review comments. Poll every 30 seconds, up to 5 minutes.
 
-Track the current comment count before pushing:
+**Before pushing**, record the IDs of all existing Greptile comments so you can identify new ones later:
 
 ```bash
 gh api repos/{owner}/{repo}/pulls/<PR>/comments \
-  --jq '[.[] | select(.user.login == "greptile-apps[bot]")] | length'
+  --jq '[.[] | select(.user.login == "greptile-apps[bot]") | .id]'
 ```
 
-After pushing, poll until the count increases (new review posted) or timeout.
+Store this list as `SEEN_COMMENT_IDS`. After pushing, poll until new comment IDs appear beyond this set, or timeout.
 
 - If timeout with no new comments, exit successfully — Greptile found nothing new
 
 ### 7. Read and Triage Comments
 
-Fetch all Greptile comments from the latest review round (new comments since last check):
+Fetch only **new** Greptile comments (IDs not in `SEEN_COMMENT_IDS`):
 
 ```bash
 gh api repos/{owner}/{repo}/pulls/<PR>/comments \
   --jq '[.[] | select(.user.login == "greptile-apps[bot]")]'
 ```
+
+Filter out any comments whose `.id` is in `SEEN_COMMENT_IDS`. Only process the remaining new comments. Add the new IDs to `SEEN_COMMENT_IDS` for the next iteration.
 
 Categorize each comment:
 

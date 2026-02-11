@@ -110,12 +110,25 @@ Use a conventional prefix in the title (`feat:`, `fix:`, `refactor:`, etc.).
 
 ### 8. Greptile Review Loop
 
-Follow the same Greptile polling and iteration loop as `/autopilot`:
+Poll for Greptile review comments and iterate until resolved:
 
-1. Poll for Greptile comments (30s intervals, 5min timeout)
-2. Triage comments as actionable vs dismissable
-3. Fix actionable ones, reply to dismissable ones
-4. Push and repeat (max 3 iterations)
+1. **Record seen comments** — before pushing, save all existing Greptile comment IDs:
+   ```bash
+   gh api repos/{owner}/{repo}/pulls/<PR>/comments \
+     --jq '[.[] | select(.user.login == "greptile-apps[bot]") | .id]'
+   ```
+2. **Poll** — every 30 seconds, up to 5 minutes, check for new comment IDs beyond the seen set
+3. **Triage new comments** as:
+   - **Actionable** (bugs, security, clear quality issues) — fix the code, reply with explanation
+   - **Dismissable** (style conflicts, false positives, over-engineering) — reply explaining why
+4. **Reply** to comments:
+   ```bash
+   gh api repos/{owner}/{repo}/pulls/<PR>/comments/<COMMENT_ID>/replies \
+     -f body="<reply>"
+   ```
+5. **Push** — run quality checks, commit fixes, push, add new IDs to seen set
+6. **Repeat** from step 2 (max 3 iterations)
+7. **Exit** when no new comments appear or max iterations reached
 
 ### 9. Summary
 
