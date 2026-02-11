@@ -6,6 +6,7 @@ import { useAppStore } from '@/frontend/stores/app';
 import Badge from './ui/Badge';
 import Button from './ui/Button';
 import Input from './ui/Input';
+import PageHeader from './ui/PageHeader';
 
 export function ArchivePanel() {
   const selectedRepoId = useAppStore((s) => s.selectedRepoId);
@@ -35,7 +36,7 @@ export function ArchivePanel() {
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
-      <div className="flex items-center gap-3 px-6 py-3 border-b">
+      <PageHeader className="gap-3 px-6">
         <Button size="sm" variant="ghost" onClick={toggleArchive}>
           <ArrowLeft className="h-4 w-4 mr-1" />
           Back
@@ -54,7 +55,7 @@ export function ArchivePanel() {
             className="h-8 pl-8 text-sm"
           />
         </div>
-      </div>
+      </PageHeader>
       <div className="flex-1 overflow-y-auto p-6">
         {filteredTasks.length === 0 ? (
           <div className="text-center text-muted-foreground py-12">
