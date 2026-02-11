@@ -70,6 +70,15 @@ Spawn three teammates with specific roles:
 > `bunx vitest run <file>`. If tests fail, message the implementer with details
 > so they can fix the implementation. Do not modify implementation code yourself.
 
+**Documenter** (use Sonnet):
+> You are the documentation specialist for the Holophyte project. Watch for
+> completed implementation tasks. For each new component, generate a Storybook
+> story (co-located `.stories.tsx`). Add TSDoc comments to all new exported
+> functions and interfaces. If you notice repeated Convex query patterns across
+> components, extract them into custom hooks in `src/frontend/hooks/`. Verify
+> stories build with `timeout 60000 bun run build-storybook`. Do not modify
+> implementation logic. Coordinate with the tester to avoid file conflicts.
+
 ### 4. Coordinate
 
 As team lead:
@@ -88,6 +97,7 @@ After all teammates finish:
 bun run lint:fix
 bunx tsc --noEmit
 bun run test
+timeout 60000 bun run build-storybook
 ```
 
 Fix any remaining issues. Use the `test-fixer` subagent if tests fail.
@@ -135,6 +145,7 @@ Poll for Greptile review comments and iterate until resolved:
 When exiting, display:
 - Teammates spawned and their roles
 - Tasks completed by each teammate
+- Stories and docs created by Documenter
 - Review iterations with Greptile
 - Comments addressed vs dismissed
 - Final PR URL

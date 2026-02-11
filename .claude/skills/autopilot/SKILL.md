@@ -50,11 +50,37 @@ Before committing, run reviewers in parallel:
 
 > Use the code-reviewer subagent to review the current changes
 > Use the security-reviewer subagent to audit the current changes
+> Use the a11y-reviewer subagent to audit accessibility of any new/changed UI components
 
-- Fix any **critical** issues from either reviewer
+- Fix any **critical** issues from any reviewer (including critical a11y issues)
 - Evaluate **warnings** and fix if valid
 - **Suggestions** are optional — skip unless clearly beneficial
 - Run quality checks again if changes were made
+
+### 3.5. Documentation, Testing, and Accessibility for New Code
+
+Check for new files added on the branch:
+
+```bash
+git diff main...HEAD --name-only --diff-filter=A
+```
+
+For each new file:
+- **New `.tsx` components** → use the `storybook-writer` subagent to generate a co-located `.stories.tsx`
+- **New `.ts`/`.tsx` exports** → use the `test-writer` subagent to generate co-located tests
+- **New/changed UI components** → use the `a11y-reviewer` subagent to audit accessibility (already done in step 3 — review results here)
+- Add TSDoc `/** */` comments to all new exported functions and interfaces
+
+Skip this step if no new files were added (only modifications to existing files).
+
+After generating stories and tests, verify:
+
+```bash
+bunx vitest run
+timeout 60000 bun run build-storybook
+```
+
+Fix any failures before proceeding.
 
 ### 4. Commit and Push
 
