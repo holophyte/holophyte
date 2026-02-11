@@ -4,7 +4,7 @@ import { PRIORITY_CONFIG, TaskPriority, TaskStatus } from '@convex/schema';
 import { useMutation, useQuery } from 'convex/react';
 import type { FunctionReturnType } from 'convex/server';
 import { ChevronDown, X } from 'lucide-react';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import {
   dateInputToTimestamp,
   formatDuration,
@@ -18,6 +18,7 @@ import { SubtaskList } from './SubtaskList';
 import Button from './ui/Button';
 import Input from './ui/Input';
 import Label from './ui/Label';
+import PageHeader from './ui/PageHeader';
 import { Popover, PopoverContent, PopoverTrigger } from './ui/Popover';
 import Separator from './ui/Separator';
 import Textarea from './ui/Textarea';
@@ -26,14 +27,35 @@ type Task = NonNullable<FunctionReturnType<typeof api.tasks.get>>;
 
 export function TaskDetailPanel() {
   const selectedTaskId = useAppStore((s) => s.selectedTaskId);
+  const selectTask = useAppStore((s) => s.selectTask);
   const task = useQuery(
     api.tasks.get,
     selectedTaskId ? { id: selectedTaskId } : 'skip',
   );
 
-  if (!task) return null;
+  // Keep previous task visible while the next one loads
+  const prevTaskRef = useRef<Task | null>(null);
+  if (task) prevTaskRef.current = task;
+  const displayTask = task ?? prevTaskRef.current;
 
-  return <TaskDetailInner key={task._id} task={task} />;
+  return (
+    <div className="absolute right-0 top-0 bottom-0 w-96 border-l bg-background flex flex-col overflow-hidden shadow-xl z-10">
+      <PageHeader className="justify-between">
+        <h2 className="font-semibold text-sm">Task Details</h2>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-7 w-7"
+          onClick={() => selectTask(null)}
+        >
+          <X className="h-4 w-4" />
+        </Button>
+      </PageHeader>
+      {displayTask && (
+        <TaskDetailInner key={displayTask._id} task={displayTask} />
+      )}
+    </div>
+  );
 }
 
 function TaskDetailInner({ task }: { task: Task }) {
@@ -41,9 +63,6 @@ function TaskDetailInner({ task }: { task: Task }) {
   const updateTask = useMutation(api.tasks.update);
   const removeTask = useMutation(api.tasks.remove);
 
-  // Local state only for fields that need controlled inputs:
-  // - title: controlled input, saves on blur
-  // - description/prompt: manual save with Save/Cancel buttons
   const [title, setTitle] = useState(task.title);
   const [description, setDescription] = useState(task.description);
   const [prompt, setPrompt] = useState(task.prompt);
@@ -109,18 +128,7 @@ function TaskDetailInner({ task }: { task: Task }) {
     PRIORITY_CONFIG[priority] ?? PRIORITY_CONFIG[TaskPriority.None];
 
   return (
-    <div className="w-96 border-l bg-background flex flex-col overflow-hidden">
-      <div className="flex items-center justify-between px-4 py-3 border-b">
-        <h2 className="font-semibold text-sm">Task Details</h2>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-7 w-7"
-          onClick={() => selectTask(null)}
-        >
-          <X className="h-4 w-4" />
-        </Button>
-      </div>
+    <>
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
         {/* Title at top */}
         <Input
@@ -313,6 +321,6 @@ function TaskDetailInner({ task }: { task: Task }) {
           Delete
         </Button>
       </div>
-    </div>
+    </>
   );
 }

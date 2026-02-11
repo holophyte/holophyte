@@ -16,6 +16,7 @@ import { cn } from '@/frontend/lib/utils';
 import { useAppStore } from '@/frontend/stores/app';
 import { AddRepoDialog } from './AddRepoDialog';
 import Button from './ui/Button';
+import PageHeader from './ui/PageHeader';
 import ScrollArea from './ui/ScrollArea';
 import Separator from './ui/Separator';
 
@@ -50,11 +51,10 @@ export function Sidebar() {
 
   return (
     <aside className="w-64 border-r bg-muted/30 flex flex-col">
-      <div className="p-4 font-semibold text-lg flex items-center gap-2">
+      <PageHeader className="gap-2 font-semibold text-lg">
         <FolderGit2 className="h-5 w-5" />
         Holophyte
-      </div>
-      <Separator />
+      </PageHeader>
       <div className="p-2 space-y-1">
         <Button
           variant={

@@ -11,7 +11,7 @@ export function App() {
   const viewMode = useAppStore((s) => s.viewMode);
 
   return (
-    <div className="flex h-screen bg-background text-foreground">
+    <div className="flex h-screen bg-background text-foreground relative">
       <Sidebar />
       <main className="flex-1 flex flex-col overflow-hidden">
         {viewMode === 'seeds' ? <SeedBoard /> : <KanbanBoard />}
