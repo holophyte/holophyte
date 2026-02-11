@@ -15,7 +15,20 @@ comments until resolved.
 
 ## Process
 
-### 1. Implement the Feature
+### 1. Set Up Worktree (if needed)
+
+If not already on a feature branch, create a worktree to avoid disrupting current work:
+
+```bash
+REPO=$(basename "$(git rev-parse --show-toplevel)")
+BRANCH=$(git branch --show-current)
+```
+
+- If on `main`: create a worktree with `git worktree add ../$REPO-<feature-name> -b feat/<feature-name>`, copy `.env`/`.env.local`, run `bun install`, then work from that directory
+- If already on a `feat/` branch: continue in the current directory
+- Derive a short feature name from `$ARGUMENTS` (e.g., "add drag reordering" becomes `drag-reordering`)
+
+### 2. Implement the Feature
 
 Implement the feature described in `$ARGUMENTS`.
 
@@ -30,7 +43,18 @@ bun run test
 
 - Fix any issues before proceeding
 
-### 2. Commit and Push
+### 3. Self-Review with Subagent
+
+Before committing, run the `code-reviewer` subagent to review changes:
+
+> Use the code-reviewer subagent to review the current changes
+
+- Fix any **critical** issues found by the reviewer
+- Evaluate **warnings** and fix if valid
+- **Suggestions** are optional — skip unless clearly beneficial
+- Run quality checks again if changes were made
+
+### 4. Commit and Push
 
 ```bash
 git add <relevant files>
@@ -38,7 +62,7 @@ git commit -m "<conventional commit message>"
 git push -u origin $(git branch --show-current)
 ```
 
-### 3. Create or Update PR
+### 5. Create or Update PR
 
 Check if a PR already exists for this branch:
 
@@ -46,10 +70,10 @@ Check if a PR already exists for this branch:
 gh pr list --head $(git branch --show-current) --json number --jq '.[0].number'
 ```
 
-- If no PR exists, create one with `gh pr create`
+- If no PR exists, create one with `gh pr create` — use a conventional prefix in the title (e.g., `feat: add drag reordering to kanban columns`)
 - If PR exists, it's already updated by the push
 
-### 4. Poll for Greptile Review
+### 6. Poll for Greptile Review
 
 Wait for Greptile to post review comments. Poll every 30 seconds, up to 5 minutes.
 
@@ -64,7 +88,7 @@ After pushing, poll until the count increases (new review posted) or timeout.
 
 - If timeout with no new comments, exit successfully — Greptile found nothing new
 
-### 5. Read and Triage Comments
+### 7. Read and Triage Comments
 
 Fetch all Greptile comments from the latest review round (new comments since last check):
 
@@ -85,7 +109,7 @@ Categorize each comment:
 - False positives or misunderstandings of intent
 - Suggestions that would over-engineer the solution
 
-### 6. Address Comments
+### 8. Address Comments
 
 For each actionable comment:
 1. Read the file at the referenced line
@@ -102,7 +126,7 @@ gh api repos/{owner}/{repo}/pulls/<PR>/comments/<COMMENT_ID>/replies \
   -f body="<reply>"
 ```
 
-### 7. Push and Loop
+### 9. Push and Loop
 
 After addressing all comments:
 
@@ -115,9 +139,9 @@ git commit -m "fix: address greptile review feedback"
 git push
 ```
 
-Return to **Step 4** for the next round.
+Return to **Step 6** for the next round.
 
-### 8. Exit Conditions
+### 10. Exit Conditions
 
 Stop the loop when any of these are true:
 
@@ -125,7 +149,7 @@ Stop the loop when any of these are true:
 - **Max 3 iterations** — report remaining unresolved comments to the user
 - **Quality checks fail after 2 retries** — stop and report the errors
 
-### 9. Summary
+### 11. Summary
 
 When exiting, display:
 - Total iterations completed
