@@ -80,11 +80,17 @@ export function CommandPalette() {
 
         {/* Navigation actions */}
         <Command.Group heading="Navigation" className={GROUP_HEADING_CLASS}>
-          <CommandItem onSelect={() => runAction(() => selectRepo(null))}>
+          <CommandItem
+            value="nav-all-tasks"
+            onSelect={() => runAction(() => selectRepo(null))}
+          >
             <LayoutDashboard className="h-4 w-4 shrink-0 text-muted-foreground" />
             All Tasks
           </CommandItem>
-          <CommandItem onSelect={() => runAction(() => selectSeedBox())}>
+          <CommandItem
+            value="nav-seed-box"
+            onSelect={() => runAction(() => selectSeedBox())}
+          >
             <Lightbulb className="h-4 w-4 shrink-0 text-muted-foreground" />
             Seed Box
           </CommandItem>
@@ -96,6 +102,7 @@ export function CommandPalette() {
             {repos.map((repo) => (
               <CommandItem
                 key={repo._id}
+                value={`${repo.name} repo-${repo._id}`}
                 onSelect={() => runAction(() => selectRepo(repo._id))}
               >
                 <FolderGit2 className="h-4 w-4 shrink-0 text-muted-foreground" />
@@ -111,6 +118,7 @@ export function CommandPalette() {
             {tasks.map((task) => (
               <CommandItem
                 key={task._id}
+                value={`${task.title} task-${task._id}`}
                 onSelect={() => runAction(() => selectTask(task._id))}
               >
                 <ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground" />
@@ -134,12 +142,14 @@ export function CommandPalette() {
 
 interface CommandItemProps {
   children: React.ReactNode;
+  value: string;
   onSelect: () => void;
 }
 
-function CommandItem({ children, onSelect }: CommandItemProps) {
+function CommandItem({ children, value, onSelect }: CommandItemProps) {
   return (
     <Command.Item
+      value={value}
       onSelect={onSelect}
       className={cn(
         'flex items-center gap-2 rounded-md px-2 py-2 text-sm cursor-pointer',
