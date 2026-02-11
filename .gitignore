@@ -34,6 +34,10 @@ playwright-report
 # storybook
 storybook-static
 
+# docusaurus
+docs/.docusaurus
+docs/build
+
 # caches
 .eslintcache
 .cache
