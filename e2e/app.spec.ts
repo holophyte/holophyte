@@ -138,3 +138,16 @@ test('archive button is visible in header', async ({ page }) => {
   const archiveButton = page.locator('button', { hasText: 'Archive' });
   await expect(archiveButton).toBeVisible();
 });
+
+test('sidebar and kanban headers have the same height', async ({ page }) => {
+  await waitForApp(page);
+  const sidebarHeader = page.locator('aside > div').first();
+  const kanbanHeader = page
+    .locator('main h1', { hasText: 'All Tasks' })
+    .locator('..');
+  const sidebarBox = await sidebarHeader.boundingBox();
+  const kanbanBox = await kanbanHeader.boundingBox();
+  expect(sidebarBox).not.toBeNull();
+  expect(kanbanBox).not.toBeNull();
+  expect(sidebarBox!.height).toBe(kanbanBox!.height);
+});
