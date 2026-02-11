@@ -5,7 +5,8 @@
   "type": "module",
   "private": true,
   "scripts": {
-    "dev": "bun run --hot src/server.ts",
+    "dev": "bun run --watch src/server.ts",
+    "dev:all": "concurrently -n server,convex -c blue,magenta 'bun run dev' 'bun run convex:dev'",
     "test": "vitest",
     "test:ui": "vitest --ui",
     "test:e2e": "playwright test",
@@ -32,6 +33,7 @@
     "@types/react-dom": "^19",
     "@vitest/ui": "^4.0.18",
     "bun-plugin-tailwind": "^0.1.2",
+    "concurrently": "^9.2.1",
     "convex-test": "^0.0.41",
     "jsdom": "^28.0.0",
     "storybook": "^10.2.8",
