@@ -4,10 +4,17 @@ import { mutation, query } from './_generated/server';
 export const list = query({
   args: { repoId: v.optional(v.id('repos')) },
   handler: async (ctx, args) => {
-    const all = await ctx.db.query('promptTemplates').collect();
-    const global = all.filter((t) => !t.repoId);
+    // Convex indexes include docs with undefined optional fields,
+    // so eq('repoId', undefined) matches global templates.
+    const global = await ctx.db
+      .query('promptTemplates')
+      .withIndex('by_repo', (q) => q.eq('repoId', undefined))
+      .collect();
     if (!args.repoId) return global;
-    const repoTemplates = all.filter((t) => t.repoId === args.repoId);
+    const repoTemplates = await ctx.db
+      .query('promptTemplates')
+      .withIndex('by_repo', (q) => q.eq('repoId', args.repoId))
+      .collect();
     return [...repoTemplates, ...global];
   },
 });

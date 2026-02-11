@@ -18,8 +18,6 @@ export const record = mutation({
     prompt: v.string(),
   },
   handler: async (ctx, args) => {
-    if (!args.prompt.trim()) return;
-
     // Check if latest entry is identical — skip duplicate
     const latest = await ctx.db
       .query('promptHistory')
