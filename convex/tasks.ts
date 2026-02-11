@@ -106,15 +106,12 @@ export const create = mutation({
       totalInProgressMs: 0,
     });
 
-    // Record initial prompt history
-    const prompt = args.prompt?.trim();
-    if (prompt) {
-      await ctx.db.insert('promptHistory', {
-        taskId,
-        prompt,
-        createdAt: now,
-      });
-    }
+    // Record initial prompt history (including empty prompts for consistency)
+    await ctx.db.insert('promptHistory', {
+      taskId,
+      prompt: args.prompt?.trim() ?? '',
+      createdAt: now,
+    });
 
     return taskId;
   },
