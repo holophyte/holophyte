@@ -255,11 +255,19 @@ export function LabelPicker({
   );
 }
 
-export function LabelDots({ labels }: { labels: Doc<'labels'>[] }) {
+export function LabelDots({
+  labels,
+  max,
+}: {
+  labels: Doc<'labels'>[];
+  max?: number;
+}) {
   if (labels.length === 0) return null;
+  const visible = max != null ? labels.slice(0, max) : labels;
+  const overflow = labels.length - visible.length;
   return (
     <div className="flex gap-1 flex-wrap">
-      {labels.map((label) => (
+      {visible.map((label) => (
         <span
           key={label._id}
           className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium text-white"
@@ -268,6 +276,11 @@ export function LabelDots({ labels }: { labels: Doc<'labels'>[] }) {
           {label.name}
         </span>
       ))}
+      {overflow > 0 && (
+        <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium text-muted-foreground bg-muted">
+          +{overflow}
+        </span>
+      )}
     </div>
   );
 }

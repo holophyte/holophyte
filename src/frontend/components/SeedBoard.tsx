@@ -25,6 +25,7 @@ import {
 } from './ui/Dialog';
 import Input from './ui/Input';
 import Label from './ui/Label';
+import PageHeader from './ui/PageHeader';
 import Textarea from './ui/Textarea';
 
 function timeAgo(timestamp: number): string {
@@ -374,8 +375,7 @@ export function SeedBoard() {
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
-      {/* Header */}
-      <div className="flex items-center justify-between px-6 py-3 border-b">
+      <PageHeader className="justify-between px-6">
         <div className="flex items-center gap-2">
           <h1 className="text-lg font-semibold">Seed Box</h1>
           {seeds && seeds.length > 0 && (
@@ -405,7 +405,7 @@ export function SeedBoard() {
             New Idea
           </Button>
         </div>
-      </div>
+      </PageHeader>
 
       {/* Grid */}
       <div className="flex-1 overflow-y-auto p-4">

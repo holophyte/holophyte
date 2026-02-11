@@ -50,12 +50,19 @@ git log main..HEAD --oneline
 
 ### Title Format
 
-Use a concise, descriptive title based on the changes made.
+Use a conventional commit prefix followed by a concise description. Choose the prefix based on the nature of the changes:
+
+- `feat:` — new functionality
+- `fix:` — bug fix
+- `refactor:` — code restructuring without behavior change
+- `test:` — adding or updating tests
+- `chore:` — tooling, config, dependencies
+- `docs:` — documentation only
 
 Examples:
-- `Add terminal resize support`
-- `Fix WebSocket reconnection on session timeout`
-- `Refactor PTY manager to support multiple sessions`
+- `feat: add terminal resize support`
+- `fix: WebSocket reconnection on session timeout`
+- `refactor: extract PTY manager into separate module`
 
 ### Description Guidelines
 

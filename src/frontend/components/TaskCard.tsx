@@ -15,7 +15,12 @@ interface TaskCardProps {
 
 export function TaskCard({ task, repoName }: TaskCardProps) {
   const selectTask = useAppStore((s) => s.selectTask);
+  const toggleBulkSelectTask = useAppStore((s) => s.toggleBulkSelectTask);
+  const bulkSelectedTaskIds = useAppStore((s) => s.bulkSelectedTaskIds);
   const session = useQuery(api.sessions.getByTask, { taskId: task._id });
+
+  const isBulkMode = bulkSelectedTaskIds.length > 0;
+  const isSelected = bulkSelectedTaskIds.includes(task._id);
 
   const isOverdue =
     task.dueAt &&
@@ -29,25 +34,55 @@ export function TaskCard({ task, repoName }: TaskCardProps) {
     e.dataTransfer.effectAllowed = 'move';
   };
 
+  const handleClick = () => {
+    if (isBulkMode) {
+      toggleBulkSelectTask(task._id);
+    } else {
+      selectTask(task._id);
+    }
+  };
+
+  const handleCheckboxChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    e.stopPropagation();
+    toggleBulkSelectTask(task._id);
+  };
+
   return (
     <div
       role="button"
       tabIndex={0}
-      draggable
+      draggable={!isBulkMode}
       data-task-id={task._id}
       onDragStart={handleDragStart}
-      onClick={() => selectTask(task._id)}
+      onClick={handleClick}
       onKeyDown={(e) => {
         if (e.key === 'Enter' || e.key === ' ') {
           e.preventDefault();
-          selectTask(task._id);
+          if (isBulkMode) {
+            toggleBulkSelectTask(task._id);
+          } else {
+            selectTask(task._id);
+          }
         }
       }}
       className={cn(
-        'bg-background rounded-md border p-3 cursor-pointer hover:border-foreground/20 transition-colors shadow-sm',
+        'group/card relative bg-background rounded-md border p-3 cursor-pointer hover:border-foreground/20 transition-colors shadow-sm',
         'active:cursor-grabbing',
+        isSelected && 'ring-2 ring-primary border-primary/50',
       )}
     >
+      {/* Bulk selection checkbox */}
+      <input
+        type="checkbox"
+        checked={isSelected}
+        aria-label={`Select task: ${task.title}`}
+        onClick={(e) => e.stopPropagation()}
+        onChange={handleCheckboxChange}
+        className={cn(
+          'absolute top-2 right-2 h-4 w-4 accent-primary cursor-pointer transition-opacity',
+          isBulkMode ? 'opacity-100' : 'opacity-0 group-hover/card:opacity-100',
+        )}
+      />
       {/* Tag pills */}
       {task.labels && task.labels.length > 0 && (
         <div className="flex gap-1 mb-1.5 flex-wrap">

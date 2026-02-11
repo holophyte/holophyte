@@ -3,6 +3,7 @@ import type { Doc } from '@convex/_generated/dataModel';
 import { useQuery } from 'convex/react';
 import { Loader2, Play, Square } from 'lucide-react';
 import { useState } from 'react';
+import { useStickyValue } from '@/frontend/hooks/useStickyValue';
 import { useAppStore } from '@/frontend/stores/app';
 import Button from './ui/Button';
 
@@ -11,7 +12,10 @@ interface ClaudeButtonProps {
 }
 
 export function ClaudeButton({ task }: ClaudeButtonProps) {
-  const session = useQuery(api.sessions.getByTask, { taskId: task._id });
+  const session = useStickyValue(
+    useQuery(api.sessions.getByTask, { taskId: task._id }),
+    task._id,
+  );
   const openTerminal = useAppStore((s) => s.openTerminal);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
