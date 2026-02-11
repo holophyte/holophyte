@@ -14,6 +14,8 @@ import { cn } from '@/frontend/lib/utils';
 import { useAppStore } from '@/frontend/stores/app';
 import { ClaudeButton } from './ClaudeButton';
 import { LabelDots, LabelPicker } from './LabelPicker';
+import { PromptHistory } from './PromptHistory';
+import { PromptTemplatePicker } from './PromptTemplatePicker';
 import { SubtaskList } from './SubtaskList';
 import Button from './ui/Button';
 import Input from './ui/Input';
@@ -287,7 +289,17 @@ function TaskDetailInner({ task }: { task: Task }) {
           )}
         </div>
         <div className="space-y-2">
-          <Label htmlFor="detail-prompt">Claude Prompt</Label>
+          <div className="flex items-center justify-between">
+            <Label htmlFor="detail-prompt">Claude Prompt</Label>
+            <div className="flex gap-1">
+              <PromptTemplatePicker repoId={task.repoId} onApply={setPrompt} />
+              <PromptHistory
+                taskId={task._id}
+                currentPrompt={prompt}
+                onRestore={setPrompt}
+              />
+            </div>
+          </div>
           <Textarea
             id="detail-prompt"
             value={prompt}

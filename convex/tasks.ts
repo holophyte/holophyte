@@ -91,7 +91,7 @@ export const create = mutation({
       0,
     );
     const now = Date.now();
-    return await ctx.db.insert('tasks', {
+    const taskId = await ctx.db.insert('tasks', {
       repoId: args.repoId,
       title: args.title,
       description: args.description ?? '',
@@ -105,6 +105,15 @@ export const create = mutation({
       priority: args.priority,
       totalInProgressMs: 0,
     });
+
+    // Record initial prompt history (including empty prompts for consistency)
+    await ctx.db.insert('promptHistory', {
+      taskId,
+      prompt: args.prompt?.trim() ?? '',
+      createdAt: now,
+    });
+
+    return taskId;
   },
 });
 
@@ -121,7 +130,8 @@ export const update = mutation({
   },
   handler: async (ctx, args) => {
     const { id, clearDueAt, ...fields } = args;
-    const updates: Record<string, unknown> = { updatedAt: Date.now() };
+    const now = Date.now();
+    const updates: Record<string, unknown> = { updatedAt: now };
     if (fields.title !== undefined) updates.title = fields.title;
     if (fields.description !== undefined)
       updates.description = fields.description;
@@ -131,6 +141,23 @@ export const update = mutation({
     if (clearDueAt) updates.dueAt = undefined;
     if (fields.priority !== undefined) updates.priority = fields.priority;
     await ctx.db.patch(id, updates);
+
+    // Record prompt history when prompt changes (including clears)
+    if (fields.prompt !== undefined) {
+      const trimmed = fields.prompt.trim();
+      const latest = await ctx.db
+        .query('promptHistory')
+        .withIndex('by_task', (q) => q.eq('taskId', id))
+        .order('desc')
+        .first();
+      if (!latest || latest.prompt !== trimmed) {
+        await ctx.db.insert('promptHistory', {
+          taskId: id,
+          prompt: trimmed,
+          createdAt: now,
+        });
+      }
+    }
   },
 });
 
@@ -280,6 +307,14 @@ export const remove = mutation({
     for (const subtask of subtasks) {
       await ctx.db.delete(subtask._id);
     }
+    // Delete prompt history
+    const promptHistory = await ctx.db
+      .query('promptHistory')
+      .withIndex('by_task', (q) => q.eq('taskId', args.id))
+      .collect();
+    for (const entry of promptHistory) {
+      await ctx.db.delete(entry._id);
+    }
     await ctx.db.delete(args.id);
   },
 });
@@ -380,6 +415,14 @@ export const bulkDelete = mutation({
         .collect();
       for (const subtask of subtasks) {
         await ctx.db.delete(subtask._id);
+      }
+      // Delete prompt history
+      const promptHistory = await ctx.db
+        .query('promptHistory')
+        .withIndex('by_task', (q) => q.eq('taskId', id))
+        .collect();
+      for (const entry of promptHistory) {
+        await ctx.db.delete(entry._id);
       }
       await ctx.db.delete(id);
     }

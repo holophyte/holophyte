@@ -102,6 +102,21 @@ export default defineSchema({
     createdAt: v.number(),
   }).index('by_status', ['status']),
 
+  promptTemplates: defineTable({
+    name: v.string(),
+    content: v.string(),
+    // null repoId = global template
+    repoId: v.optional(v.id('repos')),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  }).index('by_repo', ['repoId']),
+
+  promptHistory: defineTable({
+    taskId: v.id('tasks'),
+    prompt: v.string(),
+    createdAt: v.number(),
+  }).index('by_task', ['taskId', 'createdAt']),
+
   sessions: defineTable({
     taskId: v.id('tasks'),
     status: v.union(
