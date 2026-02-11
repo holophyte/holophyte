@@ -9,6 +9,7 @@ import {
   Lightbulb,
   Search,
 } from 'lucide-react';
+import { Dialog as RadixDialog, VisuallyHidden } from 'radix-ui';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { cn } from '@/frontend/lib/utils';
 import { useAppStore } from '@/frontend/stores/app';
@@ -67,6 +68,9 @@ export function CommandPalette() {
       className="fixed left-1/2 top-[20%] z-50 -translate-x-1/2 w-full max-w-lg rounded-lg border bg-background shadow-2xl overflow-hidden"
       overlayClassName="fixed inset-0 z-50 bg-black/50"
     >
+      <VisuallyHidden.Root asChild>
+        <RadixDialog.Title>Command palette</RadixDialog.Title>
+      </VisuallyHidden.Root>
       <div className="flex items-center border-b px-3">
         <Search className="h-4 w-4 shrink-0 text-muted-foreground" />
         <Command.Input
