@@ -416,6 +416,14 @@ export const bulkDelete = mutation({
       for (const subtask of subtasks) {
         await ctx.db.delete(subtask._id);
       }
+      // Delete prompt history
+      const promptHistory = await ctx.db
+        .query('promptHistory')
+        .withIndex('by_task', (q) => q.eq('taskId', id))
+        .collect();
+      for (const entry of promptHistory) {
+        await ctx.db.delete(entry._id);
+      }
       await ctx.db.delete(id);
     }
   },
