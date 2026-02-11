@@ -158,18 +158,18 @@ function TaskDetailInner({ task }: { task: Task }) {
           </div>
         )}
 
-        {/* Tags — visible pills + picker */}
-        <div className="space-y-2">
-          <div className="flex items-center justify-between">
-            <Label className="text-xs text-muted-foreground">Tags</Label>
+        {/* Tags */}
+        <div className="flex items-center gap-2 flex-wrap">
+          <Label className="text-xs text-muted-foreground shrink-0">Tags</Label>
+          {task.labels && task.labels.length > 0 && (
+            <LabelDots labels={task.labels} max={3} />
+          )}
+          <div className="ml-auto shrink-0">
             <LabelPicker
               currentLabelIds={labelIds}
               onChangeLabelIds={handleLabelChange}
             />
           </div>
-          {task.labels && task.labels.length > 0 && (
-            <LabelDots labels={task.labels} />
-          )}
         </div>
 
         {/* Priority dropdown */}
