@@ -57,6 +57,8 @@ export function CommandPalette() {
     setOpen(false);
   }, []);
 
+  if (!open) return null;
+
   return (
     <Command.Dialog
       open={open}
