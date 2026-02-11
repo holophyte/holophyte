@@ -3,6 +3,7 @@ import type { Id } from '@convex/_generated/dataModel';
 import { useMutation, useQuery } from 'convex/react';
 import { Plus, X } from 'lucide-react';
 import { useState } from 'react';
+import { useStickyValue } from '@/frontend/hooks/useStickyValue';
 import { cn } from '@/frontend/lib/utils';
 import Checkbox from './ui/Checkbox';
 import Input from './ui/Input';
@@ -12,7 +13,9 @@ interface SubtaskListProps {
 }
 
 export function SubtaskList({ taskId }: SubtaskListProps) {
-  const subtasks = useQuery(api.subtasks.listByTask, { taskId });
+  const subtasks = useStickyValue(
+    useQuery(api.subtasks.listByTask, { taskId }),
+  );
   const createSubtask = useMutation(api.subtasks.create);
   const toggleSubtask = useMutation(api.subtasks.toggle);
   const updateTitle = useMutation(api.subtasks.updateTitle);

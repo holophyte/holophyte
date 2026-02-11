@@ -51,9 +51,7 @@ export function TaskDetailPanel() {
           <X className="h-4 w-4" />
         </Button>
       </PageHeader>
-      {displayTask && (
-        <TaskDetailInner key={displayTask._id} task={displayTask} />
-      )}
+      {displayTask && <TaskDetailInner task={displayTask} />}
     </div>
   );
 }
@@ -63,10 +61,20 @@ function TaskDetailInner({ task }: { task: Task }) {
   const updateTask = useMutation(api.tasks.update);
   const removeTask = useMutation(api.tasks.remove);
 
+  const [prevTaskId, setPrevTaskId] = useState(task._id);
   const [title, setTitle] = useState(task.title);
   const [description, setDescription] = useState(task.description);
   const [prompt, setPrompt] = useState(task.prompt);
   const [priorityOpen, setPriorityOpen] = useState(false);
+
+  // Reset local state when switching tasks (synchronous, no useEffect)
+  if (task._id !== prevTaskId) {
+    setPrevTaskId(task._id);
+    setTitle(task.title);
+    setDescription(task.description);
+    setPrompt(task.prompt);
+    setPriorityOpen(false);
+  }
 
   // Auto-save title on blur
   const handleTitleBlur = () => {
