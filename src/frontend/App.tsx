@@ -1,4 +1,5 @@
 import { useAppStore } from '@/frontend/stores/app';
+import { CommandPalette } from './components/CommandPalette';
 import { KanbanBoard } from './components/KanbanBoard';
 import { SeedBoard } from './components/SeedBoard';
 import { Sidebar } from './components/Sidebar';
@@ -18,6 +19,7 @@ export function App() {
         {terminalSessionId && <TerminalPanel />}
       </main>
       {selectedTaskId && <TaskDetailPanel />}
+      <CommandPalette />
     </div>
   );
 }
