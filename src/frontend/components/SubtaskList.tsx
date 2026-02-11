@@ -15,6 +15,7 @@ interface SubtaskListProps {
 export function SubtaskList({ taskId }: SubtaskListProps) {
   const subtasks = useStickyValue(
     useQuery(api.subtasks.listByTask, { taskId }),
+    taskId,
   );
   const createSubtask = useMutation(api.subtasks.create);
   const toggleSubtask = useMutation(api.subtasks.toggle);

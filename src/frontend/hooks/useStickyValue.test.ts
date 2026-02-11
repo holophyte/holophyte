@@ -64,4 +64,55 @@ describe('useStickyValue', () => {
     rerender();
     expect(result.current).toBe(arr1);
   });
+
+  describe('with key', () => {
+    it('resets when key changes', () => {
+      let value: string | undefined = 'task-A-data';
+      let key: string = 'A';
+      const { result, rerender } = renderHook(() => useStickyValue(value, key));
+      expect(result.current).toBe('task-A-data');
+
+      // Switch to key B with undefined value (simulates query loading)
+      key = 'B';
+      value = undefined;
+      rerender();
+      expect(result.current).toBeUndefined();
+    });
+
+    it('still sticks within the same key', () => {
+      let value: string | undefined = 'data';
+      const key = 'A';
+      const { result, rerender } = renderHook(() => useStickyValue(value, key));
+      expect(result.current).toBe('data');
+
+      value = undefined;
+      rerender();
+      expect(result.current).toBe('data');
+    });
+
+    it('picks up new value after key reset', () => {
+      let value: string | undefined = 'old';
+      let key: string = 'A';
+      const { result, rerender } = renderHook(() => useStickyValue(value, key));
+
+      key = 'B';
+      value = undefined;
+      rerender();
+      expect(result.current).toBeUndefined();
+
+      value = 'new';
+      rerender();
+      expect(result.current).toBe('new');
+    });
+
+    it('works without key (backwards compatible)', () => {
+      let value: string | undefined = 'first';
+      const { result, rerender } = renderHook(() => useStickyValue(value));
+      expect(result.current).toBe('first');
+
+      value = undefined;
+      rerender();
+      expect(result.current).toBe('first');
+    });
+  });
 });

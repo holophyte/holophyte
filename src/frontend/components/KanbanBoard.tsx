@@ -173,7 +173,10 @@ export function KanbanBoard() {
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden relative">
-      <PageHeader className="justify-between px-6 gap-3">
+      <PageHeader
+        data-testid="kanban-header"
+        className="justify-between px-6 gap-3"
+      >
         <h1 className="text-lg font-semibold shrink-0">
           {selectedRepoId
             ? (repoMap.get(selectedRepoId)?.name ?? 'Tasks')

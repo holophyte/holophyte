@@ -51,7 +51,10 @@ export function Sidebar() {
 
   return (
     <aside className="w-64 border-r bg-muted/30 flex flex-col">
-      <PageHeader className="gap-2 font-semibold text-lg">
+      <PageHeader
+        data-testid="sidebar-header"
+        className="gap-2 font-semibold text-lg"
+      >
         <FolderGit2 className="h-5 w-5" />
         Holophyte
       </PageHeader>

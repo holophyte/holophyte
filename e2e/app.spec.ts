@@ -141,10 +141,8 @@ test('archive button is visible in header', async ({ page }) => {
 
 test('sidebar and kanban headers have the same height', async ({ page }) => {
   await waitForApp(page);
-  const sidebarHeader = page.locator('aside > div').first();
-  const kanbanHeader = page
-    .locator('main h1', { hasText: 'All Tasks' })
-    .locator('..');
+  const sidebarHeader = page.getByTestId('sidebar-header');
+  const kanbanHeader = page.getByTestId('kanban-header');
   const sidebarBox = await sidebarHeader.boundingBox();
   const kanbanBox = await kanbanHeader.boundingBox();
   expect(sidebarBox).not.toBeNull();

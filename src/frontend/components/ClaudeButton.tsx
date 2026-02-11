@@ -14,6 +14,7 @@ interface ClaudeButtonProps {
 export function ClaudeButton({ task }: ClaudeButtonProps) {
   const session = useStickyValue(
     useQuery(api.sessions.getByTask, { taskId: task._id }),
+    task._id,
   );
   const openTerminal = useAppStore((s) => s.openTerminal);
   const [loading, setLoading] = useState(false);
