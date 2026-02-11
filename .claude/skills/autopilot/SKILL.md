@@ -41,15 +41,17 @@ bunx tsc --noEmit
 bun run test
 ```
 
-- Fix any issues before proceeding
+- If tests fail, use the `test-fixer` subagent to analyze and fix failures
+- Fix lint/type errors directly
 
-### 3. Self-Review with Subagent
+### 3. Self-Review with Subagents
 
-Before committing, run the `code-reviewer` subagent to review changes:
+Before committing, run reviewers in parallel:
 
 > Use the code-reviewer subagent to review the current changes
+> Use the security-reviewer subagent to audit the current changes
 
-- Fix any **critical** issues found by the reviewer
+- Fix any **critical** issues from either reviewer
 - Evaluate **warnings** and fix if valid
 - **Suggestions** are optional — skip unless clearly beneficial
 - Run quality checks again if changes were made
@@ -134,6 +136,11 @@ After addressing all comments:
 bun run lint:fix
 bunx tsc --noEmit
 bun run test
+```
+
+- If tests fail, use the `test-fixer` subagent to fix them
+
+```bash
 git add <changed files>
 git commit -m "fix: address greptile review feedback"
 git push
