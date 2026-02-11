@@ -41,17 +41,23 @@ export function CommandPalette() {
     [repos],
   );
 
-  // Cmd+K listener
+  // Cmd+K listener — skip when focus is inside an editable element
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'k' && (e.metaKey || e.ctrlKey)) {
+        const tag = (e.target as HTMLElement).tagName;
+        const isEditable =
+          tag === 'INPUT' ||
+          tag === 'TEXTAREA' ||
+          (e.target as HTMLElement).isContentEditable;
+        if (isEditable && !open) return;
         e.preventDefault();
         setOpen((prev) => !prev);
       }
     };
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, []);
+  }, [open]);
 
   const runAction = useCallback((fn: () => void) => {
     fn();
@@ -88,7 +94,12 @@ export function CommandPalette() {
         <Command.Group heading="Navigation" className={GROUP_HEADING_CLASS}>
           <CommandItem
             value="nav-all-tasks"
-            onSelect={() => runAction(() => selectRepo(null))}
+            onSelect={() =>
+              runAction(() => {
+                selectRepo(null);
+                selectTask(null);
+              })
+            }
           >
             <LayoutDashboard className="h-4 w-4 shrink-0 text-muted-foreground" />
             All Tasks
@@ -109,7 +120,12 @@ export function CommandPalette() {
               <CommandItem
                 key={repo._id}
                 value={`${repo.name} repo-${repo._id}`}
-                onSelect={() => runAction(() => selectRepo(repo._id))}
+                onSelect={() =>
+                  runAction(() => {
+                    selectRepo(repo._id);
+                    selectTask(null);
+                  })
+                }
               >
                 <FolderGit2 className="h-4 w-4 shrink-0 text-muted-foreground" />
                 {repo.name}
@@ -125,7 +141,12 @@ export function CommandPalette() {
               <CommandItem
                 key={task._id}
                 value={`${task.title} task-${task._id}`}
-                onSelect={() => runAction(() => selectTask(task._id))}
+                onSelect={() =>
+                  runAction(() => {
+                    selectRepo(task.repoId);
+                    selectTask(task._id);
+                  })
+                }
               >
                 <ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground" />
                 <span className="flex-1 truncate">{task.title}</span>
