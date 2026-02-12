@@ -6,6 +6,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 DEV_PORTS="$REPO_ROOT/.dev-ports"
+LOCKFILE="$REPO_ROOT/.dev-local.pid"
 
 if [ ! -f "$DEV_PORTS" ]; then
   echo "Error: .dev-ports file not found at $DEV_PORTS"
@@ -27,7 +28,24 @@ if ! [[ "${DEV_PORT:-}" =~ ^[0-9]+$ ]] || \
   exit 1
 fi
 
+# Prevent duplicate instances in the same workspace
+if [ -f "$LOCKFILE" ]; then
+  OLD_PID=$(cat "$LOCKFILE")
+  if kill -0 "$OLD_PID" 2>/dev/null; then
+    echo "Error: dev:local is already running (PID $OLD_PID)"
+    echo "Stop it first, or remove $LOCKFILE if the process is stale."
+    exit 1
+  fi
+  # Stale lockfile — remove it
+  rm -f "$LOCKFILE"
+fi
+
+echo $$ > "$LOCKFILE"
+trap 'rm -f "$LOCKFILE"' EXIT
+
+export PORT="$DEV_PORT"
+
 echo "Starting dev environment (app=$DEV_PORT, convex=$CONVEX_CLOUD_PORT/$CONVEX_SITE_PORT)..."
 exec npx concurrently -n server,convex -c blue,magenta \
-  "PORT=$DEV_PORT bun run --watch src/server.ts" \
+  "bun run --watch src/server.ts" \
   "$SCRIPT_DIR/convex-local.sh"

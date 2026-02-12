@@ -42,8 +42,10 @@ storybook-static
 # IntelliJ based IDEs
 .idea
 
-# local dev ports (worktree-specific)
+# local dev (worktree-specific)
 .dev-ports
+.dev-local.pid
+.convex-local.pid
 
 # Finder (MacOS) folder config
 .DS_Store
