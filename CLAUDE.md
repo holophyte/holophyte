@@ -16,13 +16,19 @@ Project management app for running parallel Claude Code sessions. A kanban board
 
 ```bash
 bun run dev              # Start server with HMR (port 8080)
-bun run convex:dev       # Start Convex local dev (run alongside dev server)
+bun run dev:all          # App server + cloud Convex dev (port 8080)
+bun run dev:local        # App server + local Convex (reads .dev-ports)
+bun run convex:dev       # Start cloud Convex dev
+bun run convex:local     # Start local Convex backend (reads .dev-ports)
 bun run test             # Run unit tests (vitest)
 bun run test:ui          # Vitest UI dashboard
 bun run test:e2e         # Playwright E2E tests (requires convex:dev running)
 bun run lint             # Biome check
 bun run lint:fix         # Biome auto-fix
+bun run check            # lint + typecheck + test (all-in-one)
 bun run convex:deploy    # Deploy Convex to production
+bun run worktree:create <name>  # Create worktree with isolated local Convex
+bun run pr-comments      # Show Greptile PR comments (--poll for polling)
 ```
 
 Single test file: `bunx vitest run src/claude/manager.test.ts`
@@ -75,6 +81,8 @@ src/frontend/components/   → UI components (Kanban*, Task*, Terminal*, Sidebar
 src/frontend/components/ui → Radix UI primitives (Button, Dialog, Input, etc.)
 convex/schema.ts           → Data model: repos, tasks, sessions
 convex/{repos,tasks,sessions}.ts → Convex queries and mutations
+scripts/                   → Shared shell scripts (convex-local, dev-local, worktree-create, pr-comments)
+.githooks/pre-commit       → Pre-commit hook (codegen + lint + typecheck)
 ```
 
 **Data flow for terminal sessions:**
@@ -95,8 +103,15 @@ convex/{repos,tasks,sessions}.ts → Convex queries and mutations
 - Indexes named descriptively: `by_repo_status`, `by_task`, `by_path`
 - Import generated types: `import type { Doc, Id } from "@convex/_generated/dataModel"`
 - Convex URL is served via `/api/config` endpoint because browser bundles can't access env vars
-- `.env.local` is managed by `convex dev` — only contains `CONVEX_DEPLOYMENT`
 - Schema changes that conflict with existing data block deployment. To fix: temporarily remove `schema.ts`, deploy with `--typecheck=disable`, clear data, restore schema.
+
+**Local-first development:**
+- Development uses local Convex backends — each workspace (main repo + worktrees) gets its own isolated instance
+- Ports are configured in `.dev-ports` (gitignored, per-workspace): `DEV_PORT`, `CONVEX_CLOUD_PORT`, `CONVEX_SITE_PORT`
+- Main repo: dev=8080, convex=3210/3211. Worktrees get auto-assigned ports via `bun run worktree:create`
+- `bun run dev:local` starts app server + local Convex from `.dev-ports`
+- `bun run convex:dev` (cloud) is still available for production deployment workflows
+- `.env.local` is copied from main repo during worktree setup (provides project context), then overwritten by `convex dev --local --once` with local deployment config
 
 ## Frontend Patterns
 
@@ -171,7 +186,9 @@ Server configuration lives in environment variables with sensible defaults:
 
 ## Commit Guidelines
 
-- Run `bun run lint:fix` and `bunx tsc --noEmit` before committing
+- Pre-commit hooks run automatically: `convex codegen` → `lint` → `typecheck`
+- Pre-commit hooks are mandatory for AI agents. Never use `--no-verify` or `--no-gpg-sign` to skip hooks.
+- Run `bun run lint:fix` to auto-fix lint issues before committing
 - Use conventional commit prefixes: `feat:`, `fix:`, `refactor:`, `test:`, `chore:`, `docs:`
 - Commit frequently with descriptive messages — incremental changes over large batches
 - Stage specific files rather than `git add .`
@@ -185,4 +202,5 @@ Server configuration lives in environment variables with sensible defaults:
 - Biome doesn't understand CSS `theme()` function — use `var()` instead
 - `useSemanticElements` biome rule is set to "warn" (kanban board needs div-based drag-drop)
 - `bunfig.toml` configures `bun-plugin-tailwind` under `[serve.static]`
-- No CI/CD, Docker, or pre-commit hooks configured
+- Pre-commit hooks configured via `.githooks/` — `prepare` script in package.json sets `core.hooksPath` on `bun install`
+- No CI/CD or Docker configured

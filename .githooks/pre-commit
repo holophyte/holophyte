@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+echo "Pre-commit: running quality checks..."
+
+# 1. Generate/refresh Convex types from schema
+echo "  convex codegen..."
+bunx convex codegen 2>/dev/null || {
+  echo "Warning: convex codegen failed (local backend may not be running)"
+  echo "  Skipping codegen — lint and typecheck will still run"
+}
+
+# 2. Biome lint check
+echo "  lint..."
+bun run lint || {
+  echo ""
+  echo "Lint failed. Fix with: bun run lint:fix"
+  exit 1
+}
+
+# 3. TypeScript type check
+echo "  typecheck..."
+bunx tsc --noEmit || {
+  echo ""
+  echo "Type check failed. Fix errors and try again."
+  exit 1
+}
+
+echo "Pre-commit checks passed."

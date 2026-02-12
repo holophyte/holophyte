@@ -22,18 +22,13 @@ focused changes, prefer `/autopilot` (single-agent).
 
 Create a worktree for the team to work in (always — teams should never work on main):
 
-```bash
-REPO=$(basename "$(git rev-parse --show-toplevel)")
-```
+Derive a short feature name from `$ARGUMENTS`, then:
 
 ```bash
-git worktree add ../$REPO-<feature-name> -b feat/<feature-name>
-cp .env ../$REPO-<feature-name>/ 2>/dev/null || true
-cp .env.local ../$REPO-<feature-name>/ 2>/dev/null || true
-cd ../$REPO-<feature-name> && bun install
+bun run worktree:create <feature-name>
 ```
 
-Derive a short feature name from `$ARGUMENTS`.
+Work from the new worktree directory after creation.
 
 ### 2. Plan the Work
 
@@ -122,23 +117,21 @@ Use a conventional prefix in the title (`feat:`, `fix:`, `refactor:`, etc.).
 
 Poll for Greptile review comments and iterate until resolved:
 
-1. **Record seen comments** — before pushing, save all existing Greptile comment IDs:
+1. **Poll for new comments:**
    ```bash
-   gh api repos/{owner}/{repo}/pulls/<PR>/comments \
-     --jq '[.[] | select(.user.login == "greptile-apps[bot]") | .id]'
+   bun run pr-comments -- --poll <PR_NUMBER>
    ```
-2. **Poll** — every 30 seconds, up to 5 minutes, check for new comment IDs beyond the seen set
-3. **Triage new comments** as:
+2. **Triage new comments** as:
    - **Actionable** (bugs, security, clear quality issues) — fix the code, reply with explanation
    - **Dismissable** (style conflicts, false positives, over-engineering) — reply explaining why
-4. **Reply** to comments:
+3. **Reply** to comments:
    ```bash
    gh api repos/{owner}/{repo}/pulls/<PR>/comments/<COMMENT_ID>/replies \
      -f body="<reply>"
    ```
-5. **Push** — run quality checks, commit fixes, push, add new IDs to seen set
-6. **Repeat** from step 2 (max 3 iterations)
-7. **Exit** when no new comments appear or max iterations reached
+4. **Push** — run quality checks, commit fixes, push
+5. **Repeat** from step 1 (max 3 iterations)
+6. **Exit** when no new comments appear or max iterations reached
 
 ### 9. Summary
 

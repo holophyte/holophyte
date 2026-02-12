@@ -28,13 +28,12 @@ If `$ARGUMENTS` contains a PR number, use that directly.
 
 ### 2. Fetch Comments
 
-Get review comments (code-level):
+Fetch Greptile review comments using the script:
 ```bash
-gh api repos/{owner}/{repo}/pulls/<PR>/reviews
-gh api repos/{owner}/{repo}/pulls/<PR>/comments
+bun run pr-comments -- <PR_NUMBER>
 ```
 
-Get PR conversation comments:
+Also fetch general PR conversation comments:
 ```bash
 gh api repos/{owner}/{repo}/issues/<PR>/comments
 ```
@@ -77,3 +76,12 @@ For each comment to address:
 3. Implement the change
 4. Show the diff
 5. Ask for confirmation before moving to next comment
+
+### 6. Resolve Conversations
+
+After all comments have been addressed (code changes made and confirmed), resolve the Greptile review threads on GitHub:
+```bash
+bun run pr-comments -- --resolve <PR_NUMBER>
+```
+
+This clicks "Resolve conversation" on all Greptile threads via the GitHub GraphQL API.
