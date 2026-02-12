@@ -1,6 +1,6 @@
 import { v } from 'convex/values';
 import { mutation, query } from './_generated/server';
-import { requireOrgMembership } from './lib/auth';
+import { requireOrgMembership, requireRole } from './lib/auth';
 
 export const listByTask = query({
   args: { taskId: v.id('tasks') },
@@ -28,7 +28,8 @@ export const record = mutation({
     if (!task) throw new Error('Task not found');
     const repo = await ctx.db.get(task.repoId);
     if (!repo) throw new Error('Repo not found');
-    await requireOrgMembership(ctx, repo.orgId);
+    const { membership } = await requireOrgMembership(ctx, repo.orgId);
+    requireRole(membership, 'member');
     // Check if latest entry is identical — skip duplicate
     const latest = await ctx.db
       .query('promptHistory')
