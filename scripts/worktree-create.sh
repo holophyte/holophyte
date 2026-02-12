@@ -47,12 +47,23 @@ cp "$REPO_ROOT/.env.local" "$WORKTREE_PATH/" 2>/dev/null || true
 echo "Installing dependencies..."
 cd "$WORKTREE_PATH" && bun install
 
-# Assign ports based on worktree count
-# N = total worktrees including main (so first worktree is N=2)
+# Assign ports — start from worktree count, bump if any port is already in use
+port_in_use() {
+  lsof -iTCP:"$1" -sTCP:LISTEN >/dev/null 2>&1
+}
+
 N=$(git worktree list | wc -l | tr -d ' ')
-DEV_PORT=$((8080 + N - 1))
-CONVEX_CLOUD_PORT=$((3210 + (N - 1) * 2))
-CONVEX_SITE_PORT=$((3211 + (N - 1) * 2))
+while true; do
+  DEV_PORT=$((8080 + N - 1))
+  CONVEX_CLOUD_PORT=$((3210 + (N - 1) * 2))
+  CONVEX_SITE_PORT=$((3211 + (N - 1) * 2))
+
+  if ! port_in_use "$DEV_PORT" && ! port_in_use "$CONVEX_CLOUD_PORT" && ! port_in_use "$CONVEX_SITE_PORT"; then
+    break
+  fi
+  echo "Ports for slot $N in use, trying next..."
+  N=$((N + 1))
+done
 
 # Write .dev-ports
 cat > "$WORKTREE_PATH/.dev-ports" <<EOF
