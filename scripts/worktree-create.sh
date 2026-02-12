@@ -59,13 +59,6 @@ CONVEX_CLOUD_PORT=$CONVEX_CLOUD_PORT
 CONVEX_SITE_PORT=$CONVEX_SITE_PORT
 EOF
 
-# Initialize local Convex (push schema, generate types, write .env.local, then exit)
-echo "Initializing local Convex backend (cloud=$CONVEX_CLOUD_PORT, site=$CONVEX_SITE_PORT)..."
-cd "$WORKTREE_PATH" && npx convex dev --local \
-  --local-cloud-port "$CONVEX_CLOUD_PORT" \
-  --local-site-port "$CONVEX_SITE_PORT" \
-  --once
-
 echo ""
 echo "Worktree created: ../$REPO-$FEATURE_NAME"
 echo "Ports: dev=$DEV_PORT, convex=$CONVEX_CLOUD_PORT/$CONVEX_SITE_PORT"
@@ -73,3 +66,5 @@ echo ""
 echo "To start dev:"
 echo "  cd ../$REPO-$FEATURE_NAME"
 echo "  bun run dev:local"
+echo ""
+echo "On first run, Convex will prompt to create a new project (one-time setup)."
