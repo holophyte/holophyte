@@ -85,7 +85,8 @@ export const updateStatus = mutation({
     if (!task) throw new Error('Task not found');
     const repo = await ctx.db.get(task.repoId);
     if (!repo) throw new Error('Repo not found');
-    await requireOrgMembership(ctx, repo.orgId);
+    const { membership } = await requireOrgMembership(ctx, repo.orgId);
+    requireRole(membership, 'member');
     const updates: Record<string, unknown> = { status: args.status };
     if (args.status !== 'running') {
       updates.endedAt = Date.now();
