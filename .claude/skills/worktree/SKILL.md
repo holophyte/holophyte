@@ -27,40 +27,24 @@ Set up a new git worktree for working on a feature in parallel.
 
 Use `$ARGUMENTS` if provided, otherwise ask the user.
 
-### 2. Derive Repo Name
+### 2. Create Worktree
+
+Run the worktree creation script:
+
+```bash
+bun run worktree:create <feature-name>
+```
+
+This handles everything: worktree creation, branch setup, dependency installation, port assignment, and local Convex initialization.
+
+### 3. Verify Setup
 
 ```bash
 REPO=$(basename "$(git rev-parse --show-toplevel)")
-```
-
-### 3. Create Worktree
-
-```bash
-git worktree add ../$REPO-<feature-name> -b feat/<feature-name>
-```
-
-### 4. Copy Essential Files
-
-```bash
-cp .env ../$REPO-<feature-name>/ 2>/dev/null || true
-cp .env.local ../$REPO-<feature-name>/ 2>/dev/null || true
-```
-
-Note: CLAUDE.md, .claude/, and other tracked files come with the worktree automatically.
-
-### 5. Install Dependencies
-
-```bash
-cd ../$REPO-<feature-name> && bun install
-```
-
-### 6. Verify Setup
-
-```bash
-cd ../$REPO-<feature-name> && ls -la .env* CLAUDE.md
+cd ../$REPO-<feature-name> && ls -la .env* .dev-ports CLAUDE.md
 ```
 
 ## After Creation
 
-- Run `bun run dev` and `bun run convex:dev` in the new worktree
+- Run `bun run dev:local` in the new worktree (uses isolated local Convex)
 - The main directory remains on its current branch

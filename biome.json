@@ -4,6 +4,7 @@
     "includes": [
       "src/**",
       "convex/**",
+      "!convex/_generated",
       "dev-server.ts",
       "e2e/**",
       "vitest.config.ts",

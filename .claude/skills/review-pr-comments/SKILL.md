@@ -28,13 +28,12 @@ If `$ARGUMENTS` contains a PR number, use that directly.
 
 ### 2. Fetch Comments
 
-Get review comments (code-level):
+Fetch Greptile review comments using the script:
 ```bash
-gh api repos/{owner}/{repo}/pulls/<PR>/reviews
-gh api repos/{owner}/{repo}/pulls/<PR>/comments
+bun run pr-comments -- <PR_NUMBER>
 ```
 
-Get PR conversation comments:
+Also fetch general PR conversation comments:
 ```bash
 gh api repos/{owner}/{repo}/issues/<PR>/comments
 ```

@@ -20,13 +20,11 @@ comments until resolved.
 If not already on a feature branch, create a worktree to avoid disrupting current work:
 
 ```bash
-REPO=$(basename "$(git rev-parse --show-toplevel)")
 BRANCH=$(git branch --show-current)
 ```
 
-- If on `main`: create a worktree with `git worktree add ../$REPO-<feature-name> -b feat/<feature-name>`, copy `.env`/`.env.local`, run `bun install`, then work from that directory
+- If on `main`: derive a short feature name from `$ARGUMENTS` (e.g., "add drag reordering" becomes `drag-reordering`), then run `bun run worktree:create <feature-name>` and work from the new worktree directory
 - If already on a `feat/` branch: continue in the current directory
-- Derive a short feature name from `$ARGUMENTS` (e.g., "add drag reordering" becomes `drag-reordering`)
 
 ### 2. Implement the Feature
 
@@ -77,31 +75,19 @@ gh pr list --head $(git branch --show-current) --json number --jq '.[0].number'
 
 ### 6. Poll for Greptile Review
 
-Wait for Greptile to post review comments. Poll every 30 seconds, up to 5 minutes.
-
-**Before pushing**, record the IDs of all existing Greptile comments so you can identify new ones later:
+Wait for Greptile to post review comments using the polling script:
 
 ```bash
-gh api repos/{owner}/{repo}/pulls/<PR>/comments \
-  --jq '[.[] | select(.user.login == "greptile-apps[bot]") | .id]'
+bun run pr-comments -- --poll <PR_NUMBER>
 ```
 
-Store this list as `SEEN_COMMENT_IDS`. After pushing, poll until new comment IDs appear beyond this set, or timeout.
+This records existing comment IDs, polls every 30s for up to 5 minutes, and outputs only new comments.
 
 - If timeout with no new comments, exit successfully — Greptile found nothing new
 
-### 7. Read and Triage Comments
+### 7. Triage Comments
 
-Fetch only **new** Greptile comments (IDs not in `SEEN_COMMENT_IDS`):
-
-```bash
-gh api repos/{owner}/{repo}/pulls/<PR>/comments \
-  --jq '[.[] | select(.user.login == "greptile-apps[bot]")]'
-```
-
-Filter out any comments whose `.id` is in `SEEN_COMMENT_IDS`. Only process the remaining new comments. Add the new IDs to `SEEN_COMMENT_IDS` for the next iteration.
-
-Categorize each comment:
+Read the output from the polling script. Categorize each new comment:
 
 **Actionable** — fix the code:
 - Bug or correctness issues
