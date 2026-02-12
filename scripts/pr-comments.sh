@@ -3,12 +3,15 @@ set -euo pipefail
 
 # Fetch and display Greptile review comments on a GitHub PR
 # Usage:
-#   bun run pr-comments                  # show all comments (auto-detect PR)
-#   bun run pr-comments -- 42            # show comments on PR #42
-#   bun run pr-comments -- --poll        # poll for new comments
-#   bun run pr-comments -- --poll 42     # poll specific PR
+#   bun run pr-comments                      # show all comments (auto-detect PR)
+#   bun run pr-comments -- 42                # show comments on PR #42
+#   bun run pr-comments -- --poll            # poll for new comments
+#   bun run pr-comments -- --poll 42         # poll specific PR
+#   bun run pr-comments -- --resolve         # resolve all Greptile threads
+#   bun run pr-comments -- --resolve 42      # resolve threads on specific PR
 
 POLL=false
+RESOLVE=false
 PR_NUMBER=""
 
 # Parse arguments
@@ -16,6 +19,10 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --poll)
       POLL=true
+      shift
+      ;;
+    --resolve)
+      RESOLVE=true
       shift
       ;;
     *)
@@ -62,6 +69,55 @@ format_comments() {
     "=== Comment #\(.id) ===\nFile: \(.path):\(.line)\nBody: \(.body)\n"
   '
 }
+
+resolve_threads() {
+  # Fetch unresolved Greptile review thread IDs via GraphQL
+  local owner="${OWNER_REPO%%/*}"
+  local repo="${OWNER_REPO##*/}"
+
+  local threads
+  threads=$(gh api graphql -f query="
+    {
+      repository(owner: \"$owner\", name: \"$repo\") {
+        pullRequest(number: $PR_NUMBER) {
+          reviewThreads(first: 100) {
+            nodes {
+              id
+              isResolved
+              comments(first: 1) {
+                nodes { author { login } }
+              }
+            }
+          }
+        }
+      }
+    }
+  " --jq '.data.repository.pullRequest.reviewThreads.nodes[] | select(.isResolved == false) | select(.comments.nodes[0].author.login == "greptile-apps[bot]") | .id')
+
+  if [ -z "$threads" ]; then
+    echo "No unresolved Greptile threads on PR #$PR_NUMBER"
+    return
+  fi
+
+  local count=0
+  while IFS= read -r thread_id; do
+    gh api graphql -f query="
+      mutation {
+        resolveReviewThread(input: { threadId: \"$thread_id\" }) {
+          thread { isResolved }
+        }
+      }
+    " --silent
+    count=$((count + 1))
+  done <<< "$threads"
+
+  echo "Resolved $count Greptile thread(s) on PR #$PR_NUMBER"
+}
+
+if [ "$RESOLVE" = true ]; then
+  resolve_threads
+  exit 0
+fi
 
 if [ "$POLL" = false ]; then
   # One-shot mode: fetch and display all comments
