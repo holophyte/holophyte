@@ -45,7 +45,6 @@ storybook-static
 # local dev (worktree-specific)
 .dev-ports
 .dev-local.pid
-.convex-local.pid
 
 # Finder (MacOS) folder config
 .DS_Store

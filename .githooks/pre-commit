@@ -5,7 +5,7 @@ echo "Pre-commit: running quality checks..."
 
 # 1. Generate/refresh Convex types from schema
 echo "  convex codegen..."
-npx convex codegen 2>/dev/null || {
+bunx convex codegen 2>/dev/null || {
   echo "Warning: convex codegen failed (local backend may not be running)"
   echo "  Skipping codegen — lint and typecheck will still run"
 }

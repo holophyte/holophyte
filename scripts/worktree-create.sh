@@ -63,7 +63,7 @@ EOF
 
 # Initialize local Convex (push schema, generate types, then exit)
 echo "Initializing local Convex backend (cloud=$CONVEX_CLOUD_PORT, site=$CONVEX_SITE_PORT)..."
-cd "$WORKTREE_PATH" && npx convex dev --local \
+cd "$WORKTREE_PATH" && bunx convex dev --local \
   --local-cloud-port "$CONVEX_CLOUD_PORT" \
   --local-site-port "$CONVEX_SITE_PORT" \
   --once
