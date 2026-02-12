@@ -1,0 +1,51 @@
+import { api } from '@convex/_generated/api';
+import { useAuthActions } from '@convex-dev/auth/react';
+import { useQuery } from 'convex/react';
+import { LogOut } from 'lucide-react';
+import Avatar from './ui/Avatar';
+import Button from './ui/Button';
+import { Popover, PopoverContent, PopoverTrigger } from './ui/Popover';
+
+export default function UserMenu() {
+  const { signOut } = useAuthActions();
+  const user = useQuery(api.users.viewer);
+
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          className="flex items-center gap-2 w-full rounded-md px-2 py-1.5 text-sm hover:bg-muted/50 transition-colors"
+        >
+          <Avatar
+            src={user?.image}
+            name={user?.name}
+            className="h-6 w-6 text-[10px]"
+          />
+          <span className="truncate flex-1 text-left">
+            {user?.name ?? 'Loading...'}
+          </span>
+        </button>
+      </PopoverTrigger>
+      <PopoverContent className="w-56 p-2" align="start" side="top">
+        <div className="px-2 py-1.5 text-sm">
+          <p className="font-medium truncate">{user?.name}</p>
+          {user?.email && (
+            <p className="text-xs text-muted-foreground truncate">
+              {user.email}
+            </p>
+          )}
+        </div>
+        <div className="border-t my-1" />
+        <Button
+          variant="ghost"
+          className="w-full justify-start gap-2 text-sm"
+          onClick={() => void signOut()}
+        >
+          <LogOut className="h-4 w-4" />
+          Sign out
+        </Button>
+      </PopoverContent>
+    </Popover>
+  );
+}

@@ -9,16 +9,22 @@ import Input from './ui/Input';
 import PageHeader from './ui/PageHeader';
 
 export function ArchivePanel() {
+  const selectedOrgId = useAppStore((s) => s.selectedOrgId);
   const selectedRepoId = useAppStore((s) => s.selectedRepoId);
   const toggleArchive = useAppStore((s) => s.toggleArchive);
   const [search, setSearch] = useState('');
 
   const archivedTasks = useQuery(
     api.tasks.listArchived,
-    selectedRepoId ? { repoId: selectedRepoId } : {},
+    selectedOrgId
+      ? { orgId: selectedOrgId, repoId: selectedRepoId ?? undefined }
+      : 'skip',
   );
 
-  const repos = useQuery(api.repos.list);
+  const repos = useQuery(
+    api.repos.list,
+    selectedOrgId ? { orgId: selectedOrgId } : 'skip',
+  );
   const repoMap = new Map(repos?.map((r) => [r._id, r]) ?? []);
 
   const unarchiveTask = useMutation(api.tasks.unarchive);

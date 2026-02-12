@@ -1,43 +1,89 @@
 import { v } from 'convex/values';
+import type { Doc, Id } from './_generated/dataModel';
 import { mutation, query } from './_generated/server';
+import { requireOrgMembership, requireRole } from './lib/auth';
 import { priorityValidator, TaskStatus, taskStatusValidator } from './schema';
+
+/** Filter out private tasks not owned by the current user. */
+function filterPrivate(tasks: Doc<'tasks'>[], userId: Id<'users'>) {
+  return tasks.filter((t) => !t.private || t.createdBy === userId);
+}
 
 export const listByRepo = query({
   args: { repoId: v.id('repos'), includeArchived: v.optional(v.boolean()) },
   handler: async (ctx, args) => {
+    const repo = await ctx.db.get(args.repoId);
+    if (!repo) return [];
+    const { userId } = await requireOrgMembership(ctx, repo.orgId);
     const tasks = await ctx.db
       .query('tasks')
       .withIndex('by_repo_status', (q) => q.eq('repoId', args.repoId))
       .collect();
-    if (args.includeArchived) return tasks;
-    return tasks.filter((t) => t.status !== TaskStatus.Archived);
+    const visible = filterPrivate(tasks, userId);
+    if (args.includeArchived) return visible;
+    return visible.filter((t) => t.status !== TaskStatus.Archived);
   },
 });
 
 export const listAll = query({
-  args: { includeArchived: v.optional(v.boolean()) },
+  args: {
+    orgId: v.id('organizations'),
+    includeArchived: v.optional(v.boolean()),
+  },
   handler: async (ctx, args) => {
-    const tasks = await ctx.db.query('tasks').collect();
-    if (args.includeArchived) return tasks;
-    return tasks.filter((t) => t.status !== TaskStatus.Archived);
+    const { userId } = await requireOrgMembership(ctx, args.orgId);
+    // Get all repos in org, then collect tasks
+    const repos = await ctx.db
+      .query('repos')
+      .withIndex('by_org', (q) => q.eq('orgId', args.orgId))
+      .collect();
+    const allTasks: Doc<'tasks'>[] = [];
+    for (const repo of repos) {
+      const tasks = await ctx.db
+        .query('tasks')
+        .withIndex('by_repo_status', (q) => q.eq('repoId', repo._id))
+        .collect();
+      allTasks.push(...tasks);
+    }
+    const visible = filterPrivate(allTasks, userId);
+    if (args.includeArchived) return visible;
+    return visible.filter((t) => t.status !== TaskStatus.Archived);
   },
 });
 
 export const listArchived = query({
-  args: { repoId: v.optional(v.id('repos')) },
+  args: { repoId: v.optional(v.id('repos')), orgId: v.id('organizations') },
   handler: async (ctx, args) => {
-    const tasks = args.repoId
-      ? await ctx.db
+    const { userId } = await requireOrgMembership(ctx, args.orgId);
+    let tasks: Doc<'tasks'>[];
+    if (args.repoId) {
+      const repoId = args.repoId;
+      tasks = await ctx.db
+        .query('tasks')
+        .withIndex('by_repo_status', (q) =>
+          q.eq('repoId', repoId).eq('status', TaskStatus.Archived),
+        )
+        .collect();
+    } else {
+      // Get archived tasks across all org repos
+      const repos = await ctx.db
+        .query('repos')
+        .withIndex('by_org', (q) => q.eq('orgId', args.orgId))
+        .collect();
+      tasks = [];
+      for (const repo of repos) {
+        const repoTasks = await ctx.db
           .query('tasks')
           .withIndex('by_repo_status', (q) =>
-            q.eq('repoId', args.repoId!).eq('status', TaskStatus.Archived),
+            q.eq('repoId', repo._id).eq('status', TaskStatus.Archived),
           )
-          .collect()
-      : await ctx.db
-          .query('tasks')
-          .withIndex('by_status', (q) => q.eq('status', TaskStatus.Archived))
           .collect();
-    return tasks.sort((a, b) => (b.archivedAt ?? 0) - (a.archivedAt ?? 0));
+        tasks.push(...repoTasks);
+      }
+    }
+    return filterPrivate(tasks, userId).sort(
+      (a, b) => (b.archivedAt ?? 0) - (a.archivedAt ?? 0),
+    );
   },
 });
 
@@ -47,6 +93,11 @@ export const get = query({
     const task = await ctx.db.get(args.id);
     if (!task) return null;
     const repo = await ctx.db.get(task.repoId);
+    if (!repo) return null;
+    const { userId } = await requireOrgMembership(ctx, repo.orgId);
+
+    // Check private task access
+    if (task.private && task.createdBy !== userId) return null;
 
     // Fetch labels
     const labels = [];
@@ -77,8 +128,13 @@ export const create = mutation({
     dueAt: v.optional(v.number()),
     status: v.optional(taskStatusValidator),
     priority: v.optional(priorityValidator),
+    private: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
+    const repo = await ctx.db.get(args.repoId);
+    if (!repo) throw new Error('Repo not found');
+    const { userId, membership } = await requireOrgMembership(ctx, repo.orgId);
+    requireRole(membership, 'member');
     const targetStatus = args.status ?? TaskStatus.Backlog;
     const existing = await ctx.db
       .query('tasks')
@@ -104,6 +160,8 @@ export const create = mutation({
       dueAt: args.dueAt,
       priority: args.priority,
       totalInProgressMs: 0,
+      createdBy: userId,
+      private: args.private,
     });
 
     // Record initial prompt history (including empty prompts for consistency)
@@ -127,8 +185,15 @@ export const update = mutation({
     dueAt: v.optional(v.number()),
     clearDueAt: v.optional(v.boolean()),
     priority: v.optional(priorityValidator),
+    private: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
+    const task = await ctx.db.get(args.id);
+    if (!task) throw new Error('Task not found');
+    const repo = await ctx.db.get(task.repoId);
+    if (!repo) throw new Error('Repo not found');
+    const { membership } = await requireOrgMembership(ctx, repo.orgId);
+    requireRole(membership, 'member');
     const { id, clearDueAt, ...fields } = args;
     const now = Date.now();
     const updates: Record<string, unknown> = { updatedAt: now };
@@ -140,6 +205,7 @@ export const update = mutation({
     if (fields.dueAt !== undefined) updates.dueAt = fields.dueAt;
     if (clearDueAt) updates.dueAt = undefined;
     if (fields.priority !== undefined) updates.priority = fields.priority;
+    if (fields.private !== undefined) updates.private = fields.private;
     await ctx.db.patch(id, updates);
 
     // Record prompt history when prompt changes (including clears)
@@ -170,6 +236,10 @@ export const move = mutation({
   handler: async (ctx, args) => {
     const task = await ctx.db.get(args.id);
     if (!task) throw new Error('Task not found');
+    const repo = await ctx.db.get(task.repoId);
+    if (!repo) throw new Error('Repo not found');
+    const { membership } = await requireOrgMembership(ctx, repo.orgId);
+    requireRole(membership, 'member');
 
     const now = Date.now();
     const updates: Record<string, unknown> = {
@@ -211,6 +281,12 @@ export const reorder = mutation({
     position: v.number(),
   },
   handler: async (ctx, args) => {
+    const task = await ctx.db.get(args.id);
+    if (!task) throw new Error('Task not found');
+    const repo = await ctx.db.get(task.repoId);
+    if (!repo) throw new Error('Repo not found');
+    const { membership } = await requireOrgMembership(ctx, repo.orgId);
+    requireRole(membership, 'member');
     await ctx.db.patch(args.id, {
       position: args.position,
       updatedAt: Date.now(),
@@ -223,6 +299,10 @@ export const unarchive = mutation({
   handler: async (ctx, args) => {
     const task = await ctx.db.get(args.id);
     if (!task || task.status !== TaskStatus.Archived) return;
+    const repo = await ctx.db.get(task.repoId);
+    if (!repo) return;
+    const { membership } = await requireOrgMembership(ctx, repo.orgId);
+    requireRole(membership, 'member');
     const doneTasks = await ctx.db
       .query('tasks')
       .withIndex('by_repo_status', (q) =>
@@ -245,6 +325,10 @@ export const unarchive = mutation({
 export const archiveAllDone = mutation({
   args: { repoId: v.id('repos') },
   handler: async (ctx, args) => {
+    const repo = await ctx.db.get(args.repoId);
+    if (!repo) throw new Error('Repo not found');
+    const { membership } = await requireOrgMembership(ctx, repo.orgId);
+    requireRole(membership, 'member');
     const doneTasks = await ctx.db
       .query('tasks')
       .withIndex('by_repo_status', (q) =>
@@ -263,20 +347,35 @@ export const archiveAllDone = mutation({
 });
 
 export const listActive = query({
-  args: {},
-  handler: async (ctx) => {
-    const inProgress = await ctx.db
-      .query('tasks')
-      .withIndex('by_status', (q) => q.eq('status', TaskStatus.InProgress))
+  args: { orgId: v.id('organizations') },
+  handler: async (ctx, args) => {
+    const { userId } = await requireOrgMembership(ctx, args.orgId);
+    const repos = await ctx.db
+      .query('repos')
+      .withIndex('by_org', (q) => q.eq('orgId', args.orgId))
       .collect();
-    const inReview = await ctx.db
-      .query('tasks')
-      .withIndex('by_status', (q) => q.eq('status', TaskStatus.Review))
-      .collect();
-    const tasks = [...inProgress, ...inReview];
+    // Collect in_progress and review tasks from org repos
+    const allTasks: Doc<'tasks'>[] = [];
+    for (const repo of repos) {
+      const inProgress = await ctx.db
+        .query('tasks')
+        .withIndex('by_repo_status', (q) =>
+          q.eq('repoId', repo._id).eq('status', TaskStatus.InProgress),
+        )
+        .collect();
+      const inReview = await ctx.db
+        .query('tasks')
+        .withIndex('by_repo_status', (q) =>
+          q.eq('repoId', repo._id).eq('status', TaskStatus.Review),
+        )
+        .collect();
+      allTasks.push(...inProgress, ...inReview);
+    }
+
+    const tasks = filterPrivate(allTasks, userId);
     return Promise.all(
       tasks.map(async (t) => {
-        const repo = await ctx.db.get(t.repoId);
+        const repo = repos.find((r) => r._id === t.repoId);
         const sessions = await ctx.db
           .query('sessions')
           .withIndex('by_task', (q) => q.eq('taskId', t._id))
@@ -291,6 +390,12 @@ export const listActive = query({
 export const remove = mutation({
   args: { id: v.id('tasks') },
   handler: async (ctx, args) => {
+    const task = await ctx.db.get(args.id);
+    if (!task) throw new Error('Task not found');
+    const repo = await ctx.db.get(task.repoId);
+    if (!repo) throw new Error('Repo not found');
+    const { membership } = await requireOrgMembership(ctx, repo.orgId);
+    requireRole(membership, 'member');
     // Delete sessions
     const sessions = await ctx.db
       .query('sessions')
@@ -332,6 +437,13 @@ export const bulkMove = mutation({
     for (const id of args.ids) {
       const task = await ctx.db.get(id);
       if (!task) continue;
+
+      // Verify org access for each task's repo
+      const repo = await ctx.db.get(task.repoId);
+      if (!repo) continue;
+      const { membership } = await requireOrgMembership(ctx, repo.orgId);
+      requireRole(membership, 'member');
+
       if (task.status === args.status) continue;
 
       // Compute max position scoped to (repoId, status)
@@ -400,6 +512,10 @@ export const bulkDelete = mutation({
     for (const id of args.ids) {
       const task = await ctx.db.get(id);
       if (!task) continue;
+      const repo = await ctx.db.get(task.repoId);
+      if (!repo) continue;
+      const { membership } = await requireOrgMembership(ctx, repo.orgId);
+      requireRole(membership, 'member');
       // Delete sessions
       const sessions = await ctx.db
         .query('sessions')
@@ -440,6 +556,10 @@ export const bulkToggleLabel = mutation({
     for (const id of args.ids) {
       const task = await ctx.db.get(id);
       if (!task) continue;
+      const repo = await ctx.db.get(task.repoId);
+      if (!repo) continue;
+      const { membership } = await requireOrgMembership(ctx, repo.orgId);
+      requireRole(membership, 'member');
       const current = task.labelIds ?? [];
       const updated =
         args.action === 'remove'

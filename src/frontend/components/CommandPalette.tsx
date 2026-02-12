@@ -29,12 +29,19 @@ const GROUP_HEADING_CLASS =
 export function CommandPalette() {
   const [open, setOpen] = useState(false);
 
+  const selectedOrgId = useAppStore((s) => s.selectedOrgId);
   const selectRepo = useAppStore((s) => s.selectRepo);
   const selectTask = useAppStore((s) => s.selectTask);
   const selectSeedBox = useAppStore((s) => s.selectSeedBox);
 
-  const tasks = useQuery(api.tasks.listAll, { includeArchived: true });
-  const repos = useQuery(api.repos.list);
+  const tasks = useQuery(
+    api.tasks.listAll,
+    selectedOrgId ? { orgId: selectedOrgId, includeArchived: true } : 'skip',
+  );
+  const repos = useQuery(
+    api.repos.list,
+    selectedOrgId ? { orgId: selectedOrgId } : 'skip',
+  );
 
   const repoMap = useMemo(
     () => new Map(repos?.map((r) => [r._id, r]) ?? []),

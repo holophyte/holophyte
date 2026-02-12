@@ -8,13 +8,17 @@ import Input from './ui/Input';
 import { Popover, PopoverContent, PopoverTrigger } from './ui/Popover';
 
 export function SearchFilterBar() {
+  const selectedOrgId = useAppStore((s) => s.selectedOrgId);
   const searchQuery = useAppStore((s) => s.searchQuery);
   const setSearchQuery = useAppStore((s) => s.setSearchQuery);
   const filterLabelIds = useAppStore((s) => s.filterLabelIds);
   const toggleFilterLabel = useAppStore((s) => s.toggleFilterLabel);
   const clearFilters = useAppStore((s) => s.clearFilters);
 
-  const labels = useQuery(api.labels.list);
+  const labels = useQuery(
+    api.labels.list,
+    selectedOrgId ? { orgId: selectedOrgId } : 'skip',
+  );
   const hasFilters = searchQuery !== '' || filterLabelIds.length > 0;
 
   return (

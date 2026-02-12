@@ -2,6 +2,7 @@ import { api } from '@convex/_generated/api';
 import { useMutation } from 'convex/react';
 import { FolderOpen, Loader2 } from 'lucide-react';
 import { useState } from 'react';
+import { useAppStore } from '@/frontend/stores/app';
 import Button from './ui/Button';
 import {
   Dialog,
@@ -25,6 +26,7 @@ export function AddRepoDialog({ open, onOpenChange }: AddRepoDialogProps) {
   const [error, setError] = useState<string | null>(null);
   const [picking, setPicking] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const selectedOrgId = useAppStore((s) => s.selectedOrgId);
   const createRepo = useMutation(api.repos.create);
 
   const handlePick = async () => {
@@ -64,14 +66,18 @@ export function AddRepoDialog({ open, onOpenChange }: AddRepoDialogProps) {
     e.preventDefault();
     setError(null);
 
-    if (!name.trim() || !selectedPath) {
+    if (!name.trim() || !selectedPath || !selectedOrgId) {
       setError('Select a git repository and provide a name.');
       return;
     }
 
     setSubmitting(true);
     try {
-      await createRepo({ name: name.trim(), path: selectedPath });
+      await createRepo({
+        name: name.trim(),
+        path: selectedPath,
+        orgId: selectedOrgId,
+      });
       handleClose();
     } catch (err) {
       const message =

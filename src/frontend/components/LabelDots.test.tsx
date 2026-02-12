@@ -8,6 +8,7 @@ function makeLabel(name: string, color = '#ef4444'): Doc<'labels'> {
     _id: `label_${name}` as Doc<'labels'>['_id'],
     _creationTime: Date.now(),
     createdAt: Date.now(),
+    orgId: 'org_test' as Doc<'labels'>['orgId'],
     name,
     color,
   };

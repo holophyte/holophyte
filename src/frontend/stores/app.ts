@@ -5,6 +5,7 @@ import { persist } from 'zustand/middleware';
 type ViewMode = 'board' | 'seeds';
 
 interface AppState {
+  selectedOrgId: Id<'organizations'> | null;
   selectedRepoId: Id<'repos'> | null;
   selectedTaskId: Id<'tasks'> | null;
   viewMode: ViewMode;
@@ -21,6 +22,7 @@ interface AppState {
   // Bulk selection state
   bulkSelectedTaskIds: Id<'tasks'>[];
 
+  setSelectedOrgId: (id: Id<'organizations'>) => void;
   selectRepo: (id: Id<'repos'> | null) => void;
   selectSeedBox: () => void;
   selectTask: (id: Id<'tasks'> | null) => void;
@@ -46,6 +48,7 @@ interface AppState {
 export const useAppStore = create<AppState>()(
   persist(
     (set) => ({
+      selectedOrgId: null,
       selectedRepoId: null,
       selectedTaskId: null,
       viewMode: 'board',
@@ -60,6 +63,13 @@ export const useAppStore = create<AppState>()(
 
       bulkSelectedTaskIds: [],
 
+      setSelectedOrgId: (id) =>
+        set({
+          selectedOrgId: id,
+          selectedRepoId: null,
+          selectedTaskId: null,
+          bulkSelectedTaskIds: [],
+        }),
       selectRepo: (id) =>
         set({ selectedRepoId: id, viewMode: 'board', bulkSelectedTaskIds: [] }),
       selectSeedBox: () =>
@@ -127,6 +137,7 @@ export const useAppStore = create<AppState>()(
     {
       name: 'holophyte-app',
       partialize: (state) => ({
+        selectedOrgId: state.selectedOrgId,
         selectedRepoId: state.selectedRepoId,
         viewMode: state.viewMode,
         backlogCollapsed: state.backlogCollapsed,

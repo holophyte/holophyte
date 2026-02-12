@@ -1,9 +1,16 @@
 import { v } from 'convex/values';
 import { mutation, query } from './_generated/server';
+import {
+  getOrgIdFromTask,
+  requireOrgMembership,
+  requireRole,
+} from './lib/auth';
 
 export const listByTask = query({
   args: { taskId: v.id('tasks') },
   handler: async (ctx, args) => {
+    const orgId = await getOrgIdFromTask(ctx, args.taskId);
+    await requireOrgMembership(ctx, orgId);
     const subtasks = await ctx.db
       .query('subtasks')
       .withIndex('by_task', (q) => q.eq('taskId', args.taskId))
@@ -17,6 +24,8 @@ export const countsByTasks = query({
   handler: async (ctx, args) => {
     const counts: Record<string, { total: number; completed: number }> = {};
     for (const taskId of args.taskIds) {
+      const orgId = await getOrgIdFromTask(ctx, taskId);
+      await requireOrgMembership(ctx, orgId);
       const subtasks = await ctx.db
         .query('subtasks')
         .withIndex('by_task', (q) => q.eq('taskId', taskId))
@@ -38,6 +47,9 @@ export const create = mutation({
     title: v.string(),
   },
   handler: async (ctx, args) => {
+    const orgId = await getOrgIdFromTask(ctx, args.taskId);
+    const { membership } = await requireOrgMembership(ctx, orgId);
+    requireRole(membership, 'member');
     const existing = await ctx.db
       .query('subtasks')
       .withIndex('by_task', (q) => q.eq('taskId', args.taskId))
@@ -61,6 +73,9 @@ export const toggle = mutation({
   handler: async (ctx, args) => {
     const subtask = await ctx.db.get(args.id);
     if (!subtask) throw new Error('Subtask not found');
+    const orgId = await getOrgIdFromTask(ctx, subtask.taskId);
+    const { membership } = await requireOrgMembership(ctx, orgId);
+    requireRole(membership, 'member');
     await ctx.db.patch(args.id, { completed: !subtask.completed });
   },
 });
@@ -68,6 +83,11 @@ export const toggle = mutation({
 export const updateTitle = mutation({
   args: { id: v.id('subtasks'), title: v.string() },
   handler: async (ctx, args) => {
+    const subtask = await ctx.db.get(args.id);
+    if (!subtask) throw new Error('Subtask not found');
+    const orgId = await getOrgIdFromTask(ctx, subtask.taskId);
+    const { membership } = await requireOrgMembership(ctx, orgId);
+    requireRole(membership, 'member');
     await ctx.db.patch(args.id, { title: args.title });
   },
 });
@@ -75,6 +95,11 @@ export const updateTitle = mutation({
 export const remove = mutation({
   args: { id: v.id('subtasks') },
   handler: async (ctx, args) => {
+    const subtask = await ctx.db.get(args.id);
+    if (!subtask) throw new Error('Subtask not found');
+    const orgId = await getOrgIdFromTask(ctx, subtask.taskId);
+    const { membership } = await requireOrgMembership(ctx, orgId);
+    requireRole(membership, 'member');
     await ctx.db.delete(args.id);
   },
 });
