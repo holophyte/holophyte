@@ -111,7 +111,7 @@ scripts/                   → Shared shell scripts (convex-local, dev-local, wo
 - Main repo: dev=8080, convex=3210/3211. Worktrees get auto-assigned ports via `bun run worktree:create`
 - `bun run dev:local` starts app server + local Convex from `.dev-ports`
 - `bun run convex:dev` (cloud) is still available for production deployment workflows
-- `.env.local` is generated on first `dev:local` run (Convex prompts for one-time project setup) — do not copy between workspaces
+- `.env.local` is copied from main repo during worktree setup (provides project context), then overwritten by `convex dev --local --once` with local deployment config
 
 ## Frontend Patterns
 
