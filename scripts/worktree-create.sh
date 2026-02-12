@@ -11,6 +11,12 @@ if [ -z "$FEATURE_NAME" ]; then
   exit 1
 fi
 
+# Sanitize feature name — only allow alphanumeric, hyphens, underscores
+if [[ ! "$FEATURE_NAME" =~ ^[a-zA-Z0-9_-]+$ ]]; then
+  echo "Error: Feature name must contain only letters, numbers, hyphens, and underscores"
+  exit 1
+fi
+
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 REPO="$(basename "$REPO_ROOT")"
 WORKTREE_PATH="$REPO_ROOT/../$REPO-$FEATURE_NAME"

@@ -20,7 +20,14 @@ fi
 # shellcheck source=/dev/null
 source "$DEV_PORTS"
 
+if ! [[ "${DEV_PORT:-}" =~ ^[0-9]+$ ]] || \
+   ! [[ "${CONVEX_CLOUD_PORT:-}" =~ ^[0-9]+$ ]] || \
+   ! [[ "${CONVEX_SITE_PORT:-}" =~ ^[0-9]+$ ]]; then
+  echo "Error: .dev-ports is missing required variables (DEV_PORT, CONVEX_CLOUD_PORT, CONVEX_SITE_PORT)"
+  exit 1
+fi
+
 echo "Starting dev environment (app=$DEV_PORT, convex=$CONVEX_CLOUD_PORT/$CONVEX_SITE_PORT)..."
 exec npx concurrently -n server,convex -c blue,magenta \
-  "PORT=$DEV_PORT bun run --hot src/server.ts --watch" \
+  "PORT=$DEV_PORT bun run --watch src/server.ts" \
   "$SCRIPT_DIR/convex-local.sh"

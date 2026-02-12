@@ -25,6 +25,12 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+# Validate PR number is numeric if provided
+if [ -n "$PR_NUMBER" ] && ! [[ "$PR_NUMBER" =~ ^[0-9]+$ ]]; then
+  echo "Error: Invalid PR number '$PR_NUMBER' (must be numeric)"
+  exit 1
+fi
+
 # Detect owner/repo
 OWNER_REPO=$(gh repo view --json nameWithOwner --jq '.nameWithOwner')
 
@@ -47,7 +53,7 @@ fetch_greptile_comments() {
 
 format_comments() {
   local comments="$1"
-  if [ -z "$comments" ] || [ "$comments" = "" ]; then
+  if [ -z "$comments" ]; then
     echo "No Greptile comments found on PR #$PR_NUMBER"
     return
   fi

@@ -20,6 +20,12 @@ fi
 # shellcheck source=/dev/null
 source "$DEV_PORTS"
 
+if ! [[ "${CONVEX_CLOUD_PORT:-}" =~ ^[0-9]+$ ]] || \
+   ! [[ "${CONVEX_SITE_PORT:-}" =~ ^[0-9]+$ ]]; then
+  echo "Error: .dev-ports is missing required variables (CONVEX_CLOUD_PORT, CONVEX_SITE_PORT)"
+  exit 1
+fi
+
 echo "Starting local Convex (cloud=$CONVEX_CLOUD_PORT, site=$CONVEX_SITE_PORT)..."
 exec npx convex dev --local \
   --local-cloud-port "$CONVEX_CLOUD_PORT" \
