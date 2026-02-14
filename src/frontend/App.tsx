@@ -8,6 +8,7 @@ import { Sidebar } from './components/Sidebar';
 import SignInPage from './components/SignInPage';
 import { TaskDetailPanel } from './components/TaskDetailPanel';
 import { TerminalPanel } from './components/TerminalPanel';
+import { e2eTest } from './index';
 
 function AuthenticatedApp() {
   const selectedTaskId = useAppStore((s) => s.selectedTaskId);
@@ -28,6 +29,9 @@ function AuthenticatedApp() {
 }
 
 export function App() {
+  // In E2E test mode, skip auth gates — render the app directly
+  if (e2eTest) return <AuthenticatedApp />;
+
   return (
     <>
       <AuthLoading>

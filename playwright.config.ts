@@ -23,5 +23,6 @@ export default defineConfig({
     command: 'bun run src/server.ts',
     port: 8080,
     reuseExistingServer: !process.env.CI,
+    env: { E2E_TEST: '1' },
   },
 });
