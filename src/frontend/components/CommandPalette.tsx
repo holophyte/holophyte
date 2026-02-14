@@ -7,6 +7,8 @@ import {
   FolderGit2,
   LayoutDashboard,
   Lightbulb,
+  Maximize2,
+  Minimize2,
   Search,
 } from 'lucide-react';
 import { Dialog as RadixDialog, VisuallyHidden } from 'radix-ui';
@@ -32,6 +34,10 @@ export function CommandPalette() {
   const selectRepo = useAppStore((s) => s.selectRepo);
   const selectTask = useAppStore((s) => s.selectTask);
   const selectSeedBox = useAppStore((s) => s.selectSeedBox);
+  const focusMode = useAppStore((s) => s.focusMode);
+  const enterFocusMode = useAppStore((s) => s.enterFocusMode);
+  const exitFocusMode = useAppStore((s) => s.exitFocusMode);
+  const selectedTaskId = useAppStore((s) => s.selectedTaskId);
 
   const tasks = useQuery(api.tasks.listAll, { includeArchived: true });
   const repos = useQuery(api.repos.list);
@@ -111,6 +117,25 @@ export function CommandPalette() {
             <Lightbulb className="h-4 w-4 shrink-0 text-muted-foreground" />
             Seed Box
           </CommandItem>
+          {focusMode ? (
+            <CommandItem
+              value="nav-exit-focus-mode"
+              onSelect={() => runAction(() => exitFocusMode())}
+            >
+              <Minimize2 className="h-4 w-4 shrink-0 text-muted-foreground" />
+              Exit Focus Mode
+            </CommandItem>
+          ) : (
+            selectedTaskId && (
+              <CommandItem
+                value="nav-focus-mode"
+                onSelect={() => runAction(() => enterFocusMode())}
+              >
+                <Maximize2 className="h-4 w-4 shrink-0 text-muted-foreground" />
+                Enter Focus Mode
+              </CommandItem>
+            )
+          )}
         </Command.Group>
 
         {/* Projects */}

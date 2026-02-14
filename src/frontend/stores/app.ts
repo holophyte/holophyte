@@ -12,6 +12,10 @@ interface AppState {
   terminalSessionId: string | null;
   terminalMinimized: boolean;
 
+  // Focus mode state
+  focusMode: boolean;
+  breakInterval: number; // minutes, 0 = disabled
+
   // Search and filter state
   searchQuery: string;
   filterLabelIds: Id<'labels'>[];
@@ -28,6 +32,11 @@ interface AppState {
   openTerminal: (sessionId: string) => void;
   closeTerminal: () => void;
   toggleTerminalMinimized: () => void;
+
+  // Focus mode actions
+  enterFocusMode: () => void;
+  exitFocusMode: () => void;
+  setBreakInterval: (minutes: number) => void;
 
   // Search and filter actions
   setSearchQuery: (query: string) => void;
@@ -52,6 +61,9 @@ export const useAppStore = create<AppState>()(
       backlogCollapsed: true,
       terminalSessionId: null,
       terminalMinimized: false,
+
+      focusMode: false,
+      breakInterval: 25,
 
       searchQuery: '',
       filterLabelIds: [],
@@ -78,6 +90,15 @@ export const useAppStore = create<AppState>()(
         set({ terminalSessionId: null, terminalMinimized: false }),
       toggleTerminalMinimized: () =>
         set((state) => ({ terminalMinimized: !state.terminalMinimized })),
+
+      enterFocusMode: () =>
+        set((state) =>
+          state.selectedTaskId
+            ? { focusMode: true, bulkSelectedTaskIds: [] }
+            : state,
+        ),
+      exitFocusMode: () => set({ focusMode: false }),
+      setBreakInterval: (minutes) => set({ breakInterval: minutes }),
 
       setSearchQuery: (query) =>
         set({ searchQuery: query, bulkSelectedTaskIds: [] }),
@@ -132,6 +153,7 @@ export const useAppStore = create<AppState>()(
         backlogCollapsed: state.backlogCollapsed,
         showArchive: state.showArchive,
         doneColumnCollapsed: state.doneColumnCollapsed,
+        breakInterval: state.breakInterval,
       }),
     },
   ),
