@@ -9,6 +9,13 @@ function filterPrivate(tasks: Doc<'tasks'>[], userId: Id<'users'>) {
   return tasks.filter((t) => !t.private || t.createdBy === userId);
 }
 
+/** Throw if the task is private and not owned by the current user. */
+function requirePrivateOwnership(task: Doc<'tasks'>, userId: Id<'users'>) {
+  if (task.private && task.createdBy !== userId) {
+    throw new Error("Cannot modify another user's private task");
+  }
+}
+
 export const listByRepo = query({
   args: { repoId: v.id('repos'), includeArchived: v.optional(v.boolean()) },
   handler: async (ctx, args) => {
@@ -192,8 +199,9 @@ export const update = mutation({
     if (!task) throw new Error('Task not found');
     const repo = await ctx.db.get(task.repoId);
     if (!repo) throw new Error('Repo not found');
-    const { membership } = await requireOrgMembership(ctx, repo.orgId);
+    const { userId, membership } = await requireOrgMembership(ctx, repo.orgId);
     requireRole(membership, 'member');
+    requirePrivateOwnership(task, userId);
     const { id, clearDueAt, ...fields } = args;
     const now = Date.now();
     const updates: Record<string, unknown> = { updatedAt: now };
@@ -238,8 +246,9 @@ export const move = mutation({
     if (!task) throw new Error('Task not found');
     const repo = await ctx.db.get(task.repoId);
     if (!repo) throw new Error('Repo not found');
-    const { membership } = await requireOrgMembership(ctx, repo.orgId);
+    const { userId, membership } = await requireOrgMembership(ctx, repo.orgId);
     requireRole(membership, 'member');
+    requirePrivateOwnership(task, userId);
 
     const now = Date.now();
     const updates: Record<string, unknown> = {
@@ -285,8 +294,9 @@ export const reorder = mutation({
     if (!task) throw new Error('Task not found');
     const repo = await ctx.db.get(task.repoId);
     if (!repo) throw new Error('Repo not found');
-    const { membership } = await requireOrgMembership(ctx, repo.orgId);
+    const { userId, membership } = await requireOrgMembership(ctx, repo.orgId);
     requireRole(membership, 'member');
+    requirePrivateOwnership(task, userId);
     await ctx.db.patch(args.id, {
       position: args.position,
       updatedAt: Date.now(),
@@ -441,8 +451,12 @@ export const bulkMove = mutation({
       // Verify org access for each task's repo
       const repo = await ctx.db.get(task.repoId);
       if (!repo) continue;
-      const { membership } = await requireOrgMembership(ctx, repo.orgId);
+      const { userId, membership } = await requireOrgMembership(
+        ctx,
+        repo.orgId,
+      );
       requireRole(membership, 'member');
+      if (task.private && task.createdBy !== userId) continue;
 
       if (task.status === args.status) continue;
 
@@ -558,8 +572,12 @@ export const bulkToggleLabel = mutation({
       if (!task) continue;
       const repo = await ctx.db.get(task.repoId);
       if (!repo) continue;
-      const { membership } = await requireOrgMembership(ctx, repo.orgId);
+      const { userId, membership } = await requireOrgMembership(
+        ctx,
+        repo.orgId,
+      );
       requireRole(membership, 'member');
+      if (task.private && task.createdBy !== userId) continue;
       const current = task.labelIds ?? [];
       const updated =
         args.action === 'remove'

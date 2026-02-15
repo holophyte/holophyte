@@ -98,6 +98,11 @@ export const update = mutation({
     if (args.name !== undefined) updates.name = args.name;
     if (args.slug !== undefined) {
       const slug = args.slug;
+      if (!/^[a-z0-9][a-z0-9-]{0,62}$/.test(slug)) {
+        throw new Error(
+          'Slug must be lowercase alphanumeric with hyphens, 1-63 characters',
+        );
+      }
       const existing = await ctx.db
         .query('organizations')
         .withIndex('by_slug', (q) => q.eq('slug', slug))
