@@ -1,3 +1,4 @@
+import { authTables } from '@convex-dev/auth/server';
 import { defineSchema, defineTable } from 'convex/server';
 import { v } from 'convex/values';
 
@@ -48,12 +49,39 @@ export const PRIORITY_CONFIG: Record<
   [TaskPriority.Urgent]: { label: 'Urgent', color: '#ef4444' },
 };
 
+export const roleValidator = v.union(
+  v.literal('owner'),
+  v.literal('admin'),
+  v.literal('member'),
+  v.literal('viewer'),
+);
+
 export default defineSchema({
+  ...authTables,
+
+  organizations: defineTable({
+    name: v.string(),
+    slug: v.string(),
+    personal: v.boolean(),
+  }).index('by_slug', ['slug']),
+
+  memberships: defineTable({
+    userId: v.id('users'),
+    orgId: v.id('organizations'),
+    role: roleValidator,
+  })
+    .index('by_user', ['userId'])
+    .index('by_org', ['orgId'])
+    .index('by_user_org', ['userId', 'orgId']),
+
   repos: defineTable({
     name: v.string(),
     path: v.string(),
     createdAt: v.number(),
-  }).index('by_path', ['path']),
+    orgId: v.optional(v.id('organizations')),
+  })
+    .index('by_path', ['path'])
+    .index('by_org', ['orgId']),
 
   tasks: defineTable({
     repoId: v.id('repos'),
@@ -76,6 +104,9 @@ export default defineSchema({
     priority: v.optional(priorityValidator),
     // Archive timestamp
     archivedAt: v.optional(v.number()),
+    // Auth: who created + private flag
+    createdBy: v.optional(v.id('users')),
+    private: v.optional(v.boolean()),
   })
     .index('by_repo_status', ['repoId', 'status'])
     .index('by_status', ['status']),
@@ -84,7 +115,11 @@ export default defineSchema({
     name: v.string(),
     color: v.string(),
     createdAt: v.number(),
-  }),
+    orgId: v.optional(v.id('organizations')),
+    userId: v.optional(v.id('users')),
+  })
+    .index('by_org', ['orgId'])
+    .index('by_user', ['userId']),
 
   subtasks: defineTable({
     taskId: v.id('tasks'),
@@ -100,7 +135,10 @@ export default defineSchema({
     status: v.union(v.literal('active'), v.literal('planted')),
     plantedToTaskId: v.optional(v.id('tasks')),
     createdAt: v.number(),
-  }).index('by_status', ['status']),
+    orgId: v.optional(v.id('organizations')),
+  })
+    .index('by_status', ['status'])
+    .index('by_org', ['orgId']),
 
   promptTemplates: defineTable({
     name: v.string(),
@@ -109,6 +147,7 @@ export default defineSchema({
     repoId: v.optional(v.id('repos')),
     createdAt: v.number(),
     updatedAt: v.number(),
+    userId: v.optional(v.id('users')),
   }).index('by_repo', ['repoId']),
 
   promptHistory: defineTable({
