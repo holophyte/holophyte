@@ -59,7 +59,7 @@ export const remove = mutation({
     const seed = await ctx.db.get(args.id);
     if (!seed) throw new Error('Seed not found');
     const { membership } = await requireOrgMembership(ctx, seed.orgId);
-    requireRole(membership, 'member');
+    requireRole(membership, 'admin');
     await ctx.db.delete(args.id);
   },
 });

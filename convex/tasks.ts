@@ -395,7 +395,7 @@ export const remove = mutation({
     const repo = await ctx.db.get(task.repoId);
     if (!repo) throw new Error('Repo not found');
     const { membership } = await requireOrgMembership(ctx, repo.orgId);
-    requireRole(membership, 'member');
+    requireRole(membership, 'admin');
     // Delete sessions
     const sessions = await ctx.db
       .query('sessions')
@@ -515,7 +515,7 @@ export const bulkDelete = mutation({
       const repo = await ctx.db.get(task.repoId);
       if (!repo) continue;
       const { membership } = await requireOrgMembership(ctx, repo.orgId);
-      requireRole(membership, 'member');
+      requireRole(membership, 'admin');
       // Delete sessions
       const sessions = await ctx.db
         .query('sessions')

@@ -40,6 +40,11 @@ export const create = mutation({
       .withIndex('by_slug', (q) => q.eq('slug', args.slug))
       .first();
     if (existing) throw new Error('Organization slug already taken');
+    if (!/^[a-z0-9][a-z0-9-]{0,62}$/.test(args.slug)) {
+      throw new Error(
+        'Slug must be lowercase alphanumeric with hyphens, 1-63 characters',
+      );
+    }
     const orgId = await ctx.db.insert('organizations', {
       name: args.name,
       slug: args.slug,
