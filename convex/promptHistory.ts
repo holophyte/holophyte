@@ -1,9 +1,15 @@
 import { v } from 'convex/values';
 import { mutation, query } from './_generated/server';
+import { requireOrgMembership, requireRole } from './lib/auth';
 
 export const listByTask = query({
   args: { taskId: v.id('tasks') },
   handler: async (ctx, args) => {
+    const task = await ctx.db.get(args.taskId);
+    if (!task) return [];
+    const repo = await ctx.db.get(task.repoId);
+    if (!repo) return [];
+    await requireOrgMembership(ctx, repo.orgId);
     return await ctx.db
       .query('promptHistory')
       .withIndex('by_task', (q) => q.eq('taskId', args.taskId))
@@ -18,6 +24,12 @@ export const record = mutation({
     prompt: v.string(),
   },
   handler: async (ctx, args) => {
+    const task = await ctx.db.get(args.taskId);
+    if (!task) throw new Error('Task not found');
+    const repo = await ctx.db.get(task.repoId);
+    if (!repo) throw new Error('Repo not found');
+    const { membership } = await requireOrgMembership(ctx, repo.orgId);
+    requireRole(membership, 'member');
     // Check if latest entry is identical — skip duplicate
     const latest = await ctx.db
       .query('promptHistory')

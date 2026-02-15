@@ -23,6 +23,7 @@ interface BulkActionBarProps {
 }
 
 export default function BulkActionBar({ allTasks }: BulkActionBarProps) {
+  const selectedOrgId = useAppStore((s) => s.selectedOrgId);
   const bulkSelectedTaskIds = useAppStore((s) => s.bulkSelectedTaskIds);
   const clearBulkSelection = useAppStore((s) => s.clearBulkSelection);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -30,7 +31,10 @@ export default function BulkActionBar({ allTasks }: BulkActionBarProps) {
   const bulkMove = useMutation(api.tasks.bulkMove);
   const bulkDelete = useMutation(api.tasks.bulkDelete);
   const bulkToggleLabel = useMutation(api.tasks.bulkToggleLabel);
-  const labels = useQuery(api.labels.list);
+  const labels = useQuery(
+    api.labels.list,
+    selectedOrgId ? { orgId: selectedOrgId } : 'skip',
+  );
 
   const count = bulkSelectedTaskIds.length;
   if (count === 0) return null;

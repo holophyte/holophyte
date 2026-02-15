@@ -84,6 +84,7 @@ function BacklogColumn({
 }
 
 export function KanbanBoard() {
+  const selectedOrgId = useAppStore((s) => s.selectedOrgId);
   const selectedRepoId = useAppStore((s) => s.selectedRepoId);
   const backlogCollapsed = useAppStore((s) => s.backlogCollapsed);
   const toggleBacklog = useAppStore((s) => s.toggleBacklog);
@@ -102,14 +103,20 @@ export function KanbanBoard() {
   );
   const allTasksQuery = useQuery(
     api.tasks.listAll,
-    selectedRepoId ? 'skip' : {},
+    selectedRepoId || !selectedOrgId ? 'skip' : { orgId: selectedOrgId },
   );
   const allTasks = selectedRepoId ? repoTasks : allTasksQuery;
 
-  const repos = useQuery(api.repos.list);
+  const repos = useQuery(
+    api.repos.list,
+    selectedOrgId ? { orgId: selectedOrgId } : 'skip',
+  );
   const repoMap = new Map(repos?.map((r) => [r._id, r]) ?? []);
 
-  const labels = useQuery(api.labels.list);
+  const labels = useQuery(
+    api.labels.list,
+    selectedOrgId ? { orgId: selectedOrgId } : 'skip',
+  );
   const labelMap = useMemo(
     () => new Map(labels?.map((l) => [l._id, l]) ?? []),
     [labels],

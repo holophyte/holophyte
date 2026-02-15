@@ -1,9 +1,16 @@
 import { v } from 'convex/values';
 import { mutation, query } from './_generated/server';
+import {
+  getOrgIdFromTask,
+  requireOrgMembership,
+  requireRole,
+} from './lib/auth';
 
 export const listByTask = query({
   args: { taskId: v.id('tasks') },
   handler: async (ctx, args) => {
+    const orgId = await getOrgIdFromTask(ctx, args.taskId);
+    await requireOrgMembership(ctx, orgId);
     const subtasks = await ctx.db
       .query('subtasks')
       .withIndex('by_task', (q) => q.eq('taskId', args.taskId))
@@ -17,6 +24,8 @@ export const countsByTasks = query({
   handler: async (ctx, args) => {
     const counts: Record<string, { total: number; completed: number }> = {};
     for (const taskId of args.taskIds) {
+      const orgId = await getOrgIdFromTask(ctx, taskId);
+      await requireOrgMembership(ctx, orgId);
       const subtasks = await ctx.db
         .query('subtasks')
         .withIndex('by_task', (q) => q.eq('taskId', taskId))
@@ -38,6 +47,15 @@ export const create = mutation({
     title: v.string(),
   },
   handler: async (ctx, args) => {
+    const task = await ctx.db.get(args.taskId);
+    if (!task) throw new Error('Task not found');
+    const repo = await ctx.db.get(task.repoId);
+    if (!repo) throw new Error('Repo not found');
+    const { userId, membership } = await requireOrgMembership(ctx, repo.orgId);
+    requireRole(membership, 'member');
+    if (task.private && task.createdBy !== userId) {
+      throw new Error("Cannot modify another user's private task");
+    }
     const existing = await ctx.db
       .query('subtasks')
       .withIndex('by_task', (q) => q.eq('taskId', args.taskId))
@@ -61,6 +79,15 @@ export const toggle = mutation({
   handler: async (ctx, args) => {
     const subtask = await ctx.db.get(args.id);
     if (!subtask) throw new Error('Subtask not found');
+    const task = await ctx.db.get(subtask.taskId);
+    if (!task) throw new Error('Task not found');
+    const repo = await ctx.db.get(task.repoId);
+    if (!repo) throw new Error('Repo not found');
+    const { userId, membership } = await requireOrgMembership(ctx, repo.orgId);
+    requireRole(membership, 'member');
+    if (task.private && task.createdBy !== userId) {
+      throw new Error("Cannot modify another user's private task");
+    }
     await ctx.db.patch(args.id, { completed: !subtask.completed });
   },
 });
@@ -68,6 +95,17 @@ export const toggle = mutation({
 export const updateTitle = mutation({
   args: { id: v.id('subtasks'), title: v.string() },
   handler: async (ctx, args) => {
+    const subtask = await ctx.db.get(args.id);
+    if (!subtask) throw new Error('Subtask not found');
+    const task = await ctx.db.get(subtask.taskId);
+    if (!task) throw new Error('Task not found');
+    const repo = await ctx.db.get(task.repoId);
+    if (!repo) throw new Error('Repo not found');
+    const { userId, membership } = await requireOrgMembership(ctx, repo.orgId);
+    requireRole(membership, 'member');
+    if (task.private && task.createdBy !== userId) {
+      throw new Error("Cannot modify another user's private task");
+    }
     await ctx.db.patch(args.id, { title: args.title });
   },
 });
@@ -75,6 +113,17 @@ export const updateTitle = mutation({
 export const remove = mutation({
   args: { id: v.id('subtasks') },
   handler: async (ctx, args) => {
+    const subtask = await ctx.db.get(args.id);
+    if (!subtask) throw new Error('Subtask not found');
+    const task = await ctx.db.get(subtask.taskId);
+    if (!task) throw new Error('Task not found');
+    const repo = await ctx.db.get(task.repoId);
+    if (!repo) throw new Error('Repo not found');
+    const { userId, membership } = await requireOrgMembership(ctx, repo.orgId);
+    requireRole(membership, 'member');
+    if (task.private && task.createdBy !== userId) {
+      throw new Error("Cannot modify another user's private task");
+    }
     await ctx.db.delete(args.id);
   },
 });

@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { cn } from '@/frontend/lib/utils';
+import { useAppStore } from '@/frontend/stores/app';
 import Badge from './ui/Badge';
 import Button from './ui/Button';
 import {
@@ -45,6 +46,7 @@ function timeAgo(timestamp: number): string {
 
 function CreateSeedInline({ onDone }: { onDone: () => void }) {
   const [title, setTitle] = useState('');
+  const selectedOrgId = useAppStore((s) => s.selectedOrgId);
   const createSeed = useMutation(api.seeds.create);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -53,8 +55,8 @@ function CreateSeedInline({ onDone }: { onDone: () => void }) {
   }, []);
 
   const handleSubmit = async () => {
-    if (!title.trim()) return;
-    await createSeed({ title: title.trim() });
+    if (!title.trim() || !selectedOrgId) return;
+    await createSeed({ title: title.trim(), orgId: selectedOrgId });
     setTitle('');
     onDone();
   };
@@ -110,7 +112,11 @@ function PlantDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
-  const repos = useQuery(api.repos.list);
+  const selectedOrgId = useAppStore((s) => s.selectedOrgId);
+  const repos = useQuery(
+    api.repos.list,
+    selectedOrgId ? { orgId: selectedOrgId } : 'skip',
+  );
   const plantSeed = useMutation(api.seeds.plant);
   const [selectedRepoId, setSelectedRepoId] = useState<Id<'repos'> | null>(
     null,
@@ -362,7 +368,11 @@ function SeedCard({ seed }: { seed: Doc<'seeds'> }) {
 // ── Seed Board ───────────────────────────────────────────────────────
 
 export function SeedBoard() {
-  const seeds = useQuery(api.seeds.list);
+  const selectedOrgId = useAppStore((s) => s.selectedOrgId);
+  const seeds = useQuery(
+    api.seeds.list,
+    selectedOrgId ? { orgId: selectedOrgId } : 'skip',
+  );
   const [creating, setCreating] = useState(false);
   const [showPlanted, setShowPlanted] = useState(true);
 
@@ -409,7 +419,8 @@ export function SeedBoard() {
 
       {/* Grid */}
       <div className="flex-1 overflow-y-auto p-4">
-        {seeds === undefined ? null : seeds.length === 0 && !creating ? (
+        {seeds === undefined && !creating ? null : (seeds ?? []).length === 0 &&
+          !creating ? (
           <div className="flex flex-col items-center justify-center h-full text-center">
             <div className="rounded-full bg-muted/60 p-4 mb-4">
               <Sprout className="h-8 w-8 text-muted-foreground/50" />
