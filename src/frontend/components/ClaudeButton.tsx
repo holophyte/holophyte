@@ -97,7 +97,12 @@ export function ClaudeButton({ task }: ClaudeButtonProps) {
             <Play className="h-4 w-4 mr-1" />
             View Terminal
           </Button>
-          <Button size="sm" variant="destructive" onClick={handleStop}>
+          <Button
+            size="sm"
+            variant="destructive"
+            onClick={handleStop}
+            aria-label="Stop session"
+          >
             <Square className="h-4 w-4" />
           </Button>
         </div>

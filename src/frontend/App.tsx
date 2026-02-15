@@ -65,8 +65,14 @@ export function App() {
 
   return (
     <div className="flex h-screen bg-background text-foreground relative">
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:absolute focus:z-50 focus:top-2 focus:left-2 focus:px-4 focus:py-2 focus:bg-primary focus:text-primary-foreground focus:rounded-md focus:text-sm focus:font-medium"
+      >
+        Skip to main content
+      </a>
       <Sidebar />
-      <main className="flex-1 flex flex-col overflow-hidden">
+      <main id="main-content" className="flex-1 flex flex-col overflow-hidden">
         {viewMode === 'seeds' ? <SeedBoard /> : <KanbanBoard />}
         {terminalSessionId && <TerminalPanel />}
       </main>

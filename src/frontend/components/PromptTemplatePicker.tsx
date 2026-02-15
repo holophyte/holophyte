@@ -165,6 +165,7 @@ export function PromptTemplatePicker({
                       type="button"
                       onClick={() => openEditForm(t)}
                       className="p-1 text-muted-foreground hover:text-foreground"
+                      aria-label="Edit template"
                     >
                       <Pencil className="h-3 w-3" />
                     </button>
@@ -172,6 +173,7 @@ export function PromptTemplatePicker({
                       type="button"
                       onClick={() => handleDeleteTemplate(t._id)}
                       className="p-1 text-muted-foreground hover:text-destructive"
+                      aria-label="Delete template"
                     >
                       <Trash2 className="h-3 w-3" />
                     </button>

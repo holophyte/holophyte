@@ -91,6 +91,7 @@ export function Sidebar() {
           size="icon"
           className="h-6 w-6"
           onClick={() => setAddRepoOpen(true)}
+          aria-label="Add project"
         >
           <Plus className="h-3.5 w-3.5" />
         </Button>
@@ -109,6 +110,9 @@ export function Sidebar() {
                     }
                     className={cn('w-full justify-start gap-2 text-sm pr-8')}
                     onClick={() => selectRepo(repo._id)}
+                    aria-current={
+                      selectedRepoId === repo._id ? 'page' : undefined
+                    }
                   >
                     <FolderGit2 className="h-4 w-4 shrink-0" />
                     <span className="truncate">{repo.name}</span>
@@ -118,6 +122,7 @@ export function Sidebar() {
                     size="icon"
                     className="absolute right-1 top-1/2 -translate-y-1/2 h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive"
                     onClick={(e) => handleRemove(e, repo._id)}
+                    aria-label="Delete project"
                   >
                     <Trash2 className="h-3 w-3" />
                   </Button>
@@ -129,6 +134,9 @@ export function Sidebar() {
                         key={task._id}
                         type="button"
                         onClick={() => selectTask(task._id)}
+                        aria-current={
+                          selectedTaskId === task._id ? 'true' : undefined
+                        }
                         className={cn(
                           'w-full text-left rounded-md px-2 py-1 transition-colors flex items-center gap-1.5',
                           selectedTaskId === task._id

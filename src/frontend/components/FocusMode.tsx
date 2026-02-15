@@ -226,6 +226,7 @@ function CollapsibleSection({
       <button
         type="button"
         onClick={() => setOpen(!open)}
+        aria-expanded={open}
         className="flex items-center gap-1.5 text-sm font-medium hover:text-foreground/80 transition-colors"
       >
         <span

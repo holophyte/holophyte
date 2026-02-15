@@ -122,6 +122,7 @@ export function LabelPicker({
                       )}
                       style={{ backgroundColor: c.hex }}
                       title={c.name}
+                      aria-label={`Select ${c.name.toLowerCase()}`}
                     />
                   ))}
                 </div>
@@ -172,6 +173,7 @@ export function LabelPicker({
                     onClick={(e) => startEditing(label, e)}
                     className="p-0.5 rounded text-muted-foreground hover:text-foreground transition-colors"
                     title="Edit tag"
+                    aria-label="Edit tag"
                   >
                     <Pencil className="h-3 w-3" />
                   </button>
@@ -180,6 +182,7 @@ export function LabelPicker({
                     onClick={(e) => handleDelete(label._id, e)}
                     className="p-0.5 rounded text-muted-foreground hover:text-red-500 transition-colors"
                     title="Delete tag"
+                    aria-label="Delete tag"
                   >
                     <Trash2 className="h-3 w-3" />
                   </button>
@@ -215,6 +218,7 @@ export function LabelPicker({
                   )}
                   style={{ backgroundColor: c.hex }}
                   title={c.name}
+                  aria-label={`Select ${c.name.toLowerCase()}`}
                 />
               ))}
             </div>

@@ -61,6 +61,7 @@ export function TaskDetailPanel() {
             size="icon"
             className="h-7 w-7"
             onClick={() => selectTask(null)}
+            aria-label="Close task details"
           >
             <X className="h-4 w-4" />
           </Button>
@@ -269,6 +270,7 @@ function TaskDetailInner({ task }: { task: Task }) {
                   type="button"
                   onClick={() => handleDueDateChange('')}
                   className="p-1 text-muted-foreground hover:text-foreground"
+                  aria-label="Clear due date"
                 >
                   <X className="h-3 w-3" />
                 </button>

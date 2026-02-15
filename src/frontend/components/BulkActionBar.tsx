@@ -161,6 +161,7 @@ export default function BulkActionBar({ allTasks }: BulkActionBarProps) {
         onClick={clearBulkSelection}
         className="ml-1 p-1 rounded hover:bg-muted text-muted-foreground transition-colors"
         title="Clear selection"
+        aria-label="Clear selection"
       >
         <X className="h-4 w-4" />
       </button>

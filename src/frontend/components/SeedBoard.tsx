@@ -82,6 +82,7 @@ function CreateSeedInline({ onDone }: { onDone: () => void }) {
           variant="ghost"
           disabled={!title.trim()}
           className="h-7 w-7 p-0 shrink-0"
+          aria-label="Create seed"
         >
           <Check className="h-3.5 w-3.5" />
         </Button>
@@ -91,6 +92,7 @@ function CreateSeedInline({ onDone }: { onDone: () => void }) {
           variant="ghost"
           onClick={onDone}
           className="h-7 w-7 p-0 shrink-0 text-muted-foreground"
+          aria-label="Cancel"
         >
           <X className="h-3.5 w-3.5" />
         </Button>
@@ -251,6 +253,7 @@ function SeedCard({ seed }: { seed: Doc<'seeds'> }) {
           size="icon"
           className="absolute top-2 right-2 h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive"
           onClick={() => removeSeed({ id: seed._id })}
+          aria-label="Delete seed"
         >
           <Trash2 className="h-3 w-3" />
         </Button>
@@ -335,6 +338,7 @@ function SeedCard({ seed }: { seed: Doc<'seeds'> }) {
                     size="sm"
                     className="h-6 text-[10px] px-1.5 text-muted-foreground hover:text-foreground"
                     onClick={() => setEditing(true)}
+                    aria-label="Edit seed"
                   >
                     <Pencil className="h-3 w-3" />
                   </Button>
