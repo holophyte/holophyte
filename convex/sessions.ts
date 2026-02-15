@@ -6,28 +6,18 @@ export const listActive = query({
   args: { orgId: v.id('organizations') },
   handler: async (ctx, args) => {
     await requireOrgMembership(ctx, args.orgId);
-    // Query sessions through org repos → tasks to avoid reading global data
-    const orgRepos = await ctx.db
-      .query('repos')
-      .withIndex('by_org', (q) => q.eq('orgId', args.orgId))
+    // Use by_status index for O(1) lookup, then verify org membership
+    const runningSessions = await ctx.db
+      .query('sessions')
+      .withIndex('by_status', (q) => q.eq('status', 'running'))
       .collect();
     const orgSessions = [];
-    for (const repo of orgRepos) {
-      const tasks = await ctx.db
-        .query('tasks')
-        .withIndex('by_repo_status', (q) => q.eq('repoId', repo._id))
-        .collect();
-      for (const task of tasks) {
-        const sessions = await ctx.db
-          .query('sessions')
-          .withIndex('by_task', (q) => q.eq('taskId', task._id))
-          .collect();
-        for (const session of sessions) {
-          if (session.status === 'running') {
-            orgSessions.push(session);
-          }
-        }
-      }
+    for (const session of runningSessions) {
+      const task = await ctx.db.get(session.taskId);
+      if (!task) continue;
+      const repo = await ctx.db.get(task.repoId);
+      if (!repo || repo.orgId !== args.orgId) continue;
+      orgSessions.push(session);
     }
     return orgSessions;
   },

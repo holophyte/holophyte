@@ -93,6 +93,11 @@ export const remove = mutation({
       for (const entry of history) await ctx.db.delete(entry._id);
       await ctx.db.delete(task._id);
     }
+    const templates = await ctx.db
+      .query('promptTemplates')
+      .withIndex('by_repo', (q) => q.eq('repoId', args.id))
+      .collect();
+    for (const tmpl of templates) await ctx.db.delete(tmpl._id);
     await ctx.db.delete(args.id);
   },
 });

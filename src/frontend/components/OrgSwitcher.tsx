@@ -12,9 +12,12 @@ export default function OrgSwitcher() {
   const selectedOrgId = useAppStore((s) => s.selectedOrgId);
   const setSelectedOrgId = useAppStore((s) => s.setSelectedOrgId);
 
-  // Auto-select the first org if none is selected
+  // Auto-select the first org, or reset if selected org is no longer valid
   useEffect(() => {
-    if (!selectedOrgId && orgs && orgs.length > 0 && orgs[0]) {
+    if (!orgs || orgs.length === 0) return;
+    const stillValid =
+      selectedOrgId && orgs.some((o) => o._id === selectedOrgId);
+    if (!stillValid && orgs[0]) {
       setSelectedOrgId(orgs[0]._id);
     }
   }, [selectedOrgId, orgs, setSelectedOrgId]);
