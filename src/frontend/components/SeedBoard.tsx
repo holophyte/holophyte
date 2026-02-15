@@ -419,7 +419,8 @@ export function SeedBoard() {
 
       {/* Grid */}
       <div className="flex-1 overflow-y-auto p-4">
-        {seeds === undefined ? null : seeds.length === 0 && !creating ? (
+        {seeds === undefined && !creating ? null : (seeds ?? []).length === 0 &&
+          !creating ? (
           <div className="flex flex-col items-center justify-center h-full text-center">
             <div className="rounded-full bg-muted/60 p-4 mb-4">
               <Sprout className="h-8 w-8 text-muted-foreground/50" />
