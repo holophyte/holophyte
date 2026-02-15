@@ -7,7 +7,7 @@ import Button from './ui/Button';
 import { Popover, PopoverContent, PopoverTrigger } from './ui/Popover';
 
 export default function UserMenu() {
-  const { signOut } = useAuthActions();
+  const authActions = useAuthActions();
   const user = useQuery(api.users.viewer);
 
   return (
@@ -37,14 +37,16 @@ export default function UserMenu() {
           )}
         </div>
         <div className="border-t my-1" />
-        <Button
-          variant="ghost"
-          className="w-full justify-start gap-2 text-sm"
-          onClick={() => void signOut()}
-        >
-          <LogOut className="h-4 w-4" />
-          Sign out
-        </Button>
+        {authActions && (
+          <Button
+            variant="ghost"
+            className="w-full justify-start gap-2 text-sm"
+            onClick={() => void authActions.signOut()}
+          >
+            <LogOut className="h-4 w-4" />
+            Sign out
+          </Button>
+        )}
       </PopoverContent>
     </Popover>
   );
