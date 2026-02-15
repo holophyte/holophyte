@@ -23,6 +23,7 @@ const server = Bun.serve<WsData>({
       GET() {
         return Response.json({
           convexUrl: process.env.CONVEX_URL ?? '',
+          e2eTest: !!process.env.E2E_TEST,
         });
       },
     },
