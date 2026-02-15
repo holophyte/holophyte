@@ -4,6 +4,7 @@ import { useMutation, useQuery } from 'convex/react';
 import { Pencil, Plus, Tag, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import { cn } from '@/frontend/lib/utils';
+import { useAppStore } from '@/frontend/stores/app';
 import Button from './ui/Button';
 import Input from './ui/Input';
 import { Popover, PopoverContent, PopoverTrigger } from './ui/Popover';
@@ -28,7 +29,11 @@ export function LabelPicker({
   currentLabelIds,
   onChangeLabelIds,
 }: LabelPickerProps) {
-  const labels = useQuery(api.labels.list);
+  const selectedOrgId = useAppStore((s) => s.selectedOrgId);
+  const labels = useQuery(
+    api.labels.list,
+    selectedOrgId ? { orgId: selectedOrgId } : 'skip',
+  );
   const createLabel = useMutation(api.labels.create);
   const updateLabel = useMutation(api.labels.update);
   const removeLabel = useMutation(api.labels.remove);
@@ -49,8 +54,12 @@ export function LabelPicker({
 
   const handleCreateLabel = async () => {
     const trimmed = newName.trim();
-    if (!trimmed) return;
-    const id = await createLabel({ name: trimmed, color: newColor });
+    if (!trimmed || !selectedOrgId) return;
+    const id = await createLabel({
+      name: trimmed,
+      color: newColor,
+      orgId: selectedOrgId,
+    });
     onChangeLabelIds([...currentLabelIds, id]);
     setNewName('');
     setCreating(false);

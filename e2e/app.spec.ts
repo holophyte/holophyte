@@ -97,17 +97,22 @@ test('clicking all tasks returns to kanban board', async ({ page }) => {
   await expect(page.locator('h1', { hasText: 'Seed Box' })).toBeVisible();
 
   await page.locator('button', { hasText: 'All Tasks' }).click();
-  await expect(page.locator('h1', { hasText: 'All Tasks' })).toBeVisible();
+  // View transition may be slow on CI — wait for the kanban board to mount
+  await expect(page.locator('h1', { hasText: 'All Tasks' })).toBeVisible({
+    timeout: 10000,
+  });
   await expect(page.locator('text=To Do')).toBeVisible();
 });
 
 test('seed box new idea inline form appears', async ({ page }) => {
   await waitForApp(page);
   await page.locator('button', { hasText: 'Seed Box' }).click();
+  // Wait for seed board to fully mount before interacting
+  await expect(page.locator('button', { hasText: 'New Idea' })).toBeVisible();
   await page.locator('button', { hasText: 'New Idea' }).click();
   await expect(
     page.locator('input[placeholder="What\'s the idea?"]'),
-  ).toBeVisible();
+  ).toBeVisible({ timeout: 10000 });
 });
 
 test('kanban columns show column headers with task counts', async ({

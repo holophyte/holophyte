@@ -1,19 +1,36 @@
 import { v } from 'convex/values';
 import { mutation, query } from './_generated/server';
+import { requireOrgMembership, requireRole } from './lib/auth';
 
 export const listActive = query({
-  args: {},
-  handler: async (ctx) => {
-    return await ctx.db
+  args: { orgId: v.id('organizations') },
+  handler: async (ctx, args) => {
+    await requireOrgMembership(ctx, args.orgId);
+    // Use by_status index for O(1) lookup, then verify org membership
+    const runningSessions = await ctx.db
       .query('sessions')
       .withIndex('by_status', (q) => q.eq('status', 'running'))
       .collect();
+    const orgSessions = [];
+    for (const session of runningSessions) {
+      const task = await ctx.db.get(session.taskId);
+      if (!task) continue;
+      const repo = await ctx.db.get(task.repoId);
+      if (!repo || repo.orgId !== args.orgId) continue;
+      orgSessions.push(session);
+    }
+    return orgSessions;
   },
 });
 
 export const getByTask = query({
   args: { taskId: v.id('tasks') },
   handler: async (ctx, args) => {
+    const task = await ctx.db.get(args.taskId);
+    if (!task) return null;
+    const repo = await ctx.db.get(task.repoId);
+    if (!repo) return null;
+    await requireOrgMembership(ctx, repo.orgId);
     const sessions = await ctx.db
       .query('sessions')
       .withIndex('by_task', (q) => q.eq('taskId', args.taskId))
@@ -27,6 +44,12 @@ export const create = mutation({
     taskId: v.id('tasks'),
   },
   handler: async (ctx, args) => {
+    const task = await ctx.db.get(args.taskId);
+    if (!task) throw new Error('Task not found');
+    const repo = await ctx.db.get(task.repoId);
+    if (!repo) throw new Error('Repo not found');
+    const { membership } = await requireOrgMembership(ctx, repo.orgId);
+    requireRole(membership, 'member');
     return await ctx.db.insert('sessions', {
       taskId: args.taskId,
       status: 'running',
@@ -46,6 +69,14 @@ export const updateStatus = mutation({
     ),
   },
   handler: async (ctx, args) => {
+    const session = await ctx.db.get(args.id);
+    if (!session) throw new Error('Session not found');
+    const task = await ctx.db.get(session.taskId);
+    if (!task) throw new Error('Task not found');
+    const repo = await ctx.db.get(task.repoId);
+    if (!repo) throw new Error('Repo not found');
+    const { membership } = await requireOrgMembership(ctx, repo.orgId);
+    requireRole(membership, 'member');
     const updates: Record<string, unknown> = { status: args.status };
     if (args.status !== 'running') {
       updates.endedAt = Date.now();

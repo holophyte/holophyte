@@ -15,14 +15,23 @@ import { useState } from 'react';
 import { cn } from '@/frontend/lib/utils';
 import { useAppStore } from '@/frontend/stores/app';
 import { AddRepoDialog } from './AddRepoDialog';
+import OrgSwitcher from './OrgSwitcher';
+import UserMenu from './UserMenu';
 import Button from './ui/Button';
 import PageHeader from './ui/PageHeader';
 import ScrollArea from './ui/ScrollArea';
 import Separator from './ui/Separator';
 
 export function Sidebar() {
-  const repos = useQuery(api.repos.list);
-  const activeTasks = useQuery(api.tasks.listActive);
+  const selectedOrgId = useAppStore((s) => s.selectedOrgId);
+  const repos = useQuery(
+    api.repos.list,
+    selectedOrgId ? { orgId: selectedOrgId } : 'skip',
+  );
+  const activeTasks = useQuery(
+    api.tasks.listActive,
+    selectedOrgId ? { orgId: selectedOrgId } : 'skip',
+  );
   const removeRepo = useMutation(api.repos.remove);
   const selectedRepoId = useAppStore((s) => s.selectedRepoId);
   const selectedTaskId = useAppStore((s) => s.selectedTaskId);
@@ -58,6 +67,10 @@ export function Sidebar() {
         <FolderGit2 className="h-5 w-5" />
         Holophyte
       </PageHeader>
+      <div className="px-2 py-1">
+        <OrgSwitcher />
+      </div>
+      <Separator />
       <div className="p-2 space-y-1">
         <Button
           variant={
@@ -165,6 +178,10 @@ export function Sidebar() {
           )}
         </div>
       </ScrollArea>
+      <Separator />
+      <div className="p-2">
+        <UserMenu />
+      </div>
       <AddRepoDialog open={addRepoOpen} onOpenChange={setAddRepoOpen} />
     </aside>
   );

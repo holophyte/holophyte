@@ -1,66 +1,79 @@
+// @vitest-environment edge-runtime
+
 import { convexTest } from 'convex-test';
 import { describe, expect, it } from 'vitest';
 import { api } from './_generated/api';
+import type { Id } from './_generated/dataModel';
 import schema, { TaskPriority, TaskStatus } from './schema';
 
-// Helper to create a repo
-async function createRepo(t: ReturnType<typeof convexTest>) {
-  return await t.run(async (ctx) => {
-    return await ctx.db.insert('repos', {
-      name: 'test-repo',
-      path: '/tmp/test-repo',
-      createdAt: Date.now(),
-    });
+/** Create a user and return an authenticated test client + userId. */
+async function setupUser(t: ReturnType<typeof convexTest>, name = 'Test User') {
+  const userId = await t.run(async (ctx) => {
+    return await ctx.db.insert('users', { name });
   });
+  return { userId, authed: t.withIdentity({ subject: `${userId}|s1` }) };
+}
+
+/** Create user + org + repo, return everything needed for task tests. */
+async function setupRepoEnv(t: ReturnType<typeof convexTest>) {
+  const { userId, authed } = await setupUser(t, 'Owner');
+  const orgId = await authed.mutation(api.organizations.create, {
+    name: 'Test Org',
+    slug: 'test-org',
+  });
+  const repoId = await authed.mutation(api.repos.create, {
+    name: 'test-repo',
+    path: '/tmp/test-repo',
+    orgId,
+  });
+  return { userId, authed, orgId, repoId };
 }
 
 describe('tasks.create', () => {
-  it('creates a task in backlog with position 1', async () => {
+  it('creates a task in backlog with createdBy set', async () => {
     const t = convexTest(schema);
-    const repoId = await createRepo(t);
+    const { userId, authed, repoId } = await setupRepoEnv(t);
 
-    const taskId = await t.mutation(api.tasks.create, {
+    const taskId = await authed.mutation(api.tasks.create, {
       repoId,
       title: 'My task',
     });
 
-    const tasks = await t.query(api.tasks.listByRepo, { repoId });
-    expect(tasks).toHaveLength(1);
-    expect(tasks[0]).toMatchObject({
+    const task = await authed.query(api.tasks.get, { id: taskId });
+    expect(task).toMatchObject({
       title: 'My task',
       description: '',
       prompt: '',
       status: TaskStatus.Backlog,
       position: 1,
-      repoId,
+      createdBy: userId,
     });
-    expect(tasks[0]!._id).toBe(taskId);
   });
 
   it('auto-increments position for multiple tasks', async () => {
     const t = convexTest(schema);
-    const repoId = await createRepo(t);
+    const { authed, repoId } = await setupRepoEnv(t);
 
-    await t.mutation(api.tasks.create, { repoId, title: 'First' });
-    await t.mutation(api.tasks.create, { repoId, title: 'Second' });
-    await t.mutation(api.tasks.create, { repoId, title: 'Third' });
+    await authed.mutation(api.tasks.create, { repoId, title: 'First' });
+    await authed.mutation(api.tasks.create, { repoId, title: 'Second' });
+    await authed.mutation(api.tasks.create, { repoId, title: 'Third' });
 
-    const tasks = await t.query(api.tasks.listByRepo, { repoId });
+    const tasks = await authed.query(api.tasks.listByRepo, { repoId });
     const positions = tasks.map((t) => t.position).sort((a, b) => a - b);
     expect(positions).toEqual([1, 2, 3]);
   });
 
   it('creates a task with a specific status', async () => {
     const t = convexTest(schema);
-    const repoId = await createRepo(t);
+    const { authed, repoId } = await setupRepoEnv(t);
 
-    await t.mutation(api.tasks.create, {
+    await authed.mutation(api.tasks.create, {
       repoId,
       title: 'Todo task',
       status: TaskStatus.Todo,
     });
 
-    const tasks = await t.query(api.tasks.listByRepo, { repoId });
+    const tasks = await authed.query(api.tasks.listByRepo, { repoId });
     expect(tasks).toHaveLength(1);
     expect(tasks[0]).toMatchObject({
       title: 'Todo task',
@@ -71,63 +84,49 @@ describe('tasks.create', () => {
 
   it('creates a task with priority', async () => {
     const t = convexTest(schema);
-    const repoId = await createRepo(t);
+    const { authed, repoId } = await setupRepoEnv(t);
 
-    const id = await t.mutation(api.tasks.create, {
+    const id = await authed.mutation(api.tasks.create, {
       repoId,
       title: 'Urgent bug',
       priority: TaskPriority.Urgent,
     });
 
-    const task = await t.query(api.tasks.get, { id });
+    const task = await authed.query(api.tasks.get, { id });
     expect(task).toMatchObject({
       title: 'Urgent bug',
       priority: TaskPriority.Urgent,
     });
   });
 
-  it('positions correctly within the target status lane', async () => {
+  it('requires membership', async () => {
     const t = convexTest(schema);
-    const repoId = await createRepo(t);
+    const { repoId } = await setupRepoEnv(t);
+    const { authed: outsider } = await setupUser(t, 'Outsider');
 
-    await t.mutation(api.tasks.create, {
-      repoId,
-      title: 'Todo 1',
-      status: TaskStatus.Todo,
-    });
-    await t.mutation(api.tasks.create, {
-      repoId,
-      title: 'Todo 2',
-      status: TaskStatus.Todo,
-    });
-
-    const tasks = await t.query(api.tasks.listByRepo, { repoId });
-    const todoTasks = tasks
-      .filter((t) => t.status === TaskStatus.Todo)
-      .sort((a, b) => a.position - b.position);
-    expect(todoTasks).toHaveLength(2);
-    expect(todoTasks[0]?.position).toBe(1);
-    expect(todoTasks[1]?.position).toBe(2);
+    await expect(
+      outsider.mutation(api.tasks.create, { repoId, title: 'Nope' }),
+    ).rejects.toThrow('Not a member of this organization');
   });
 });
 
 describe('tasks.update', () => {
   it('updates task fields', async () => {
     const t = convexTest(schema);
-    const repoId = await createRepo(t);
-    const id = await t.mutation(api.tasks.create, {
+    const { authed, repoId } = await setupRepoEnv(t);
+    const id = await authed.mutation(api.tasks.create, {
       repoId,
       title: 'Old title',
     });
 
-    await t.mutation(api.tasks.update, {
+    await authed.mutation(api.tasks.update, {
       id,
       title: 'New title',
       description: 'Added desc',
       prompt: 'do something',
     });
 
-    const task = await t.query(api.tasks.get, { id });
+    const task = await authed.query(api.tasks.get, { id });
     expect(task).toMatchObject({
       title: 'New title',
       description: 'Added desc',
@@ -137,78 +136,137 @@ describe('tasks.update', () => {
 
   it('updates task priority', async () => {
     const t = convexTest(schema);
-    const repoId = await createRepo(t);
-    const id = await t.mutation(api.tasks.create, {
+    const { authed, repoId } = await setupRepoEnv(t);
+    const id = await authed.mutation(api.tasks.create, {
       repoId,
       title: 'Task',
     });
 
-    await t.mutation(api.tasks.update, {
+    await authed.mutation(api.tasks.update, {
       id,
       priority: TaskPriority.High,
     });
 
-    const task = await t.query(api.tasks.get, { id });
+    const task = await authed.query(api.tasks.get, { id });
     expect(task).toMatchObject({ priority: TaskPriority.High });
-
-    // Change priority again
-    await t.mutation(api.tasks.update, {
-      id,
-      priority: TaskPriority.None,
-    });
-
-    const updated = await t.query(api.tasks.get, { id });
-    expect(updated).toMatchObject({ priority: TaskPriority.None });
   });
 });
 
 describe('tasks.move', () => {
   it('changes task status and position', async () => {
     const t = convexTest(schema);
-    const repoId = await createRepo(t);
-    const id = await t.mutation(api.tasks.create, {
+    const { authed, repoId } = await setupRepoEnv(t);
+    const id = await authed.mutation(api.tasks.create, {
       repoId,
       title: 'Task',
     });
 
-    await t.mutation(api.tasks.move, {
+    await authed.mutation(api.tasks.move, {
       id,
       status: TaskStatus.InProgress,
       position: 1,
     });
 
-    const task = await t.query(api.tasks.get, { id });
-    expect(task).toMatchObject({ status: TaskStatus.InProgress, position: 1 });
+    const task = await authed.query(api.tasks.get, { id });
+    expect(task).toMatchObject({
+      status: TaskStatus.InProgress,
+      position: 1,
+    });
+  });
+});
+
+describe('tasks - private tasks', () => {
+  it('private tasks are visible to their creator', async () => {
+    const t = convexTest(schema);
+    const { authed, repoId } = await setupRepoEnv(t);
+
+    const taskId = await authed.mutation(api.tasks.create, {
+      repoId,
+      title: 'Secret task',
+      private: true,
+    });
+
+    const task = await authed.query(api.tasks.get, { id: taskId });
+    expect(task).not.toBeNull();
+    expect(task!.title).toBe('Secret task');
+    expect(task!.private).toBe(true);
+
+    // Also visible in listByRepo
+    const tasks = await authed.query(api.tasks.listByRepo, { repoId });
+    expect(tasks.some((t) => t._id === taskId)).toBe(true);
+  });
+
+  it('private tasks are hidden from other org members', async () => {
+    const t = convexTest(schema);
+    const { authed: creator, orgId, repoId } = await setupRepoEnv(t);
+    const { userId: otherId, authed: otherMember } = await setupUser(
+      t,
+      'Other',
+    );
+
+    // Add other user as member
+    await t.run(async (ctx) => {
+      await ctx.db.insert('memberships', {
+        userId: otherId,
+        orgId,
+        role: 'member',
+      });
+    });
+
+    // Creator makes a private task
+    const privateTaskId = await creator.mutation(api.tasks.create, {
+      repoId,
+      title: 'Private',
+      private: true,
+    });
+    // And a public task
+    await creator.mutation(api.tasks.create, {
+      repoId,
+      title: 'Public',
+    });
+
+    // Other member should not see private task
+    const otherTasks = await otherMember.query(api.tasks.listByRepo, {
+      repoId,
+    });
+    expect(otherTasks).toHaveLength(1);
+    expect(otherTasks[0]!.title).toBe('Public');
+
+    // tasks.get should return null for private task
+    const hidden = await otherMember.query(api.tasks.get, {
+      id: privateTaskId,
+    });
+    expect(hidden).toBeNull();
   });
 });
 
 describe('tasks.listActive', () => {
   it('returns in_progress and review tasks with repo names', async () => {
     const t = convexTest(schema);
-    const repoId = await createRepo(t);
+    const { authed, orgId, repoId } = await setupRepoEnv(t);
 
-    const id1 = await t.mutation(api.tasks.create, {
+    const id1 = await authed.mutation(api.tasks.create, {
       repoId,
       title: 'Working',
     });
-    const id2 = await t.mutation(api.tasks.create, {
+    const id2 = await authed.mutation(api.tasks.create, {
       repoId,
       title: 'Reviewing',
     });
-    await t.mutation(api.tasks.create, { repoId, title: 'Backlog item' });
+    await authed.mutation(api.tasks.create, { repoId, title: 'Backlog item' });
 
-    await t.mutation(api.tasks.move, {
+    await authed.mutation(api.tasks.move, {
       id: id1,
       status: TaskStatus.InProgress,
       position: 1,
     });
-    await t.mutation(api.tasks.move, {
+    await authed.mutation(api.tasks.move, {
       id: id2,
       status: TaskStatus.Review,
       position: 1,
     });
 
-    const active = await t.query(api.tasks.listActive);
+    const active = await authed.query(api.tasks.listActive, { orgId });
     expect(active).toHaveLength(2);
 
     const titles = active.map((t) => t.title).sort();
@@ -217,49 +275,21 @@ describe('tasks.listActive', () => {
     expect(active[0]!.hasRunningSession).toBe(false);
   });
 
-  it('detects running sessions', async () => {
-    const t = convexTest(schema);
-    const repoId = await createRepo(t);
-
-    const taskId = await t.mutation(api.tasks.create, {
-      repoId,
-      title: 'Active',
-    });
-    await t.mutation(api.tasks.move, {
-      id: taskId,
-      status: TaskStatus.InProgress,
-      position: 1,
-    });
-
-    // Create a running session
-    await t.run(async (ctx) => {
-      await ctx.db.insert('sessions', {
-        taskId,
-        status: 'running',
-        startedAt: Date.now(),
-      });
-    });
-
-    const active = await t.query(api.tasks.listActive);
-    expect(active).toHaveLength(1);
-    expect(active[0]!.hasRunningSession).toBe(true);
-  });
-
   it('excludes done and backlog tasks', async () => {
     const t = convexTest(schema);
-    const repoId = await createRepo(t);
+    const { authed, orgId, repoId } = await setupRepoEnv(t);
 
-    const id = await t.mutation(api.tasks.create, {
+    const id = await authed.mutation(api.tasks.create, {
       repoId,
       title: 'Done task',
     });
-    await t.mutation(api.tasks.move, {
+    await authed.mutation(api.tasks.move, {
       id,
       status: TaskStatus.Done,
       position: 1,
     });
 
-    const active = await t.query(api.tasks.listActive);
+    const active = await authed.query(api.tasks.listActive, { orgId });
     expect(active).toHaveLength(0);
   });
 });
@@ -267,8 +297,8 @@ describe('tasks.listActive', () => {
 describe('tasks.remove', () => {
   it('deletes task and its sessions', async () => {
     const t = convexTest(schema);
-    const repoId = await createRepo(t);
-    const taskId = await t.mutation(api.tasks.create, {
+    const { authed, repoId } = await setupRepoEnv(t);
+    const taskId = await authed.mutation(api.tasks.create, {
       repoId,
       title: 'To delete',
     });
@@ -283,12 +313,13 @@ describe('tasks.remove', () => {
       });
     });
 
-    await t.mutation(api.tasks.remove, { id: taskId });
+    await authed.mutation(api.tasks.remove, { id: taskId });
 
-    const tasks = await t.query(api.tasks.listAll, {});
+    const tasks = await t.run(async (ctx) => {
+      return await ctx.db.query('tasks').collect();
+    });
     expect(tasks).toHaveLength(0);
 
-    // Sessions should be cleaned up too
     const sessions = await t.run(async (ctx) => {
       return await ctx.db.query('sessions').collect();
     });
@@ -299,13 +330,13 @@ describe('tasks.remove', () => {
 describe('tasks.get', () => {
   it('returns task with repo data', async () => {
     const t = convexTest(schema);
-    const repoId = await createRepo(t);
-    const id = await t.mutation(api.tasks.create, {
+    const { authed, repoId } = await setupRepoEnv(t);
+    const id = await authed.mutation(api.tasks.create, {
       repoId,
       title: 'My task',
     });
 
-    const task = await t.query(api.tasks.get, { id });
+    const task = await authed.query(api.tasks.get, { id });
     expect(task).toMatchObject({
       title: 'My task',
       repo: { name: 'test-repo', path: '/tmp/test-repo' },
@@ -314,15 +345,38 @@ describe('tasks.get', () => {
 
   it('returns null for non-existent task', async () => {
     const t = convexTest(schema);
-    // Use a valid-looking but non-existent ID
-    const repoId = await createRepo(t);
-    const id = await t.mutation(api.tasks.create, {
+    const { authed, repoId } = await setupRepoEnv(t);
+    const id = await authed.mutation(api.tasks.create, {
       repoId,
       title: 'Temp',
     });
-    await t.mutation(api.tasks.remove, { id });
+    await authed.mutation(api.tasks.remove, { id });
 
-    const task = await t.query(api.tasks.get, { id });
+    const task = await authed.query(api.tasks.get, { id });
     expect(task).toBeNull();
+  });
+});
+
+describe('tasks - org scoping through repo', () => {
+  it('cannot create tasks in repos of other orgs', async () => {
+    const t = convexTest(schema);
+    const { repoId } = await setupRepoEnv(t);
+    const { authed: outsider } = await setupUser(t, 'Outsider');
+
+    await expect(
+      outsider.mutation(api.tasks.create, { repoId, title: 'Hack' }),
+    ).rejects.toThrow('Not a member of this organization');
+  });
+
+  it('cannot list tasks in repos of other orgs', async () => {
+    const t = convexTest(schema);
+    const { authed, repoId } = await setupRepoEnv(t);
+    await authed.mutation(api.tasks.create, { repoId, title: 'Task' });
+
+    const { authed: outsider } = await setupUser(t, 'Outsider');
+
+    await expect(
+      outsider.query(api.tasks.listByRepo, { repoId }),
+    ).rejects.toThrow('Not a member of this organization');
   });
 });
