@@ -1,5 +1,6 @@
 import { Authenticated, AuthLoading, Unauthenticated } from 'convex/react';
 import { Loader2 } from 'lucide-react';
+import { e2eTest } from '@/frontend/lib/config';
 import { useAppStore } from '@/frontend/stores/app';
 import { CommandPalette } from './components/CommandPalette';
 import { KanbanBoard } from './components/KanbanBoard';
@@ -8,7 +9,6 @@ import { Sidebar } from './components/Sidebar';
 import SignInPage from './components/SignInPage';
 import { TaskDetailPanel } from './components/TaskDetailPanel';
 import { TerminalPanel } from './components/TerminalPanel';
-import { e2eTest } from './index';
 
 function AuthenticatedApp() {
   const selectedTaskId = useAppStore((s) => s.selectedTaskId);
