@@ -40,11 +40,11 @@ This handles everything: worktree creation, branch setup, dependency installatio
 ### 3. Verify Setup
 
 ```bash
-REPO=$(basename "$(git rev-parse --show-toplevel)")
-cd ../$REPO-<feature-name> && ls -la .env* .dev-ports CLAUDE.md
+cd ~/.holophyte-dev/<feature-name> && ls -la .env* .dev-ports CLAUDE.md
 ```
 
 ## After Creation
 
 - Run `bun run dev:local` in the new worktree (uses isolated local Convex)
 - The main directory remains on its current branch
+- Worktrees are stored in `~/.holophyte-dev/`
