@@ -190,6 +190,15 @@ export function Sidebar() {
         </div>
       </ScrollArea>
       <Separator />
+      <div className="flex items-center justify-center px-2 py-1.5">
+        <span className="text-xs text-muted-foreground">
+          <kbd className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs">
+            ⌘K
+          </kbd>{' '}
+          Command palette
+        </span>
+      </div>
+      <Separator />
       <div className="p-2">
         <UserMenu />
       </div>
