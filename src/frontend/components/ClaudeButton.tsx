@@ -63,8 +63,6 @@ export function ClaudeButton({ task }: ClaudeButtonProps) {
     setLoading(true);
     setError(null);
     try {
-      // Kill the PTY process — status update happens via the exit event
-      // relayed through WebSocket to TerminalPanel
       const res = await fetch(`/api/sessions/${session._id}/stop`, {
         method: 'POST',
       });
@@ -72,6 +70,9 @@ export function ClaudeButton({ task }: ClaudeButtonProps) {
         const data = await res.json();
         setError(data.error ?? 'Failed to stop session');
       }
+      // Fallback: if terminal panel is closed, the exit event has no subscriber.
+      // Safe to call unconditionally — the mutation is idempotent.
+      await updateSessionStatus({ id: session._id, status: 'stopped' });
     } catch (err) {
       setError(String(err));
     } finally {
