@@ -105,15 +105,17 @@ describe('requireRole', () => {
     const { membershipId } = await createUserWithOrg(t, 'admin');
 
     const membership = await t.run(async (ctx) => {
-      return await ctx.db.get(membershipId);
+      const m = await ctx.db.get(membershipId);
+      if (!m) throw new Error('membership not found');
+      return m;
     });
 
     // admin >= member should pass
-    expect(() => requireRole(membership!, 'member')).not.toThrow();
+    expect(() => requireRole(membership, 'member')).not.toThrow();
     // admin >= admin should pass
-    expect(() => requireRole(membership!, 'admin')).not.toThrow();
+    expect(() => requireRole(membership, 'admin')).not.toThrow();
     // admin >= viewer should pass
-    expect(() => requireRole(membership!, 'viewer')).not.toThrow();
+    expect(() => requireRole(membership, 'viewer')).not.toThrow();
   });
 
   it('throws when role is below minimum', async () => {
@@ -121,15 +123,17 @@ describe('requireRole', () => {
     const { membershipId } = await createUserWithOrg(t, 'member');
 
     const membership = await t.run(async (ctx) => {
-      return await ctx.db.get(membershipId);
+      const m = await ctx.db.get(membershipId);
+      if (!m) throw new Error('membership not found');
+      return m;
     });
 
     // member < admin should throw
-    expect(() => requireRole(membership!, 'admin')).toThrow(
+    expect(() => requireRole(membership, 'admin')).toThrow(
       'Requires admin role or higher',
     );
     // member < owner should throw
-    expect(() => requireRole(membership!, 'owner')).toThrow(
+    expect(() => requireRole(membership, 'owner')).toThrow(
       'Requires owner role or higher',
     );
   });
@@ -139,10 +143,12 @@ describe('requireRole', () => {
     const { membershipId } = await createUserWithOrg(t, 'viewer');
 
     const membership = await t.run(async (ctx) => {
-      return await ctx.db.get(membershipId);
+      const m = await ctx.db.get(membershipId);
+      if (!m) throw new Error('membership not found');
+      return m;
     });
 
-    expect(() => requireRole(membership!, 'member')).toThrow(
+    expect(() => requireRole(membership, 'member')).toThrow(
       'Requires member role or higher',
     );
   });

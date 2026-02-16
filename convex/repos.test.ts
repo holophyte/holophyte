@@ -55,10 +55,7 @@ describe('repos.list', () => {
 
     // Create another org + repo as a different user
     const { authed: other, orgId: otherOrgId } = await (async () => {
-      const { userId: otherUserId, authed: otherAuthed } = await setupUser(
-        t,
-        'Other',
-      );
+      const { authed: otherAuthed } = await setupUser(t, 'Other');
       const otherOrgId = await otherAuthed.mutation(api.organizations.create, {
         name: 'Other Org',
         slug: 'other-org',
@@ -74,7 +71,7 @@ describe('repos.list', () => {
 
     const repos = await authed.query(api.repos.list, { orgId });
     expect(repos).toHaveLength(1);
-    expect(repos[0]!.name).toBe('my-repo');
+    expect(repos[0]?.name).toBe('my-repo');
   });
 
   it('requires membership to list', async () => {
@@ -152,7 +149,7 @@ describe('repos.create', () => {
 describe('repos.remove', () => {
   it('cascades deletion to tasks and sessions', async () => {
     const t = convexTest(schema);
-    const { userId, authed, orgId } = await setupOwnerWithOrg(t);
+    const { authed, orgId } = await setupOwnerWithOrg(t);
 
     const repoId = await authed.mutation(api.repos.create, {
       name: 'repo',

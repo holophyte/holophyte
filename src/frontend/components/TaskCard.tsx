@@ -48,6 +48,7 @@ export function TaskCard({ task, repoName }: TaskCardProps) {
   };
 
   return (
+    // biome-ignore lint/a11y/useSemanticElements: div with role needed for drag-and-drop
     <div
       role="button"
       tabIndex={0}
