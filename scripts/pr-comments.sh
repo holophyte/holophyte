@@ -5,7 +5,7 @@ set -euo pipefail
 # Usage:
 #   bun run pr-comments                      # show all comments (auto-detect PR)
 #   bun run pr-comments -- 42                # show comments on PR #42
-#   bun run pr-comments -- --poll            # poll for new comments
+#   bun run pr-comments -- --poll            # poll for new comments (checks at 5m, 7.5m, 10m)
 #   bun run pr-comments -- --poll 42         # poll specific PR
 #   bun run pr-comments -- --resolve         # resolve all Greptile threads
 #   bun run pr-comments -- --resolve 42      # resolve threads on specific PR
@@ -126,20 +126,20 @@ if [ "$POLL" = false ]; then
   exit 0
 fi
 
-# Poll mode: record existing comment IDs, poll for new ones
+# Poll mode: record existing comment IDs, then check at fixed intervals
 echo "Recording existing Greptile comments..."
 SEEN_IDS=$(gh api "repos/$OWNER_REPO/pulls/$PR_NUMBER/comments" \
   --jq '[.[] | select(.user.login == "greptile-apps[bot]") | .id]')
 
-echo "Polling for new Greptile comments (every 30s, timeout 5min)..."
+# Greptile typically takes 5-10 minutes to review — check at 5m, 7.5m, 10m
+POLL_DELAYS=(300 150 150)  # seconds to sleep before each check (5m, +2.5m, +2.5m)
+POLL_LABELS=("5m" "7.5m" "10m")
 
-ELAPSED=0
-TIMEOUT=300
+echo "Waiting for Greptile review (checks at 5m, 7.5m, 10m)..."
 
-while [ "$ELAPSED" -lt "$TIMEOUT" ]; do
-  sleep 30
-  ELAPSED=$((ELAPSED + 30))
-  echo "  Checking... (${ELAPSED}s / ${TIMEOUT}s)"
+for i in "${!POLL_DELAYS[@]}"; do
+  sleep "${POLL_DELAYS[$i]}"
+  echo "  Checking at ${POLL_LABELS[$i]}..."
 
   ALL_COMMENTS=$(fetch_greptile_comments)
   if [ -z "$ALL_COMMENTS" ]; then
@@ -160,5 +160,5 @@ while [ "$ELAPSED" -lt "$TIMEOUT" ]; do
   fi
 done
 
-echo "Timeout: no new Greptile comments after ${TIMEOUT}s"
+echo "No new Greptile comments after 10 minutes"
 exit 0

@@ -107,7 +107,7 @@ Wait for Greptile to post review comments using the polling script:
 bun run pr-comments -- --poll <PR_NUMBER>
 ```
 
-This records existing comment IDs, polls every 30s for up to 5 minutes, and outputs only new comments.
+This records existing comment IDs, then checks at 5m, 7.5m, and 10m for new comments.
 
 - If timeout with no new comments, exit successfully — Greptile found nothing new
 
