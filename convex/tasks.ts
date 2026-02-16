@@ -313,8 +313,9 @@ export const unarchive = mutation({
     if (!task || task.status !== TaskStatus.Archived) return;
     const repo = await ctx.db.get(task.repoId);
     if (!repo) return;
-    const { membership } = await requireOrgMembership(ctx, repo.orgId);
+    const { userId, membership } = await requireOrgMembership(ctx, repo.orgId);
     requireRole(membership, 'member');
+    requirePrivateOwnership(task, userId);
     const doneTasks = await ctx.db
       .query('tasks')
       .withIndex('by_repo_status', (q) =>
@@ -339,7 +340,7 @@ export const archiveAllDone = mutation({
   handler: async (ctx, args) => {
     const repo = await ctx.db.get(args.repoId);
     if (!repo) throw new Error('Repo not found');
-    const { membership } = await requireOrgMembership(ctx, repo.orgId);
+    const { userId, membership } = await requireOrgMembership(ctx, repo.orgId);
     requireRole(membership, 'member');
     const doneTasks = await ctx.db
       .query('tasks')
@@ -349,6 +350,7 @@ export const archiveAllDone = mutation({
       .collect();
     const now = Date.now();
     for (const task of doneTasks) {
+      if (task.private && task.createdBy !== userId) continue;
       await ctx.db.patch(task._id, {
         status: TaskStatus.Archived,
         archivedAt: now,
