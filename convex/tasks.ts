@@ -65,6 +65,8 @@ export const listArchived = query({
     let tasks: Doc<'tasks'>[];
     if (args.repoId) {
       const repoId = args.repoId;
+      const repo = await ctx.db.get(repoId);
+      if (!repo || repo.orgId !== args.orgId) return [];
       tasks = await ctx.db
         .query('tasks')
         .withIndex('by_repo_status', (q) =>
