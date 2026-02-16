@@ -46,6 +46,6 @@ trap 'rm -f "$LOCKFILE"' EXIT
 export PORT="$DEV_PORT"
 
 echo "Starting dev environment (app=$DEV_PORT, convex=$CONVEX_CLOUD_PORT/$CONVEX_SITE_PORT)..."
-bunx concurrently -n server,convex -c blue,magenta \
+bunx concurrently -k --kill-signal SIGINT -n server,convex -c blue,magenta \
   "bun run --watch src/server.ts" \
   "$SCRIPT_DIR/convex-local.sh"
