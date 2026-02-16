@@ -63,17 +63,15 @@ export function ClaudeButton({ task }: ClaudeButtonProps) {
     setLoading(true);
     setError(null);
     try {
-      // Kill the PTY process on the server
+      // Kill the PTY process — status update happens via the exit event
+      // relayed through WebSocket to TerminalPanel
       const res = await fetch(`/api/sessions/${session._id}/stop`, {
         method: 'POST',
       });
       if (!res.ok) {
         const data = await res.json();
         setError(data.error ?? 'Failed to stop session');
-        return;
       }
-      // Update session status in Convex (frontend has auth context)
-      await updateSessionStatus({ id: session._id, status: 'stopped' });
     } catch (err) {
       setError(String(err));
     } finally {
