@@ -36,10 +36,8 @@ export const create = mutation({
       .query('repos')
       .withIndex('by_path', (q) => q.eq('path', args.path))
       .first();
-    if (existing && existing.orgId === args.orgId) {
-      throw new Error(
-        `Repo already exists at ${args.path} in this organization`,
-      );
+    if (existing) {
+      throw new Error(`Repo already exists at ${args.path}`);
     }
     return await ctx.db.insert('repos', {
       name: args.name,

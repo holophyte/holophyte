@@ -44,8 +44,11 @@ export const update = mutation({
   handler: async (ctx, args) => {
     const label = await ctx.db.get(args.id);
     if (!label) throw new Error('Label not found');
-    const { membership } = await requireOrgMembership(ctx, label.orgId);
+    const { userId, membership } = await requireOrgMembership(ctx, label.orgId);
     requireRole(membership, 'member');
+    if (label.userId && label.userId !== userId) {
+      throw new Error("Cannot edit another user's personal label");
+    }
     const { id, ...fields } = args;
     const updates: Record<string, string> = {};
     if (fields.name !== undefined) updates.name = fields.name;
