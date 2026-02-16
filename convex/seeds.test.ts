@@ -216,6 +216,7 @@ describe('seeds.plant', () => {
 
     const tasks = await authed.query(api.tasks.listByRepo, { repoId });
     const positions = tasks.map((t) => t.position).sort((a, b) => a - b);
-    expect(positions[1]).toBeGreaterThan(positions[0] ?? 0);
+    expect(positions).toHaveLength(2);
+    expect(positions[1]).toBeGreaterThan(positions[0] as number);
   });
 });
