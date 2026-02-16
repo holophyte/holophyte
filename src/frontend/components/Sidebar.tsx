@@ -21,6 +21,7 @@ import Button from './ui/Button';
 import PageHeader from './ui/PageHeader';
 import ScrollArea from './ui/ScrollArea';
 import Separator from './ui/Separator';
+import Skeleton from './ui/Skeleton';
 
 export function Sidebar() {
   const selectedOrgId = useAppStore((s) => s.selectedOrgId);
@@ -110,6 +111,16 @@ export function Sidebar() {
       </div>
       <ScrollArea className="flex-1">
         <div className="p-2 space-y-1">
+          {repos === undefined && (
+            <>
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="flex items-center gap-2 px-3 py-2">
+                  <Skeleton className="h-4 w-4 shrink-0 rounded" />
+                  <Skeleton className="h-4 flex-1" />
+                </div>
+              ))}
+            </>
+          )}
           {repos?.map((repo) => {
             const repoActiveTasks =
               activeTasksByRepo.get(String(repo._id)) ?? [];
