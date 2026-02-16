@@ -4,9 +4,11 @@ import { Command } from 'cmdk';
 import { useQuery } from 'convex/react';
 import {
   ArrowRight,
+  Columns3,
   FolderGit2,
   LayoutDashboard,
   Lightbulb,
+  PanelBottom,
   Search,
 } from 'lucide-react';
 import { Dialog as RadixDialog, VisuallyHidden } from 'radix-ui';
@@ -24,15 +26,23 @@ const STATUS_LABELS: Record<string, string> = {
 };
 
 const GROUP_HEADING_CLASS =
-  '[&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-1.5 [&_[cmdk-group-heading]]:text-xs [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group-heading]]:text-muted-foreground';
+  '[&_[cmdk-group-heading]]:px-3 [&_[cmdk-group-heading]]:py-1.5 [&_[cmdk-group-heading]]:text-xs [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group-heading]]:text-muted-foreground';
 
 export function CommandPalette() {
   const [open, setOpen] = useState(false);
 
   const selectedOrgId = useAppStore((s) => s.selectedOrgId);
+  const selectedRepoId = useAppStore((s) => s.selectedRepoId);
   const selectRepo = useAppStore((s) => s.selectRepo);
   const selectTask = useAppStore((s) => s.selectTask);
   const selectSeedBox = useAppStore((s) => s.selectSeedBox);
+  const toggleBacklog = useAppStore((s) => s.toggleBacklog);
+  const toggleDoneCollapsed = useAppStore((s) => s.toggleDoneCollapsed);
+  const toggleArchive = useAppStore((s) => s.toggleArchive);
+  const terminalSessionId = useAppStore((s) => s.terminalSessionId);
+  const closeTerminal = useAppStore((s) => s.closeTerminal);
+  const toggleTerminalMinimized = useAppStore((s) => s.toggleTerminalMinimized);
+  const viewMode = useAppStore((s) => s.viewMode);
 
   const tasks = useQuery(
     api.tasks.listAll,
@@ -120,6 +130,62 @@ export function CommandPalette() {
           </CommandItem>
         </Command.Group>
 
+        {/* Actions */}
+        <Command.Group heading="Actions" className={GROUP_HEADING_CLASS}>
+          {viewMode === 'board' && (
+            <>
+              <CommandItem
+                value="action-toggle-backlog"
+                onSelect={() => runAction(toggleBacklog)}
+              >
+                <Columns3 className="h-4 w-4 shrink-0 text-muted-foreground" />
+                Toggle backlog column
+              </CommandItem>
+              <CommandItem
+                value="action-toggle-done"
+                onSelect={() => runAction(toggleDoneCollapsed)}
+              >
+                <Columns3 className="h-4 w-4 shrink-0 text-muted-foreground" />
+                Toggle done column
+              </CommandItem>
+              <CommandItem
+                value="action-toggle-archive"
+                onSelect={() => runAction(toggleArchive)}
+              >
+                <Columns3 className="h-4 w-4 shrink-0 text-muted-foreground" />
+                Toggle archived tasks
+              </CommandItem>
+            </>
+          )}
+          {viewMode === 'seeds' && (
+            <CommandItem
+              value="action-switch-board-view"
+              onSelect={() => runAction(() => selectRepo(selectedRepoId))}
+            >
+              <LayoutDashboard className="h-4 w-4 shrink-0 text-muted-foreground" />
+              Switch to board view
+            </CommandItem>
+          )}
+          {terminalSessionId && (
+            <>
+              <CommandItem
+                value="action-toggle-terminal"
+                onSelect={() => runAction(toggleTerminalMinimized)}
+              >
+                <PanelBottom className="h-4 w-4 shrink-0 text-muted-foreground" />
+                Toggle terminal panel
+              </CommandItem>
+              <CommandItem
+                value="action-close-terminal"
+                onSelect={() => runAction(closeTerminal)}
+              >
+                <PanelBottom className="h-4 w-4 shrink-0 text-muted-foreground" />
+                Close terminal panel
+              </CommandItem>
+            </>
+          )}
+        </Command.Group>
+
         {/* Projects */}
         {repos && repos.length > 0 && (
           <Command.Group heading="Projects" className={GROUP_HEADING_CLASS}>
@@ -161,7 +227,7 @@ export function CommandPalette() {
                   {STATUS_LABELS[task.status] ?? task.status}
                 </span>
                 {repoMap.get(task.repoId) && (
-                  <span className="text-[10px] text-muted-foreground/60 shrink-0">
+                  <span className="text-xs text-muted-foreground shrink-0">
                     {repoMap.get(task.repoId)?.name}
                   </span>
                 )}
@@ -170,6 +236,27 @@ export function CommandPalette() {
           </Command.Group>
         )}
       </Command.List>
+      {/* Keyboard hints footer */}
+      <div className="flex items-center gap-4 border-t px-3 py-2 text-xs text-muted-foreground">
+        <span className="flex items-center gap-1">
+          <kbd className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs">
+            ↑↓
+          </kbd>
+          Navigate
+        </span>
+        <span className="flex items-center gap-1">
+          <kbd className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs">
+            ↵
+          </kbd>
+          Select
+        </span>
+        <span className="flex items-center gap-1">
+          <kbd className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs">
+            esc
+          </kbd>
+          Close
+        </span>
+      </div>
     </Command.Dialog>
   );
 }
@@ -186,7 +273,7 @@ function CommandItem({ children, value, onSelect }: CommandItemProps) {
       value={value}
       onSelect={onSelect}
       className={cn(
-        'flex items-center gap-2 rounded-md px-2 py-2 text-sm cursor-pointer',
+        'flex items-center gap-2 rounded-md px-3 py-3 min-h-11 text-sm cursor-pointer',
         'aria-selected:bg-accent aria-selected:text-accent-foreground',
       )}
     >
