@@ -140,7 +140,7 @@ export default function BulkActionBar({ allTasks }: BulkActionBarProps) {
             Confirm
           </Button>
           <Button
-            variant="ghost"
+            variant="outline"
             size="sm"
             onClick={() => setConfirmDelete(false)}
           >

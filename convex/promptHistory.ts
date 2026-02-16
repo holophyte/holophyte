@@ -43,5 +43,8 @@ export const record = mutation({
       prompt: args.prompt,
       createdAt: Date.now(),
     });
+    await ctx.db.patch(args.taskId, {
+      promptHistoryCount: (task.promptHistoryCount ?? 0) + 1,
+    });
   },
 });

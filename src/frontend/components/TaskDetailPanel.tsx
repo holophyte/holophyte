@@ -311,7 +311,7 @@ function TaskDetailInner({ task }: { task: Task }) {
               </Button>
               <Button
                 size="sm"
-                variant="ghost"
+                variant="outline"
                 onClick={() => setDescription(task.description)}
               >
                 Cancel
@@ -326,6 +326,7 @@ function TaskDetailInner({ task }: { task: Task }) {
               <PromptTemplatePicker repoId={task.repoId} onApply={setPrompt} />
               <PromptHistory
                 taskId={task._id}
+                historyCount={task.promptHistoryCount ?? 0}
                 currentPrompt={prompt}
                 onRestore={setPrompt}
               />
@@ -345,7 +346,7 @@ function TaskDetailInner({ task }: { task: Task }) {
               </Button>
               <Button
                 size="sm"
-                variant="ghost"
+                variant="outline"
                 onClick={() => setPrompt(task.prompt)}
               >
                 Cancel

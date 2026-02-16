@@ -2,6 +2,7 @@ import { api } from '@convex/_generated/api';
 import type { Id } from '@convex/_generated/dataModel';
 import { useQuery } from 'convex/react';
 import { History } from 'lucide-react';
+import { useState } from 'react';
 import { formatTimeAgo } from '@/frontend/lib/dateUtils';
 import { cn } from '@/frontend/lib/utils';
 import Button from './ui/Button';
@@ -9,21 +10,27 @@ import { Popover, PopoverContent, PopoverTrigger } from './ui/Popover';
 
 interface PromptHistoryProps {
   taskId: Id<'tasks'>;
+  historyCount: number;
   currentPrompt: string;
   onRestore: (prompt: string) => void;
 }
 
 export function PromptHistory({
   taskId,
+  historyCount,
   currentPrompt,
   onRestore,
 }: PromptHistoryProps) {
-  const history = useQuery(api.promptHistory.listByTask, { taskId });
+  const [open, setOpen] = useState(false);
+  const history = useQuery(
+    api.promptHistory.listByTask,
+    open ? { taskId } : 'skip',
+  );
 
-  const hasHistory = history && history.length > 0;
+  const hasHistory = historyCount > 0;
 
   return (
-    <Popover>
+    <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <Button
           variant="outline"
@@ -34,7 +41,7 @@ export function PromptHistory({
           <History className="h-3 w-3" />
           History
           <span className="ml-0.5 bg-muted rounded-full px-1.5 text-[10px]">
-            {hasHistory ? history.length : '-'}
+            {hasHistory ? historyCount : '-'}
           </span>
         </Button>
       </PopoverTrigger>
@@ -52,10 +59,13 @@ export function PromptHistory({
                 onClick={() => {
                   if (!isCurrent) onRestore(entry.prompt);
                 }}
+                aria-current={isCurrent ? 'true' : undefined}
                 disabled={isCurrent}
                 className={cn(
                   'w-full text-left px-2 py-1.5 rounded transition-colors',
-                  isCurrent ? 'bg-muted/50 cursor-default' : 'hover:bg-muted',
+                  isCurrent
+                    ? 'bg-primary/10 border border-primary/30 cursor-default'
+                    : 'hover:bg-muted',
                 )}
               >
                 <div className="flex items-center justify-between gap-2">
