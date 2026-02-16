@@ -2,7 +2,7 @@ import { api } from '@convex/_generated/api';
 import type { Doc } from '@convex/_generated/dataModel';
 import { TaskStatus } from '@convex/schema';
 import { useMutation, useQuery } from 'convex/react';
-import { Archive, ChevronsRight } from 'lucide-react';
+import { Archive, ChevronsRight, FolderGit2 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { cn } from '@/frontend/lib/utils';
 import { useAppStore } from '@/frontend/stores/app';
@@ -178,6 +178,9 @@ export function KanbanBoard() {
     return <ArchivePanel />;
   }
 
+  const hasNoRepos =
+    !selectedRepoId && repos !== undefined && repos.length === 0;
+
   return (
     <div className="flex-1 flex flex-col overflow-hidden relative">
       <PageHeader
@@ -201,56 +204,65 @@ export function KanbanBoard() {
           </Button>
         </div>
       </PageHeader>
-      <div className="flex-1 flex gap-4 p-4 overflow-x-auto">
-        {COLUMNS.map((col) => {
-          const columnEl = (
-            <KanbanColumn
-              key={col.status}
-              status={col.status}
-              label={col.label}
-              tasks={getColumnTasks(col.status)}
-              repoMap={repoMap}
-              showRepoBadge={selectedRepoId === null}
-              collapsible={col.status === TaskStatus.Backlog}
-              variant={
-                col.status === TaskStatus.Backlog ? 'backlog' : 'default'
-              }
-              onCollapse={
-                col.status === TaskStatus.Backlog ? toggleBacklog : undefined
-              }
-              onArchiveAll={
-                col.status === TaskStatus.Done && selectedRepoId
-                  ? handleArchiveAll
-                  : undefined
-              }
-              onAddTask={
-                selectedRepoId
-                  ? () => {
-                      setCreateDialogStatus(col.status);
-                      setCreateDialogOpen(true);
-                    }
-                  : undefined
-              }
-            />
-          );
-
-          if (col.status === TaskStatus.Backlog) {
-            return (
-              <BacklogColumn
+      {hasNoRepos ? (
+        <div className="flex-1 flex flex-col items-center justify-center gap-3 text-muted-foreground">
+          <FolderGit2 className="h-10 w-10" />
+          <p className="text-sm">
+            No projects yet. Add a repository to get started.
+          </p>
+        </div>
+      ) : (
+        <div className="flex-1 flex gap-4 p-4 overflow-x-auto">
+          {COLUMNS.map((col) => {
+            const columnEl = (
+              <KanbanColumn
                 key={col.status}
-                collapsed={backlogCollapsed}
-                onToggle={toggleBacklog}
+                status={col.status}
                 label={col.label}
-                count={getColumnTasks(col.status).length}
-              >
-                {columnEl}
-              </BacklogColumn>
+                tasks={getColumnTasks(col.status)}
+                repoMap={repoMap}
+                showRepoBadge={selectedRepoId === null}
+                collapsible={col.status === TaskStatus.Backlog}
+                variant={
+                  col.status === TaskStatus.Backlog ? 'backlog' : 'default'
+                }
+                onCollapse={
+                  col.status === TaskStatus.Backlog ? toggleBacklog : undefined
+                }
+                onArchiveAll={
+                  col.status === TaskStatus.Done && selectedRepoId
+                    ? handleArchiveAll
+                    : undefined
+                }
+                onAddTask={
+                  selectedRepoId
+                    ? () => {
+                        setCreateDialogStatus(col.status);
+                        setCreateDialogOpen(true);
+                      }
+                    : undefined
+                }
+              />
             );
-          }
 
-          return columnEl;
-        })}
-      </div>
+            if (col.status === TaskStatus.Backlog) {
+              return (
+                <BacklogColumn
+                  key={col.status}
+                  collapsed={backlogCollapsed}
+                  onToggle={toggleBacklog}
+                  label={col.label}
+                  count={getColumnTasks(col.status).length}
+                >
+                  {columnEl}
+                </BacklogColumn>
+              );
+            }
+
+            return columnEl;
+          })}
+        </div>
+      )}
       <BulkActionBar allTasks={enrichedTasks} />
       {selectedRepoId && (
         <CreateTaskDialog
