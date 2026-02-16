@@ -102,6 +102,12 @@ const server = Bun.serve<WsData>({
               { status: 400 },
             );
           }
+          if (getSession(sessionId)) {
+            return Response.json(
+              { error: 'Session already active' },
+              { status: 409 },
+            );
+          }
           const result = await startSession({ sessionId, repoPath, prompt });
           return Response.json(result);
         } catch (err) {

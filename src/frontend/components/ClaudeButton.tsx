@@ -1,5 +1,5 @@
 import { api } from '@convex/_generated/api';
-import type { Doc } from '@convex/_generated/dataModel';
+import type { Doc, Id } from '@convex/_generated/dataModel';
 import { useMutation, useQuery } from 'convex/react';
 import { Loader2, Play, Square } from 'lucide-react';
 import { useState } from 'react';
@@ -26,9 +26,10 @@ export function ClaudeButton({ task }: ClaudeButtonProps) {
     if (!task.prompt || !task.repo) return;
     setLoading(true);
     setError(null);
+    let sessionId: Id<'sessions'> | undefined;
     try {
       // Create session in Convex first (frontend has auth context)
-      const sessionId = await createSession({ taskId: task._id });
+      sessionId = await createSession({ taskId: task._id });
 
       // Then start the PTY on the server
       const res = await fetch('/api/sessions/start', {
@@ -42,7 +43,6 @@ export function ClaudeButton({ task }: ClaudeButtonProps) {
       });
       if (!res.ok) {
         const data = await res.json();
-        // Mark session as failed since PTY didn't start
         await updateSessionStatus({ id: sessionId, status: 'failed' });
         setError(data.error ?? 'Failed to launch session');
         return;
@@ -50,6 +50,9 @@ export function ClaudeButton({ task }: ClaudeButtonProps) {
       openTerminal(sessionId);
     } catch (err) {
       setError(String(err));
+      if (sessionId) {
+        await updateSessionStatus({ id: sessionId, status: 'failed' });
+      }
     } finally {
       setLoading(false);
     }
