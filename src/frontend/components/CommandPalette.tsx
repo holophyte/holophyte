@@ -128,35 +128,37 @@ export function CommandPalette() {
         </Command.Group>
 
         {/* Actions */}
-        <Command.Group heading="Actions" className={GROUP_HEADING_CLASS}>
-          {viewMode === 'board' && (
-            <CommandItem
-              value="action-toggle-backlog"
-              onSelect={() => runAction(toggleBacklog)}
-            >
-              <Columns3 className="h-4 w-4 shrink-0 text-muted-foreground" />
-              Toggle backlog column
-            </CommandItem>
-          )}
-          {terminalSessionId && (
-            <>
+        {(viewMode === 'board' || terminalSessionId) && (
+          <Command.Group heading="Actions" className={GROUP_HEADING_CLASS}>
+            {viewMode === 'board' && (
               <CommandItem
-                value="action-toggle-terminal"
-                onSelect={() => runAction(toggleTerminalMinimized)}
+                value="action-toggle-backlog"
+                onSelect={() => runAction(toggleBacklog)}
               >
-                <PanelBottom className="h-4 w-4 shrink-0 text-muted-foreground" />
-                Toggle terminal panel
+                <Columns3 className="h-4 w-4 shrink-0 text-muted-foreground" />
+                Toggle backlog column
               </CommandItem>
-              <CommandItem
-                value="action-close-terminal"
-                onSelect={() => runAction(closeTerminal)}
-              >
-                <PanelBottom className="h-4 w-4 shrink-0 text-muted-foreground" />
-                Close terminal panel
-              </CommandItem>
-            </>
-          )}
-        </Command.Group>
+            )}
+            {terminalSessionId && (
+              <>
+                <CommandItem
+                  value="action-toggle-terminal"
+                  onSelect={() => runAction(toggleTerminalMinimized)}
+                >
+                  <PanelBottom className="h-4 w-4 shrink-0 text-muted-foreground" />
+                  Toggle terminal panel
+                </CommandItem>
+                <CommandItem
+                  value="action-close-terminal"
+                  onSelect={() => runAction(closeTerminal)}
+                >
+                  <PanelBottom className="h-4 w-4 shrink-0 text-muted-foreground" />
+                  Close terminal panel
+                </CommandItem>
+              </>
+            )}
+          </Command.Group>
+        )}
 
         {/* Projects */}
         {repos && repos.length > 0 && (
