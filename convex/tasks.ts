@@ -442,24 +442,33 @@ export const bulkMove = mutation({
     status: taskStatusValidator,
   },
   handler: async (ctx, args) => {
+    const firstId = args.ids[0];
+    if (!firstId) return;
+
+    // Validate auth once using the first task's repo
+    const firstTask = await ctx.db.get(firstId);
+    if (!firstTask) throw new Error('Task not found');
+    const firstRepo = await ctx.db.get(firstTask.repoId);
+    if (!firstRepo) throw new Error('Repo not found');
+    const { userId, membership } = await requireOrgMembership(
+      ctx,
+      firstRepo.orgId,
+    );
+    requireRole(membership, 'member');
+    const orgId = firstRepo.orgId;
+
     // Track max position per repo so tasks land in correct repo-scoped order
     const maxPositionByRepo = new Map<string, number>();
-
     const now = Date.now();
+
     for (const id of args.ids) {
       const task = await ctx.db.get(id);
       if (!task) continue;
 
-      // Verify org access for each task's repo
+      // Verify task belongs to the same org
       const repo = await ctx.db.get(task.repoId);
-      if (!repo) continue;
-      const { userId, membership } = await requireOrgMembership(
-        ctx,
-        repo.orgId,
-      );
-      requireRole(membership, 'member');
+      if (!repo || repo.orgId !== orgId) continue;
       if (task.private && task.createdBy !== userId) continue;
-
       if (task.status === args.status) continue;
 
       // Compute max position scoped to (repoId, status)
@@ -525,13 +534,24 @@ export const bulkMove = mutation({
 export const bulkDelete = mutation({
   args: { ids: v.array(v.id('tasks')) },
   handler: async (ctx, args) => {
+    const firstId = args.ids[0];
+    if (!firstId) return;
+
+    // Validate auth once using the first task's repo
+    const firstTask = await ctx.db.get(firstId);
+    if (!firstTask) throw new Error('Task not found');
+    const firstRepo = await ctx.db.get(firstTask.repoId);
+    if (!firstRepo) throw new Error('Repo not found');
+    const { membership } = await requireOrgMembership(ctx, firstRepo.orgId);
+    requireRole(membership, 'admin');
+    const orgId = firstRepo.orgId;
+
     for (const id of args.ids) {
       const task = await ctx.db.get(id);
       if (!task) continue;
+      // Verify task belongs to the same org
       const repo = await ctx.db.get(task.repoId);
-      if (!repo) continue;
-      const { membership } = await requireOrgMembership(ctx, repo.orgId);
-      requireRole(membership, 'admin');
+      if (!repo || repo.orgId !== orgId) continue;
       // Delete sessions
       const sessions = await ctx.db
         .query('sessions')
@@ -568,17 +588,28 @@ export const bulkToggleLabel = mutation({
     action: v.union(v.literal('add'), v.literal('remove')),
   },
   handler: async (ctx, args) => {
+    const firstId = args.ids[0];
+    if (!firstId) return;
+
+    // Validate auth once using the first task's repo
+    const firstTask = await ctx.db.get(firstId);
+    if (!firstTask) throw new Error('Task not found');
+    const firstRepo = await ctx.db.get(firstTask.repoId);
+    if (!firstRepo) throw new Error('Repo not found');
+    const { userId, membership } = await requireOrgMembership(
+      ctx,
+      firstRepo.orgId,
+    );
+    requireRole(membership, 'member');
+    const orgId = firstRepo.orgId;
+
     const now = Date.now();
     for (const id of args.ids) {
       const task = await ctx.db.get(id);
       if (!task) continue;
+      // Verify task belongs to the same org
       const repo = await ctx.db.get(task.repoId);
-      if (!repo) continue;
-      const { userId, membership } = await requireOrgMembership(
-        ctx,
-        repo.orgId,
-      );
-      requireRole(membership, 'member');
+      if (!repo || repo.orgId !== orgId) continue;
       if (task.private && task.createdBy !== userId) continue;
       const current = task.labelIds ?? [];
       const updated =

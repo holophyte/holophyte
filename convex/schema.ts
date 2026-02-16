@@ -78,7 +78,8 @@ export default defineSchema({
     name: v.string(),
     path: v.string(),
     createdAt: v.number(),
-    orgId: v.id('organizations'),
+    // Optional during migration — tighten to required after running backfill
+    orgId: v.optional(v.id('organizations')),
   })
     .index('by_path', ['path'])
     .index('by_org', ['orgId']),
@@ -105,7 +106,8 @@ export default defineSchema({
     // Archive timestamp
     archivedAt: v.optional(v.number()),
     // Auth: who created + private flag
-    createdBy: v.id('users'),
+    // Optional during migration — tighten to required after running backfill
+    createdBy: v.optional(v.id('users')),
     private: v.optional(v.boolean()),
   })
     .index('by_repo_status', ['repoId', 'status'])
@@ -115,7 +117,8 @@ export default defineSchema({
     name: v.string(),
     color: v.string(),
     createdAt: v.number(),
-    orgId: v.id('organizations'),
+    // Optional during migration — tighten to required after running backfill
+    orgId: v.optional(v.id('organizations')),
     userId: v.optional(v.id('users')),
   })
     .index('by_org', ['orgId'])
@@ -135,7 +138,8 @@ export default defineSchema({
     status: v.union(v.literal('active'), v.literal('planted')),
     plantedToTaskId: v.optional(v.id('tasks')),
     createdAt: v.number(),
-    orgId: v.id('organizations'),
+    // Optional during migration — tighten to required after running backfill
+    orgId: v.optional(v.id('organizations')),
   })
     .index('by_status', ['status'])
     .index('by_org', ['orgId']),
@@ -147,7 +151,8 @@ export default defineSchema({
     repoId: v.optional(v.id('repos')),
     createdAt: v.number(),
     updatedAt: v.number(),
-    userId: v.id('users'),
+    // Optional during migration — tighten to required after running backfill
+    userId: v.optional(v.id('users')),
   }).index('by_repo', ['repoId']),
 
   promptHistory: defineTable({
