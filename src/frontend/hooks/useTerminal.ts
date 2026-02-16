@@ -1,14 +1,32 @@
 import { FitAddon } from '@xterm/addon-fit';
 import { Terminal } from '@xterm/xterm';
 import { useEffect, useRef } from 'react';
+import type { SessionExitEvent } from '@/claude/manager';
 import { ansi } from '@/constants';
 import '@xterm/xterm/css/xterm.css';
 
-export function useTerminal(sessionId: string | null) {
+interface UseTerminalOptions {
+  sessionId: string | null;
+  onSessionExit?: (event: SessionExitEvent) => void;
+}
+
+function tryParseExitEvent(data: string): SessionExitEvent | null {
+  try {
+    const parsed = JSON.parse(data);
+    if (parsed?.type === 'session_exit') return parsed as SessionExitEvent;
+  } catch {
+    // Not JSON — regular terminal data
+  }
+  return null;
+}
+
+export function useTerminal({ sessionId, onSessionExit }: UseTerminalOptions) {
   const containerRef = useRef<HTMLDivElement>(null);
   const terminalRef = useRef<Terminal | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
+  const onSessionExitRef = useRef(onSessionExit);
+  onSessionExitRef.current = onSessionExit;
 
   useEffect(() => {
     if (!sessionId || !containerRef.current) return;
@@ -58,6 +76,13 @@ export function useTerminal(sessionId: string | null) {
     };
 
     ws.onmessage = (event) => {
+      const exitEvent = tryParseExitEvent(event.data);
+      if (exitEvent) {
+        const label = exitEvent.status === 'completed' ? 'completed' : 'failed';
+        terminal.writeln(`\r\n${ansi.green(`Session ${label}.`)}`);
+        onSessionExitRef.current?.(exitEvent);
+        return;
+      }
       terminal.write(event.data);
     };
 

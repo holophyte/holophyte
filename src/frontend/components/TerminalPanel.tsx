@@ -1,4 +1,9 @@
+import { api } from '@convex/_generated/api';
+import type { Id } from '@convex/_generated/dataModel';
+import { useMutation } from 'convex/react';
 import { ChevronDown, ChevronUp, X } from 'lucide-react';
+import { useCallback } from 'react';
+import type { SessionExitEvent } from '@/claude/manager';
 import { useTerminal } from '@/frontend/hooks/useTerminal';
 import { cn } from '@/frontend/lib/utils';
 import { useAppStore } from '@/frontend/stores/app';
@@ -9,8 +14,23 @@ export function TerminalPanel() {
   const terminalMinimized = useAppStore((s) => s.terminalMinimized);
   const closeTerminal = useAppStore((s) => s.closeTerminal);
   const toggleTerminalMinimized = useAppStore((s) => s.toggleTerminalMinimized);
+  const updateSessionStatus = useMutation(api.sessions.updateStatus);
 
-  const terminalRef = useTerminal(terminalSessionId);
+  const handleSessionExit = useCallback(
+    (event: SessionExitEvent) => {
+      if (!terminalSessionId) return;
+      updateSessionStatus({
+        id: terminalSessionId as Id<'sessions'>,
+        status: event.status,
+      });
+    },
+    [terminalSessionId, updateSessionStatus],
+  );
+
+  const terminalRef = useTerminal({
+    sessionId: terminalSessionId,
+    onSessionExit: handleSessionExit,
+  });
 
   return (
     <div

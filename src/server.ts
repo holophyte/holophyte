@@ -2,6 +2,7 @@ import { ansi } from '@/constants';
 import homepage from '../public/index.html';
 import {
   getSession,
+  onSessionExit,
   resizeSession,
   startSession,
   stopSession,
@@ -11,7 +12,7 @@ import {
 
 interface WsData {
   sessionId: string;
-  unsubscribe?: () => void;
+  cleanups: (() => void)[];
 }
 
 const server = Bun.serve<WsData>({
@@ -94,14 +95,14 @@ const server = Bun.serve<WsData>({
     '/api/sessions/start': {
       async POST(req: Request) {
         try {
-          const { taskId, repoPath, prompt } = await req.json();
-          if (!taskId || !repoPath || !prompt) {
+          const { sessionId, repoPath, prompt } = await req.json();
+          if (!sessionId || !repoPath || !prompt) {
             return Response.json(
-              { error: 'taskId, repoPath, and prompt are required' },
+              { error: 'sessionId, repoPath, and prompt are required' },
               { status: 400 },
             );
           }
-          const result = await startSession({ taskId, repoPath, prompt });
+          const result = await startSession({ sessionId, repoPath, prompt });
           return Response.json(result);
         } catch (err) {
           console.error('Failed to start session:', err);
@@ -119,7 +120,7 @@ const server = Bun.serve<WsData>({
     if (stopMatch && req.method === 'POST') {
       const sessionId = stopMatch[1] ?? '';
       try {
-        await stopSession(sessionId);
+        stopSession(sessionId);
         return Response.json({ ok: true });
       } catch (err) {
         console.error('Failed to stop session:', err);
@@ -144,7 +145,9 @@ const server = Bun.serve<WsData>({
     // WebSocket upgrade for /ws/terminal/:sessionId
     if (url.pathname.startsWith('/ws/terminal/')) {
       const sessionId = url.pathname.slice('/ws/terminal/'.length);
-      const upgraded = server.upgrade(req, { data: { sessionId } });
+      const upgraded = server.upgrade(req, {
+        data: { sessionId, cleanups: [] },
+      });
       if (upgraded) return undefined;
       return new Response('WebSocket upgrade failed', { status: 400 });
     }
@@ -162,9 +165,16 @@ const server = Bun.serve<WsData>({
         return;
       }
 
-      ws.data.unsubscribe = subscribe(sessionId, (data) => {
+      const unsubData = subscribe(sessionId, (data) => {
         ws.send(data);
       });
+
+      const unsubExit = onSessionExit(sessionId, (event) => {
+        ws.send(JSON.stringify(event));
+        ws.close();
+      });
+
+      ws.data.cleanups = [unsubData, unsubExit];
     },
 
     message(ws, message) {
@@ -172,7 +182,9 @@ const server = Bun.serve<WsData>({
     },
 
     close(ws) {
-      ws.data.unsubscribe?.();
+      for (const cleanup of ws.data.cleanups) {
+        cleanup();
+      }
     },
   },
 

@@ -1,6 +1,6 @@
 import { api } from '@convex/_generated/api';
 import type { Doc } from '@convex/_generated/dataModel';
-import { useQuery } from 'convex/react';
+import { useMutation, useQuery } from 'convex/react';
 import { Loader2, Play, Square } from 'lucide-react';
 import { useState } from 'react';
 import { useStickyValue } from '@/frontend/hooks/useStickyValue';
@@ -16,6 +16,8 @@ export function ClaudeButton({ task }: ClaudeButtonProps) {
     useQuery(api.sessions.getByTask, { taskId: task._id }),
     task._id,
   );
+  const createSession = useMutation(api.sessions.create);
+  const updateSessionStatus = useMutation(api.sessions.updateStatus);
   const openTerminal = useAppStore((s) => s.openTerminal);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -25,24 +27,27 @@ export function ClaudeButton({ task }: ClaudeButtonProps) {
     setLoading(true);
     setError(null);
     try {
+      // Create session in Convex first (frontend has auth context)
+      const sessionId = await createSession({ taskId: task._id });
+
+      // Then start the PTY on the server
       const res = await fetch('/api/sessions/start', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          taskId: task._id,
+          sessionId,
           repoPath: task.repo.path,
           prompt: task.prompt,
         }),
       });
       if (!res.ok) {
         const data = await res.json();
+        // Mark session as failed since PTY didn't start
+        await updateSessionStatus({ id: sessionId, status: 'failed' });
         setError(data.error ?? 'Failed to launch session');
         return;
       }
-      const data = await res.json();
-      if (data.sessionId) {
-        openTerminal(data.sessionId);
-      }
+      openTerminal(sessionId);
     } catch (err) {
       setError(String(err));
     } finally {
@@ -55,13 +60,17 @@ export function ClaudeButton({ task }: ClaudeButtonProps) {
     setLoading(true);
     setError(null);
     try {
+      // Kill the PTY process on the server
       const res = await fetch(`/api/sessions/${session._id}/stop`, {
         method: 'POST',
       });
       if (!res.ok) {
         const data = await res.json();
         setError(data.error ?? 'Failed to stop session');
+        return;
       }
+      // Update session status in Convex (frontend has auth context)
+      await updateSessionStatus({ id: session._id, status: 'stopped' });
     } catch (err) {
       setError(String(err));
     } finally {
