@@ -229,9 +229,8 @@ export const update = mutation({
           prompt: trimmed,
           createdAt: now,
         });
-        const current = await ctx.db.get(id);
         await ctx.db.patch(id, {
-          promptHistoryCount: (current?.promptHistoryCount ?? 0) + 1,
+          promptHistoryCount: (task.promptHistoryCount ?? 0) + 1,
         });
       }
     }
