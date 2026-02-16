@@ -10,6 +10,7 @@ export default function Avatar({ src, name, className }: AvatarProps) {
   const initials = name
     ? name
         .split(' ')
+        .filter(Boolean)
         .map((n) => n[0])
         .join('')
         .slice(0, 2)
