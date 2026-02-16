@@ -19,8 +19,10 @@ export async function requireAuth(ctx: QueryCtx | MutationCtx) {
 /** Returns userId + membership or throws — verifies user belongs to org. */
 export async function requireOrgMembership(
   ctx: QueryCtx | MutationCtx,
-  orgId: Id<'organizations'>,
+  orgId: Id<'organizations'> | undefined,
 ) {
+  if (!orgId)
+    throw new Error('Resource missing orgId — run backfill migration');
   const userId = await requireAuth(ctx);
   const membership = await ctx.db
     .query('memberships')
@@ -49,5 +51,7 @@ export async function getOrgIdFromTask(
   if (!task) throw new Error('Task not found');
   const repo = await ctx.db.get(task.repoId);
   if (!repo) throw new Error('Repo not found');
+  if (!repo.orgId)
+    throw new Error('Repo missing orgId — run backfill migration');
   return repo.orgId;
 }
