@@ -20,16 +20,21 @@ export function PromptHistory({
 }: PromptHistoryProps) {
   const history = useQuery(api.promptHistory.listByTask, { taskId });
 
-  if (!history || history.length === 0) return null;
+  const hasHistory = history && history.length > 0;
 
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <Button variant="outline" size="sm" className="h-7 gap-1 text-xs">
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-7 min-w-[5.5rem] gap-1 text-xs"
+          disabled={!hasHistory}
+        >
           <History className="h-3 w-3" />
           History
           <span className="ml-0.5 bg-muted rounded-full px-1.5 text-[10px]">
-            {history.length}
+            {hasHistory ? history.length : '-'}
           </span>
         </Button>
       </PopoverTrigger>
@@ -38,7 +43,7 @@ export function PromptHistory({
           Prompt History
         </p>
         <div className="space-y-0.5 max-h-72 overflow-y-auto">
-          {history.map((entry, i) => {
+          {(history ?? []).map((entry, i, arr) => {
             const isCurrent = entry.prompt === currentPrompt;
             return (
               <button
@@ -55,7 +60,7 @@ export function PromptHistory({
               >
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-[10px] text-muted-foreground">
-                    {i === 0 ? 'Latest' : `v${history.length - i}`}
+                    {i === 0 ? 'Latest' : `v${arr.length - i}`}
                   </span>
                   <span className="text-[10px] text-muted-foreground">
                     {formatTimeAgo(entry.createdAt)}
