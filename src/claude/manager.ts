@@ -1,20 +1,18 @@
-import { api } from '@convex/_generated/api';
-import type { Id } from '@convex/_generated/dataModel';
 import type { Subprocess } from 'bun';
-import { ConvexHttpClient } from 'convex/browser';
 import { TERMINAL_DEFAULTS } from '@/constants';
+
+/** Sent to subscribers when the PTY process exits. */
+export interface SessionExitEvent {
+  type: 'session_exit';
+  status: 'completed' | 'failed';
+  exitCode: number;
+}
 
 interface Session {
   proc: Subprocess;
-  taskId: Id<'tasks'>;
-  convexSessionId: Id<'sessions'>;
   subscribers: Set<(data: string) => void>;
+  exitCallbacks: Set<(event: SessionExitEvent) => void>;
 }
-
-if (!process.env.CONVEX_URL) {
-  throw new Error('CONVEX_URL environment variable is required');
-}
-const convex = new ConvexHttpClient(process.env.CONVEX_URL);
 
 const sessions = new Map<string, Session>();
 
@@ -72,25 +70,19 @@ export function getActiveSessions(): string[] {
 }
 
 export async function startSession(opts: {
-  taskId: Id<'tasks'>;
+  sessionId: string;
   repoPath: string;
   prompt: string;
 }): Promise<{ sessionId: string }> {
   const claudePath = await resolveClaudePath();
   const env = await getEnv();
 
-  // Create session in Convex
-  const convexSessionId = await convex.mutation(api.sessions.create, {
-    taskId: opts.taskId,
-  });
-
-  const sessionId = convexSessionId;
+  const { sessionId } = opts;
 
   const session: Session = {
     proc: null as unknown as Subprocess,
-    taskId: opts.taskId,
-    convexSessionId,
     subscribers: new Set(),
+    exitCallbacks: new Set(),
   };
 
   // Use Bun's native PTY support (available since Bun v1.3.5)
@@ -116,15 +108,14 @@ export async function startSession(opts: {
   sessions.set(sessionId, session);
 
   // Handle process exit
-  proc.exited.then(async (exitCode) => {
-    const status = exitCode === 0 ? 'completed' : 'failed';
-    try {
-      await convex.mutation(api.sessions.updateStatus, {
-        id: convexSessionId,
-        status,
-      });
-    } catch (err) {
-      console.error('Failed to update session status:', err);
+  proc.exited.then((exitCode) => {
+    const event: SessionExitEvent = {
+      type: 'session_exit',
+      status: exitCode === 0 ? 'completed' : 'failed',
+      exitCode,
+    };
+    for (const cb of session.exitCallbacks) {
+      cb(event);
     }
     proc.terminal?.close();
     sessions.delete(sessionId);
@@ -133,23 +124,13 @@ export async function startSession(opts: {
   return { sessionId };
 }
 
-export async function stopSession(sessionId: string): Promise<void> {
+export function stopSession(sessionId: string): void {
   const session = sessions.get(sessionId);
   if (!session) return;
 
   session.proc.terminal?.close();
   session.proc.kill('SIGKILL');
-
-  try {
-    await convex.mutation(api.sessions.updateStatus, {
-      id: session.convexSessionId,
-      status: 'stopped',
-    });
-  } catch (err) {
-    console.error('Failed to update session status:', err);
-  }
-
-  sessions.delete(sessionId);
+  // Session cleanup happens in the proc.exited handler
 }
 
 export function resizeSession(
@@ -171,6 +152,19 @@ export function subscribe(
   session.subscribers.add(callback);
   return () => {
     session.subscribers.delete(callback);
+  };
+}
+
+/** Register a callback for when the session's PTY process exits. */
+export function onSessionExit(
+  sessionId: string,
+  callback: (event: SessionExitEvent) => void,
+): () => void {
+  const session = sessions.get(sessionId);
+  if (!session) return () => {};
+  session.exitCallbacks.add(callback);
+  return () => {
+    session.exitCallbacks.delete(callback);
   };
 }
 

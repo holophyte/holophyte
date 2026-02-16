@@ -1,30 +1,5 @@
 // @vitest-environment node
-import type { Id } from '@convex/_generated/dataModel';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-
-// Set before manager module loads (guard requires CONVEX_URL)
-process.env.CONVEX_URL = 'https://test.convex.cloud';
-
-const mockTaskId = 'task-id' as unknown as Id<'tasks'>;
-
-// Mock convex before importing manager
-const mockMutation = vi.fn().mockResolvedValue('mock-session-id');
-vi.mock('convex/browser', () => {
-  return {
-    ConvexHttpClient: class {
-      mutation = mockMutation;
-    },
-  };
-});
-
-vi.mock('@convex/_generated/api', () => ({
-  api: {
-    sessions: {
-      create: 'sessions:create',
-      updateStatus: 'sessions:updateStatus',
-    },
-  },
-}));
 
 // Mock Bun.spawn and Bun.file
 function createMockTerminal() {
@@ -89,7 +64,7 @@ afterEach(async () => {
   // Clean up sessions between tests
   const { getActiveSessions, stopSession } = await import('./manager');
   for (const id of getActiveSessions()) {
-    await stopSession(id);
+    stopSession(id);
   }
   vi.restoreAllMocks();
 });
@@ -102,14 +77,14 @@ describe('claude/manager', () => {
       );
 
       const result = await startSession({
-        taskId: mockTaskId,
+        sessionId: 'test-session-id',
         repoPath: '/tmp/test-repo',
         prompt: 'fix the bug',
       });
 
-      expect(result.sessionId).toBe('mock-session-id');
-      expect(getSession('mock-session-id')).toBeDefined();
-      expect(getActiveSessions()).toContain('mock-session-id');
+      expect(result.sessionId).toBe('test-session-id');
+      expect(getSession('test-session-id')).toBeDefined();
+      expect(getActiveSessions()).toContain('test-session-id');
 
       // Verify Bun.spawn was called with terminal option
       expect(Bun.spawn).toHaveBeenCalledWith(
@@ -126,28 +101,25 @@ describe('claude/manager', () => {
   });
 
   describe('stopSession', () => {
-    it('closes terminal, kills process with SIGKILL, and removes session', async () => {
-      const { startSession, stopSession, getSession } = await import(
-        './manager'
-      );
+    it('closes terminal and kills process with SIGKILL', async () => {
+      const { startSession, stopSession } = await import('./manager');
 
       const { sessionId } = await startSession({
-        taskId: mockTaskId,
+        sessionId: 'test-session-id',
         repoPath: '/tmp/test-repo',
         prompt: 'fix the bug',
       });
 
-      await stopSession(sessionId);
+      stopSession(sessionId);
 
       expect(mockTerminal.close).toHaveBeenCalled();
       expect(mockProc.proc.kill).toHaveBeenCalledWith('SIGKILL');
-      expect(getSession(sessionId)).toBeUndefined();
     });
 
     it('does nothing for a non-existent session', async () => {
       const { stopSession } = await import('./manager');
       // Should not throw
-      await stopSession('non-existent-id');
+      stopSession('non-existent-id');
     });
   });
 
@@ -156,7 +128,7 @@ describe('claude/manager', () => {
       const { startSession, subscribe } = await import('./manager');
 
       const { sessionId } = await startSession({
-        taskId: mockTaskId,
+        sessionId: 'test-session-id',
         repoPath: '/tmp/test-repo',
         prompt: 'test',
       });
@@ -183,7 +155,7 @@ describe('claude/manager', () => {
       const { startSession, writeToSession } = await import('./manager');
 
       const { sessionId } = await startSession({
-        taskId: mockTaskId,
+        sessionId: 'test-session-id',
         repoPath: '/tmp/test-repo',
         prompt: 'test',
       });
@@ -204,7 +176,7 @@ describe('claude/manager', () => {
       const { startSession, resizeSession } = await import('./manager');
 
       const { sessionId } = await startSession({
-        taskId: mockTaskId,
+        sessionId: 'test-session-id',
         repoPath: '/tmp/test-repo',
         prompt: 'test',
       });
@@ -221,14 +193,19 @@ describe('claude/manager', () => {
   });
 
   describe('process exit handling', () => {
-    it('cleans up session on process exit with code 0', async () => {
-      const { startSession, getSession } = await import('./manager');
+    it('cleans up session and fires exit callbacks on process exit', async () => {
+      const { startSession, getSession, onSessionExit } = await import(
+        './manager'
+      );
 
       const { sessionId } = await startSession({
-        taskId: mockTaskId,
+        sessionId: 'test-session-id',
         repoPath: '/tmp/test-repo',
         prompt: 'test',
       });
+
+      const exitCallback = vi.fn();
+      onSessionExit(sessionId, exitCallback);
 
       expect(getSession(sessionId)).toBeDefined();
 
@@ -239,6 +216,33 @@ describe('claude/manager', () => {
 
       expect(getSession(sessionId)).toBeUndefined();
       expect(mockTerminal.close).toHaveBeenCalled();
+      expect(exitCallback).toHaveBeenCalledWith({
+        type: 'session_exit',
+        status: 'completed',
+        exitCode: 0,
+      });
+    });
+
+    it('reports failed status for non-zero exit code', async () => {
+      const { startSession, onSessionExit } = await import('./manager');
+
+      const { sessionId } = await startSession({
+        sessionId: 'test-session-id',
+        repoPath: '/tmp/test-repo',
+        prompt: 'test',
+      });
+
+      const exitCallback = vi.fn();
+      onSessionExit(sessionId, exitCallback);
+
+      mockProc.resolveExited(1);
+      await new Promise((r) => setTimeout(r, 10));
+
+      expect(exitCallback).toHaveBeenCalledWith({
+        type: 'session_exit',
+        status: 'failed',
+        exitCode: 1,
+      });
     });
   });
 });
