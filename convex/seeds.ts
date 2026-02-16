@@ -106,6 +106,13 @@ export const plant = mutation({
       createdBy: userId,
     });
 
+    // Record initial prompt history (matching tasks.create behavior)
+    await ctx.db.insert('promptHistory', {
+      taskId,
+      prompt: args.prompt?.trim() ?? '',
+      createdAt: now,
+    });
+
     await ctx.db.patch(args.id, {
       status: 'planted',
       plantedToTaskId: taskId,
