@@ -23,6 +23,7 @@ import Label from './ui/Label';
 import PageHeader from './ui/PageHeader';
 import { Popover, PopoverContent, PopoverTrigger } from './ui/Popover';
 import Separator from './ui/Separator';
+import Skeleton from './ui/Skeleton';
 import Textarea from './ui/Textarea';
 
 type Task = NonNullable<FunctionReturnType<typeof api.tasks.get>>;
@@ -53,7 +54,37 @@ export function TaskDetailPanel() {
           <X className="h-4 w-4" />
         </Button>
       </PageHeader>
-      {displayTask && <TaskDetailInner task={displayTask} />}
+      {displayTask ? (
+        <TaskDetailInner task={displayTask} />
+      ) : (
+        <TaskDetailSkeleton />
+      )}
+    </div>
+  );
+}
+
+function TaskDetailSkeleton() {
+  return (
+    <div className="flex-1 overflow-y-auto p-4 space-y-4">
+      <Skeleton className="h-9 w-full" />
+      <div className="space-y-1">
+        <Skeleton className="h-3 w-16" />
+        <Skeleton className="h-4 w-32" />
+      </div>
+      <Skeleton className="h-4 w-24" />
+      <div className="space-y-2">
+        <Skeleton className="h-3 w-12" />
+        <Skeleton className="h-9 w-full" />
+      </div>
+      <Separator />
+      <div className="space-y-2">
+        <Skeleton className="h-4 w-20" />
+        <Skeleton className="h-20 w-full" />
+      </div>
+      <div className="space-y-2">
+        <Skeleton className="h-4 w-24" />
+        <Skeleton className="h-28 w-full" />
+      </div>
     </div>
   );
 }
