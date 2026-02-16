@@ -78,8 +78,8 @@ export function useTerminal({ sessionId, onSessionExit }: UseTerminalOptions) {
     ws.onmessage = (event) => {
       const exitEvent = tryParseExitEvent(event.data);
       if (exitEvent) {
-        const label = exitEvent.status === 'completed' ? 'completed' : 'failed';
-        terminal.writeln(`\r\n${ansi.green(`Session ${label}.`)}`);
+        const color = exitEvent.status === 'completed' ? ansi.green : ansi.red;
+        terminal.writeln(`\r\n${color(`Session ${exitEvent.status}.`)}`);
         onSessionExitRef.current?.(exitEvent);
         return;
       }

@@ -4,12 +4,13 @@ import { TERMINAL_DEFAULTS } from '@/constants';
 /** Sent to subscribers when the PTY process exits. */
 export interface SessionExitEvent {
   type: 'session_exit';
-  status: 'completed' | 'failed';
+  status: 'completed' | 'failed' | 'stopped';
   exitCode: number;
 }
 
 interface Session {
   proc: Subprocess;
+  stoppedByUser: boolean;
   subscribers: Set<(data: string) => void>;
   exitCallbacks: Set<(event: SessionExitEvent) => void>;
 }
@@ -81,6 +82,7 @@ export async function startSession(opts: {
 
   const session: Session = {
     proc: null as unknown as Subprocess,
+    stoppedByUser: false,
     subscribers: new Set(),
     exitCallbacks: new Set(),
   };
@@ -109,11 +111,13 @@ export async function startSession(opts: {
 
   // Handle process exit
   proc.exited.then((exitCode) => {
-    const event: SessionExitEvent = {
-      type: 'session_exit',
-      status: exitCode === 0 ? 'completed' : 'failed',
-      exitCode,
-    };
+    let status: SessionExitEvent['status'];
+    if (session.stoppedByUser) {
+      status = 'stopped';
+    } else {
+      status = exitCode === 0 ? 'completed' : 'failed';
+    }
+    const event: SessionExitEvent = { type: 'session_exit', status, exitCode };
     for (const cb of session.exitCallbacks) {
       cb(event);
     }
@@ -128,6 +132,7 @@ export function stopSession(sessionId: string): void {
   const session = sessions.get(sessionId);
   if (!session) return;
 
+  session.stoppedByUser = true;
   session.proc.terminal?.close();
   session.proc.kill('SIGKILL');
   // Session cleanup happens in the proc.exited handler
