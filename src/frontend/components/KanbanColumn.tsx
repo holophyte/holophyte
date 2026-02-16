@@ -133,6 +133,7 @@ export function KanbanColumn({
   };
 
   return (
+    // biome-ignore lint/a11y/useSemanticElements: div with role needed for drag-and-drop
     <div
       role="group"
       aria-label={`${label} column`}

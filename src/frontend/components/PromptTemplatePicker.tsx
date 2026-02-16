@@ -3,7 +3,6 @@ import type { Doc, Id } from '@convex/_generated/dataModel';
 import { useMutation, useQuery } from 'convex/react';
 import { FileText, Globe, Pencil, Plus, Trash2 } from 'lucide-react';
 import { useState } from 'react';
-import { cn } from '@/frontend/lib/utils';
 import Button from './ui/Button';
 import {
   Dialog,

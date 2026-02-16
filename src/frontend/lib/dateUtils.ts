@@ -43,5 +43,5 @@ export function dateInputToTimestamp(value: string): number {
   if (parts.length !== 3 || parts.some(Number.isNaN)) {
     throw new Error('Invalid date format');
   }
-  return new Date(parts[0]!, parts[1]! - 1, parts[2]).getTime();
+  return new Date(parts[0] ?? 0, (parts[1] ?? 1) - 1, parts[2]).getTime();
 }

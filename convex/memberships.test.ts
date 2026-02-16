@@ -66,7 +66,7 @@ describe('memberships.invite', () => {
 
   it('admin cannot invite with owner role', async () => {
     const t = convexTest(schema);
-    const { authed: owner, orgId } = await setupOwnerWithOrg(t);
+    const { orgId } = await setupOwnerWithOrg(t);
     const { userId: adminId, authed: admin } = await setupUser(t, 'Admin');
     const { userId: newUserId } = await setupUser(t, 'New');
 
@@ -132,7 +132,7 @@ describe('memberships.updateRole', () => {
 
   it('admin cannot promote to owner', async () => {
     const t = convexTest(schema);
-    const { authed: owner, orgId } = await setupOwnerWithOrg(t);
+    const { orgId } = await setupOwnerWithOrg(t);
     const { userId: adminId, authed: admin } = await setupUser(t, 'Admin');
     const { userId: memberId } = await setupUser(t, 'Member');
 
@@ -166,7 +166,7 @@ describe('memberships.updateRole', () => {
 
     // Add a second owner
     const { userId: owner2Id, authed: owner2 } = await setupUser(t, 'Owner 2');
-    const owner2MembershipId = await t.run(async (ctx) => {
+    await t.run(async (ctx) => {
       return await ctx.db.insert('memberships', {
         userId: owner2Id,
         orgId,
@@ -179,11 +179,13 @@ describe('memberships.updateRole', () => {
     const firstOwnerMembership = memberships.find(
       (m) => m.role === 'owner' && m.userId !== owner2Id,
     );
+    if (!firstOwnerMembership)
+      throw new Error('expected first owner membership');
 
     // owner2 tries to demote original owner
     await expect(
       owner2.mutation(api.memberships.updateRole, {
-        id: firstOwnerMembership!._id,
+        id: firstOwnerMembership._id,
         role: 'admin',
       }),
     ).rejects.toThrow('Cannot change the role of an owner');
@@ -276,6 +278,6 @@ describe('memberships.leave', () => {
 
     const members = await owner2.query(api.memberships.listByOrg, { orgId });
     expect(members).toHaveLength(1);
-    expect(members[0]!.role).toBe('owner');
+    expect(members[0]?.role).toBe('owner');
   });
 });

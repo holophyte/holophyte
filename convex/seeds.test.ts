@@ -31,7 +31,7 @@ describe('seeds.create', () => {
   it('creates an active seed with title', async () => {
     const t = convexTest(schema);
     const { authed, orgId } = await (async () => {
-      const { userId, authed } = await setupUser(t, 'Owner');
+      const { authed } = await setupUser(t, 'Owner');
       const orgId = await authed.mutation(api.organizations.create, {
         name: 'Test Org',
         slug: 'test-org',
@@ -216,6 +216,6 @@ describe('seeds.plant', () => {
 
     const tasks = await authed.query(api.tasks.listByRepo, { repoId });
     const positions = tasks.map((t) => t.position).sort((a, b) => a - b);
-    expect(positions[1]).toBeGreaterThan(positions[0]!);
+    expect(positions[1]).toBeGreaterThan(positions[0] ?? 0);
   });
 });

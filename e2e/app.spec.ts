@@ -152,5 +152,5 @@ test('sidebar and kanban headers have the same height', async ({ page }) => {
   const kanbanBox = await kanbanHeader.boundingBox();
   expect(sidebarBox).not.toBeNull();
   expect(kanbanBox).not.toBeNull();
-  expect(sidebarBox!.height).toBe(kanbanBox!.height);
+  expect(sidebarBox?.height).toBe(kanbanBox?.height);
 });

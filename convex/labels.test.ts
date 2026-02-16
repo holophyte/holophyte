@@ -123,7 +123,7 @@ describe('labels.remove', () => {
 
   it('removes label from tasks that reference it', async () => {
     const t = convexTest(schema);
-    const { userId, authed, orgId } = await setupOwnerWithOrg(t);
+    const { authed, orgId } = await setupOwnerWithOrg(t);
 
     const repoId = await authed.mutation(api.repos.create, {
       name: 'test-repo',
@@ -209,7 +209,7 @@ describe('labels with tasks', () => {
 describe('labels - personal labels', () => {
   it('personal labels are only visible to their creator', async () => {
     const t = convexTest(schema);
-    const { userId, authed: owner, orgId } = await setupOwnerWithOrg(t);
+    const { authed: owner, orgId } = await setupOwnerWithOrg(t);
     const { userId: memberId, authed: member } = await setupUser(t, 'Member');
 
     // Add member to org
@@ -243,6 +243,6 @@ describe('labels - personal labels', () => {
     // Member only sees the shared label
     const memberLabels = await member.query(api.labels.list, { orgId });
     expect(memberLabels).toHaveLength(1);
-    expect(memberLabels[0]!.name).toBe('Shared Label');
+    expect(memberLabels[0]?.name).toBe('Shared Label');
   });
 });

@@ -15,7 +15,7 @@ async function setupUser(t: ReturnType<typeof convexTest>, name = 'Test User') {
 describe('organizations.create', () => {
   it('creates an org and auto-creates owner membership', async () => {
     const t = convexTest(schema);
-    const { userId, authed } = await setupUser(t);
+    const { authed } = await setupUser(t);
 
     const orgId = await authed.mutation(api.organizations.create, {
       name: 'My Org',
@@ -78,7 +78,7 @@ describe('organizations.createPersonal', () => {
       personal: true,
       role: 'owner',
     });
-    expect(orgs[0]!.slug).toBe(`personal-${userId}`);
+    expect(orgs[0]?.slug).toBe(`personal-${userId}`);
   });
 
   it('is idempotent — calling twice returns the same orgId', async () => {
@@ -117,11 +117,11 @@ describe('organizations.listByUser', () => {
 
     const user1Orgs = await user1.query(api.organizations.listByUser);
     expect(user1Orgs).toHaveLength(1);
-    expect(user1Orgs[0]!.name).toBe('Org A');
+    expect(user1Orgs[0]?.name).toBe('Org A');
 
     const user2Orgs = await user2.query(api.organizations.listByUser);
     expect(user2Orgs).toHaveLength(1);
-    expect(user2Orgs[0]!.name).toBe('Org B');
+    expect(user2Orgs[0]?.name).toBe('Org B');
   });
 });
 
@@ -158,7 +158,7 @@ describe('organizations.get', () => {
 describe('organizations.update', () => {
   it('allows admin to update', async () => {
     const t = convexTest(schema);
-    const { userId, authed } = await setupUser(t);
+    const { authed } = await setupUser(t);
 
     const orgId = await authed.mutation(api.organizations.create, {
       name: 'Old Name',
@@ -171,7 +171,7 @@ describe('organizations.update', () => {
     });
 
     const org = await authed.query(api.organizations.get, { id: orgId });
-    expect(org!.name).toBe('New Name');
+    expect(org?.name).toBe('New Name');
   });
 
   it('rejects members without admin role', async () => {

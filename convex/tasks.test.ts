@@ -3,7 +3,6 @@
 import { convexTest } from 'convex-test';
 import { describe, expect, it } from 'vitest';
 import { api } from './_generated/api';
-import type { Id } from './_generated/dataModel';
 import schema, { TaskPriority, TaskStatus } from './schema';
 
 /** Create a user and return an authenticated test client + userId. */
@@ -188,8 +187,8 @@ describe('tasks - private tasks', () => {
 
     const task = await authed.query(api.tasks.get, { id: taskId });
     expect(task).not.toBeNull();
-    expect(task!.title).toBe('Secret task');
-    expect(task!.private).toBe(true);
+    expect(task?.title).toBe('Secret task');
+    expect(task?.private).toBe(true);
 
     // Also visible in listByRepo
     const tasks = await authed.query(api.tasks.listByRepo, { repoId });
@@ -230,7 +229,7 @@ describe('tasks - private tasks', () => {
       repoId,
     });
     expect(otherTasks).toHaveLength(1);
-    expect(otherTasks[0]!.title).toBe('Public');
+    expect(otherTasks[0]?.title).toBe('Public');
 
     // tasks.get should return null for private task
     const hidden = await otherMember.query(api.tasks.get, {
@@ -271,8 +270,8 @@ describe('tasks.listActive', () => {
 
     const titles = active.map((t) => t.title).sort();
     expect(titles).toEqual(['Reviewing', 'Working']);
-    expect(active[0]!.repoName).toBe('test-repo');
-    expect(active[0]!.hasRunningSession).toBe(false);
+    expect(active[0]?.repoName).toBe('test-repo');
+    expect(active[0]?.hasRunningSession).toBe(false);
   });
 
   it('excludes done and backlog tasks', async () => {
