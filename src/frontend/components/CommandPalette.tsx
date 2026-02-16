@@ -32,13 +32,10 @@ export function CommandPalette() {
   const [open, setOpen] = useState(false);
 
   const selectedOrgId = useAppStore((s) => s.selectedOrgId);
-  const selectedRepoId = useAppStore((s) => s.selectedRepoId);
   const selectRepo = useAppStore((s) => s.selectRepo);
   const selectTask = useAppStore((s) => s.selectTask);
   const selectSeedBox = useAppStore((s) => s.selectSeedBox);
   const toggleBacklog = useAppStore((s) => s.toggleBacklog);
-  const toggleDoneCollapsed = useAppStore((s) => s.toggleDoneCollapsed);
-  const toggleArchive = useAppStore((s) => s.toggleArchive);
   const terminalSessionId = useAppStore((s) => s.terminalSessionId);
   const closeTerminal = useAppStore((s) => s.closeTerminal);
   const toggleTerminalMinimized = useAppStore((s) => s.toggleTerminalMinimized);
@@ -133,37 +130,12 @@ export function CommandPalette() {
         {/* Actions */}
         <Command.Group heading="Actions" className={GROUP_HEADING_CLASS}>
           {viewMode === 'board' && (
-            <>
-              <CommandItem
-                value="action-toggle-backlog"
-                onSelect={() => runAction(toggleBacklog)}
-              >
-                <Columns3 className="h-4 w-4 shrink-0 text-muted-foreground" />
-                Toggle backlog column
-              </CommandItem>
-              <CommandItem
-                value="action-toggle-done"
-                onSelect={() => runAction(toggleDoneCollapsed)}
-              >
-                <Columns3 className="h-4 w-4 shrink-0 text-muted-foreground" />
-                Toggle done column
-              </CommandItem>
-              <CommandItem
-                value="action-toggle-archive"
-                onSelect={() => runAction(toggleArchive)}
-              >
-                <Columns3 className="h-4 w-4 shrink-0 text-muted-foreground" />
-                Toggle archived tasks
-              </CommandItem>
-            </>
-          )}
-          {viewMode === 'seeds' && (
             <CommandItem
-              value="action-switch-board-view"
-              onSelect={() => runAction(() => selectRepo(selectedRepoId))}
+              value="action-toggle-backlog"
+              onSelect={() => runAction(toggleBacklog)}
             >
-              <LayoutDashboard className="h-4 w-4 shrink-0 text-muted-foreground" />
-              Switch to board view
+              <Columns3 className="h-4 w-4 shrink-0 text-muted-foreground" />
+              Toggle backlog column
             </CommandItem>
           )}
           {terminalSessionId && (
