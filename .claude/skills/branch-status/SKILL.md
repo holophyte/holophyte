@@ -58,7 +58,7 @@ Organize branches into categories:
 ### Active Worktrees
 | Directory | Branch | Status |
 |-----------|--------|--------|
-| ../holophyte-feature-x | feat/feature-x | 2 ahead of main |
+| ~/.holophyte-dev/feature-x | feat/feature-x | 2 ahead of main |
 
 ### Branches with Open PRs
 | Branch | PR | Status | Review |

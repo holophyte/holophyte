@@ -18,8 +18,8 @@ if [[ ! "$FEATURE_NAME" =~ ^[a-zA-Z0-9_-]+$ ]]; then
 fi
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
-REPO="$(basename "$REPO_ROOT")"
-WORKTREE_PATH="$REPO_ROOT/../$REPO-$FEATURE_NAME"
+WORKTREE_DIR="$HOME/.holophyte-dev"
+WORKTREE_PATH="$WORKTREE_DIR/$FEATURE_NAME"
 BRANCH="feat/$FEATURE_NAME"
 
 # Check if branch already exists
@@ -34,8 +34,11 @@ if [ -d "$WORKTREE_PATH" ]; then
   exit 1
 fi
 
+# Ensure worktree directory exists
+mkdir -p "$WORKTREE_DIR"
+
 # Create worktree
-echo "Creating worktree at ../$REPO-$FEATURE_NAME on branch $BRANCH..."
+echo "Creating worktree at ~/.holophyte-dev/$FEATURE_NAME on branch $BRANCH..."
 git worktree add "$WORKTREE_PATH" -b "$BRANCH"
 
 # Copy env files — .env.local gives Convex the project context so
@@ -80,9 +83,9 @@ cd "$WORKTREE_PATH" && bunx convex dev --local \
   --once
 
 echo ""
-echo "Worktree created: ../$REPO-$FEATURE_NAME"
+echo "Worktree created: ~/.holophyte-dev/$FEATURE_NAME"
 echo "Ports: dev=$DEV_PORT, convex=$CONVEX_CLOUD_PORT/$CONVEX_SITE_PORT"
 echo ""
 echo "To start dev:"
-echo "  cd ../$REPO-$FEATURE_NAME"
+echo "  cd ~/.holophyte-dev/$FEATURE_NAME"
 echo "  bun run dev:local"
