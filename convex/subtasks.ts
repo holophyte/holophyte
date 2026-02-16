@@ -1,16 +1,15 @@
 import { v } from 'convex/values';
 import { mutation, query } from './_generated/server';
-import {
-  getOrgIdFromTask,
-  requireOrgMembership,
-  requireRole,
-} from './lib/auth';
+import { requireOrgMembership, requireRole } from './lib/auth';
 
 export const listByTask = query({
   args: { taskId: v.id('tasks') },
   handler: async (ctx, args) => {
-    const orgId = await getOrgIdFromTask(ctx, args.taskId);
-    await requireOrgMembership(ctx, orgId);
+    const task = await ctx.db.get(args.taskId);
+    if (!task) return [];
+    const repo = await ctx.db.get(task.repoId);
+    if (!repo) return [];
+    await requireOrgMembership(ctx, repo.orgId);
     const subtasks = await ctx.db
       .query('subtasks')
       .withIndex('by_task', (q) => q.eq('taskId', args.taskId))
@@ -24,8 +23,11 @@ export const countsByTasks = query({
   handler: async (ctx, args) => {
     const counts: Record<string, { total: number; completed: number }> = {};
     for (const taskId of args.taskIds) {
-      const orgId = await getOrgIdFromTask(ctx, taskId);
-      await requireOrgMembership(ctx, orgId);
+      const task = await ctx.db.get(taskId);
+      if (!task) continue;
+      const repo = await ctx.db.get(task.repoId);
+      if (!repo) continue;
+      await requireOrgMembership(ctx, repo.orgId);
       const subtasks = await ctx.db
         .query('subtasks')
         .withIndex('by_task', (q) => q.eq('taskId', taskId))

@@ -104,6 +104,8 @@ export default defineSchema({
     priority: v.optional(priorityValidator),
     // Archive timestamp
     archivedAt: v.optional(v.number()),
+    // Denormalized prompt history count
+    promptHistoryCount: v.optional(v.number()),
     // Auth: who created + private flag
     createdBy: v.id('users'),
     private: v.optional(v.boolean()),
