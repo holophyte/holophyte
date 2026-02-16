@@ -205,6 +205,10 @@ export const update = mutation({
     requireRole(membership, 'member');
     requirePrivateOwnership(task, userId);
     const { id, clearDueAt, ...fields } = args;
+    // Only the task creator can toggle the private flag
+    if (fields.private !== undefined && task.createdBy !== userId) {
+      throw new Error('Only the task creator can change the private flag');
+    }
     const now = Date.now();
     const updates: Record<string, unknown> = { updatedAt: now };
     if (fields.title !== undefined) updates.title = fields.title;
@@ -604,6 +608,14 @@ export const bulkToggleLabel = mutation({
     );
     requireRole(membership, 'member');
     const orgId = firstRepo.orgId;
+
+    // Validate label belongs to this org
+    if (args.action === 'add') {
+      const label = await ctx.db.get(args.labelId);
+      if (!label || label.orgId !== orgId) {
+        throw new Error('Label not found in this organization');
+      }
+    }
 
     const now = Date.now();
     for (const id of args.ids) {
