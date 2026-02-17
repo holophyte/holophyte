@@ -60,7 +60,10 @@ export function Sidebar() {
   }
 
   return (
-    <aside className="w-64 border-r bg-muted/30 flex flex-col">
+    <aside
+      className="w-64 border-r bg-muted/30 flex flex-col"
+      aria-label="Navigation"
+    >
       <PageHeader
         data-testid="sidebar-header"
         className="gap-2 font-semibold text-lg"
@@ -105,6 +108,7 @@ export function Sidebar() {
           size="icon"
           className="h-6 w-6"
           onClick={() => setAddRepoOpen(true)}
+          aria-label="Add project"
         >
           <Plus className="h-3.5 w-3.5" />
         </Button>
@@ -139,6 +143,7 @@ export function Sidebar() {
                     size="icon"
                     className="absolute right-1 top-1/2 -translate-y-1/2 h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive"
                     onClick={(e) => handleRemove(e, repo._id)}
+                    aria-label={`Delete ${repo.name}`}
                   >
                     <Trash2 className="h-3 w-3" />
                   </Button>

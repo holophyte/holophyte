@@ -257,6 +257,7 @@ function SeedCard({ seed }: { seed: Doc<'seeds'> }) {
           size="icon"
           className="absolute top-2 right-2 h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive"
           onClick={() => removeSeed({ id: seed._id })}
+          aria-label={`Delete seed: ${seed.title}`}
         >
           <Trash2 className="h-3 w-3" />
         </Button>
