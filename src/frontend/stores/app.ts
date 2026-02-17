@@ -23,6 +23,7 @@ interface AppState {
   bulkSelectedTaskIds: Id<'tasks'>[];
 
   setSelectedOrgId: (id: Id<'organizations'>) => void;
+  clearOrgSelection: () => void;
   selectRepo: (id: Id<'repos'> | null) => void;
   selectSeedBox: () => void;
   selectTask: (id: Id<'tasks'> | null) => void;
@@ -66,6 +67,13 @@ export const useAppStore = create<AppState>()(
       setSelectedOrgId: (id) =>
         set({
           selectedOrgId: id,
+          selectedRepoId: null,
+          selectedTaskId: null,
+          bulkSelectedTaskIds: [],
+        }),
+      clearOrgSelection: () =>
+        set({
+          selectedOrgId: null,
           selectedRepoId: null,
           selectedTaskId: null,
           bulkSelectedTaskIds: [],

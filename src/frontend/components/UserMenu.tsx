@@ -2,6 +2,7 @@ import { api } from '@convex/_generated/api';
 import { useAuthActions } from '@convex-dev/auth/react';
 import { useQuery } from 'convex/react';
 import { LogOut } from 'lucide-react';
+import { useAppStore } from '@/frontend/stores/app';
 import Avatar from './ui/Avatar';
 import Button from './ui/Button';
 import { Popover, PopoverContent, PopoverTrigger } from './ui/Popover';
@@ -9,6 +10,7 @@ import { Popover, PopoverContent, PopoverTrigger } from './ui/Popover';
 export default function UserMenu() {
   const authActions = useAuthActions();
   const user = useQuery(api.users.viewer);
+  const clearOrgSelection = useAppStore((s) => s.clearOrgSelection);
 
   return (
     <Popover>
@@ -41,7 +43,10 @@ export default function UserMenu() {
           <Button
             variant="ghost"
             className="w-full justify-start gap-2 text-sm"
-            onClick={() => void authActions.signOut()}
+            onClick={() => {
+              clearOrgSelection();
+              void authActions.signOut();
+            }}
           >
             <LogOut className="h-4 w-4" />
             Sign out
