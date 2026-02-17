@@ -104,6 +104,41 @@ describe('terminal actions', () => {
   });
 });
 
+describe('clearOrgSelection', () => {
+  const fakeOrgId = 'org789' as Id<'organizations'>;
+  const fakeRepoId = 'repo456' as Id<'repos'>;
+  const fakeTaskId = 'task123' as Id<'tasks'>;
+
+  it('clears selectedOrgId and cascades to repo/task/bulk selection', () => {
+    useAppStore.setState({
+      selectedOrgId: fakeOrgId,
+      selectedRepoId: fakeRepoId,
+      selectedTaskId: fakeTaskId,
+      bulkSelectedTaskIds: [fakeTaskId],
+    });
+
+    useAppStore.getState().clearOrgSelection();
+
+    expect(useAppStore.getState().selectedOrgId).toBeNull();
+    expect(useAppStore.getState().selectedRepoId).toBeNull();
+    expect(useAppStore.getState().selectedTaskId).toBeNull();
+    expect(useAppStore.getState().bulkSelectedTaskIds).toEqual([]);
+  });
+
+  it('persists cleared selectedOrgId to localStorage', () => {
+    useAppStore.setState({
+      selectedOrgId: fakeOrgId,
+      selectedRepoId: fakeRepoId,
+    });
+
+    useAppStore.getState().clearOrgSelection();
+
+    const stored = JSON.parse(localStorage.getItem('holophyte-app') ?? '{}');
+    expect(stored.state.selectedOrgId).toBeNull();
+    expect(stored.state.selectedRepoId).toBeNull();
+  });
+});
+
 describe('persist', () => {
   it('persists selectedRepoId, viewMode, and backlogCollapsed', () => {
     useAppStore.getState().selectRepo(fakeRepoId);
