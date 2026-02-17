@@ -2,17 +2,27 @@
 
 Connect the session system to the rest of the app — permissions, task status, history, and cost. Phases 1-3 build the engine; this phase wires it into the dashboard.
 
+## Phase 1 Findings
+
+These details were discovered during Phase 1 implementation and affect Phase 4:
+
+- **Permission mode names in the implementation are `'default' | 'safe-auto' | 'bypass'`**, matching SDK terminology. The user-facing names below (Interactive / Safe Auto / Full Auto) are display labels — map them to these internal values.
+- **`model`, `permissionMode`, and `sdkSessionId` are already on the sessions schema** (added in Phase 1). Only `costUsd`, `tokenUsage`, and `duration` need to be added.
+- **`costUsd` and `tokenUsage` can be extracted from the SDK `result` event.** Phase 1 already detects `event.type === 'result'` for error status — extend this to also capture `total_cost_usd` and token usage fields.
+- **Unauthenticated Convex mutations must be converted to `internalMutation` before adding more.** Phase 1 added `insertBatch`, `updateSdkSessionId`, and `serverUpdateStatus` as public mutations with no auth (flagged by Greptile and security review). Fix this pattern before Phase 4 adds more server-side mutations (cost updates, status transitions).
+- **Safe-auto Bash allowlisting is already restrictive.** Phase 1 implemented specific subcommand patterns (`bun test`, `bun run lint`, `bun run check`, etc.) plus shell operator rejection (`;&|`$\n<>`). The "Custom Profiles (Future)" section is partially done.
+
 ## Permission Profiles
 
 The `canUseTool` callback in Phase 1 is powerful but raw — it needs a user-facing configuration layer. Permission profiles are presets that determine which tools get auto-approved and which require human intervention.
 
 Three presets:
 
-**Interactive** — everything prompts. Equivalent to the current terminal experience where you type y/n for each action. Best for sensitive work or unfamiliar codebases where you want to see every move Claude makes.
+**Interactive** (`default`) — everything prompts. Equivalent to the current terminal experience where you type y/n for each action. Best for sensitive work or unfamiliar codebases where you want to see every move Claude makes.
 
-**Safe Auto** — read-only tools (Read, Glob, Grep, WebSearch, WebFetch) are auto-approved. Write operations (Edit, Write, Bash) require approval. This is the sweet spot for most work: Claude can explore freely but you sign off on changes. Most sessions should use this.
+**Safe Auto** (`safe-auto`) — read-only tools (Read, Glob, Grep, WebSearch, WebFetch, TodoRead) are auto-approved. Bash is auto-approved only for specific safe commands (`bun test`, `bun run lint`, `git status`, `ls`, etc.) with shell operator rejection. All other write operations require approval. This is the sweet spot for most work: Claude can explore freely but you sign off on changes. Most sessions should use this.
 
-**Full Auto** — all tools auto-approved (`bypassPermissions` in SDK terms). Claude runs completely autonomously. Best for well-scoped tasks with clear prompts where you trust the outcome, like "run the test suite and fix any failures" or "update all imports to use the new path alias." Review the diff after, not during.
+**Full Auto** (`bypass`) — all tools auto-approved. Claude runs completely autonomously. Best for well-scoped tasks with clear prompts where you trust the outcome, like "run the test suite and fix any failures" or "update all imports to use the new path alias." Review the diff after, not during.
 
 ### Where Profiles Live
 
@@ -25,7 +35,7 @@ The launch UI shows a dropdown or segmented control: Interactive / Safe Auto / F
 
 ### Custom Profiles (Future)
 
-Down the road, users might want fine-grained control: "auto-approve Bash only for `bun run test` and `bun run lint`, but prompt for everything else." This is a custom allowlist that maps to the SDK's `allowedTools` + `canUseTool` logic. Not needed for dogfooding — the three presets cover the common cases.
+Down the road, users might want fine-grained control beyond the three presets. Phase 1 already implements the core mechanism: `SAFE_BASH_PATTERNS` (regex allowlist for specific commands) and `SAFE_TOOLS` (set of always-approved tool names) in `src/claude/manager.ts`. A custom profile would expose these as user-configurable lists rather than hardcoded constants. Not needed for dogfooding — the three presets cover the common cases.
 
 ## Auto-Status Transitions
 
@@ -100,11 +110,17 @@ These controls should have sensible defaults (repo's default model and permissio
 
 ## Convex Schema Changes
 
-The `sessions` table needs a few new fields:
+The `sessions` table already has these fields from Phase 1:
 
 ```
-model: v.string()              // which Claude model was used
-permissionProfile: v.string()  // 'interactive' | 'safe_auto' | 'full_auto'
+model: v.optional(v.string())           // already added
+permissionMode: v.optional(v.string())  // already added (not 'permissionProfile')
+sdkSessionId: v.optional(v.string())    // already added
+```
+
+New fields needed for Phase 4:
+
+```
 costUsd: v.optional(v.number())        // from SDK result event
 tokenUsage: v.optional(v.object({
   inputTokens: v.number(),
@@ -112,9 +128,10 @@ tokenUsage: v.optional(v.object({
   cacheReadTokens: v.optional(v.number()),
   cacheCreationTokens: v.optional(v.number()),
 }))
-sdkSessionId: v.optional(v.string())   // for resume support
-duration: v.optional(v.number())       // ms, from SDK result event
+duration: v.optional(v.number())       // ms, computed from startedAt to endedAt
 ```
+
+**Important**: The server-side mutations that update these fields (`updateSdkSessionId`, `serverUpdateStatus`, `insertBatch`) are currently public unauthenticated mutations. Before adding more server-side mutations for cost/token updates, convert the existing ones to `internalMutation` (callable only from Convex actions, not from external clients). Use a Convex HTTP action with a shared secret for the `ConvexHttpClient` calls from the Bun server.
 
 The `repos` table gets:
 

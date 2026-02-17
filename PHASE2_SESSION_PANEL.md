@@ -8,6 +8,16 @@ The terminal was the right first step — it's the fastest way to get Claude Cod
 
 The SDK gives us structured data. The session panel renders that data as a conversation — messages, tool calls, permission prompts, results — instead of a wall of ANSI text.
 
+## Phase 1 Findings
+
+These details were discovered during Phase 1 implementation and affect Phase 2:
+
+- **WebSocket path changed to `/ws/session/:sessionId`** (was `/ws/terminal/:sessionId`)
+- **WS protocol uses typed JSON messages** with four types: `event` (SDK events), `permission` (approval requests), `status` (lifecycle changes), `error` (error messages). Defined as `WsServerMessage` in `src/claude/manager.ts`.
+- **All models have startup latency**, not just Haiku. The loading indicator should be unconditional.
+- **Backend session statuses are `'running' | 'completed' | 'failed' | 'stopped'`** — `waiting_input` is a frontend-derived state (from pending `permission` WS messages), not a backend status.
+- **Follow-up message injection doesn't exist yet.** Phase 1's `POST /api/sessions/:id/respond` only handles approve/deny for permission prompts. Injecting user messages into the SDK conversation needs new backend work (either extending the respond endpoint or adding a separate message endpoint).
+
 ## Component Architecture
 
 The `TerminalPanel` component gets replaced by `SessionPanel`. It occupies the same position in the layout (bottom or right pane, resizable) but renders completely different content.
@@ -34,7 +44,7 @@ Long messages should be readable — proper markdown rendering with syntax-highl
 
 Auto-scroll to bottom as new content arrives, but stop auto-scrolling if the user scrolls up (they're reading something above). Resume auto-scroll when they scroll back to bottom.
 
-**Startup loading state**: Haiku in particular has noticeable latency before the first streaming event arrives. The panel should show a loading indicator ("Starting session…" with a spinner or subtle pulse) from the moment the session is launched until the first event is received. Without this, the panel looks broken during that quiet window.
+**Startup loading state**: All models have noticeable latency before the first streaming event arrives (not just Haiku — confirmed in Phase 1). The panel should show a loading indicator ("Starting session…" with a spinner or subtle pulse) from the moment the session is launched until the first event is received. Without this, the panel looks broken during that quiet window.
 
 ### ToolCallCard
 
