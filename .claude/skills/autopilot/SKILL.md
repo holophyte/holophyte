@@ -57,25 +57,48 @@ Before committing, run reviewers in parallel:
 
 ### 3.5. Documentation, Testing, and Accessibility for New Code
 
-Check for new files added on the branch:
+Check for new and changed files on the branch:
 
 ```bash
-git diff main...HEAD --name-only --diff-filter=A
+git diff main...HEAD --name-only --diff-filter=A   # new files
+git diff main...HEAD --name-only                     # all changed files
 ```
 
 For each new file:
-- **New `.tsx` components** → use the `storybook-writer` subagent to generate a co-located `.stories.tsx`
+- **New reusable UI components or components with multiple visual states** → use the `storybook-writer` subagent to generate a co-located `.stories.tsx`. Skip Storybook for page-level layouts, data-coupled feature components that need extensive Convex mocking, and thin wrappers with no visual complexity.
 - **New `.ts`/`.tsx` exports** → use the `test-writer` subagent to generate co-located tests
 - **New/changed UI components** → use the `a11y-reviewer` subagent to audit accessibility (already done in step 3 — review results here)
 - Add TSDoc `/** */` comments to all new exported functions and interfaces
 
-Skip this step if no new files were added (only modifications to existing files).
+Skip Storybook/test generation if no new files were added (only modifications to existing files).
 
-After generating stories and tests, verify:
+#### Docusaurus Documentation Evaluation
+
+Evaluate whether the changes warrant updating Docusaurus docs. The changes are **doc-worthy** if ANY of these are true:
+
+- New public hook, utility, or API endpoint was added
+- New component with non-trivial behavior or complex props was added
+- Existing documented architecture or data flow changed meaningfully
+- New Convex table, query, or mutation was added
+- New agent, skill, or automation pattern was introduced
+
+The changes are **NOT doc-worthy** if ALL of these are true:
+
+- Bug fix or minor refactor with no API surface change
+- Internal implementation detail changed (no public-facing impact)
+- Style-only or config-only changes
+- Test-only or story-only additions
+
+If doc-worthy, use the `doc-writer` subagent:
+
+> Review the changes on this branch (`git diff main...HEAD --name-only`) and update the relevant Docusaurus documentation in `docs/docs/`. Only update pages that are affected by the changes — do not regenerate unrelated docs. Add TSDoc comments to any new exported functions/interfaces that lack them. Verify with `cd docs && bunx docusaurus build`.
+
+After generating stories, tests, and docs, verify:
 
 ```bash
 bunx vitest run
 timeout 60000 bun run build-storybook
+cd docs && bunx docusaurus build
 ```
 
 Fix any failures before proceeding.

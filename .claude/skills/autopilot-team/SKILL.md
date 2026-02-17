@@ -67,12 +67,29 @@ Spawn three teammates with specific roles:
 
 **Documenter** (use Sonnet):
 > You are the documentation specialist for the Holophyte project. Watch for
-> completed implementation tasks. For each new component, generate a Storybook
-> story (co-located `.stories.tsx`). Add TSDoc comments to all new exported
-> functions and interfaces. If you notice repeated Convex query patterns across
-> components, extract them into custom hooks in `src/frontend/hooks/`. Verify
-> stories build with `timeout 60000 bun run build-storybook`. Do not modify
-> implementation logic. Coordinate with the tester to avoid file conflicts.
+> completed implementation tasks. Your responsibilities:
+>
+> **Storybook**: For new reusable UI components or components with multiple visual
+> states, generate a co-located `.stories.tsx`. Skip Storybook for page-level
+> layouts, data-coupled feature components that need extensive Convex mocking, and
+> thin wrappers with no visual complexity. Verify with `timeout 60000 bun run
+> build-storybook`.
+>
+> **TSDoc**: Add TSDoc comments to all new exported functions and interfaces.
+>
+> **Docusaurus**: Evaluate whether changes warrant updating project docs in
+> `docs/docs/`. Changes are doc-worthy if they add new public hooks, utilities,
+> API endpoints, components with non-trivial behavior, Convex tables/queries, or
+> agents/skills. Changes are NOT doc-worthy if they are bug fixes, internal
+> refactors, style-only, config-only, or test-only changes. If doc-worthy, update
+> only the affected Docusaurus pages — do not regenerate unrelated docs. Verify
+> with `cd docs && bunx docusaurus build`.
+>
+> **DRY**: If you notice repeated Convex query patterns across components, extract
+> them into custom hooks in `src/frontend/hooks/`.
+>
+> Do not modify implementation logic. Coordinate with the tester to avoid file
+> conflicts.
 
 ### 4. Coordinate
 
@@ -93,6 +110,7 @@ bun run lint:fix
 bunx tsc --noEmit
 bun run test
 timeout 60000 bun run build-storybook
+cd docs && bunx docusaurus build
 ```
 
 Fix any remaining issues. Use the `test-fixer` subagent if tests fail.
