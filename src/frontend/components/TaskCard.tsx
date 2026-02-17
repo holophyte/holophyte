@@ -118,9 +118,11 @@ export function TaskCard({ task, repoName }: TaskCardProps) {
               PRIORITY_CONFIG[TaskPriority.None];
             return (
               <span
+                role="img"
+                aria-label={`Priority: ${config.label}`}
+                title={config.label}
                 className="h-2.5 w-2.5 rounded-full shrink-0"
                 style={{ backgroundColor: config.color }}
-                title={config.label}
               />
             );
           })()}

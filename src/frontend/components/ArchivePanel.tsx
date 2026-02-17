@@ -100,7 +100,7 @@ export function ArchivePanel() {
                   size="sm"
                   variant="ghost"
                   onClick={() => unarchiveTask({ id: task._id })}
-                  title="Restore to Done"
+                  aria-label={`Restore "${task.title}" to Done`}
                 >
                   <ArchiveRestore className="h-4 w-4" />
                 </Button>
@@ -109,7 +109,7 @@ export function ArchivePanel() {
                   variant="ghost"
                   className="text-destructive hover:text-destructive"
                   onClick={() => removeTask({ id: task._id })}
-                  title="Delete permanently"
+                  aria-label={`Delete "${task.title}" permanently`}
                 >
                   <Trash2 className="h-4 w-4" />
                 </Button>

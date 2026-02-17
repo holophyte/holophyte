@@ -49,6 +49,9 @@ export function TerminalPanel() {
             size="icon"
             className="h-6 w-6"
             onClick={toggleTerminalMinimized}
+            aria-label={
+              terminalMinimized ? 'Expand terminal' : 'Minimize terminal'
+            }
           >
             {terminalMinimized ? (
               <ChevronUp className="h-3.5 w-3.5" />
@@ -61,6 +64,7 @@ export function TerminalPanel() {
             size="icon"
             className="h-6 w-6"
             onClick={closeTerminal}
+            aria-label="Close terminal"
           >
             <X className="h-3.5 w-3.5" />
           </Button>

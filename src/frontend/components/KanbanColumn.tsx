@@ -163,7 +163,11 @@ export function KanbanColumn({
                     ? 'bg-primary/50 border-primary text-primary-foreground'
                     : 'border-muted-foreground/30 bg-background',
               )}
-              title={allSelected ? 'Deselect all' : 'Select all'}
+              aria-label={
+                allSelected
+                  ? `Deselect all in ${label}`
+                  : `Select all in ${label}`
+              }
             >
               {(allSelected || someSelected) && (
                 <svg
@@ -202,7 +206,7 @@ export function KanbanColumn({
               type="button"
               onClick={onArchiveAll}
               className="p-0.5 rounded text-muted-foreground/50 hover:text-muted-foreground transition-colors"
-              title="Archive all done tasks"
+              aria-label="Archive all done tasks"
             >
               <Archive className="h-3.5 w-3.5" />
             </button>
@@ -211,6 +215,7 @@ export function KanbanColumn({
             <button
               type="button"
               onClick={onCollapse}
+              aria-label={`Collapse ${label} column`}
               className="p-0.5 rounded text-muted-foreground/50 hover:text-muted-foreground transition-colors"
             >
               <ChevronsLeft className="h-3.5 w-3.5" />

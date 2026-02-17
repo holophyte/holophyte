@@ -52,13 +52,23 @@ export function SubtaskList({ taskId }: SubtaskListProps) {
     <div className="space-y-2">
       {totalCount > 0 && (
         <div className="flex items-center gap-2">
-          <div className="flex-1 h-1.5 rounded-full bg-muted overflow-hidden">
+          <div
+            className="flex-1 h-1.5 rounded-full bg-muted overflow-hidden"
+            role="progressbar"
+            aria-valuenow={completedCount}
+            aria-valuemin={0}
+            aria-valuemax={totalCount}
+            aria-label={`Subtask progress: ${completedCount} of ${totalCount} completed`}
+          >
             <div
               className="h-full rounded-full bg-primary transition-all duration-300"
               style={{ width: `${progressPercent}%` }}
             />
           </div>
-          <span className="text-xs text-muted-foreground shrink-0">
+          <span
+            className="text-xs text-muted-foreground shrink-0"
+            aria-hidden="true"
+          >
             {completedCount}/{totalCount}
           </span>
         </div>
@@ -106,6 +116,7 @@ export function SubtaskList({ taskId }: SubtaskListProps) {
             <button
               type="button"
               onClick={() => removeSubtask({ id: subtask._id })}
+              aria-label={`Remove subtask: ${subtask.title}`}
               className="opacity-0 group-hover:opacity-100 p-0.5 text-muted-foreground hover:text-destructive transition-opacity"
             >
               <X className="h-3 w-3" />

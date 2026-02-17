@@ -66,7 +66,11 @@ export default function BulkActionBar({ allTasks }: BulkActionBarProps) {
   };
 
   return (
-    <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 bg-background border rounded-lg shadow-lg px-4 py-2">
+    <div
+      role="toolbar"
+      aria-label={`Bulk actions for ${count} selected tasks`}
+      className="absolute bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 bg-background border rounded-lg shadow-lg px-4 py-2"
+    >
       <span className="text-sm font-medium mr-1">{count} selected</span>
 
       {/* Move to column */}
@@ -164,7 +168,7 @@ export default function BulkActionBar({ allTasks }: BulkActionBarProps) {
         type="button"
         onClick={clearBulkSelection}
         className="ml-1 p-1 rounded hover:bg-muted text-muted-foreground transition-colors"
-        title="Clear selection"
+        aria-label="Clear selection"
       >
         <X className="h-4 w-4" />
       </button>

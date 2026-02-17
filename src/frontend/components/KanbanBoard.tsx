@@ -54,6 +54,9 @@ function BacklogColumn({
       <button
         type="button"
         onClick={onToggle}
+        aria-label={`Expand ${label} column (${count} tasks)`}
+        aria-hidden={!collapsed}
+        tabIndex={collapsed ? 0 : -1}
         className={cn(
           'absolute inset-0 w-10 rounded-lg bg-muted/30 border border-dashed',
           'flex flex-col items-center justify-center gap-2',
