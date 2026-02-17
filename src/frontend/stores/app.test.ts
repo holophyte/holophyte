@@ -7,6 +7,7 @@ import { useAppStore } from './app';
 beforeEach(() => {
   localStorage.clear();
   useAppStore.setState({
+    selectedOrgId: null,
     selectedRepoId: null,
     selectedTaskId: null,
     viewMode: 'board',
