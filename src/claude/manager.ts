@@ -73,6 +73,7 @@ interface Session {
   convexSessionId: string;
   flushTimer?: ReturnType<typeof setInterval>;
   permissionMode: PermissionMode;
+  model?: string;
 }
 
 const sessions = new Map<string, Session>();
@@ -82,17 +83,20 @@ const MAX_BUFFER_SIZE = 200;
 
 /** Bash command patterns considered safe for auto-approval in safe-auto mode. */
 const SAFE_BASH_PATTERNS = [
-  /^bun\s/,
-  /^bunx\s/,
-  /^git\s+(status|diff|log|branch|show|stash\s+list)/,
+  /^bun\s+(test|run\s+(lint|lint:fix|check|typecheck))(\s|$)/,
+  /^bunx\s+(vitest|tsc|biome)(\s|$)/,
+  /^git\s+(status|diff|log|stash\s+list)(\s|$)/,
+  // git show: only bare commit hashes (no :path which exfiltrates file contents)
+  /^git\s+show\s+[a-f0-9]{7,40}\s*$/,
+  /^git\s+branch\s*$/,
   /^ls(\s|$)/,
   /^pwd$/,
   /^which\s/,
   /^type\s/,
 ];
 
-/** Shell operators that indicate multi-statement commands — never auto-approve. */
-const SHELL_OPERATOR_PATTERN = /[;&|`$\n]|\$\(/;
+/** Shell operators and redirects — never auto-approve commands containing these. */
+const SHELL_OPERATOR_PATTERN = /[;&|`$\n<>]|\$\(/;
 
 /** Tools that are always safe to auto-approve (read-only operations). */
 const SAFE_TOOLS = new Set([
@@ -160,8 +164,8 @@ async function flushEvents(session: Session): Promise<void> {
   } catch (err) {
     console.error('Failed to flush events to Convex:', err);
     // Re-add events to buffer on failure so they're not lost
+    // Don't decrement batchIndex to avoid duplicate batch indices
     session.eventBuffer.unshift(...events);
-    session.batchIndex--;
   } finally {
     session.flushing = false;
   }
@@ -213,6 +217,7 @@ export async function startSession(opts: {
     flushing: false,
     convexSessionId: sessionId,
     permissionMode: mode,
+    model: opts.model,
   };
 
   sessions.set(sessionId, session);
@@ -232,6 +237,10 @@ export async function startSession(opts: {
       }
 
       const requestId = toolOpts.toolUseID;
+      if (!requestId) {
+        // Deny immediately if we can't key the request — avoids Map collisions
+        return { behavior: 'deny', message: 'Missing tool use ID' };
+      }
 
       // Broadcast permission request to all WS subscribers
       broadcast(session, {
@@ -274,7 +283,9 @@ export async function startSession(opts: {
   }
 
   // Consume the SDK iterator in the background (non-blocking)
-  consumeIterator(session, sessionId, opts.prompt, sdkOptions);
+  consumeIterator(session, sessionId, opts.prompt, sdkOptions).catch((err) => {
+    console.error('Unhandled error in session iterator:', err);
+  });
 
   return { sessionId };
 }
@@ -309,6 +320,8 @@ async function consumeIterator(
           await client.mutation(api.sessions.updateSdkSessionId, {
             id: session.convexSessionId as Id<'sessions'>,
             sdkSessionId: session.sdkSessionId,
+            model: session.model,
+            permissionMode: session.permissionMode,
           });
         } catch (err) {
           console.error('Failed to persist SDK session ID:', err);
@@ -393,7 +406,7 @@ export function respondToApproval(
   session.approvalQueue.delete(requestId);
 
   if (approved) {
-    pending.resolve({ behavior: 'allow' });
+    pending.resolve({ behavior: 'allow', toolUseID: requestId });
   } else {
     pending.resolve({
       behavior: 'deny',
@@ -411,6 +424,18 @@ export function subscribe(
   const session = sessions.get(sessionId);
   if (!session) return () => {};
   session.subscribers.add(callback);
+
+  // Replay any pending approvals so late-connecting clients don't miss them
+  for (const [requestId, { toolName, input }] of session.approvalQueue) {
+    callback({
+      type: 'permission',
+      sessionId,
+      requestId,
+      tool: toolName,
+      input,
+    });
+  }
+
   return () => {
     session.subscribers.delete(callback);
   };

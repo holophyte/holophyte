@@ -44,6 +44,7 @@ export const getBySession = query({
     return await ctx.db
       .query('sessionEvents')
       .withIndex('by_session_batch', (q) => q.eq('sessionId', args.sessionId))
+      .order('asc')
       .collect();
   },
 });

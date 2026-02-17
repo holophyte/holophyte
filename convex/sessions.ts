@@ -86,18 +86,27 @@ export const updateStatus = mutation({
 });
 
 /**
- * Server-side mutation to persist the SDK session ID for resume support.
- * Called by the Bun server's ConvexHttpClient — no frontend auth context.
+ * Server-side mutation to persist the SDK session ID, model, and permission
+ * mode at session init time. Called by the Bun server's ConvexHttpClient.
+ * TODO: Convert to internalMutation with admin auth for production.
  */
 export const updateSdkSessionId = mutation({
   args: {
     id: v.id('sessions'),
     sdkSessionId: v.string(),
+    model: v.optional(v.string()),
+    permissionMode: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const session = await ctx.db.get(args.id);
     if (!session) throw new Error('Session not found');
-    await ctx.db.patch(args.id, { sdkSessionId: args.sdkSessionId });
+    const updates: Record<string, unknown> = {
+      sdkSessionId: args.sdkSessionId,
+    };
+    if (args.model !== undefined) updates.model = args.model;
+    if (args.permissionMode !== undefined)
+      updates.permissionMode = args.permissionMode;
+    await ctx.db.patch(args.id, updates);
   },
 });
 

@@ -24,6 +24,8 @@ afterEach(async () => {
   for (const id of getActiveSessions()) {
     stopSession(id);
   }
+  // Allow background async cleanup (consumeIterator finally block) to complete
+  await new Promise((r) => setTimeout(r, 100));
   vi.restoreAllMocks();
 });
 
@@ -259,7 +261,10 @@ describe('claude/manager (SDK-based)', () => {
 
       // Wait for the iterator to finish processing
       await new Promise((r) => setTimeout(r, 50));
-      expect(canUseToolResult).toEqual({ behavior: 'allow' });
+      expect(canUseToolResult).toEqual({
+        behavior: 'allow',
+        toolUseID: 'tool-1',
+      });
     });
 
     it('returns false for non-existent session', async () => {

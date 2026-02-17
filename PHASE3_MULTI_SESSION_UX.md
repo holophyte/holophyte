@@ -8,6 +8,14 @@ The whole point of Holophyte is running Claude Code sessions in parallel. But pa
 
 This phase adds three layers of attention management: tabs for switching, indicators for scanning, and notifications for interrupting.
 
+## Phase 1 Findings
+
+These details were discovered during Phase 1 implementation and affect Phase 3:
+
+- **One WS per session is already the architecture.** Phase 1 implemented `/ws/session/:sessionId` with per-session connections. No need to re-evaluate multiplexed vs per-session — build on the existing pattern.
+- **Approval queue state comes from `permission` WS messages.** The backend broadcasts `{ type: 'permission', sessionId, requestId, tool, input }` when a tool needs approval. Use these to track pending approvals client-side and derive `waiting_input` state.
+- **Session statuses from the backend are `'running' | 'completed' | 'failed' | 'stopped'`.** The attention states (`active`, `waiting_input`, `idle`) are frontend-derived from these plus event timing and pending approvals.
+
 ## Session Tabs
 
 The session panel gains a tab bar along the top. Each active session gets a tab labeled with the task name (not the session ID — the task name is what the user recognizes).
@@ -19,11 +27,7 @@ Tabs show:
 
 Clicking a tab switches the panel content to that session's event stream. The WebSocket subscription model matters here: you want to stay subscribed to all active sessions (so you can update badges), but only render one session's full event stream at a time.
 
-Two approaches for WebSocket subscriptions:
-1. **One WS per session**: simple, but means N connections for N sessions. Fine for 3-5 sessions, might be wasteful for 10+.
-2. **Multiplexed WS**: single connection, server sends events tagged with sessionId. More complex but scales better.
-
-For dogfooding (likely 3-5 concurrent sessions), option 1 is fine. The tab bar subscribes to all sessions but only the active tab renders the full MessageStream. Inactive tabs still process events to update their attention badge.
+Phase 1 already implemented one WebSocket per session (`/ws/session/:sessionId`). The tab bar subscribes to all sessions but only the active tab renders the full MessageStream. Inactive tabs still process events to update their attention badge. If scaling beyond ~10 concurrent sessions becomes needed, multiplexing can be added later.
 
 ### Tab Ordering
 
