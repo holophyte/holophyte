@@ -1,0 +1,49 @@
+import { v } from 'convex/values';
+import { mutation, query } from './_generated/server';
+import { requireOrgMembership } from './lib/auth';
+
+/**
+ * Server-side mutation for batched event persistence.
+ * Called by the Bun server's ConvexHttpClient.
+ * TODO: Convert to internalMutation with admin auth for production.
+ */
+export const insertBatch = mutation({
+  args: {
+    sessionId: v.id('sessions'),
+    events: v.array(
+      v.object({
+        type: v.string(),
+        data: v.any(),
+        timestamp: v.number(),
+      }),
+    ),
+    batchIndex: v.number(),
+  },
+  handler: async (ctx, args) => {
+    await ctx.db.insert('sessionEvents', {
+      sessionId: args.sessionId,
+      events: args.events,
+      batchIndex: args.batchIndex,
+    });
+  },
+});
+
+/** Retrieve all event batches for a session, ordered by batchIndex. */
+export const getBySession = query({
+  args: { sessionId: v.id('sessions') },
+  handler: async (ctx, args) => {
+    // Auth: verify caller has access to this session's org
+    const session = await ctx.db.get(args.sessionId);
+    if (!session) return [];
+    const task = await ctx.db.get(session.taskId);
+    if (!task) return [];
+    const repo = await ctx.db.get(task.repoId);
+    if (!repo) return [];
+    await requireOrgMembership(ctx, repo.orgId);
+
+    return await ctx.db
+      .query('sessionEvents')
+      .withIndex('by_session_batch', (q) => q.eq('sessionId', args.sessionId))
+      .collect();
+  },
+});

@@ -84,3 +84,44 @@ export const updateStatus = mutation({
     await ctx.db.patch(args.id, updates);
   },
 });
+
+/**
+ * Server-side mutation to persist the SDK session ID for resume support.
+ * Called by the Bun server's ConvexHttpClient — no frontend auth context.
+ */
+export const updateSdkSessionId = mutation({
+  args: {
+    id: v.id('sessions'),
+    sdkSessionId: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const session = await ctx.db.get(args.id);
+    if (!session) throw new Error('Session not found');
+    await ctx.db.patch(args.id, { sdkSessionId: args.sdkSessionId });
+  },
+});
+
+/**
+ * Server-side mutation to update session status without auth.
+ * Called by the Bun server when the SDK iterator completes.
+ */
+export const serverUpdateStatus = mutation({
+  args: {
+    id: v.id('sessions'),
+    status: v.union(
+      v.literal('running'),
+      v.literal('completed'),
+      v.literal('failed'),
+      v.literal('stopped'),
+    ),
+  },
+  handler: async (ctx, args) => {
+    const session = await ctx.db.get(args.id);
+    if (!session) throw new Error('Session not found');
+    const updates: Record<string, unknown> = { status: args.status };
+    if (args.status !== 'running') {
+      updates.endedAt = Date.now();
+    }
+    await ctx.db.patch(args.id, updates);
+  },
+});

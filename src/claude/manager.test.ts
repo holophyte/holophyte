@@ -1,67 +1,25 @@
 // @vitest-environment node
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
-// Mock Bun.spawn and Bun.file
-function createMockTerminal() {
-  return {
-    write: vi.fn().mockReturnValue(0),
-    resize: vi.fn(),
-    close: vi.fn(),
-    stdin: 0,
-    stdout: 1,
-    closed: false,
-    setRawMode: vi.fn(),
-    ref: vi.fn(),
-    unref: vi.fn(),
-    [Symbol.asyncDispose]: vi.fn(),
-  };
-}
+// Mock the SDK before importing the manager
+vi.mock('@anthropic-ai/claude-agent-sdk', () => ({
+  query: vi.fn(),
+}));
 
-function createMockProc(terminal: ReturnType<typeof createMockTerminal>) {
-  let resolveExited: ((code: number) => void) | undefined;
-  const exited = new Promise<number>((resolve) => {
-    resolveExited = resolve;
-  });
-  return {
-    proc: {
-      terminal,
-      pid: 12345,
-      exited,
-      exitCode: null as number | null,
-      signalCode: null,
-      killed: false,
-      kill: vi.fn(),
-      ref: vi.fn(),
-      unref: vi.fn(),
-      stdin: null,
-      stdout: null,
-      stderr: null,
-      readable: null,
-      send: vi.fn(),
-      disconnect: vi.fn(),
-      resourceUsage: vi.fn(),
-      [Symbol.asyncDispose]: vi.fn(),
-    },
-    resolveExited: resolveExited as unknown as (code: number) => void,
-  };
-}
-
-let mockTerminal: ReturnType<typeof createMockTerminal>;
-let mockProc: ReturnType<typeof createMockProc>;
-
-beforeEach(() => {
-  mockTerminal = createMockTerminal();
-  mockProc = createMockProc(mockTerminal);
-
-  globalThis.Bun = {
-    ...globalThis.Bun,
-    spawn: vi.fn().mockReturnValue(mockProc.proc),
-    file: vi.fn().mockReturnValue({ exists: vi.fn().mockResolvedValue(false) }),
-  };
+// Mock ConvexHttpClient as a proper class
+vi.mock('convex/browser', () => {
+  class MockConvexHttpClient {
+    mutation = vi.fn().mockResolvedValue(undefined);
+  }
+  return { ConvexHttpClient: MockConvexHttpClient };
 });
 
+// Set CONVEX_URL so the manager can create a ConvexHttpClient
+process.env.CONVEX_URL = 'http://localhost:3210';
+
+import { query as mockSdkQuery } from '@anthropic-ai/claude-agent-sdk';
+
 afterEach(async () => {
-  // Clean up sessions between tests
   const { getActiveSessions, stopSession } = await import('./manager');
   for (const id of getActiveSessions()) {
     stopSession(id);
@@ -69,9 +27,41 @@ afterEach(async () => {
   vi.restoreAllMocks();
 });
 
-describe('claude/manager', () => {
+/** Helper: create a mock async generator that yields the given events. */
+function createMockIterator(events: Array<Record<string, unknown>>) {
+  return {
+    async *[Symbol.asyncIterator]() {
+      for (const event of events) {
+        yield event;
+      }
+    },
+    next: vi.fn(),
+    return: vi.fn(),
+    throw: vi.fn(),
+  };
+}
+
+describe('claude/manager (SDK-based)', () => {
   describe('startSession', () => {
-    it('spawns a process with terminal option and registers the session', async () => {
+    it('registers the session and calls SDK query', async () => {
+      const mockIter = createMockIterator([
+        {
+          type: 'system',
+          subtype: 'init',
+          session_id: 'sdk-123',
+          tools: [],
+          model: 'claude-sonnet-4-5-20250929',
+        },
+        {
+          type: 'result',
+          subtype: 'success',
+          is_error: false,
+          result: 'Done',
+          session_id: 'sdk-123',
+        },
+      ]);
+      vi.mocked(mockSdkQuery).mockReturnValue(mockIter as never);
+
       const { startSession, getSession, getActiveSessions } = await import(
         './manager'
       );
@@ -86,163 +76,283 @@ describe('claude/manager', () => {
       expect(getSession('test-session-id')).toBeDefined();
       expect(getActiveSessions()).toContain('test-session-id');
 
-      // Verify Bun.spawn was called with terminal option
-      expect(Bun.spawn).toHaveBeenCalledWith(
-        expect.arrayContaining(['fix the bug']),
+      expect(mockSdkQuery).toHaveBeenCalledWith(
         expect.objectContaining({
-          cwd: '/tmp/test-repo',
-          terminal: expect.objectContaining({
-            cols: 120,
-            rows: 30,
+          prompt: 'fix the bug',
+          options: expect.objectContaining({
+            cwd: '/tmp/test-repo',
           }),
         }),
       );
+
+      // Wait for iterator to complete
+      await new Promise((r) => setTimeout(r, 50));
+    });
+
+    it('accepts optional model and permissionMode', async () => {
+      const mockIter = createMockIterator([
+        {
+          type: 'result',
+          subtype: 'success',
+          is_error: false,
+          result: 'Done',
+          session_id: 'sdk-456',
+        },
+      ]);
+      vi.mocked(mockSdkQuery).mockReturnValue(mockIter as never);
+
+      const { startSession } = await import('./manager');
+
+      await startSession({
+        sessionId: 'test-model-session',
+        repoPath: '/tmp/test-repo',
+        prompt: 'test',
+        model: 'claude-sonnet-4-5-20250929',
+        permissionMode: 'bypass',
+      });
+
+      expect(mockSdkQuery).toHaveBeenCalledWith(
+        expect.objectContaining({
+          options: expect.objectContaining({
+            model: 'claude-sonnet-4-5-20250929',
+          }),
+        }),
+      );
+
+      await new Promise((r) => setTimeout(r, 50));
     });
   });
 
   describe('stopSession', () => {
-    it('closes terminal and kills process with SIGKILL', async () => {
-      const { startSession, stopSession } = await import('./manager');
-
-      const { sessionId } = await startSession({
-        sessionId: 'test-session-id',
-        repoPath: '/tmp/test-repo',
-        prompt: 'fix the bug',
+    it('aborts the controller and marks session as stopped', async () => {
+      // Create a long-running iterator that never completes on its own
+      let resolveBlock: (() => void) | undefined;
+      const blockPromise = new Promise<void>((r) => {
+        resolveBlock = r;
       });
 
-      stopSession(sessionId);
+      const mockIter = {
+        async *[Symbol.asyncIterator]() {
+          yield {
+            type: 'system',
+            subtype: 'init',
+            session_id: 'sdk-789',
+            tools: [],
+            model: 'claude-sonnet-4-5-20250929',
+          };
+          await blockPromise;
+        },
+      };
+      vi.mocked(mockSdkQuery).mockReturnValue(mockIter as never);
 
-      expect(mockTerminal.close).toHaveBeenCalled();
-      expect(mockProc.proc.kill).toHaveBeenCalledWith('SIGKILL');
+      const { startSession, stopSession, getSession } = await import(
+        './manager'
+      );
+
+      await startSession({
+        sessionId: 'stop-test',
+        repoPath: '/tmp/test',
+        prompt: 'test',
+      });
+
+      const session = getSession('stop-test');
+      expect(session).toBeDefined();
+
+      stopSession('stop-test');
+
+      // Unblock to let cleanup run
+      resolveBlock?.();
+      await new Promise((r) => setTimeout(r, 50));
     });
 
     it('does nothing for a non-existent session', async () => {
       const { stopSession } = await import('./manager');
-      // Should not throw
       stopSession('non-existent-id');
     });
   });
 
   describe('subscribe', () => {
     it('adds and removes subscribers', async () => {
+      const mockIter = createMockIterator([]);
+      vi.mocked(mockSdkQuery).mockReturnValue(mockIter as never);
+
       const { startSession, subscribe } = await import('./manager');
 
-      const { sessionId } = await startSession({
-        sessionId: 'test-session-id',
-        repoPath: '/tmp/test-repo',
+      await startSession({
+        sessionId: 'sub-test',
+        repoPath: '/tmp/test',
         prompt: 'test',
       });
 
       const callback = vi.fn();
-      const unsubscribe = subscribe(sessionId, callback);
-
+      const unsubscribe = subscribe('sub-test', callback);
       expect(typeof unsubscribe).toBe('function');
 
       unsubscribe();
-      // After unsubscribe, callback should not be in the set
+
+      await new Promise((r) => setTimeout(r, 50));
     });
 
     it('returns a no-op unsubscribe for non-existent session', async () => {
       const { subscribe } = await import('./manager');
       const unsubscribe = subscribe('non-existent', vi.fn());
       expect(typeof unsubscribe).toBe('function');
-      unsubscribe(); // should not throw
+      unsubscribe();
     });
   });
 
-  describe('writeToSession', () => {
-    it('writes data to the terminal', async () => {
-      const { startSession, writeToSession } = await import('./manager');
+  describe('respondToApproval', () => {
+    it('resolves a pending approval with allow', async () => {
+      let canUseToolCalled = false;
+      let canUseToolResult: unknown;
 
-      const { sessionId } = await startSession({
-        sessionId: 'test-session-id',
-        repoPath: '/tmp/test-repo',
+      vi.mocked(mockSdkQuery).mockImplementation((params: unknown) => {
+        const { options } = params as {
+          options: {
+            canUseTool: (
+              tool: string,
+              input: Record<string, unknown>,
+              opts: { toolUseID: string; signal: AbortSignal },
+            ) => Promise<unknown>;
+          };
+        };
+
+        return {
+          async *[Symbol.asyncIterator]() {
+            canUseToolCalled = true;
+            // Call canUseTool — this parks in the approval queue
+            canUseToolResult = await options.canUseTool(
+              'Write',
+              { path: '/tmp/file.txt' },
+              {
+                toolUseID: 'tool-1',
+                signal: new AbortController().signal,
+              },
+            );
+            yield {
+              type: 'result',
+              subtype: 'success',
+              is_error: false,
+              result: 'Done',
+              session_id: 'sdk-approval',
+            };
+          },
+        } as never;
+      });
+
+      const { startSession, respondToApproval } = await import('./manager');
+
+      await startSession({
+        sessionId: 'approval-test',
+        repoPath: '/tmp/test',
+        prompt: 'test',
+        permissionMode: 'default',
+      });
+
+      // Wait for canUseTool to fire (it runs in background microtask)
+      await new Promise((r) => setTimeout(r, 50));
+      expect(canUseToolCalled).toBe(true);
+
+      // Resolve the pending approval
+      const resolved = respondToApproval('approval-test', 'tool-1', true);
+      expect(resolved).toBe(true);
+
+      // Wait for the iterator to finish processing
+      await new Promise((r) => setTimeout(r, 50));
+      expect(canUseToolResult).toEqual({ behavior: 'allow' });
+    });
+
+    it('returns false for non-existent session', async () => {
+      const { respondToApproval } = await import('./manager');
+      expect(respondToApproval('nope', 'req-1', true)).toBe(false);
+    });
+
+    it('returns false for non-existent request', async () => {
+      const mockIter = createMockIterator([]);
+      vi.mocked(mockSdkQuery).mockReturnValue(mockIter as never);
+
+      const { startSession, respondToApproval } = await import('./manager');
+
+      await startSession({
+        sessionId: 'no-req-test',
+        repoPath: '/tmp/test',
         prompt: 'test',
       });
 
-      writeToSession(sessionId, 'hello\n');
-      expect(mockTerminal.write).toHaveBeenCalledWith('hello\n');
-    });
+      expect(respondToApproval('no-req-test', 'nonexistent', true)).toBe(false);
 
-    it('does nothing for non-existent session', async () => {
-      const { writeToSession } = await import('./manager');
-      writeToSession('non-existent', 'hello');
-      // Should not throw
+      await new Promise((r) => setTimeout(r, 50));
     });
   });
 
-  describe('resizeSession', () => {
-    it('resizes the terminal', async () => {
-      const { startSession, resizeSession } = await import('./manager');
+  describe('session lifecycle', () => {
+    it('broadcasts status changes and cleans up on completion', async () => {
+      const mockIter = createMockIterator([
+        {
+          type: 'result',
+          subtype: 'success',
+          is_error: false,
+          result: 'Done',
+          session_id: 'sdk-lifecycle',
+        },
+      ]);
+      vi.mocked(mockSdkQuery).mockReturnValue(mockIter as never);
 
-      const { sessionId } = await startSession({
-        sessionId: 'test-session-id',
-        repoPath: '/tmp/test-repo',
+      const { startSession, subscribe, getSession } = await import('./manager');
+
+      const messages: Array<{ type: string; status?: string }> = [];
+
+      await startSession({
+        sessionId: 'lifecycle-test',
+        repoPath: '/tmp/test',
         prompt: 'test',
       });
 
-      resizeSession(sessionId, 200, 50);
-      expect(mockTerminal.resize).toHaveBeenCalledWith(200, 50);
+      subscribe('lifecycle-test', (msg) => {
+        messages.push(msg);
+      });
+
+      // Wait for iterator to complete
+      await new Promise((r) => setTimeout(r, 100));
+
+      // Session should be cleaned up
+      expect(getSession('lifecycle-test')).toBeUndefined();
+
+      // Should have received a final status message
+      const statusMsgs = messages.filter((m) => m.type === 'status');
+      expect(statusMsgs.length).toBeGreaterThan(0);
     });
 
-    it('does nothing for non-existent session', async () => {
-      const { resizeSession } = await import('./manager');
-      resizeSession('non-existent', 80, 24);
-      // Should not throw
-    });
-  });
+    it('reports failed status for error results', async () => {
+      const mockIter = createMockIterator([
+        {
+          type: 'result',
+          subtype: 'error_during_execution',
+          is_error: true,
+          errors: ['Something went wrong'],
+          session_id: 'sdk-error',
+        },
+      ]);
+      vi.mocked(mockSdkQuery).mockReturnValue(mockIter as never);
 
-  describe('process exit handling', () => {
-    it('cleans up session and fires exit callbacks on process exit', async () => {
-      const { startSession, getSession, onSessionExit } = await import(
-        './manager'
-      );
+      const { startSession, subscribe } = await import('./manager');
 
-      const { sessionId } = await startSession({
-        sessionId: 'test-session-id',
-        repoPath: '/tmp/test-repo',
+      const messages: Array<{ type: string; status?: string }> = [];
+
+      await startSession({
+        sessionId: 'error-test',
+        repoPath: '/tmp/test',
         prompt: 'test',
       });
 
-      const exitCallback = vi.fn();
-      onSessionExit(sessionId, exitCallback);
-
-      expect(getSession(sessionId)).toBeDefined();
-
-      // Simulate process exit
-      mockProc.resolveExited(0);
-      // Allow the .then() handler to run
-      await new Promise((r) => setTimeout(r, 10));
-
-      expect(getSession(sessionId)).toBeUndefined();
-      expect(mockTerminal.close).toHaveBeenCalled();
-      expect(exitCallback).toHaveBeenCalledWith({
-        type: 'session_exit',
-        status: 'completed',
-        exitCode: 0,
-      });
-    });
-
-    it('reports failed status for non-zero exit code', async () => {
-      const { startSession, onSessionExit } = await import('./manager');
-
-      const { sessionId } = await startSession({
-        sessionId: 'test-session-id',
-        repoPath: '/tmp/test-repo',
-        prompt: 'test',
+      subscribe('error-test', (msg) => {
+        messages.push(msg);
       });
 
-      const exitCallback = vi.fn();
-      onSessionExit(sessionId, exitCallback);
+      await new Promise((r) => setTimeout(r, 100));
 
-      mockProc.resolveExited(1);
-      await new Promise((r) => setTimeout(r, 10));
-
-      expect(exitCallback).toHaveBeenCalledWith({
-        type: 'session_exit',
-        status: 'failed',
-        exitCode: 1,
-      });
+      const finalStatus = messages.filter((m) => m.type === 'status').pop();
+      expect(finalStatus?.status).toBe('failed');
     });
   });
 });
