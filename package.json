@@ -49,6 +49,7 @@
     "vitest": "^4.0.18"
   },
   "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "^0.2.44",
     "@auth/core": "0.37.0",
     "@convex-dev/auth": "^0.0.90",
     "@xterm/addon-fit": "^0.10.0",

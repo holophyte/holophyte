@@ -1,65 +1,182 @@
-import type { Subprocess } from 'bun';
-import { TERMINAL_DEFAULTS } from '@/constants';
+import type { SDKMessage } from '@anthropic-ai/claude-agent-sdk';
+import { query as sdkQuery } from '@anthropic-ai/claude-agent-sdk';
+import { api } from '@convex/_generated/api';
+import type { Id } from '@convex/_generated/dataModel';
+import { ConvexHttpClient } from 'convex/browser';
 
-/** Sent to subscribers when the PTY process exits. */
+/** Permission mode for a session's canUseTool behavior. */
+export type PermissionMode = 'default' | 'safe-auto' | 'bypass';
+
+const VALID_PERMISSION_MODES = new Set<PermissionMode>([
+  'default',
+  'safe-auto',
+  'bypass',
+]);
+
+/**
+ * @deprecated Legacy type from PTY-based manager. Kept for frontend compat
+ * until Phase 2 rewrites the terminal UI. Use WsServerMessage instead.
+ */
 export interface SessionExitEvent {
   type: 'session_exit';
   status: 'completed' | 'failed' | 'stopped';
-  exitCode: number;
+}
+
+/** JSON messages sent to WebSocket subscribers. */
+export type WsServerMessage =
+  | { type: 'event'; sessionId: string; event: SDKMessage }
+  | {
+      type: 'permission';
+      sessionId: string;
+      requestId: string;
+      tool: string;
+      input: Record<string, unknown>;
+    }
+  | { type: 'status'; sessionId: string; status: SessionStatus }
+  | { type: 'error'; sessionId: string; message: string };
+
+export type SessionStatus = 'running' | 'completed' | 'failed' | 'stopped';
+
+interface PendingApproval {
+  resolve: (result: PermissionResult) => void;
+  toolName: string;
+  input: Record<string, unknown>;
+}
+
+type PermissionResult =
+  | {
+      behavior: 'allow';
+      updatedInput?: Record<string, unknown>;
+      toolUseID?: string;
+    }
+  | {
+      behavior: 'deny';
+      message: string;
+      toolUseID?: string;
+    };
+
+interface BufferedEvent {
+  type: string;
+  data: unknown;
+  timestamp: number;
 }
 
 interface Session {
-  proc: Subprocess;
+  controller: AbortController;
   stoppedByUser: boolean;
-  subscribers: Set<(data: string) => void>;
-  exitCallbacks: Set<(event: SessionExitEvent) => void>;
+  subscribers: Set<(msg: WsServerMessage) => void>;
+  approvalQueue: Map<string, PendingApproval>;
+  eventBuffer: BufferedEvent[];
+  batchIndex: number;
+  flushing: boolean;
+  sdkSessionId?: string;
+  convexSessionId: string;
+  flushTimer?: ReturnType<typeof setInterval>;
+  permissionMode: PermissionMode;
 }
 
 const sessions = new Map<string, Session>();
 
-// Resolve the user's login shell env so spawned processes can find `claude`
-async function getShellEnv(): Promise<Record<string, string>> {
-  const shell = process.env.SHELL ?? '/bin/zsh';
-  const proc = Bun.spawn([shell, '-ilc', 'env'], {
-    stdout: 'pipe',
-    stderr: 'pipe',
+const FLUSH_INTERVAL_MS = 5000;
+const MAX_BUFFER_SIZE = 200;
+
+/** Bash command patterns considered safe for auto-approval in safe-auto mode. */
+const SAFE_BASH_PATTERNS = [
+  /^bun\s/,
+  /^bunx\s/,
+  /^git\s+(status|diff|log|branch|show|stash\s+list)/,
+  /^ls(\s|$)/,
+  /^pwd$/,
+  /^which\s/,
+  /^type\s/,
+];
+
+/** Shell operators that indicate multi-statement commands — never auto-approve. */
+const SHELL_OPERATOR_PATTERN = /[;&|`$\n]|\$\(/;
+
+/** Tools that are always safe to auto-approve (read-only operations). */
+const SAFE_TOOLS = new Set([
+  'Read',
+  'Glob',
+  'Grep',
+  'WebFetch',
+  'WebSearch',
+  'TodoRead',
+]);
+
+let convexClient: ConvexHttpClient | null = null;
+
+function getConvexClient(): ConvexHttpClient {
+  if (!convexClient) {
+    const url = process.env.CONVEX_URL;
+    if (!url) throw new Error('CONVEX_URL environment variable is not set');
+    convexClient = new ConvexHttpClient(url);
+  }
+  return convexClient;
+}
+
+function broadcast(session: Session, msg: WsServerMessage): void {
+  for (const cb of session.subscribers) {
+    cb(msg);
+  }
+}
+
+function shouldAutoApprove(
+  session: Session,
+  toolName: string,
+  input: Record<string, unknown>,
+): boolean {
+  if (session.permissionMode === 'bypass') return true;
+  if (session.permissionMode === 'default') return false;
+
+  // safe-auto mode
+  if (SAFE_TOOLS.has(toolName)) return true;
+
+  if (toolName === 'Bash') {
+    const command = typeof input.command === 'string' ? input.command : '';
+    // Reject multi-statement commands (shell operators can bypass pattern checks)
+    if (SHELL_OPERATOR_PATTERN.test(command)) return false;
+    return SAFE_BASH_PATTERNS.some((pattern) => pattern.test(command));
+  }
+
+  return false;
+}
+
+async function flushEvents(session: Session): Promise<void> {
+  if (session.eventBuffer.length === 0 || session.flushing) return;
+
+  session.flushing = true;
+  const events = [...session.eventBuffer];
+  session.eventBuffer = [];
+  const batchIndex = session.batchIndex++;
+
+  try {
+    const client = getConvexClient();
+    await client.mutation(api.sessionEvents.insertBatch, {
+      sessionId: session.convexSessionId as Id<'sessions'>,
+      events,
+      batchIndex,
+    });
+  } catch (err) {
+    console.error('Failed to flush events to Convex:', err);
+    // Re-add events to buffer on failure so they're not lost
+    session.eventBuffer.unshift(...events);
+    session.batchIndex--;
+  } finally {
+    session.flushing = false;
+  }
+}
+
+function bufferEvent(session: Session, event: SDKMessage): void {
+  session.eventBuffer.push({
+    type: event.type,
+    data: event,
+    timestamp: Date.now(),
   });
-  const output = await new Response(proc.stdout).text();
-  const env: Record<string, string> = {};
-  for (const line of output.split('\n')) {
-    const idx = line.indexOf('=');
-    if (idx > 0) {
-      env[line.slice(0, idx)] = line.slice(idx + 1);
-    }
-  }
-  return env;
-}
 
-let shellEnvCache: Record<string, string> | null = null;
-
-async function getEnv(): Promise<Record<string, string>> {
-  if (!shellEnvCache) {
-    try {
-      shellEnvCache = await getShellEnv();
-    } catch {
-      shellEnvCache = process.env as Record<string, string>;
-    }
+  if (session.eventBuffer.length >= MAX_BUFFER_SIZE) {
+    void flushEvents(session);
   }
-  return shellEnvCache;
-}
-
-// Resolve full path to claude binary
-async function resolveClaudePath(): Promise<string> {
-  const env = await getEnv();
-  const pathDirs = (env.PATH ?? '').split(':');
-  for (const dir of pathDirs) {
-    const candidate = `${dir}/claude`;
-    const file = Bun.file(candidate);
-    if (await file.exists()) {
-      return candidate;
-    }
-  }
-  return 'claude';
 }
 
 export function getSession(sessionId: string): Session | undefined {
@@ -74,83 +191,222 @@ export async function startSession(opts: {
   sessionId: string;
   repoPath: string;
   prompt: string;
+  model?: string;
+  permissionMode?: PermissionMode;
+  resumeSdkSessionId?: string;
 }): Promise<{ sessionId: string }> {
-  const claudePath = await resolveClaudePath();
-  const env = await getEnv();
-
   const { sessionId } = opts;
+  const controller = new AbortController();
+
+  const mode = opts.permissionMode ?? 'safe-auto';
+  if (!VALID_PERMISSION_MODES.has(mode)) {
+    throw new Error(`Invalid permissionMode: ${mode}`);
+  }
 
   const session: Session = {
-    proc: null as unknown as Subprocess,
+    controller,
     stoppedByUser: false,
     subscribers: new Set(),
-    exitCallbacks: new Set(),
+    approvalQueue: new Map(),
+    eventBuffer: [],
+    batchIndex: 0,
+    flushing: false,
+    convexSessionId: sessionId,
+    permissionMode: mode,
   };
 
-  // Use Bun's native PTY support (available since Bun v1.3.5)
-  const proc = Bun.spawn([claudePath, opts.prompt], {
-    cwd: opts.repoPath,
-    env: {
-      ...env,
-      TERM: 'xterm-256color',
-    },
-    terminal: {
-      cols: TERMINAL_DEFAULTS.cols,
-      rows: TERMINAL_DEFAULTS.rows,
-      data(_terminal, data) {
-        const text = new TextDecoder().decode(data);
-        for (const cb of session.subscribers) {
-          cb(text);
-        }
-      },
-    },
-  });
-
-  session.proc = proc;
   sessions.set(sessionId, session);
 
-  // Handle process exit
-  proc.exited.then((exitCode) => {
-    let status: SessionExitEvent['status'];
-    if (session.stoppedByUser) {
-      status = 'stopped';
-    } else {
-      status = exitCode === 0 ? 'completed' : 'failed';
-    }
-    const event: SessionExitEvent = { type: 'session_exit', status, exitCode };
-    for (const cb of session.exitCallbacks) {
-      cb(event);
-    }
-    proc.terminal?.close();
-    sessions.delete(sessionId);
-  });
+  // Periodic event flush to Convex
+  session.flushTimer = setInterval(() => {
+    flushEvents(session);
+  }, FLUSH_INTERVAL_MS);
+
+  // Build SDK options
+  const sdkOptions: Parameters<typeof sdkQuery>[0]['options'] = {
+    cwd: opts.repoPath,
+    abortController: controller,
+    canUseTool: async (toolName, input, toolOpts) => {
+      if (shouldAutoApprove(session, toolName, input)) {
+        return { behavior: 'allow' as const, toolUseID: toolOpts.toolUseID };
+      }
+
+      const requestId = toolOpts.toolUseID;
+
+      // Broadcast permission request to all WS subscribers
+      broadcast(session, {
+        type: 'permission',
+        sessionId,
+        requestId,
+        tool: toolName,
+        input,
+      });
+
+      // Park in the approval queue — resolved when user responds
+      return new Promise<PermissionResult>((resolve) => {
+        session.approvalQueue.set(requestId, { resolve, toolName, input });
+
+        // Auto-deny on abort so we don't leak promises
+        toolOpts.signal.addEventListener(
+          'abort',
+          () => {
+            if (session.approvalQueue.has(requestId)) {
+              session.approvalQueue.delete(requestId);
+              resolve({
+                behavior: 'deny',
+                message: 'Session aborted',
+                toolUseID: toolOpts.toolUseID,
+              });
+            }
+          },
+          { once: true },
+        );
+      });
+    },
+  };
+
+  if (opts.model) {
+    sdkOptions.model = opts.model;
+  }
+
+  if (opts.resumeSdkSessionId) {
+    sdkOptions.resume = opts.resumeSdkSessionId;
+  }
+
+  // Consume the SDK iterator in the background (non-blocking)
+  consumeIterator(session, sessionId, opts.prompt, sdkOptions);
 
   return { sessionId };
+}
+
+async function consumeIterator(
+  session: Session,
+  sessionId: string,
+  prompt: string,
+  options: Parameters<typeof sdkQuery>[0]['options'],
+): Promise<void> {
+  let finalStatus: SessionStatus = 'completed';
+
+  try {
+    const iterator = sdkQuery({ prompt, options });
+
+    broadcast(session, { type: 'status', sessionId, status: 'running' });
+
+    for await (const event of iterator) {
+      // Capture SDK session ID from the init event for resume support
+      if (
+        event.type === 'system' &&
+        'subtype' in event &&
+        event.subtype === 'init' &&
+        'session_id' in event
+      ) {
+        session.sdkSessionId = String(
+          (event as Record<string, unknown>).session_id,
+        );
+
+        try {
+          const client = getConvexClient();
+          await client.mutation(api.sessions.updateSdkSessionId, {
+            id: session.convexSessionId as Id<'sessions'>,
+            sdkSessionId: session.sdkSessionId,
+          });
+        } catch (err) {
+          console.error('Failed to persist SDK session ID:', err);
+        }
+      }
+
+      // Detect error results
+      if (event.type === 'result' && 'is_error' in event && event.is_error) {
+        finalStatus = 'failed';
+      }
+
+      // Buffer for Convex persistence
+      bufferEvent(session, event);
+
+      // Broadcast to all WebSocket subscribers
+      broadcast(session, { type: 'event', sessionId, event });
+    }
+  } catch (err) {
+    if (session.stoppedByUser) {
+      finalStatus = 'stopped';
+    } else {
+      finalStatus = 'failed';
+      broadcast(session, {
+        type: 'error',
+        sessionId,
+        message: String(err),
+      });
+    }
+  } finally {
+    // Stop the periodic flush timer first to prevent races
+    if (session.flushTimer) {
+      clearInterval(session.flushTimer);
+    }
+
+    // Flush remaining buffered events
+    await flushEvents(session);
+
+    // Reject any pending approvals
+    for (const [, pending] of session.approvalQueue) {
+      pending.resolve({ behavior: 'deny', message: 'Session ended' });
+    }
+    session.approvalQueue.clear();
+
+    // Update session status in Convex
+    try {
+      const client = getConvexClient();
+      await client.mutation(api.sessions.serverUpdateStatus, {
+        id: session.convexSessionId as Id<'sessions'>,
+        status: finalStatus,
+      });
+    } catch (err) {
+      console.error('Failed to update session status in Convex:', err);
+    }
+
+    // Notify subscribers of final status
+    broadcast(session, { type: 'status', sessionId, status: finalStatus });
+
+    sessions.delete(sessionId);
+  }
 }
 
 export function stopSession(sessionId: string): void {
   const session = sessions.get(sessionId);
   if (!session) return;
-
   session.stoppedByUser = true;
-  session.proc.terminal?.close();
-  session.proc.kill('SIGKILL');
-  // Session cleanup happens in the proc.exited handler
+  session.controller.abort();
 }
 
-export function resizeSession(
+/** Resolve a pending permission prompt (approve or deny a tool call). */
+export function respondToApproval(
   sessionId: string,
-  cols: number,
-  rows: number,
-): void {
+  requestId: string,
+  approved: boolean,
+  message?: string,
+): boolean {
   const session = sessions.get(sessionId);
-  if (!session) return;
-  session.proc.terminal?.resize(cols, rows);
+  if (!session) return false;
+
+  const pending = session.approvalQueue.get(requestId);
+  if (!pending) return false;
+
+  session.approvalQueue.delete(requestId);
+
+  if (approved) {
+    pending.resolve({ behavior: 'allow' });
+  } else {
+    pending.resolve({
+      behavior: 'deny',
+      message: message ?? 'User denied the tool call',
+    });
+  }
+
+  return true;
 }
 
 export function subscribe(
   sessionId: string,
-  callback: (data: string) => void,
+  callback: (msg: WsServerMessage) => void,
 ): () => void {
   const session = sessions.get(sessionId);
   if (!session) return () => {};
@@ -158,23 +414,4 @@ export function subscribe(
   return () => {
     session.subscribers.delete(callback);
   };
-}
-
-/** Register a callback for when the session's PTY process exits. */
-export function onSessionExit(
-  sessionId: string,
-  callback: (event: SessionExitEvent) => void,
-): () => void {
-  const session = sessions.get(sessionId);
-  if (!session) return () => {};
-  session.exitCallbacks.add(callback);
-  return () => {
-    session.exitCallbacks.delete(callback);
-  };
-}
-
-export function writeToSession(sessionId: string, data: string): void {
-  const session = sessions.get(sessionId);
-  if (!session) return;
-  session.proc.terminal?.write(data);
 }

@@ -1,0 +1,135 @@
+# Phase 4: Workflow Integration
+
+Connect the session system to the rest of the app — permissions, task status, history, and cost. Phases 1-3 build the engine; this phase wires it into the dashboard.
+
+## Permission Profiles
+
+The `canUseTool` callback in Phase 1 is powerful but raw — it needs a user-facing configuration layer. Permission profiles are presets that determine which tools get auto-approved and which require human intervention.
+
+Three presets:
+
+**Interactive** — everything prompts. Equivalent to the current terminal experience where you type y/n for each action. Best for sensitive work or unfamiliar codebases where you want to see every move Claude makes.
+
+**Safe Auto** — read-only tools (Read, Glob, Grep, WebSearch, WebFetch) are auto-approved. Write operations (Edit, Write, Bash) require approval. This is the sweet spot for most work: Claude can explore freely but you sign off on changes. Most sessions should use this.
+
+**Full Auto** — all tools auto-approved (`bypassPermissions` in SDK terms). Claude runs completely autonomously. Best for well-scoped tasks with clear prompts where you trust the outcome, like "run the test suite and fix any failures" or "update all imports to use the new path alias." Review the diff after, not during.
+
+### Where Profiles Live
+
+Profiles are configured at two levels:
+
+- **Per-repo default**: stored on the repo record in Convex. "For this repo, default to Safe Auto." Applies to all tasks in the repo unless overridden.
+- **Per-task override**: set at launch time in the session start dialog. "For this specific task, use Full Auto." Overrides the repo default.
+
+The launch UI shows a dropdown or segmented control: Interactive / Safe Auto / Full Auto. Pre-selected to the repo default. The user can change it before launching.
+
+### Custom Profiles (Future)
+
+Down the road, users might want fine-grained control: "auto-approve Bash only for `bun run test` and `bun run lint`, but prompt for everything else." This is a custom allowlist that maps to the SDK's `allowedTools` + `canUseTool` logic. Not needed for dogfooding — the three presets cover the common cases.
+
+## Auto-Status Transitions
+
+The kanban board should reflect what's actually happening. Right now, launching Claude doesn't move the task — you manually drag it to "In Progress." The status should follow the session lifecycle:
+
+- **Session starts** → task moves to `in_progress` (if it was in `todo` or `backlog`)
+- **Session completes** → task moves to `review` (Claude finished, human should check the result)
+- **Session fails** → task stays in `in_progress` (needs attention, not done)
+- **Session stopped** → no change (user intentionally stopped, they'll decide where it goes)
+
+These transitions should be automatic but not surprising. A small visual indicator on the task card (a brief animation or status change toast) helps the user understand why a card moved.
+
+### Opt-Out
+
+Some users might not want auto-transitions — they manage their board manually and the auto-moves would be disruptive. A per-repo setting: "Auto-update task status on session events" (default: on). Stored on the repo record in Convex alongside the default permission profile.
+
+### Edge Cases
+
+- Task is already in `review` or `done` when session starts → don't move it backwards to `in_progress`. Only transition forward.
+- Multiple sessions on the same task → status follows the most recent session event. If one session completes but another is still running, keep at `in_progress`.
+- Task was manually moved to `done` while session is running → respect the manual override, don't revert.
+
+The rule: auto-transitions only move tasks forward in the workflow (backlog → todo → in_progress → review → done), never backward. Manual moves always take precedence.
+
+## Session History
+
+Every task should have a record of its Claude sessions — what was asked, what happened, how long it took, what it cost. This lives in the task detail panel as a collapsible section.
+
+### What the History Shows
+
+A list of past sessions, most recent first. Each entry shows:
+
+- **Timestamp** — when the session started
+- **Duration** — how long it ran
+- **Model** — which Claude model was used
+- **Status** — completed / failed / stopped
+- **Cost** — total cost from the SDK's result event (or token count if cost isn't available)
+- **Prompt** — the initial prompt (truncated, expandable)
+
+Clicking a session entry expands it to show the full event log — the same MessageStream component from Phase 2, but rendering stored events from Convex instead of a live WebSocket stream. This is session replay.
+
+### Session Replay
+
+The stored `sessionEvents` from Phase 1 make this possible. Fetching all event batches for a session and rendering them through the same MessageStream component gives you a read-only replay of the entire session. You can see everything Claude did, every tool it called, every permission you granted, and the final result.
+
+This is one of the biggest upgrades over the terminal approach — with PTY, once you close the terminal, the output is gone. With the SDK + Convex persistence, every session is permanently reviewable.
+
+### Cost Data
+
+The SDK's `result` event includes `total_cost_usd` and a token usage breakdown (input, output, cache read, cache creation tokens). This data is stored with the session record in Convex.
+
+Display cost at two levels:
+
+- **Per-session**: shown in the session history entry
+- **Per-task**: sum of all sessions for that task, shown in the task detail panel header
+
+This gives you a sense of how expensive a task has been across iterations. "This auth refactor has cost $2.40 across 5 sessions" is useful information for deciding whether to keep iterating or take a different approach.
+
+### Aggregate Views (Future)
+
+Per-repo and per-day cost aggregates would be useful for budget awareness, but they're not needed for dogfooding. The per-task rollup is enough to start.
+
+## Launch UI Changes
+
+The session launch flow (currently the "Launch Claude Code" button in the task detail panel) gets a few additions:
+
+- **Model picker**: dropdown with Opus 4.6 / Sonnet 4.5 / Haiku 4.5
+- **Permission profile**: dropdown or segmented control with Interactive / Safe Auto / Full Auto
+- **Resume option**: if the task has a previous session, offer "Resume last session" as an alternative to starting fresh
+
+These controls should have sensible defaults (repo's default model and permission profile) so you can still launch with a single click for the common case. The additional options are there when you need them, not in your face when you don't.
+
+## Convex Schema Changes
+
+The `sessions` table needs a few new fields:
+
+```
+model: v.string()              // which Claude model was used
+permissionProfile: v.string()  // 'interactive' | 'safe_auto' | 'full_auto'
+costUsd: v.optional(v.number())        // from SDK result event
+tokenUsage: v.optional(v.object({
+  inputTokens: v.number(),
+  outputTokens: v.number(),
+  cacheReadTokens: v.optional(v.number()),
+  cacheCreationTokens: v.optional(v.number()),
+}))
+sdkSessionId: v.optional(v.string())   // for resume support
+duration: v.optional(v.number())       // ms, from SDK result event
+```
+
+The `repos` table gets:
+
+```
+defaultModel: v.optional(v.string())
+defaultPermissionProfile: v.optional(v.string())
+autoStatusTransitions: v.optional(v.boolean())  // default true
+```
+
+## Done When
+
+- Permission profile selector works in the launch UI and flows through to `canUseTool` behavior
+- Task status auto-updates on session start (→ in_progress) and completion (→ review)
+- Session history section in task detail panel shows past sessions with timestamp, duration, model, cost, status
+- Clicking a session history entry shows the full event replay
+- Cost displays per-session and per-task
+- Model and permission profile defaults are configurable per-repo
+- Resume option works for continuing previous sessions

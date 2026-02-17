@@ -168,7 +168,22 @@ export default defineSchema({
     ),
     startedAt: v.number(),
     endedAt: v.optional(v.number()),
+    sdkSessionId: v.optional(v.string()),
+    model: v.optional(v.string()),
+    permissionMode: v.optional(v.string()),
   })
     .index('by_task', ['taskId'])
     .index('by_status', ['status']),
+
+  sessionEvents: defineTable({
+    sessionId: v.id('sessions'),
+    events: v.array(
+      v.object({
+        type: v.string(),
+        data: v.any(),
+        timestamp: v.number(),
+      }),
+    ),
+    batchIndex: v.number(),
+  }).index('by_session_batch', ['sessionId', 'batchIndex']),
 });

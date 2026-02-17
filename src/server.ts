@@ -1,13 +1,11 @@
-import { ansi } from '@/constants';
+import type { WsServerMessage } from '@/claude/manager';
 import homepage from '../public/index.html';
 import {
   getSession,
-  onSessionExit,
-  resizeSession,
+  respondToApproval,
   startSession,
   stopSession,
   subscribe,
-  writeToSession,
 } from './claude/manager';
 
 interface WsData {
@@ -95,7 +93,8 @@ const server = Bun.serve<WsData>({
     '/api/sessions/start': {
       async POST(req: Request) {
         try {
-          const { sessionId, repoPath, prompt } = await req.json();
+          const { sessionId, repoPath, prompt, model, permissionMode } =
+            await req.json();
           if (!sessionId || !repoPath || !prompt) {
             return Response.json(
               { error: 'sessionId, repoPath, and prompt are required' },
@@ -108,7 +107,13 @@ const server = Bun.serve<WsData>({
               { status: 409 },
             );
           }
-          const result = await startSession({ sessionId, repoPath, prompt });
+          const result = await startSession({
+            sessionId,
+            repoPath,
+            prompt,
+            model,
+            permissionMode,
+          });
           return Response.json(result);
         } catch (err) {
           console.error('Failed to start session:', err);
@@ -124,7 +129,10 @@ const server = Bun.serve<WsData>({
     // POST /api/sessions/:id/stop
     const stopMatch = url.pathname.match(/^\/api\/sessions\/(.+)\/stop$/);
     if (stopMatch && req.method === 'POST') {
-      const sessionId = stopMatch[1] ?? '';
+      const sessionId = stopMatch[1];
+      if (!sessionId) {
+        return Response.json({ error: 'Missing session ID' }, { status: 400 });
+      }
       try {
         stopSession(sessionId);
         return Response.json({ ok: true });
@@ -134,23 +142,43 @@ const server = Bun.serve<WsData>({
       }
     }
 
-    // POST /api/sessions/:id/resize
-    const resizeMatch = url.pathname.match(/^\/api\/sessions\/(.+)\/resize$/);
-    if (resizeMatch && req.method === 'POST') {
+    // POST /api/sessions/:id/respond — approve/deny a pending permission
+    const respondMatch = url.pathname.match(/^\/api\/sessions\/(.+)\/respond$/);
+    if (respondMatch && req.method === 'POST') {
+      const sessionId = respondMatch[1];
+      if (!sessionId) {
+        return Response.json({ error: 'Missing session ID' }, { status: 400 });
+      }
       try {
-        const sessionId = resizeMatch[1] ?? '';
-        const { cols, rows } = await req.json();
-        resizeSession(sessionId, cols, rows);
+        const { requestId, approved, message } = await req.json();
+        if (!requestId || typeof approved !== 'boolean') {
+          return Response.json(
+            { error: 'requestId and approved (boolean) are required' },
+            { status: 400 },
+          );
+        }
+        const resolved = respondToApproval(
+          sessionId,
+          requestId,
+          approved,
+          message,
+        );
+        if (!resolved) {
+          return Response.json(
+            { error: 'No pending approval with that requestId' },
+            { status: 404 },
+          );
+        }
         return Response.json({ ok: true });
       } catch (err) {
-        console.error('Failed to resize session:', err);
+        console.error('Failed to respond to approval:', err);
         return Response.json({ error: String(err) }, { status: 500 });
       }
     }
 
-    // WebSocket upgrade for /ws/terminal/:sessionId
-    if (url.pathname.startsWith('/ws/terminal/')) {
-      const sessionId = url.pathname.slice('/ws/terminal/'.length);
+    // WebSocket upgrade for /ws/session/:sessionId
+    if (url.pathname.startsWith('/ws/session/')) {
+      const sessionId = url.pathname.slice('/ws/session/'.length);
       const upgraded = server.upgrade(req, {
         data: { sessionId, cleanups: [] },
       });
@@ -166,25 +194,41 @@ const server = Bun.serve<WsData>({
       const { sessionId } = ws.data;
       const session = getSession(sessionId);
       if (!session) {
-        ws.send(ansi.red('Session not found.'));
+        ws.send(
+          JSON.stringify({
+            type: 'error',
+            sessionId,
+            message: 'Session not found',
+          }),
+        );
         ws.close();
         return;
       }
 
-      const unsubData = subscribe(sessionId, (data) => {
-        ws.send(data);
+      const unsub = subscribe(sessionId, (msg: WsServerMessage) => {
+        ws.send(JSON.stringify(msg));
       });
 
-      const unsubExit = onSessionExit(sessionId, (event) => {
-        ws.send(JSON.stringify(event));
-        ws.close();
-      });
-
-      ws.data.cleanups = [unsubData, unsubExit];
+      ws.data.cleanups = [unsub];
     },
 
-    message(ws, message) {
-      writeToSession(ws.data.sessionId, String(message));
+    message(ws, rawMessage) {
+      // Handle client JSON messages (approve/deny via WebSocket)
+      try {
+        const msg = JSON.parse(String(rawMessage));
+        if (msg.type === 'approve' && msg.requestId) {
+          respondToApproval(ws.data.sessionId, msg.requestId, true);
+        } else if (msg.type === 'deny' && msg.requestId) {
+          respondToApproval(
+            ws.data.sessionId,
+            msg.requestId,
+            false,
+            msg.message,
+          );
+        }
+      } catch {
+        // Ignore non-JSON messages
+      }
     },
 
     close(ws) {
