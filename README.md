@@ -35,7 +35,7 @@ Holophyte is a kanban board application that lets you create tasks with prompts,
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/holophyte.git
+git clone https://github.com/holophyte/holophyte.git
 cd holophyte
 
 # Install dependencies
