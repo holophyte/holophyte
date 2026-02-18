@@ -524,9 +524,8 @@ describe('claude/manager (SDK-based)', () => {
         ['git log --oneline', 's13'],
         ['git log --stat', 's14'],
         ['git log -n 10', 's15'],
-        ['git diff', 's16'], // bare diff — no path args
-        ['git diff --stat', 's17'],
-        ['git diff --name-only', 's18'],
+        ['git diff --stat', 's16'],
+        ['git diff --name-only', 's17'],
       ] as const;
       for (const [cmd, id] of safe) {
         const result = await canUseTool(
@@ -550,8 +549,9 @@ describe('claude/manager (SDK-based)', () => {
         ['bunx some-random-pkg', 'u6'], // arbitrary npm exec
         ['git log -p', 'u7'], // patch output exposes full file content
         ['git log --full-diff', 'u8'], // same risk as -p
-        ['git diff HEAD~1..HEAD', 'u9'], // path arguments enable targeted exfiltration
-        ['git diff HEAD~1..HEAD src/.env', 'u10'], // explicit secret file path
+        ['git diff', 'u9'], // bare diff outputs full working-tree patch
+        ['git diff HEAD~1..HEAD', 'u10'], // range args enable targeted exfiltration
+        ['git diff HEAD~1..HEAD src/.env', 'u11'], // explicit secret file path
       ] as const;
 
       vi.mocked(mockSdkQuery).mockImplementation((params: unknown) => {
