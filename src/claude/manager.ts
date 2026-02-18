@@ -436,7 +436,8 @@ export function sendSessionMessage(sessionId: string, text: string): boolean {
   const session = sessions.get(sessionId);
   if (!session?.sdkQuery) return false;
 
-  if (!session.sdkSessionId) {
+  const sdkSessionId = session.sdkSessionId;
+  if (!sdkSessionId) {
     console.error('Cannot send follow-up: SDK session ID not yet known');
     return false;
   }
@@ -447,7 +448,7 @@ export function sendSessionMessage(sessionId: string, text: string): boolean {
       type: 'user',
       message: { role: 'user', content: text },
       parent_tool_use_id: null,
-      session_id: session.sdkSessionId!,
+      session_id: sdkSessionId,
     };
   })();
 
