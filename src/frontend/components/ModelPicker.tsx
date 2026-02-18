@@ -1,6 +1,5 @@
 import { ChevronDown } from 'lucide-react';
 import { useRef, useState } from 'react';
-import { DEFAULT_MODEL } from '@/constants';
 import { cn } from '@/frontend/lib/utils';
 
 /**
