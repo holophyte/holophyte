@@ -81,11 +81,18 @@ const sessions = new Map<string, Session>();
 const FLUSH_INTERVAL_MS = 5000;
 const MAX_BUFFER_SIZE = 200;
 
+/** Default model until Phase 4 adds a model picker. */
+const DEFAULT_MODEL = 'claude-haiku-4-5-20251001';
+
 /** Bash command patterns considered safe for auto-approval in safe-auto mode. */
 const SAFE_BASH_PATTERNS = [
   /^bun\s+(test|run\s+(lint|lint:fix|check|typecheck))(\s|$)/,
   /^bunx\s+(vitest|tsc|biome)(\s|$)/,
-  /^git\s+(status|diff|log|stash\s+list)(\s|$)/,
+  /^git\s+(status|stash\s+list)(\s|$)/,
+  // git log: only metadata flags, no patch output (-p, --full-diff, etc.)
+  /^git\s+log(\s+(--oneline|--stat|--name-only|--name-status|--no-patch|-n\s*\d+|--since=\S+|--until=\S+|--author=\S+|--format=\S+))*\s*$/,
+  // git diff: only summary flags, no path arguments (prevents targeted file exfiltration)
+  /^git\s+diff(\s+(--stat|--name-only|--name-status|--no-patch))*\s*$/,
   // git show: only bare commit hashes (no :path which exfiltrates file contents)
   /^git\s+show\s+[a-f0-9]{7,40}\s*$/,
   /^git\s+branch\s*$/,
@@ -274,9 +281,7 @@ export async function startSession(opts: {
     },
   };
 
-  if (opts.model) {
-    sdkOptions.model = opts.model;
-  }
+  sdkOptions.model = opts.model ?? DEFAULT_MODEL;
 
   if (opts.resumeSdkSessionId) {
     sdkOptions.resume = opts.resumeSdkSessionId;

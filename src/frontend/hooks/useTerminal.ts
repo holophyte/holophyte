@@ -1,7 +1,7 @@
 import { FitAddon } from '@xterm/addon-fit';
 import { Terminal } from '@xterm/xterm';
 import { useEffect, useRef } from 'react';
-import type { SessionExitEvent } from '@/claude/manager';
+import type { SessionExitEvent, WsServerMessage } from '@/claude/manager';
 import { ansi } from '@/constants';
 import '@xterm/xterm/css/xterm.css';
 
@@ -10,14 +10,12 @@ interface UseTerminalOptions {
   onSessionExit?: (event: SessionExitEvent) => void;
 }
 
-function tryParseExitEvent(data: string): SessionExitEvent | null {
+function tryParseWsMessage(data: string): WsServerMessage | null {
   try {
-    const parsed = JSON.parse(data);
-    if (parsed?.type === 'session_exit') return parsed as SessionExitEvent;
+    return JSON.parse(data) as WsServerMessage;
   } catch {
-    // Not JSON — regular terminal data
+    return null;
   }
-  return null;
 }
 
 export function useTerminal({ sessionId, onSessionExit }: UseTerminalOptions) {
@@ -64,10 +62,10 @@ export function useTerminal({ sessionId, onSessionExit }: UseTerminalOptions) {
     // Defer initial fit to next frame so layout is settled
     requestAnimationFrame(safeFit);
 
-    // Connect WebSocket
+    // Connect WebSocket — Phase 1 path (replaced by SessionPanel in Phase 2)
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const ws = new WebSocket(
-      `${protocol}//${window.location.host}/ws/terminal/${sessionId}`,
+      `${protocol}//${window.location.host}/ws/session/${sessionId}`,
     );
 
     ws.onopen = () => {
@@ -75,15 +73,39 @@ export function useTerminal({ sessionId, onSessionExit }: UseTerminalOptions) {
       safeFit();
     };
 
-    ws.onmessage = (event) => {
-      const exitEvent = tryParseExitEvent(event.data);
-      if (exitEvent) {
-        const color = exitEvent.status === 'completed' ? ansi.green : ansi.red;
-        terminal.writeln(`\r\n${color(`Session ${exitEvent.status}.`)}`);
-        onSessionExitRef.current?.(exitEvent);
-        return;
+    ws.onmessage = (rawEvent) => {
+      const msg = tryParseWsMessage(rawEvent.data);
+      if (!msg) return;
+
+      if (msg.type === 'status') {
+        const color = msg.status === 'completed' ? ansi.green : ansi.red;
+        terminal.writeln(`\r\n${color(`Session ${msg.status}.`)}`);
+        if (msg.status !== 'running') {
+          onSessionExitRef.current?.({
+            type: 'session_exit',
+            status: msg.status,
+          });
+        }
+      } else if (msg.type === 'error') {
+        terminal.writeln(`\r\n${ansi.red(`Error: ${msg.message}`)}`);
+      } else if (msg.type === 'permission') {
+        terminal.writeln(`\r\n[Waiting for approval: ${msg.tool}]`);
+      } else if (msg.type === 'event') {
+        // Extract text from assistant messages for minimal display
+        const ev = msg.event as Record<string, unknown>;
+        if (ev.type === 'assistant') {
+          const content = (ev as { message?: { content?: unknown[] } }).message
+            ?.content;
+          if (Array.isArray(content)) {
+            for (const block of content) {
+              const b = block as Record<string, unknown>;
+              if (b.type === 'text' && typeof b.text === 'string') {
+                terminal.write(b.text);
+              }
+            }
+          }
+        }
       }
-      terminal.write(event.data);
     };
 
     ws.onclose = () => {
@@ -98,16 +120,9 @@ export function useTerminal({ sessionId, onSessionExit }: UseTerminalOptions) {
 
     wsRef.current = ws;
 
-    // Handle resize
+    // Handle resize (resize API removed in Phase 1 — Phase 2 replaces this hook)
     const resizeObserver = new ResizeObserver(() => {
       safeFit();
-      if (ws.readyState === WebSocket.OPEN && terminal.cols && terminal.rows) {
-        fetch(`/api/sessions/${sessionId}/resize`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ cols: terminal.cols, rows: terminal.rows }),
-        });
-      }
     });
     resizeObserver.observe(container);
 

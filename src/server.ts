@@ -93,8 +93,14 @@ const server = Bun.serve<WsData>({
     '/api/sessions/start': {
       async POST(req: Request) {
         try {
-          const { sessionId, repoPath, prompt, model, permissionMode } =
-            await req.json();
+          const {
+            sessionId,
+            repoPath,
+            prompt,
+            model,
+            permissionMode,
+            resumeSdkSessionId,
+          } = await req.json();
           if (!sessionId || !repoPath || !prompt) {
             return Response.json(
               { error: 'sessionId, repoPath, and prompt are required' },
@@ -113,6 +119,7 @@ const server = Bun.serve<WsData>({
             prompt,
             model,
             permissionMode,
+            resumeSdkSessionId,
           });
           return Response.json(result);
         } catch (err) {

@@ -127,11 +127,8 @@ describe('claude/manager (SDK-based)', () => {
 
   describe('stopSession', () => {
     it('aborts the controller and marks session as stopped', async () => {
-      // Create a long-running iterator that never completes on its own
-      let resolveBlock: (() => void) | undefined;
-      const blockPromise = new Promise<void>((r) => {
-        resolveBlock = r;
-      });
+      // Create a long-running iterator that throws when aborted (like the real SDK)
+      let abortReject: ((err: Error) => void) | undefined;
 
       const mockIter = {
         async *[Symbol.asyncIterator]() {
@@ -142,12 +139,15 @@ describe('claude/manager (SDK-based)', () => {
             tools: [],
             model: 'claude-sonnet-4-5-20250929',
           };
-          await blockPromise;
+          // Block until aborted, then throw like the real SDK does
+          await new Promise<never>((_, reject) => {
+            abortReject = reject;
+          });
         },
       };
       vi.mocked(mockSdkQuery).mockReturnValue(mockIter as never);
 
-      const { startSession, stopSession, getSession } = await import(
+      const { startSession, stopSession, getSession, subscribe } = await import(
         './manager'
       );
 
@@ -160,11 +160,25 @@ describe('claude/manager (SDK-based)', () => {
       const session = getSession('stop-test');
       expect(session).toBeDefined();
 
+      // Wait for consumeIterator to reach the blocking await (where abortReject gets set)
+      await new Promise((r) => setTimeout(r, 20));
+
+      // Subscribe after the session exists so we capture subsequent broadcasts
+      const capturedMessages: Array<Record<string, unknown>> = [];
+      const unsubscribe = subscribe('stop-test', (msg) => {
+        capturedMessages.push(msg as Record<string, unknown>);
+      });
+
       stopSession('stop-test');
 
-      // Unblock to let cleanup run
-      resolveBlock?.();
+      // Simulate SDK throwing AbortError when the controller is aborted
+      abortReject?.(new Error('AbortError'));
       await new Promise((r) => setTimeout(r, 50));
+      unsubscribe();
+
+      const statusMsgs = capturedMessages.filter((m) => m.type === 'status');
+      const finalStatus = statusMsgs[statusMsgs.length - 1];
+      expect(finalStatus?.status).toBe('stopped');
     });
 
     it('does nothing for a non-existent session', async () => {
@@ -358,6 +372,316 @@ describe('claude/manager (SDK-based)', () => {
 
       const finalStatus = messages.filter((m) => m.type === 'status').pop();
       expect(finalStatus?.status).toBe('failed');
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // canUseTool / permission mode behaviour
+  // ---------------------------------------------------------------------------
+
+  type CanUseTool = (
+    tool: string,
+    input: Record<string, unknown>,
+    opts: { toolUseID: string; signal: AbortSignal },
+  ) => Promise<{ behavior: string; toolUseID?: string; message?: string }>;
+
+  /** Start a session and capture the canUseTool callback from the SDK options. */
+  async function captureCanUseTool(
+    permissionMode: 'bypass' | 'default' | 'safe-auto',
+  ): Promise<{ canUseTool: CanUseTool; sessionId: string }> {
+    let captured: CanUseTool | undefined;
+
+    vi.mocked(mockSdkQuery).mockImplementation((params: unknown) => {
+      const { options } = params as { options: { canUseTool: CanUseTool } };
+      captured = options.canUseTool;
+      return createMockIterator([]) as never;
+    });
+
+    const { startSession } = await import('./manager');
+    const sessionId = `perm-test-${Math.random().toString(36).slice(2)}`;
+    await startSession({
+      sessionId,
+      repoPath: '/tmp',
+      prompt: 'test',
+      permissionMode,
+    });
+
+    // Wait for consumeIterator to call sdkQuery and populate captured
+    await new Promise((r) => setTimeout(r, 20));
+    if (!captured)
+      throw new Error('canUseTool was not captured from SDK options');
+    return { canUseTool: captured, sessionId };
+  }
+
+  function sig(): AbortSignal {
+    return new AbortController().signal;
+  }
+
+  describe('bypass mode: auto-approves everything', () => {
+    it('allows SAFE_TOOLS, Bash, and Write', async () => {
+      const { canUseTool } = await captureCanUseTool('bypass');
+      expect(
+        (await canUseTool('Read', {}, { toolUseID: 't1', signal: sig() }))
+          .behavior,
+      ).toBe('allow');
+      expect(
+        (
+          await canUseTool(
+            'Write',
+            { file_path: '/etc/passwd', content: 'x' },
+            { toolUseID: 't2', signal: sig() },
+          )
+        ).behavior,
+      ).toBe('allow');
+      expect(
+        (
+          await canUseTool(
+            'Bash',
+            { command: 'rm -rf /' },
+            { toolUseID: 't3', signal: sig() },
+          )
+        ).behavior,
+      ).toBe('allow');
+    });
+  });
+
+  describe('default mode: queues every tool', () => {
+    it('parks Read and Bash in the approval queue', async () => {
+      vi.mocked(mockSdkQuery).mockImplementation((params: unknown) => {
+        const { options } = params as { options: { canUseTool: CanUseTool } };
+        return {
+          // biome-ignore lint/correctness/useYield: blocking mock — parks via await without yielding events
+          async *[Symbol.asyncIterator]() {
+            // Fire concurrently so both park before the generator suspends
+            await Promise.all([
+              options.canUseTool(
+                'Read',
+                {},
+                { toolUseID: 'r1', signal: sig() },
+              ),
+              options.canUseTool(
+                'Bash',
+                { command: 'ls' },
+                { toolUseID: 'r2', signal: sig() },
+              ),
+            ]);
+          },
+        } as never;
+      });
+
+      const { startSession, getSession } = await import('./manager');
+      await startSession({
+        sessionId: 'default-queue-test',
+        repoPath: '/tmp',
+        prompt: 'test',
+        permissionMode: 'default',
+      });
+
+      await new Promise((r) => setTimeout(r, 50));
+      const session = getSession('default-queue-test');
+      expect(session?.approvalQueue.has('r1')).toBe(true);
+      expect(session?.approvalQueue.has('r2')).toBe(true);
+    });
+  });
+
+  describe('safe-auto mode', () => {
+    it('auto-approves SAFE_TOOLS', async () => {
+      const { canUseTool } = await captureCanUseTool('safe-auto');
+      for (const tool of [
+        'Read',
+        'Glob',
+        'Grep',
+        'WebFetch',
+        'WebSearch',
+        'TodoRead',
+      ]) {
+        const result = await canUseTool(
+          tool,
+          {},
+          { toolUseID: tool, signal: sig() },
+        );
+        expect(result.behavior, `${tool} should be auto-approved`).toBe(
+          'allow',
+        );
+      }
+    });
+
+    it('auto-approves safe bash commands', async () => {
+      const { canUseTool } = await captureCanUseTool('safe-auto');
+      const safe = [
+        ['ls', 's1'],
+        ['ls ~/.ssh', 's2'], // tilde path — ls itself is safe
+        ['pwd', 's3'],
+        ['bun test', 's4'],
+        ['bun run lint', 's5'],
+        ['bun run check', 's6'],
+        ['git status', 's7'],
+        ['git branch', 's8'],
+        ['git show abc1234f', 's9'],
+        ['bunx vitest', 's10'],
+        ['which bun', 's11'],
+        ['git log', 's12'], // bare log — no patch output
+        ['git log --oneline', 's13'],
+        ['git log --stat', 's14'],
+        ['git log -n 10', 's15'],
+        ['git diff', 's16'], // bare diff — no path args
+        ['git diff --stat', 's17'],
+        ['git diff --name-only', 's18'],
+      ] as const;
+      for (const [cmd, id] of safe) {
+        const result = await canUseTool(
+          'Bash',
+          { command: cmd },
+          { toolUseID: id, signal: sig() },
+        );
+        expect(result.behavior, `"${cmd}" should be auto-approved`).toBe(
+          'allow',
+        );
+      }
+    });
+
+    it('queues unsafe bash commands (write ops, dangerous flags, shell operators)', async () => {
+      const unsafe = [
+        ['bun run dev', 'u1'], // arbitrary package.json script
+        ['git branch -D main', 'u2'], // destructive flag
+        ['git show HEAD:src/file.ts', 'u3'], // colon = file content exfiltration
+        ['ls > /tmp/out', 'u4'], // redirect operator
+        ['bun test && rm -rf /', 'u5'], // chained shell operator
+        ['bunx some-random-pkg', 'u6'], // arbitrary npm exec
+        ['git log -p', 'u7'], // patch output exposes full file content
+        ['git log --full-diff', 'u8'], // same risk as -p
+        ['git diff HEAD~1..HEAD', 'u9'], // path arguments enable targeted exfiltration
+        ['git diff HEAD~1..HEAD src/.env', 'u10'], // explicit secret file path
+      ] as const;
+
+      vi.mocked(mockSdkQuery).mockImplementation((params: unknown) => {
+        const { options } = params as { options: { canUseTool: CanUseTool } };
+        return {
+          async *[Symbol.asyncIterator]() {
+            await Promise.all(
+              unsafe.map(([cmd, id]) =>
+                options.canUseTool(
+                  'Bash',
+                  { command: cmd },
+                  { toolUseID: id, signal: sig() },
+                ),
+              ),
+            );
+          },
+        } as never;
+      });
+
+      const { startSession, getSession } = await import('./manager');
+      await startSession({
+        sessionId: 'unsafe-bash-test',
+        repoPath: '/tmp',
+        prompt: 'test',
+        permissionMode: 'safe-auto',
+      });
+
+      await new Promise((r) => setTimeout(r, 50));
+      const session = getSession('unsafe-bash-test');
+      for (const [cmd, id] of unsafe) {
+        expect(
+          session?.approvalQueue.has(id),
+          `"${cmd}" should be queued`,
+        ).toBe(true);
+      }
+    });
+
+    it('queues write-side tools (Write, Edit)', async () => {
+      vi.mocked(mockSdkQuery).mockImplementation((params: unknown) => {
+        const { options } = params as { options: { canUseTool: CanUseTool } };
+        return {
+          // biome-ignore lint/correctness/useYield: blocking mock — parks via await without yielding events
+          async *[Symbol.asyncIterator]() {
+            await Promise.all([
+              options.canUseTool(
+                'Write',
+                { file_path: '/tmp/x' },
+                { toolUseID: 'w1', signal: sig() },
+              ),
+              options.canUseTool(
+                'Edit',
+                { file_path: '/tmp/x' },
+                { toolUseID: 'e1', signal: sig() },
+              ),
+            ]);
+          },
+        } as never;
+      });
+
+      const { startSession, getSession } = await import('./manager');
+      await startSession({
+        sessionId: 'write-tools-test',
+        repoPath: '/tmp',
+        prompt: 'test',
+        permissionMode: 'safe-auto',
+      });
+
+      await new Promise((r) => setTimeout(r, 50));
+      const session = getSession('write-tools-test');
+      expect(session?.approvalQueue.has('w1')).toBe(true);
+      expect(session?.approvalQueue.has('e1')).toBe(true);
+    });
+  });
+
+  describe('canUseTool: missing toolUseID guard', () => {
+    it('immediately denies when toolUseID is empty/undefined', async () => {
+      const { canUseTool } = await captureCanUseTool('default');
+
+      // Simulate SDK providing no toolUseID
+      const result = await canUseTool(
+        'Write',
+        {},
+        { toolUseID: '' as string, signal: sig() },
+      );
+      expect(result.behavior).toBe('deny');
+      expect(result.message).toMatch(/missing tool use id/i);
+    });
+  });
+
+  describe('stop session with pending approval', () => {
+    it('resolves pending approvals as denied when session is stopped', async () => {
+      let pendingResult: { behavior: string; message?: string } | undefined;
+
+      vi.mocked(mockSdkQuery).mockImplementation((params: unknown) => {
+        const { options } = params as {
+          options: { canUseTool: CanUseTool; abortController: AbortController };
+        };
+        return {
+          // biome-ignore lint/correctness/useYield: blocking mock — parks via await without yielding events
+          async *[Symbol.asyncIterator]() {
+            // Use the session's own abort signal — stopSession fires it
+            pendingResult = await options.canUseTool(
+              'Write',
+              {},
+              {
+                toolUseID: 'pending-1',
+                signal: options.abortController.signal,
+              },
+            );
+          },
+        } as never;
+      });
+
+      const { startSession, stopSession } = await import('./manager');
+      await startSession({
+        sessionId: 'stop-pending-test',
+        repoPath: '/tmp',
+        prompt: 'test',
+        permissionMode: 'default',
+      });
+
+      // Wait for the approval to park
+      await new Promise((r) => setTimeout(r, 50));
+
+      // Abort the session — fires the signal, which resolves the pending approval as denied
+      stopSession('stop-pending-test');
+
+      await new Promise((r) => setTimeout(r, 100));
+      expect(pendingResult?.behavior).toBe('deny');
+      expect(pendingResult?.message).toMatch(/session/i);
     });
   });
 });
