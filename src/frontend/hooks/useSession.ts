@@ -126,9 +126,8 @@ export function useSession(sessionId: string | null): UseSessionReturn {
 
   const approve = useCallback((requestId: string) => {
     const ws = wsRef.current;
-    if (ws?.readyState === WebSocket.OPEN) {
-      ws.send(JSON.stringify({ type: 'approve', requestId }));
-    }
+    if (ws?.readyState !== WebSocket.OPEN) return;
+    ws.send(JSON.stringify({ type: 'approve', requestId }));
     setPendingApprovals((prev) =>
       prev.map((a) =>
         a.requestId === requestId ? { ...a, resolved: { approved: true } } : a,
@@ -138,9 +137,8 @@ export function useSession(sessionId: string | null): UseSessionReturn {
 
   const deny = useCallback((requestId: string, message?: string) => {
     const ws = wsRef.current;
-    if (ws?.readyState === WebSocket.OPEN) {
-      ws.send(JSON.stringify({ type: 'deny', requestId, message }));
-    }
+    if (ws?.readyState !== WebSocket.OPEN) return;
+    ws.send(JSON.stringify({ type: 'deny', requestId, message }));
     setPendingApprovals((prev) =>
       prev.map((a) =>
         a.requestId === requestId ? { ...a, resolved: { approved: false } } : a,

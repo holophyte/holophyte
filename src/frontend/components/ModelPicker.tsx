@@ -14,9 +14,14 @@ export const CLAUDE_MODELS = [
     description: 'Most capable — best for complex tasks',
   },
   {
+    id: 'claude-sonnet-4-6',
+    label: 'Sonnet 4.6',
+    description: 'Balanced — capable and fast',
+  },
+  {
     id: 'claude-sonnet-4-5-20250929',
     label: 'Sonnet 4.5',
-    description: 'Balanced — capable and fast',
+    description: 'Previous generation — stable',
   },
   {
     id: 'claude-haiku-4-5-20251001',

@@ -5,8 +5,8 @@ import { CLAUDE_MODELS, DEFAULT_MODEL, ModelPicker } from './ModelPicker';
 
 describe('ModelPicker', () => {
   describe('constants', () => {
-    it('has three models', () => {
-      expect(CLAUDE_MODELS).toHaveLength(3);
+    it('has four models', () => {
+      expect(CLAUDE_MODELS).toHaveLength(4);
     });
 
     it('DEFAULT_MODEL matches Haiku (fastest/cheapest for quick tasks)', () => {
@@ -33,7 +33,7 @@ describe('ModelPicker', () => {
     it('does not show other model options before opening', () => {
       render(<ModelPicker value={DEFAULT_MODEL} onChange={vi.fn()} />);
       expect(screen.queryByText('Opus 4.6')).not.toBeInTheDocument();
-      expect(screen.queryByText('Sonnet 4.5')).not.toBeInTheDocument();
+      expect(screen.queryByText('Sonnet 4.6')).not.toBeInTheDocument();
     });
 
     it('has aria-expanded=false when closed', () => {
@@ -100,13 +100,13 @@ describe('ModelPicker', () => {
       expect(onChange).toHaveBeenCalledWith('claude-opus-4-6');
     });
 
-    it('calls onChange with Sonnet model id', async () => {
+    it('calls onChange with Sonnet 4.6 model id', async () => {
       const onChange = vi.fn();
       const user = userEvent.setup();
       render(<ModelPicker value={DEFAULT_MODEL} onChange={onChange} />);
       await user.click(screen.getByRole('button', { name: /haiku 4.5/i }));
-      await user.click(screen.getByRole('option', { name: /sonnet 4.5/i }));
-      expect(onChange).toHaveBeenCalledWith('claude-sonnet-4-5-20250929');
+      await user.click(screen.getByRole('option', { name: /sonnet 4.6/i }));
+      expect(onChange).toHaveBeenCalledWith('claude-sonnet-4-6');
     });
 
     it('closes the dropdown after selection', async () => {
@@ -116,7 +116,7 @@ describe('ModelPicker', () => {
       await user.click(screen.getByRole('option', { name: /opus 4.6/i }));
       // After selection, the dropdown options should no longer be visible
       expect(
-        screen.queryByRole('option', { name: /sonnet 4.5/i }),
+        screen.queryByRole('option', { name: /sonnet 4.6/i }),
       ).not.toBeInTheDocument();
     });
 

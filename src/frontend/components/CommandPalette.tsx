@@ -142,14 +142,14 @@ export function CommandPalette() {
             {sessionId && (
               <>
                 <CommandItem
-                  value="action-toggle-terminal"
+                  value="action-toggle-session"
                   onSelect={() => runAction(toggleSessionMinimized)}
                 >
                   <PanelBottom className="h-4 w-4 shrink-0 text-muted-foreground" />
                   Toggle session panel
                 </CommandItem>
                 <CommandItem
-                  value="action-close-terminal"
+                  value="action-close-session"
                   onSelect={() => runAction(closeSession)}
                 >
                   <PanelBottom className="h-4 w-4 shrink-0 text-muted-foreground" />

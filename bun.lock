@@ -8,8 +8,6 @@
         "@anthropic-ai/claude-agent-sdk": "^0.2.44",
         "@auth/core": "0.37.0",
         "@convex-dev/auth": "^0.0.90",
-        "@xterm/addon-fit": "^0.10.0",
-        "@xterm/xterm": "^5.5.0",
         "class-variance-authority": "^0.7.1",
         "clsx": "^2.1.1",
         "cmdk": "^1.1.1",
@@ -594,10 +592,6 @@
     "@vitest/ui": ["@vitest/ui@4.0.18", "", { "dependencies": { "@vitest/utils": "4.0.18", "fflate": "^0.8.2", "flatted": "^3.3.3", "pathe": "^2.0.3", "sirv": "^3.0.2", "tinyglobby": "^0.2.15", "tinyrainbow": "^3.0.3" }, "peerDependencies": { "vitest": "4.0.18" } }, "sha512-CGJ25bc8fRi8Lod/3GHSvXRKi7nBo3kxh0ApW4yCjmrWmRmlT53B5E08XRSZRliygG0aVNxLrBEqPYdz/KcCtQ=="],
 
     "@vitest/utils": ["@vitest/utils@4.0.18", "", { "dependencies": { "@vitest/pretty-format": "4.0.18", "tinyrainbow": "^3.0.3" } }, "sha512-msMRKLMVLWygpK3u2Hybgi4MNjcYJvwTb0Ru09+fOyCXIgT5raYP041DRRdiJiI3k/2U6SEbAETB3YtBrUkCFA=="],
-
-    "@xterm/addon-fit": ["@xterm/addon-fit@0.10.0", "", { "peerDependencies": { "@xterm/xterm": "^5.0.0" } }, "sha512-UFYkDm4HUahf2lnEyHvio51TNGiLK66mqP2JoATy7hRZeXaGMRDr00JiSF7m63vR5WKATF605yEggJKsw0JpMQ=="],
-
-    "@xterm/xterm": ["@xterm/xterm@5.5.0", "", {}, "sha512-hqJHYaQb5OptNunnyAnkHyM8aCjZ1MEIDTQu1iIbbTD/xops91NB5yq1ZK/dC2JDbVWtF23zUtl9JE2NqwT87A=="],
 
     "acorn": ["acorn@8.15.0", "", { "bin": { "acorn": "bin/acorn" } }, "sha512-NZyJarBfL7nWwIq+FDL6Zp/yHEhePMNnnJ0y3qfieCrmNvYct8uvtiV41UvlSe6apAfk0fY1FbWx+NwfmpvtTg=="],
 

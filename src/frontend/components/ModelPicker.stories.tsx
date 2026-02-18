@@ -35,7 +35,13 @@ export const OpusSelected: Story = {
   },
 };
 
-export const SonnetSelected: Story = {
+export const Sonnet46Selected: Story = {
+  args: {
+    value: 'claude-sonnet-4-6',
+  },
+};
+
+export const Sonnet45Selected: Story = {
   args: {
     value: 'claude-sonnet-4-5-20250929',
   },
