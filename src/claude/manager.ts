@@ -91,8 +91,8 @@ const SAFE_BASH_PATTERNS = [
   /^git\s+(status|stash\s+list)(\s|$)/,
   // git log: only metadata flags, no patch output (-p, --full-diff, etc.)
   /^git\s+log(\s+(--oneline|--stat|--name-only|--name-status|--no-patch|-n\s*\d+|--since=\S+|--until=\S+|--author=\S+|--format=\S+))*\s*$/,
-  // git diff: only summary flags, no path arguments (prevents targeted file exfiltration)
-  /^git\s+diff(\s+(--stat|--name-only|--name-status|--no-patch))*\s*$/,
+  // git diff: require at least one summary flag (prevents bare patch output and path args)
+  /^git\s+diff(\s+(--stat|--name-only|--name-status|--no-patch))+\s*$/,
   // git show: only bare commit hashes (no :path which exfiltrates file contents)
   /^git\s+show\s+[a-f0-9]{7,40}\s*$/,
   /^git\s+branch\s*$/,
@@ -230,7 +230,7 @@ export async function startSession(opts: {
     flushing: false,
     convexSessionId: sessionId,
     permissionMode: mode,
-    model: opts.model,
+    model: opts.model ?? DEFAULT_MODEL,
   };
 
   sessions.set(sessionId, session);
