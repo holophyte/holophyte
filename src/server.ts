@@ -168,7 +168,7 @@ const server = Bun.serve<WsData>({
               { status: 400 },
             );
           }
-          const sent = sendSessionMessage(sessionId, body.text);
+          const sent = await sendSessionMessage(sessionId, body.text);
           if (!sent) {
             return Response.json(
               { error: 'Session not found or not running' },

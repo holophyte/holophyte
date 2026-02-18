@@ -1,5 +1,6 @@
 import { ChevronDown } from 'lucide-react';
 import { useRef, useState } from 'react';
+import { DEFAULT_MODEL } from '@/constants';
 import { cn } from '@/frontend/lib/utils';
 
 /**
@@ -33,8 +34,8 @@ export const CLAUDE_MODELS = [
 /** Union of valid Claude model ID strings derived from {@link CLAUDE_MODELS}. */
 export type ClaudeModelId = (typeof CLAUDE_MODELS)[number]['id'];
 
-/** The model pre-selected when a new session is launched. */
-export const DEFAULT_MODEL: ClaudeModelId = 'claude-haiku-4-5-20251001';
+// Re-export for consumers that import from ModelPicker
+export { DEFAULT_MODEL } from '@/constants';
 
 /** Props for {@link ModelPicker}. */
 interface ModelPickerProps {
@@ -59,7 +60,11 @@ interface ModelPickerProps {
  * <ModelPicker value={model} onChange={setModel} />
  * ```
  */
-export function ModelPicker({ value, onChange, className }: ModelPickerProps) {
+export default function ModelPicker({
+  value,
+  onChange,
+  className,
+}: ModelPickerProps) {
   const [open, setOpen] = useState(false);
   const buttonRef = useRef<HTMLButtonElement>(null);
 

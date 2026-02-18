@@ -104,7 +104,7 @@ const MAX_RESULT_CHARS = 2000;
  * />
  * ```
  */
-export function ToolCallCard({
+export default function ToolCallCard({
   toolName,
   input,
   result,

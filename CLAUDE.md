@@ -72,12 +72,12 @@ Strict mode with additional checks:
 
 ```
 src/server.ts              → Bun.serve() with routes + WebSocket handler
-src/claude/manager.ts      → PTY process management (spawn/stop/resize Claude Code)
+src/claude/manager.ts      → Claude Agent SDK session management (spawn/stop/approve)
 src/frontend/index.tsx     → React entry, Convex client setup
-src/frontend/App.tsx       → Main layout: Sidebar | KanbanBoard + TerminalPanel | TaskDetailPanel
-src/frontend/stores/app.ts → Zustand store (selected repo/task, terminal state)
-src/frontend/hooks/        → useTerminal (xterm.js + WebSocket)
-src/frontend/components/   → UI components (Kanban*, Task*, Terminal*, Sidebar, dialogs)
+src/frontend/App.tsx       → Main layout: Sidebar | KanbanBoard + SessionPanel | TaskDetailPanel
+src/frontend/stores/app.ts → Zustand store (selected repo/task, session state)
+src/frontend/hooks/        → useSession (WebSocket + SDK event state)
+src/frontend/components/   → UI components (Kanban*, Task*, Session*, Sidebar, dialogs)
 src/frontend/components/ui → Radix UI primitives (Button, Dialog, Input, etc.)
 convex/schema.ts           → Data model: repos, tasks, sessions
 convex/{repos,tasks,sessions}.ts → Convex queries and mutations
@@ -85,12 +85,12 @@ scripts/                   → Shared shell scripts (convex-local, dev-local, wo
 .githooks/pre-commit       → Pre-commit hook (codegen + lint + typecheck)
 ```
 
-**Data flow for terminal sessions:**
-1. Frontend POSTs to `/api/sessions/start` with taskId + prompt
-2. Server spawns Claude Code via Bun native PTY (`Bun.spawn` with `terminal` option)
-3. Frontend opens WebSocket to `/ws/terminal/:sessionId`
-4. PTY output → `data` callback → WebSocket → xterm.js in browser
-5. User terminal input → WebSocket → `proc.terminal.write()` → PTY
+**Data flow for SDK sessions:**
+1. Frontend POSTs to `/api/sessions/start` with taskId + prompt + model
+2. Server spawns Claude Code via Claude Agent SDK (`@anthropic-ai/claude-agent-sdk`)
+3. Frontend opens WebSocket to `/ws/session/:sessionId`
+4. SDK events → `consumeIterator()` → WebSocket → SessionPanel conversation UI in browser
+5. User approvals → WebSocket → `respondToApproval()` → SDK resumes
 
 **Path aliases:** `@/*` → `./src/*`, `@convex/*` → `./convex/*`
 
@@ -121,7 +121,7 @@ scripts/                   → Shared shell scripts (convex-local, dev-local, wo
 - **Tailwind v4** via CSS-first config in `src/frontend/styles.css` (`@theme inline {}` block) — no `tailwind.config.ts`
 - **Radix UI** (umbrella `radix-ui` package) + class-variance-authority for component variants
 - **Icons**: `lucide-react`
-- **xterm.js** + FitAddon for terminal rendering
+- **react-markdown** + rehype-highlight for rendered message content
 
 ## Testing
 

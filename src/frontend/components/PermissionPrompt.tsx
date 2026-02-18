@@ -48,7 +48,7 @@ function permissionDescription(
  * Multiple `PermissionPrompt` instances are stacked when Claude issues
  * several tool-use requests in quick succession.
  */
-export function PermissionPrompt({
+export default function PermissionPrompt({
   approval,
   onApprove,
   onDeny,

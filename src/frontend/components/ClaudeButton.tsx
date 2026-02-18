@@ -6,7 +6,7 @@ import { useState } from 'react';
 import { useStickyValue } from '@/frontend/hooks/useStickyValue';
 import { useAppStore } from '@/frontend/stores/app';
 import type { ClaudeModelId } from './ModelPicker';
-import { DEFAULT_MODEL, ModelPicker } from './ModelPicker';
+import ModelPicker, { DEFAULT_MODEL } from './ModelPicker';
 import Button from './ui/Button';
 
 interface ClaudeButtonProps {

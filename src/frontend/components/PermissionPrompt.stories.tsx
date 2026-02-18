@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { PermissionPrompt } from './PermissionPrompt';
+import PermissionPrompt from './PermissionPrompt';
 
 const meta = {
   title: 'Session/PermissionPrompt',

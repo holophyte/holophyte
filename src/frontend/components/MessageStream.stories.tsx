@@ -1,6 +1,6 @@
 import type { SDKMessage } from '@anthropic-ai/claude-agent-sdk';
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { MessageStream } from './MessageStream';
+import MessageStream from './MessageStream';
 
 const meta = {
   title: 'Session/MessageStream',

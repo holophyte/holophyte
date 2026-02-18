@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import type { ClaudeModelId } from './ModelPicker';
-import { CLAUDE_MODELS, DEFAULT_MODEL, ModelPicker } from './ModelPicker';
+import ModelPicker, { CLAUDE_MODELS, DEFAULT_MODEL } from './ModelPicker';
 
 const meta = {
   title: 'Session/ModelPicker',

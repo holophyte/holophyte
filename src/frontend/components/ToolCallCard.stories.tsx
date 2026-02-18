@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { ToolCallCard } from './ToolCallCard';
+import ToolCallCard from './ToolCallCard';
 
 const meta = {
   title: 'Session/ToolCallCard',

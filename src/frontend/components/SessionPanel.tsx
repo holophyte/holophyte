@@ -2,9 +2,9 @@ import { ChevronDown, ChevronUp, Circle, Wifi, WifiOff, X } from 'lucide-react';
 import { useSession } from '@/frontend/hooks/useSession';
 import { cn } from '@/frontend/lib/utils';
 import { useAppStore } from '@/frontend/stores/app';
-import { MessageStream } from './MessageStream';
-import { PermissionPrompt } from './PermissionPrompt';
-import { UserInput } from './UserInput';
+import MessageStream from './MessageStream';
+import PermissionPrompt from './PermissionPrompt';
+import UserInput from './UserInput';
 import Button from './ui/Button';
 
 function statusDot(status: string | null): { color: string; label: string } {
@@ -39,7 +39,7 @@ function statusDot(status: string | null): { color: string; label: string } {
  *
  * No props — all state is sourced from the global store.
  */
-export function SessionPanel() {
+export default function SessionPanel() {
   const sessionId = useAppStore((s) => s.sessionId);
   const sessionMinimized = useAppStore((s) => s.sessionMinimized);
   const closeSession = useAppStore((s) => s.closeSession);

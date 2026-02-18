@@ -7,6 +7,7 @@ import { query as sdkQuery } from '@anthropic-ai/claude-agent-sdk';
 import { api } from '@convex/_generated/api';
 import type { Id } from '@convex/_generated/dataModel';
 import { ConvexHttpClient } from 'convex/browser';
+import { DEFAULT_MODEL } from '@/constants';
 
 /** Permission mode for a session's canUseTool behavior. */
 export type PermissionMode = 'default' | 'safe-auto' | 'bypass';
@@ -77,9 +78,6 @@ const sessions = new Map<string, Session>();
 
 const FLUSH_INTERVAL_MS = 5000;
 const MAX_BUFFER_SIZE = 200;
-
-/** Default model until Phase 4 adds a model picker. */
-const DEFAULT_MODEL = 'claude-haiku-4-5-20251001';
 
 /** Bash command patterns considered safe for auto-approval in safe-auto mode. */
 const SAFE_BASH_PATTERNS = [
@@ -432,7 +430,10 @@ export function respondToApproval(
  *
  * @returns true if the message was queued, false if the session is not found or has no live query.
  */
-export function sendSessionMessage(sessionId: string, text: string): boolean {
+export async function sendSessionMessage(
+  sessionId: string,
+  text: string,
+): Promise<boolean> {
   const session = sessions.get(sessionId);
   if (!session?.sdkQuery) return false;
 
@@ -452,11 +453,7 @@ export function sendSessionMessage(sessionId: string, text: string): boolean {
     };
   })();
 
-  // Fire-and-forget: streamInput returns a promise but we don't await it here
-  session.sdkQuery.streamInput(singleMessage).catch((err: unknown) => {
-    console.error('Failed to send follow-up message:', err);
-  });
-
+  await session.sdkQuery.streamInput(singleMessage);
   return true;
 }
 

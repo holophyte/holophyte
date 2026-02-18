@@ -1,7 +1,7 @@
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it } from 'vitest';
-import { ToolCallCard } from './ToolCallCard';
+import ToolCallCard from './ToolCallCard';
 
 describe('ToolCallCard', () => {
   describe('collapsed state (default)', () => {

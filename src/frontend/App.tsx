@@ -5,7 +5,7 @@ import { useAppStore } from '@/frontend/stores/app';
 import { CommandPalette } from './components/CommandPalette';
 import { KanbanBoard } from './components/KanbanBoard';
 import { SeedBoard } from './components/SeedBoard';
-import { SessionPanel } from './components/SessionPanel';
+import SessionPanel from './components/SessionPanel';
 import { Sidebar } from './components/Sidebar';
 import SignInPage from './components/SignInPage';
 import { TaskDetailPanel } from './components/TaskDetailPanel';

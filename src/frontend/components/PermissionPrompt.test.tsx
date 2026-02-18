@@ -2,7 +2,7 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import type { PendingApproval } from '@/frontend/hooks/useSession';
-import { PermissionPrompt } from './PermissionPrompt';
+import PermissionPrompt from './PermissionPrompt';
 
 function makeApproval(overrides?: Partial<PendingApproval>): PendingApproval {
   return {

@@ -26,7 +26,11 @@ interface UserInputProps {
  * - Clears the textarea on successful send.
  * - Shows "Session completed" as placeholder when `disabled` is `true`.
  */
-export function UserInput({ sessionId, disabled, onSend }: UserInputProps) {
+export default function UserInput({
+  sessionId,
+  disabled,
+  onSend,
+}: UserInputProps) {
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);

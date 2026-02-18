@@ -5,7 +5,7 @@ import ReactMarkdown from 'react-markdown';
 import rehypeHighlight from 'rehype-highlight';
 import remarkGfm from 'remark-gfm';
 import { cn } from '@/frontend/lib/utils';
-import { ToolCallCard } from './ToolCallCard';
+import ToolCallCard from './ToolCallCard';
 
 /** Props for {@link MessageStream}. */
 interface MessageStreamProps {
@@ -174,7 +174,10 @@ function buildMessages(events: SDKMessage[]): RenderedMessage[] {
  *   while the user is scrolled up to read earlier content.
  * - Shows a loading spinner while `isLoading` is `true` and no messages exist.
  */
-export function MessageStream({ events, isLoading }: MessageStreamProps) {
+export default function MessageStream({
+  events,
+  isLoading,
+}: MessageStreamProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const userScrolledRef = useRef(false);

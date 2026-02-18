@@ -1,7 +1,7 @@
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
-import { CLAUDE_MODELS, DEFAULT_MODEL, ModelPicker } from './ModelPicker';
+import ModelPicker, { CLAUDE_MODELS, DEFAULT_MODEL } from './ModelPicker';
 
 describe('ModelPicker', () => {
   describe('constants', () => {
