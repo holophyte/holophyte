@@ -7,6 +7,9 @@ import remarkGfm from 'remark-gfm';
 import { cn } from '@/frontend/lib/utils';
 import ToolCallCard from './ToolCallCard';
 
+const REMARK_PLUGINS = [remarkGfm];
+const REHYPE_PLUGINS = [rehypeHighlight];
+
 /** Props for {@link MessageStream}. */
 interface MessageStreamProps {
   /**
@@ -241,8 +244,8 @@ export default function MessageStream({
               {msg.text && (
                 <div className="prose prose-sm prose-invert max-w-none text-foreground text-sm leading-relaxed [&_pre]:overflow-x-auto [&_pre]:text-xs [&_code]:text-xs">
                   <ReactMarkdown
-                    remarkPlugins={[remarkGfm]}
-                    rehypePlugins={[rehypeHighlight]}
+                    remarkPlugins={REMARK_PLUGINS}
+                    rehypePlugins={REHYPE_PLUGINS}
                   >
                     {msg.text}
                   </ReactMarkdown>
