@@ -36,9 +36,9 @@ export function CommandPalette() {
   const selectTask = useAppStore((s) => s.selectTask);
   const selectSeedBox = useAppStore((s) => s.selectSeedBox);
   const toggleBacklog = useAppStore((s) => s.toggleBacklog);
-  const terminalSessionId = useAppStore((s) => s.terminalSessionId);
-  const closeTerminal = useAppStore((s) => s.closeTerminal);
-  const toggleTerminalMinimized = useAppStore((s) => s.toggleTerminalMinimized);
+  const sessionId = useAppStore((s) => s.sessionId);
+  const closeSession = useAppStore((s) => s.closeSession);
+  const toggleSessionMinimized = useAppStore((s) => s.toggleSessionMinimized);
   const viewMode = useAppStore((s) => s.viewMode);
 
   const tasks = useQuery(
@@ -128,7 +128,7 @@ export function CommandPalette() {
         </Command.Group>
 
         {/* Actions */}
-        {(viewMode === 'board' || terminalSessionId) && (
+        {(viewMode === 'board' || sessionId) && (
           <Command.Group heading="Actions" className={GROUP_HEADING_CLASS}>
             {viewMode === 'board' && (
               <CommandItem
@@ -139,21 +139,21 @@ export function CommandPalette() {
                 Toggle backlog column
               </CommandItem>
             )}
-            {terminalSessionId && (
+            {sessionId && (
               <>
                 <CommandItem
                   value="action-toggle-terminal"
-                  onSelect={() => runAction(toggleTerminalMinimized)}
+                  onSelect={() => runAction(toggleSessionMinimized)}
                 >
                   <PanelBottom className="h-4 w-4 shrink-0 text-muted-foreground" />
-                  Toggle terminal panel
+                  Toggle session panel
                 </CommandItem>
                 <CommandItem
                   value="action-close-terminal"
-                  onSelect={() => runAction(closeTerminal)}
+                  onSelect={() => runAction(closeSession)}
                 >
                   <PanelBottom className="h-4 w-4 shrink-0 text-muted-foreground" />
-                  Close terminal panel
+                  Close session panel
                 </CommandItem>
               </>
             )}

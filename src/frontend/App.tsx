@@ -5,14 +5,14 @@ import { useAppStore } from '@/frontend/stores/app';
 import { CommandPalette } from './components/CommandPalette';
 import { KanbanBoard } from './components/KanbanBoard';
 import { SeedBoard } from './components/SeedBoard';
+import { SessionPanel } from './components/SessionPanel';
 import { Sidebar } from './components/Sidebar';
 import SignInPage from './components/SignInPage';
 import { TaskDetailPanel } from './components/TaskDetailPanel';
-import { TerminalPanel } from './components/TerminalPanel';
 
 function AuthenticatedApp() {
   const selectedTaskId = useAppStore((s) => s.selectedTaskId);
-  const terminalSessionId = useAppStore((s) => s.terminalSessionId);
+  const sessionId = useAppStore((s) => s.sessionId);
   const viewMode = useAppStore((s) => s.viewMode);
 
   return (
@@ -20,7 +20,7 @@ function AuthenticatedApp() {
       <Sidebar />
       <main className="flex-1 flex flex-col overflow-hidden">
         {viewMode === 'seeds' ? <SeedBoard /> : <KanbanBoard />}
-        {terminalSessionId && <TerminalPanel />}
+        {sessionId && <SessionPanel />}
       </main>
       {selectedTaskId && <TaskDetailPanel />}
       <CommandPalette />

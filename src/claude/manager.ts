@@ -1,4 +1,8 @@
-import type { SDKMessage } from '@anthropic-ai/claude-agent-sdk';
+import type {
+  Query,
+  SDKMessage,
+  SDKUserMessage,
+} from '@anthropic-ai/claude-agent-sdk';
 import { query as sdkQuery } from '@anthropic-ai/claude-agent-sdk';
 import { api } from '@convex/_generated/api';
 import type { Id } from '@convex/_generated/dataModel';
@@ -12,15 +16,6 @@ const VALID_PERMISSION_MODES = new Set<PermissionMode>([
   'safe-auto',
   'bypass',
 ]);
-
-/**
- * @deprecated Legacy type from PTY-based manager. Kept for frontend compat
- * until Phase 2 rewrites the terminal UI. Use WsServerMessage instead.
- */
-export interface SessionExitEvent {
-  type: 'session_exit';
-  status: 'completed' | 'failed' | 'stopped';
-}
 
 /** JSON messages sent to WebSocket subscribers. */
 export type WsServerMessage =
@@ -74,6 +69,8 @@ interface Session {
   flushTimer?: ReturnType<typeof setInterval>;
   permissionMode: PermissionMode;
   model?: string;
+  /** The live SDK query object — used to inject follow-up messages. */
+  sdkQuery?: Query;
 }
 
 const sessions = new Map<string, Session>();
@@ -311,6 +308,7 @@ async function consumeIterator(
 
   try {
     const iterator = sdkQuery({ prompt, options });
+    session.sdkQuery = iterator;
 
     broadcast(session, { type: 'status', sessionId, status: 'running' });
 
@@ -424,6 +422,39 @@ export function respondToApproval(
       message: message ?? 'User denied the tool call',
     });
   }
+
+  return true;
+}
+
+/**
+ * Inject a follow-up user message into a running session.
+ * Uses the SDK's `streamInput` to send the message as a new conversation turn.
+ *
+ * @returns true if the message was queued, false if the session is not found or has no live query.
+ */
+export function sendSessionMessage(sessionId: string, text: string): boolean {
+  const session = sessions.get(sessionId);
+  if (!session?.sdkQuery) return false;
+
+  if (!session.sdkSessionId) {
+    console.error('Cannot send follow-up: SDK session ID not yet known');
+    return false;
+  }
+
+  // streamInput expects AsyncIterable<SDKUserMessage> — construct the correct shape
+  const singleMessage = (async function* (): AsyncIterable<SDKUserMessage> {
+    yield {
+      type: 'user',
+      message: { role: 'user', content: text },
+      parent_tool_use_id: null,
+      session_id: session.sdkSessionId!,
+    };
+  })();
+
+  // Fire-and-forget: streamInput returns a promise but we don't await it here
+  session.sdkQuery.streamInput(singleMessage).catch((err: unknown) => {
+    console.error('Failed to send follow-up message:', err);
+  });
 
   return true;
 }
