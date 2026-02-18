@@ -154,7 +154,13 @@ function shouldAutoApprove(
 }
 
 async function flushEvents(session: Session): Promise<void> {
-  if (session.eventBuffer.length === 0 || session.flushing) return;
+  if (session.eventBuffer.length === 0) return;
+
+  // Wait for any in-flight flush to finish so we don't skip buffered events
+  while (session.flushing) {
+    await new Promise((r) => setTimeout(r, 50));
+  }
+  if (session.eventBuffer.length === 0) return;
 
   session.flushing = true;
   const events = [...session.eventBuffer];
