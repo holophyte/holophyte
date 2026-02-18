@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What is Holophyte?
 
-Project management app for running parallel Claude Code sessions. A kanban board UI lets you create tasks with prompts, launch Claude Code in PTY terminals per task, and stream output to the browser via WebSocket.
+Project management app for running parallel Claude Code sessions. A kanban board UI lets you create tasks with prompts, launch Claude Code sessions via the Agent SDK per task, and stream structured events to the browser via WebSocket.
 
 ## Development Principles
 
@@ -167,15 +167,14 @@ Use `console.error` for errors that need attention in server-side code. Use `con
 
 Extract shared values to avoid magic numbers and duplicated strings:
 - **Task/session statuses**: Import `taskStatusValidator` from `convex/schema.ts` — don't redeclare status literals elsewhere
-- **Terminal defaults** (cols, rows): Define once and import where needed
-- **ANSI escape codes**: Use helper functions rather than inline escape sequences
+- **Default model**: Import `DEFAULT_MODEL` from `src/constants.ts` — shared between backend and frontend
 
 ## Configuration
 
 Server configuration lives in environment variables with sensible defaults:
 - `PORT` (default: `8080`) — server port
 - `CONVEX_URL` — Convex deployment URL (served to frontend via `/api/config`)
-- `SHELL` (default: `/bin/zsh`) — login shell for PTY env resolution
+- `SHELL` (default: `/bin/zsh`) — login shell for environment resolution
 - `CONVEX_DEPLOYMENT` — managed by `convex dev` in `.env.local`
 
 ## Git Workflow
@@ -195,8 +194,6 @@ Server configuration lives in environment variables with sensible defaults:
 
 ## Key Gotchas
 
-- Bun native PTY: `proc.stdin`/`proc.stdout`/`proc.stderr` are all `null` when using `terminal` option — use the `data` callback for output and `proc.terminal.write()` for input
-- `node-pty` does NOT work with Bun — always use Bun's native PTY
 - Bun.serve() route handlers need explicit `Request` type annotation in strict mode
 - Bun.serve() generic `<WsData>` types the `ws.data` object
 - Biome doesn't understand CSS `theme()` function — use `var()` instead

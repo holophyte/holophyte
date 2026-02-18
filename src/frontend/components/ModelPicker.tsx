@@ -68,7 +68,7 @@ export default function ModelPicker({
   const buttonRef = useRef<HTMLButtonElement>(null);
 
   const selected =
-    CLAUDE_MODELS.find((m) => m.id === value) ?? CLAUDE_MODELS[2];
+    CLAUDE_MODELS.find((m) => m.id === value) ?? CLAUDE_MODELS[0];
 
   return (
     <div className={cn('relative', className)}>
