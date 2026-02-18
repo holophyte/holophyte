@@ -17,6 +17,7 @@ These details were discovered during Phase 1 implementation and affect Phase 2:
 - **All models have startup latency**, not just Haiku. The loading indicator should be unconditional.
 - **Backend session statuses are `'running' | 'completed' | 'failed' | 'stopped'`** — `waiting_input` is a frontend-derived state (from pending `permission` WS messages), not a backend status.
 - **Follow-up message injection doesn't exist yet.** Phase 1's `POST /api/sessions/:id/respond` only handles approve/deny for permission prompts. Injecting user messages into the SDK conversation needs new backend work (either extending the respond endpoint or adding a separate message endpoint).
+- **Pending approvals must be replayed on WS connect.** When `canUseTool` fires and no client is subscribed yet (or a client reconnects), the `permission` broadcast is missed and the session hangs indefinitely waiting for a response. The `server.ts` `websocket.open` handler must replay all entries in `session.approvalQueue` to the newly connected client.
 
 ## Component Architecture
 
