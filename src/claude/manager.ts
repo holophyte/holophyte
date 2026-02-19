@@ -395,8 +395,14 @@ async function consumeIterator(
         session.pendingMessage = undefined;
       } else {
         followUp = await new Promise<string | null>((resolve) => {
-          session.idleResolve = (text: string) => resolve(text);
-          setTimeout(() => resolve(null), IDLE_TIMEOUT_MS);
+          const timeoutHandle = setTimeout(
+            () => resolve(null),
+            IDLE_TIMEOUT_MS,
+          );
+          session.idleResolve = (text: string) => {
+            clearTimeout(timeoutHandle);
+            resolve(text);
+          };
         });
         session.idleResolve = undefined;
       }

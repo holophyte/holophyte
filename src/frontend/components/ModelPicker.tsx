@@ -33,8 +33,10 @@ export const CLAUDE_MODELS = [
 /** Union of valid Claude model ID strings derived from {@link CLAUDE_MODELS}. */
 export type ClaudeModelId = (typeof CLAUDE_MODELS)[number]['id'];
 
+import { DEFAULT_MODEL } from '@/constants';
+
 // Re-export for consumers that import from ModelPicker
-export { DEFAULT_MODEL } from '@/constants';
+export { DEFAULT_MODEL };
 
 /** Props for {@link ModelPicker}. */
 interface ModelPickerProps {
@@ -68,7 +70,9 @@ export default function ModelPicker({
   const buttonRef = useRef<HTMLButtonElement>(null);
 
   const selected =
-    CLAUDE_MODELS.find((m) => m.id === value) ?? CLAUDE_MODELS[0];
+    CLAUDE_MODELS.find((m) => m.id === value) ??
+    CLAUDE_MODELS.find((m) => m.id === DEFAULT_MODEL) ??
+    CLAUDE_MODELS[0];
 
   return (
     <div className={cn('relative', className)}>
