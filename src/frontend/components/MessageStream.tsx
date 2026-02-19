@@ -1,5 +1,5 @@
 import type { SDKMessage } from '@anthropic-ai/claude-agent-sdk';
-import { ChevronRight, Loader2 } from 'lucide-react';
+import { ChevronRight, Loader2, Sparkles } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import ReactMarkdown from 'react-markdown';
 import rehypeHighlight from 'rehype-highlight';
@@ -23,6 +23,12 @@ interface MessageStreamProps {
    * event arrives.
    */
   isLoading: boolean;
+  /**
+   * When `true`, shows a rotating star indicator at the bottom of the stream
+   * to signal that Claude is actively processing. Should reflect `status ===
+   * 'running'` from the session.
+   */
+  isProcessing: boolean;
 }
 
 // Extract text content from an assistant message's content array
@@ -180,6 +186,7 @@ function buildMessages(events: SDKMessage[]): RenderedMessage[] {
 export default function MessageStream({
   events,
   isLoading,
+  isProcessing,
 }: MessageStreamProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -256,6 +263,16 @@ export default function MessageStream({
           )}
         </div>
       ))}
+
+      {isProcessing && (
+        <div className="flex items-center gap-1.5 text-muted-foreground/50 text-xs py-1">
+          <Sparkles
+            className="h-3 w-3"
+            style={{ animation: 'pulse-spin 2s linear infinite' }}
+          />
+          <span>Thinking…</span>
+        </div>
+      )}
 
       <div ref={bottomRef} />
     </div>

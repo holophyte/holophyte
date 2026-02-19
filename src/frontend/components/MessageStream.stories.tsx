@@ -80,6 +80,15 @@ export const Loading: Story = {
   args: {
     events: [],
     isLoading: true,
+    isProcessing: false,
+  },
+};
+
+export const Processing: Story = {
+  args: {
+    events: [],
+    isLoading: false,
+    isProcessing: true,
   },
 };
 
@@ -87,6 +96,7 @@ export const Empty: Story = {
   args: {
     events: [],
     isLoading: false,
+    isProcessing: false,
   },
 };
 
@@ -98,6 +108,7 @@ export const SingleAssistantMessage: Story = {
       ),
     ],
     isLoading: false,
+    isProcessing: false,
   },
 };
 
@@ -113,6 +124,7 @@ export const WithToolCall: Story = {
       ),
     ],
     isLoading: false,
+    isProcessing: false,
   },
 };
 
@@ -138,6 +150,7 @@ The hook handles reconnection and pending approval replay automatically.`,
       ),
     ],
     isLoading: false,
+    isProcessing: false,
   },
 };
 
@@ -151,6 +164,7 @@ export const WithUserMessage: Story = {
       assistantEvent("I'll add TSDoc comments to all exported functions now."),
     ],
     isLoading: false,
+    isProcessing: false,
   },
 };
 
@@ -173,6 +187,7 @@ export const MultipleToolCalls: Story = {
       ),
     ],
     isLoading: false,
+    isProcessing: false,
   },
 };
 
@@ -188,6 +203,7 @@ export const WithErrorToolResult: Story = {
       ),
     ],
     isLoading: false,
+    isProcessing: false,
   },
 };
 
@@ -239,5 +255,6 @@ This is a significant improvement over the previous xterm.js approach.`,
       ),
     ],
     isLoading: false,
+    isProcessing: false,
   },
 };
