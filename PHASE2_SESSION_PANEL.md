@@ -35,7 +35,7 @@ Follow-up messages are injected via `POST /api/sessions/:id/message` (a new endp
 
 Users can send follow-up messages while Claude is still processing a turn (before `idleResolve` is set). These are stored as `session.pendingMessage` and delivered immediately when the current turn completes (skipping the idle wait entirely). The frontend shows a "Message queued" hint in the UserInput when `messageQueued` status is received from the WS.
 
-A fifth WS message type was added: **`messageQueued`** — sent by the server when a message is stored as `pendingMessage`.
+`messageQueued` is **frontend-only state** — set in `useSession` when the user sends a message while the session is running (i.e. `sendSessionMessage` returns with a queued result). No additional WS message type was added; the frontend derives this from the `POST /api/sessions/:id/message` response. `WsServerMessage` remains four types: `event`, `permission`, `status`, `error`.
 
 ### Synthesized User Events
 
