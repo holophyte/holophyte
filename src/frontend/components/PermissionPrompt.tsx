@@ -1,7 +1,6 @@
 import { AlertTriangle, Check, X } from 'lucide-react';
 import { useState } from 'react';
 import type { PendingApproval } from '@/frontend/hooks/useSession';
-import { cn } from '@/frontend/lib/utils';
 import Button from './ui/Button';
 
 /** Props for {@link PermissionPrompt}. */
@@ -85,14 +84,21 @@ export default function PermissionPrompt({
 
           {showDenyInput && (
             <div className="mt-2">
-              <input
-                type="text"
+              <textarea
                 value={denyReason}
-                onChange={(e) => setDenyReason(e.target.value)}
+                onChange={(e) => {
+                  setDenyReason(e.target.value);
+                  e.target.style.height = 'auto';
+                  e.target.style.height = `${Math.min(e.target.scrollHeight, 8 * 20)}px`;
+                }}
                 placeholder="Reason (optional)"
-                className="w-full text-xs bg-background border border-input rounded px-2 py-1 placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-ring"
+                rows={1}
+                className="w-full text-xs bg-background border border-input rounded px-2 py-1.5 placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-ring resize-none overflow-y-auto"
                 onKeyDown={(e) => {
-                  if (e.key === 'Enter') handleDeny();
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    handleDeny();
+                  }
                   if (e.key === 'Escape') {
                     setShowDenyInput(false);
                     setDenyReason('');
@@ -103,54 +109,52 @@ export default function PermissionPrompt({
               />
             </div>
           )}
-        </div>
 
-        <div
-          className={cn('flex gap-1.5 shrink-0', showDenyInput && 'flex-col')}
-        >
-          {!showDenyInput ? (
-            <>
-              <Button
-                size="sm"
-                className="h-7 px-2.5 text-xs bg-green-600 hover:bg-green-700 text-white"
-                onClick={onApprove}
-              >
-                <Check className="h-3 w-3 mr-1" />
-                Approve
-              </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                className="h-7 px-2.5 text-xs border-destructive/40 text-destructive hover:bg-destructive/10"
-                onClick={() => setShowDenyInput(true)}
-              >
-                <X className="h-3 w-3 mr-1" />
-                Deny
-              </Button>
-            </>
-          ) : (
-            <>
-              <Button
-                size="sm"
-                variant="destructive"
-                className="h-7 px-2.5 text-xs"
-                onClick={handleDeny}
-              >
-                Confirm deny
-              </Button>
-              <Button
-                size="sm"
-                variant="ghost"
-                className="h-7 px-2.5 text-xs"
-                onClick={() => {
-                  setShowDenyInput(false);
-                  setDenyReason('');
-                }}
-              >
-                Cancel
-              </Button>
-            </>
-          )}
+          <div className="flex gap-1.5 mt-2">
+            {!showDenyInput ? (
+              <>
+                <Button
+                  size="sm"
+                  className="h-7 px-2.5 text-xs bg-green-600 hover:bg-green-700 text-white"
+                  onClick={onApprove}
+                >
+                  <Check className="h-3 w-3 mr-1" />
+                  Approve
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-7 px-2.5 text-xs border-destructive/40 text-destructive hover:bg-destructive/10"
+                  onClick={() => setShowDenyInput(true)}
+                >
+                  <X className="h-3 w-3 mr-1" />
+                  Deny
+                </Button>
+              </>
+            ) : (
+              <>
+                <Button
+                  size="sm"
+                  variant="destructive"
+                  className="h-7 px-2.5 text-xs"
+                  onClick={handleDeny}
+                >
+                  Confirm deny
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-7 px-2.5 text-xs"
+                  onClick={() => {
+                    setShowDenyInput(false);
+                    setDenyReason('');
+                  }}
+                >
+                  Cancel
+                </Button>
+              </>
+            )}
+          </div>
         </div>
       </div>
     </div>
