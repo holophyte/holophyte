@@ -306,6 +306,7 @@ describe('claude/manager (SDK-based)', () => {
 
   describe('session lifecycle', () => {
     it('broadcasts status changes and cleans up on completion', async () => {
+      vi.useFakeTimers();
       const mockIter = createMockIterator([
         {
           type: 'result',
@@ -331,8 +332,10 @@ describe('claude/manager (SDK-based)', () => {
         messages.push(msg);
       });
 
-      // Wait for iterator to complete
-      await new Promise((r) => setTimeout(r, 100));
+      // Let iterator complete, then advance past the idle timeout
+      await vi.advanceTimersByTimeAsync(100);
+      await vi.advanceTimersByTimeAsync(61_000);
+      await vi.advanceTimersByTimeAsync(100);
 
       // Session should be cleaned up
       expect(getSession('lifecycle-test')).toBeUndefined();
@@ -340,9 +343,11 @@ describe('claude/manager (SDK-based)', () => {
       // Should have received a final status message
       const statusMsgs = messages.filter((m) => m.type === 'status');
       expect(statusMsgs.length).toBeGreaterThan(0);
+      vi.useRealTimers();
     });
 
     it('reports failed status for error results', async () => {
+      vi.useFakeTimers();
       const mockIter = createMockIterator([
         {
           type: 'result',
@@ -368,10 +373,14 @@ describe('claude/manager (SDK-based)', () => {
         messages.push(msg);
       });
 
-      await new Promise((r) => setTimeout(r, 100));
+      // Let iterator complete, then advance past the idle timeout
+      await vi.advanceTimersByTimeAsync(100);
+      await vi.advanceTimersByTimeAsync(61_000);
+      await vi.advanceTimersByTimeAsync(100);
 
       const finalStatus = messages.filter((m) => m.type === 'status').pop();
       expect(finalStatus?.status).toBe('failed');
+      vi.useRealTimers();
     });
   });
 
