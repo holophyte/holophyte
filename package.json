@@ -6,8 +6,8 @@
   "private": true,
   "scripts": {
     "prepare": "git config core.hooksPath .githooks",
-    "dev": "bun run --watch src/server.ts",
-    "dev:all": "concurrently -k --kill-signal SIGINT -n server,convex -c blue,magenta 'bun run dev' 'bun run convex:dev'",
+    "dev": "scripts/dev.sh",
+    "dev:all": "scripts/dev-all.sh",
     "dev:local": "scripts/dev-local.sh",
     "test": "vitest",
     "test:ui": "vitest --ui",
