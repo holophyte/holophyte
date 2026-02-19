@@ -13,7 +13,7 @@ export const insertBatch = mutation({
     events: v.array(
       v.object({
         type: v.string(),
-        data: v.any(),
+        data: v.string(), // JSON-serialized SDKMessage
         timestamp: v.number(),
       }),
     ),

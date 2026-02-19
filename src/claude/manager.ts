@@ -54,7 +54,7 @@ type PermissionResult =
 
 interface BufferedEvent {
   type: string;
-  data: unknown;
+  data: string; // JSON-serialized SDKMessage
   timestamp: number;
 }
 
@@ -190,7 +190,7 @@ async function flushEvents(session: Session): Promise<void> {
 function bufferEvent(session: Session, event: SDKMessage): void {
   session.eventBuffer.push({
     type: event.type,
-    data: event,
+    data: JSON.stringify(event),
     timestamp: Date.now(),
   });
 
@@ -543,7 +543,7 @@ export function subscribe(
     callback({
       type: 'event',
       sessionId,
-      event: buffered.data as SDKMessage,
+      event: JSON.parse(buffered.data) as SDKMessage,
     });
   }
 
