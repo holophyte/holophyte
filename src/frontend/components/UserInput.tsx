@@ -12,6 +12,11 @@ interface UserInputProps {
    */
   disabled?: boolean;
   /**
+   * When `true`, shows a subtle indicator that the sent message is queued and
+   * will be delivered once the current Claude turn finishes.
+   */
+  queued?: boolean;
+  /**
    * Called when the user submits a message. Receives the session ID and the
    * trimmed message text. Should forward to {@link useSession.sendMessage}.
    */
@@ -29,6 +34,7 @@ interface UserInputProps {
 export default function UserInput({
   sessionId,
   disabled,
+  queued,
   onSend,
 }: UserInputProps) {
   const [text, setText] = useState('');
@@ -82,6 +88,11 @@ export default function UserInput({
           <Send className="h-4 w-4" />
         </Button>
       </div>
+      {queued && !error && (
+        <p className="text-xs text-muted-foreground/60 mt-1">
+          Message queued — will be sent when Claude finishes the current turn.
+        </p>
+      )}
       {error && <p className="text-xs text-destructive mt-1">{error}</p>}
     </div>
   );

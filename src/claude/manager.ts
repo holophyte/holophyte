@@ -78,6 +78,8 @@ interface Session {
   sdkQuery?: Query;
   /** Resolves the idle-timeout promise when a follow-up message arrives. */
   idleResolve?: (text: string) => void;
+  /** Message queued while the session is running; delivered when the turn ends. */
+  pendingMessage?: string;
 }
 
 const sessions = new Map<string, Session>();
@@ -377,7 +379,7 @@ async function consumeIterator(
         broadcast(session, { type: 'event', sessionId, event });
       }
 
-      // Iterator finished — wait for a follow-up message or timeout
+      // Iterator finished — deliver a queued message immediately, or wait for input
       waitingForInput = true;
       broadcast(session, {
         type: 'status',
@@ -385,11 +387,18 @@ async function consumeIterator(
         status: 'waiting_input',
       });
 
-      const followUp = await new Promise<string | null>((resolve) => {
-        session.idleResolve = (text: string) => resolve(text);
-        setTimeout(() => resolve(null), IDLE_TIMEOUT_MS);
-      });
-      session.idleResolve = undefined;
+      // If a message was queued while the session was running, use it now
+      let followUp: string | null;
+      if (session.pendingMessage) {
+        followUp = session.pendingMessage;
+        session.pendingMessage = undefined;
+      } else {
+        followUp = await new Promise<string | null>((resolve) => {
+          session.idleResolve = (text: string) => resolve(text);
+          setTimeout(() => resolve(null), IDLE_TIMEOUT_MS);
+        });
+        session.idleResolve = undefined;
+      }
 
       if (!followUp) break; // Timeout — complete the session
 
@@ -499,9 +508,15 @@ export function sendSessionMessage(sessionId: string, text: string): boolean {
   const session = sessions.get(sessionId);
   if (!session) return false;
 
-  // If the session is idle-waiting for input, resolve the promise
+  // If the session is idle-waiting for input, resolve the promise immediately
   if (session.idleResolve) {
     session.idleResolve(text);
+    return true;
+  }
+
+  // Session is still running — queue the message for delivery after the turn ends
+  if (session.sdkQuery) {
+    session.pendingMessage = text;
     return true;
   }
 

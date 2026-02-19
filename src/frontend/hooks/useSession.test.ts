@@ -1,6 +1,15 @@
-import { act, renderHook, waitFor } from '@testing-library/react';
+import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useSession } from './useSession';
+
+// Mock Convex modules so the hook can render without a ConvexProvider.
+vi.mock('convex/react', () => ({
+  useQuery: vi.fn().mockReturnValue([]),
+}));
+vi.mock('@convex/_generated/api', () => ({
+  api: { sessionEvents: { getBySession: 'sessionEvents:getBySession' } },
+}));
+vi.mock('@convex/_generated/dataModel', () => ({}));
 
 // ---------------------------------------------------------------------------
 // WebSocket mock

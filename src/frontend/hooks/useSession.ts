@@ -1,5 +1,8 @@
 import type { SDKMessage } from '@anthropic-ai/claude-agent-sdk';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { api } from '@convex/_generated/api';
+import type { Id } from '@convex/_generated/dataModel';
+import { useQuery } from 'convex/react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { WsServerMessage } from '@/claude/manager';
 
 /**
@@ -55,6 +58,11 @@ export interface UseSessionReturn {
   /** Whether the WebSocket connection is currently open. */
   isConnected: boolean;
   /**
+   * `true` when a message has been sent while the session was in `running`
+   * state and is queued for delivery once the current turn ends.
+   */
+  messageQueued: boolean;
+  /**
    * Approve a pending tool-use request. Sends `{ type: 'approve', requestId }`
    * over the WebSocket and marks the approval as resolved in local state.
    *
@@ -103,6 +111,10 @@ function tryParseWsMessage(data: string): WsServerMessage | null {
  * Pending approvals are replayed by the server on connect, so a reconnecting
  * client won't miss them. The hook deduplicates replayed entries.
  *
+ * Full conversation history is loaded from Convex on mount (persisted events
+ * from prior flushes), then merged with live WebSocket events so late-connecting
+ * clients see the complete history.
+ *
  * @param sessionId - The Convex session ID to connect to, or `null` to remain
  *   disconnected. Changing this value closes the old connection and opens a new one.
  * @returns State and action callbacks for the session. See {@link UseSessionReturn}.
@@ -113,7 +125,8 @@ function tryParseWsMessage(data: string): WsServerMessage | null {
  * ```
  */
 export function useSession(sessionId: string | null): UseSessionReturn {
-  const [events, setEvents] = useState<SDKMessage[]>([]);
+  // Events received over WebSocket (un-flushed buffer replay + live events).
+  const [wsEvents, setWsEvents] = useState<SDKMessage[]>([]);
   const [pendingApprovals, setPendingApprovals] = useState<PendingApproval[]>(
     [],
   );
@@ -121,8 +134,32 @@ export function useSession(sessionId: string | null): UseSessionReturn {
     null,
   );
   const [isConnected, setIsConnected] = useState(false);
+  const [messageQueued, setMessageQueued] = useState(false);
 
   const wsRef = useRef<WebSocket | null>(null);
+
+  // Load persisted event batches from Convex (already-flushed history).
+  // Returns undefined while loading; skip when sessionId is null.
+  const persistedBatches = useQuery(
+    api.sessionEvents.getBySession,
+    sessionId ? { sessionId: sessionId as Id<'sessions'> } : 'skip',
+  );
+
+  // Flatten persisted batches (ordered by batchIndex) into a single event list.
+  const persistedEvents = useMemo<SDKMessage[]>(() => {
+    if (!persistedBatches) return [];
+    return persistedBatches.flatMap((batch) =>
+      batch.events.map((e) => e.data as SDKMessage),
+    );
+  }, [persistedBatches]);
+
+  // Merge: persisted history first, then WS events (un-flushed tail + live).
+  // The server only buffers events not yet flushed to Convex, so there is no
+  // overlap between persistedEvents and wsEvents under normal operation.
+  const events = useMemo<SDKMessage[]>(
+    () => [...persistedEvents, ...wsEvents],
+    [persistedEvents, wsEvents],
+  );
 
   const approve = useCallback((requestId: string) => {
     const ws = wsRef.current;
@@ -146,25 +183,33 @@ export function useSession(sessionId: string | null): UseSessionReturn {
     );
   }, []);
 
-  const sendMessage = useCallback(async (sid: string, text: string) => {
-    const res = await fetch(`/api/sessions/${sid}/respond`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ type: 'message', text }),
-    });
-    if (!res.ok) {
-      throw new Error(await res.text());
-    }
-  }, []);
+  const sendMessage = useCallback(
+    async (sid: string, text: string) => {
+      const res = await fetch(`/api/sessions/${sid}/respond`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: 'message', text }),
+      });
+      if (!res.ok) {
+        throw new Error(await res.text());
+      }
+      // If the session was running, the message is queued — show an indicator
+      if (sessionStatus === 'running') {
+        setMessageQueued(true);
+      }
+    },
+    [sessionStatus],
+  );
 
   useEffect(() => {
     if (!sessionId) return;
 
-    // Reset state on new session
-    setEvents([]);
+    // Reset WS-side state on new session (persisted events reset via useQuery)
+    setWsEvents([]);
     setPendingApprovals([]);
     setSessionStatus(null);
     setIsConnected(false);
+    setMessageQueued(false);
 
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const ws = new WebSocket(
@@ -182,7 +227,7 @@ export function useSession(sessionId: string | null): UseSessionReturn {
       if (!msg) return;
 
       if (msg.type === 'event') {
-        setEvents((prev) => [...prev, msg.event]);
+        setWsEvents((prev) => [...prev, msg.event]);
       } else if (msg.type === 'permission') {
         setPendingApprovals((prev) => {
           // Avoid duplicates on reconnect replay
@@ -196,8 +241,13 @@ export function useSession(sessionId: string | null): UseSessionReturn {
         // from unresolved pendingApprovals automatically.
       } else if (msg.type === 'status') {
         setSessionStatus(msg.status as SessionStatus);
+        // Clear queued indicator once the session moves past running
+        if (msg.status !== 'running') {
+          setMessageQueued(false);
+        }
       } else if (msg.type === 'error') {
         setSessionStatus('failed');
+        setMessageQueued(false);
       }
     };
 
@@ -226,6 +276,7 @@ export function useSession(sessionId: string | null): UseSessionReturn {
     pendingApprovals,
     sessionStatus: derivedStatus,
     isConnected,
+    messageQueued,
     approve,
     deny,
     sendMessage,

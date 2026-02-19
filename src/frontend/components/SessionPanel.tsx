@@ -65,6 +65,7 @@ export default function SessionPanel() {
     pendingApprovals,
     sessionStatus,
     isConnected,
+    messageQueued,
     approve,
     deny,
     sendMessage,
@@ -143,7 +144,11 @@ export default function SessionPanel() {
       {/* Body */}
       {!sessionMinimized && (
         <div className="flex flex-col flex-1 overflow-hidden">
-          <MessageStream events={events} isLoading={isLoading} />
+          <MessageStream
+            events={events}
+            isLoading={isLoading}
+            isProcessing={sessionStatus === 'running'}
+          />
 
           {/* Permission prompts stacked above input */}
           {unresolvedApprovals.length > 0 && (
@@ -162,6 +167,7 @@ export default function SessionPanel() {
           <UserInput
             sessionId={sessionId}
             disabled={!sessionId || isFinished}
+            queued={messageQueued}
             onSend={sendMessage}
           />
         </div>

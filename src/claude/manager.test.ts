@@ -650,6 +650,87 @@ describe('claude/manager (SDK-based)', () => {
     });
   });
 
+  describe('sendSessionMessage', () => {
+    it('queues a message sent while running and delivers it after the turn ends', async () => {
+      // Resolver to unblock the iterator when we're ready
+      let resolveBlock: (() => void) | undefined;
+
+      // Track the second sdkQuery call's prompt
+      let secondPrompt: string | undefined;
+      let callCount = 0;
+
+      vi.mocked(mockSdkQuery).mockImplementation((params: unknown) => {
+        const { prompt } = params as { prompt: string };
+        callCount++;
+
+        if (callCount === 1) {
+          // First call: block until resolveBlock is called
+          return {
+            async *[Symbol.asyncIterator]() {
+              yield {
+                type: 'system',
+                subtype: 'init',
+                session_id: 'sdk-queue',
+                tools: [],
+                model: 'claude-sonnet-4-5-20250929',
+              };
+              await new Promise<void>((r) => {
+                resolveBlock = r;
+              });
+              yield {
+                type: 'result',
+                subtype: 'success',
+                is_error: false,
+                result: 'Done',
+                session_id: 'sdk-queue',
+              };
+            },
+          } as never;
+        }
+
+        // Second call: record the prompt and complete immediately
+        secondPrompt = prompt;
+        return createMockIterator([
+          {
+            type: 'result',
+            subtype: 'success',
+            is_error: false,
+            result: 'Done 2',
+            session_id: 'sdk-queue',
+          },
+        ]) as never;
+      });
+
+      const { startSession, sendSessionMessage } = await import('./manager');
+
+      await startSession({
+        sessionId: 'queue-msg-test',
+        repoPath: '/tmp',
+        prompt: 'initial',
+      });
+
+      // Wait for the session to be running (after init event)
+      await new Promise((r) => setTimeout(r, 30));
+
+      // Send a message while the iterator is still running (blocked)
+      const sent = sendSessionMessage('queue-msg-test', 'follow-up text');
+      expect(sent).toBe(true);
+
+      // Unblock the iterator so the turn ends
+      resolveBlock?.();
+
+      // Wait for consumeIterator to pick up the pending message and start the second query
+      await new Promise((r) => setTimeout(r, 100));
+
+      expect(secondPrompt).toBe('follow-up text');
+    });
+
+    it('returns false when session does not exist', async () => {
+      const { sendSessionMessage } = await import('./manager');
+      expect(sendSessionMessage('nonexistent', 'hello')).toBe(false);
+    });
+  });
+
   describe('stop session with pending approval', () => {
     it('resolves pending approvals as denied when session is stopped', async () => {
       let pendingResult: { behavior: string; message?: string } | undefined;
