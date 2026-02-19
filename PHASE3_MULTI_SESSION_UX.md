@@ -16,6 +16,17 @@ These details were discovered during Phase 1 implementation and affect Phase 3:
 - **Approval queue state comes from `permission` WS messages.** The backend broadcasts `{ type: 'permission', sessionId, requestId, tool, input }` when a tool needs approval. Use these to track pending approvals client-side and derive `waiting_input` state.
 - **Session statuses from the backend are `'running' | 'completed' | 'failed' | 'stopped'`.** The attention states (`active`, `waiting_input`, `idle`) are frontend-derived from these plus event timing and pending approvals.
 
+## Phase 2 Findings
+
+These details were discovered during Phase 2 implementation and affect Phase 3:
+
+- **WS message types are now 5, not 4.** In addition to `event`, `permission`, `status`, `error`, Phase 2 added `messageQueued`. When a user sends a message while Claude is running, the server stores it as `pendingMessage` and broadcasts `{ type: 'messageQueued' }`. The tab bar should reflect this — a queued message is not the same as `waiting_input` (no action required from the user), but it could be a useful indicator ("message pending delivery").
+- **Sessions stay alive for 60 seconds after a turn completes.** The idle timeout loop (`IDLE_TIMEOUT_MS = 60_000` in `manager.ts`) keeps the session open for follow-up messages. Backend status transitions: `running` during a turn → still `running` during the idle wait → `completed` when the timeout fires with no follow-up. The attention state `idle` (gray badge) maps to this window.
+- **`isProcessing` is distinct from `isLoading`.** `isLoading` = session started, no events yet (spinner, "Starting…"). `isProcessing` = session running, at least one event received (thinking indicator). Both states need separate treatment in the tab badge — a brand-new session tab is not the same as a tab that's been running for 10 minutes.
+- **Convex `sessionEvents` table holds full event history.** The `getBySession` query returns all event batches. The frontend deduplicates events between `persistedEvents` (Convex) and `wsEvents` (live stream) using a UUID-based Set. For Phase 3, the tab history for an inactive tab can come entirely from Convex — no need to keep a live WS open for tabs that aren't displayed.
+- **Zustand store already has `selectedSessionId` and `closeSession()`.** Phase 2 uses `closeSession()` for stale panel detection (repo/task deleted). Phase 3 will expand this to a multi-session tab list; the existing action can become the basis for tab close behavior.
+- **`useSession` hook manages one session at a time.** Phase 3 will need either: (a) one `useSession` per open tab (mounted but hidden), or (b) a shared session registry that all tabs subscribe to. Option (a) is simpler but multiplies WS connections. Option (b) is cleaner for the "subscribe to all sessions, render one" model described above.
+
 ## Session Tabs
 
 The session panel gains a tab bar along the top. Each active session gets a tab labeled with the task name (not the session ID — the task name is what the user recognizes).

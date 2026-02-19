@@ -333,16 +333,14 @@ describe('PermissionPrompt', () => {
         { requestId: 'req-2', tool: 'Bash', input: { command: 'rm -rf /' } },
       ];
       render(
-        <>
-          {approvals.map((a) => (
-            <PermissionPrompt
-              key={a.requestId}
-              approval={a}
-              onApprove={vi.fn()}
-              onDeny={vi.fn()}
-            />
-          ))}
-        </>,
+        approvals.map((a) => (
+          <PermissionPrompt
+            key={a.requestId}
+            approval={a}
+            onApprove={vi.fn()}
+            onDeny={vi.fn()}
+          />
+        )),
       );
       expect(
         screen.getByText(/Permission required — Write/),

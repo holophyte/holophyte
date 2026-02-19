@@ -19,6 +19,46 @@ These details were discovered during Phase 1 implementation and affect Phase 2:
 - **Follow-up message injection doesn't exist yet.** Phase 1's `POST /api/sessions/:id/respond` only handles approve/deny for permission prompts. Injecting user messages into the SDK conversation needs new backend work (either extending the respond endpoint or adding a separate message endpoint).
 - **Pending approvals must be replayed on WS connect.** When `canUseTool` fires and no client is subscribed yet (or a client reconnects), the `permission` broadcast is missed and the session hangs indefinitely waiting for a response. The `server.ts` `websocket.open` handler must replay all entries in `session.approvalQueue` to the newly connected client.
 
+## Phase 2 Findings
+
+These details were discovered during Phase 2 implementation:
+
+### Follow-up Message Architecture
+
+Follow-up messages are injected via `POST /api/sessions/:id/message` (a new endpoint, separate from `/respond` which handles approvals only). On the backend, the session runs an **idle timeout loop**: after each SDK turn completes, the session waits up to 60 seconds for a follow-up message before the session closes. The wait uses a Promise with an `idleResolve` callback so incoming messages can resolve it immediately.
+
+- `IDLE_TIMEOUT_MS = 60_000` — configurable constant in `manager.ts`
+- Follow-up messages with `session.idleResolve` set get delivered synchronously (no new HTTP round-trip needed)
+- Race condition: `clearTimeout(timeoutHandle)` must be called inside `idleResolve` to prevent the timeout from firing after a message arrives
+
+### Message Queuing During Running State
+
+Users can send follow-up messages while Claude is still processing a turn (before `idleResolve` is set). These are stored as `session.pendingMessage` and delivered immediately when the current turn completes (skipping the idle wait entirely). The frontend shows a "Message queued" hint in the UserInput when `messageQueued` status is received from the WS.
+
+A fifth WS message type was added: **`messageQueued`** — sent by the server when a message is stored as `pendingMessage`.
+
+### Synthesized User Events
+
+The SDK's `query({ prompt })` does not emit a `user` event for the initial prompt (or for any follow-up prompts). The server synthesizes these events and injects them into the event stream so the conversation UI shows "You: ..." bubbles. Synthesized events must carry a `uuid` (via `crypto.randomUUID()`) for deduplication.
+
+### Event Deduplication (Convex + WebSocket)
+
+Session events are persisted to Convex via `sessionEvents` table (batched flushes). The frontend loads persisted history via `useQuery(api.sessionEvents.getBySession)` for reconnect support. This creates an overlap problem: Convex's `useQuery` is reactive — when a batch flushes, those events appear in `persistedEvents` while they're still in the live `wsEvents` array. This causes duplicate rendering.
+
+Fix: add a `uuid` field to every `SDKMessage`. Use a `Set<string>` during merge — events seen in `persistedEvents` are skipped in `wsEvents`. Events without a UUID (older SDK events that don't carry one) are never deduplicated against each other, so they must not be emitted twice from the server.
+
+### Stale Panel Detection
+
+When a repo or task is deleted while its panel is open, Convex queries return `null`. Panels watch for `null` via `useEffect` and call the Zustand `closeTask()` / `closeSession()` action. The `prevTaskRef` pattern (caching the last non-null value) must not be used for this detection — only raw query results should trigger close.
+
+### Thinking Indicator
+
+A `pulse-spin` keyframe animation (CSS `@keyframes`) drives a `<Sparkles>` icon with "Thinking…" text that appears below the last message while `isProcessing` is true. `isProcessing` is derived from session status being `'running'` (after at least one event has arrived — before any events arrive the full loading state is shown instead).
+
+### Model Reset on Task Switch
+
+`useState` initializer only runs once on mount. `ClaudeButton` stays mounted across task switches (the component doesn't unmount), so the model picker preserved the previous task's model. Fixed with a `prevTaskRef` pattern: when `task._id` changes, reset the model to `DEFAULT_MODEL` in a `useEffect`.
+
 ## Component Architecture
 
 The `TerminalPanel` component gets replaced by `SessionPanel`. It occupies the same position in the layout (bottom or right pane, resizable) but renders completely different content.

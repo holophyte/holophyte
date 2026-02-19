@@ -331,7 +331,6 @@ async function consumeIterator(
     let currentIterator: AsyncIterable<SDKMessage> = iterator;
     let waitingForInput = false;
 
-    // biome-ignore lint/correctness/noConstantCondition: intentional loop broken by timeout or stop
     while (true) {
       for await (const event of currentIterator) {
         // If we were idle-waiting, we're back to running
