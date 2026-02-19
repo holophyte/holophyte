@@ -45,6 +45,14 @@ trap 'rm -f "$LOCKFILE"' EXIT
 
 export PORT="$DEV_PORT"
 
+# Kill any lingering processes on dev ports (prevents Bun/Convex from auto-incrementing)
+for PORT_NUM in "$DEV_PORT" "$CONVEX_CLOUD_PORT" "$CONVEX_SITE_PORT"; do
+  if lsof -ti :"$PORT_NUM" >/dev/null 2>&1; then
+    echo "Port $PORT_NUM in use — killing lingering process..."
+    lsof -ti :"$PORT_NUM" | xargs kill -9 2>/dev/null || true
+  fi
+done
+
 echo "Starting dev environment (app=$DEV_PORT, convex=$CONVEX_CLOUD_PORT/$CONVEX_SITE_PORT)..."
 bunx concurrently -k --kill-signal SIGINT -n server,convex -c blue,magenta \
   "bun run --watch src/server.ts" \
