@@ -1,8 +1,9 @@
-import type { SDKMessage } from '@anthropic-ai/claude-agent-sdk';
+import type { Query, SDKMessage } from '@anthropic-ai/claude-agent-sdk';
 import { query as sdkQuery } from '@anthropic-ai/claude-agent-sdk';
 import { api } from '@convex/_generated/api';
 import type { Id } from '@convex/_generated/dataModel';
 import { ConvexHttpClient } from 'convex/browser';
+import { DEFAULT_MODEL } from '@/constants';
 
 /** Permission mode for a session's canUseTool behavior. */
 export type PermissionMode = 'default' | 'safe-auto' | 'bypass';
@@ -12,15 +13,6 @@ const VALID_PERMISSION_MODES = new Set<PermissionMode>([
   'safe-auto',
   'bypass',
 ]);
-
-/**
- * @deprecated Legacy type from PTY-based manager. Kept for frontend compat
- * until Phase 2 rewrites the terminal UI. Use WsServerMessage instead.
- */
-export interface SessionExitEvent {
-  type: 'session_exit';
-  status: 'completed' | 'failed' | 'stopped';
-}
 
 /** JSON messages sent to WebSocket subscribers. */
 export type WsServerMessage =
@@ -35,7 +27,12 @@ export type WsServerMessage =
   | { type: 'status'; sessionId: string; status: SessionStatus }
   | { type: 'error'; sessionId: string; message: string };
 
-export type SessionStatus = 'running' | 'completed' | 'failed' | 'stopped';
+export type SessionStatus =
+  | 'running'
+  | 'waiting_input'
+  | 'completed'
+  | 'failed'
+  | 'stopped';
 
 interface PendingApproval {
   resolve: (result: PermissionResult) => void;
@@ -61,6 +58,9 @@ interface BufferedEvent {
   timestamp: number;
 }
 
+/** How long to wait for a follow-up message after the SDK turn completes. */
+const IDLE_TIMEOUT_MS = 60_000;
+
 interface Session {
   controller: AbortController;
   stoppedByUser: boolean;
@@ -74,15 +74,18 @@ interface Session {
   flushTimer?: ReturnType<typeof setInterval>;
   permissionMode: PermissionMode;
   model?: string;
+  /** The live SDK query object — used to inject follow-up messages. */
+  sdkQuery?: Query;
+  /** Resolves the idle-timeout promise when a follow-up message arrives. */
+  idleResolve?: (text: string) => void;
+  /** Message queued while the session is running; delivered when the turn ends. */
+  pendingMessage?: string;
 }
 
 const sessions = new Map<string, Session>();
 
 const FLUSH_INTERVAL_MS = 5000;
 const MAX_BUFFER_SIZE = 200;
-
-/** Default model until Phase 4 adds a model picker. */
-const DEFAULT_MODEL = 'claude-haiku-4-5-20251001';
 
 /** Bash command patterns considered safe for auto-approval in safe-auto mode. */
 const SAFE_BASH_PATTERNS = [
@@ -311,44 +314,119 @@ async function consumeIterator(
 
   try {
     const iterator = sdkQuery({ prompt, options });
+    session.sdkQuery = iterator;
 
     broadcast(session, { type: 'status', sessionId, status: 'running' });
 
-    for await (const event of iterator) {
-      // Capture SDK session ID from the init event for resume support
-      if (
-        event.type === 'system' &&
-        'subtype' in event &&
-        event.subtype === 'init' &&
-        'session_id' in event
-      ) {
-        session.sdkSessionId = String(
-          (event as Record<string, unknown>).session_id,
-        );
+    // Show the initial prompt as the first user message in the conversation
+    const promptEvent = {
+      type: 'user',
+      uuid: crypto.randomUUID(),
+      message: { role: 'user', content: prompt },
+    } as SDKMessage;
+    broadcast(session, { type: 'event', sessionId, event: promptEvent });
+    bufferEvent(session, promptEvent);
 
-        try {
-          const client = getConvexClient();
-          await client.mutation(api.sessions.updateSdkSessionId, {
-            id: session.convexSessionId as Id<'sessions'>,
-            sdkSessionId: session.sdkSessionId,
-            model: session.model,
-            permissionMode: session.permissionMode,
+    // Consume SDK events, then wait for follow-up messages in a loop
+    let currentIterator: AsyncIterable<SDKMessage> = iterator;
+    let waitingForInput = false;
+
+    // biome-ignore lint/correctness/noConstantCondition: intentional loop broken by timeout or stop
+    while (true) {
+      for await (const event of currentIterator) {
+        // If we were idle-waiting, we're back to running
+        if (waitingForInput) {
+          waitingForInput = false;
+          broadcast(session, {
+            type: 'status',
+            sessionId,
+            status: 'running',
           });
-        } catch (err) {
-          console.error('Failed to persist SDK session ID:', err);
         }
+
+        // Capture SDK session ID from the init event for resume support
+        if (
+          event.type === 'system' &&
+          'subtype' in event &&
+          event.subtype === 'init' &&
+          'session_id' in event
+        ) {
+          session.sdkSessionId = String(
+            (event as Record<string, unknown>).session_id,
+          );
+
+          try {
+            const client = getConvexClient();
+            await client.mutation(api.sessions.updateSdkSessionId, {
+              id: session.convexSessionId as Id<'sessions'>,
+              sdkSessionId: session.sdkSessionId,
+              model: session.model,
+              permissionMode: session.permissionMode,
+            });
+          } catch (err) {
+            console.error('Failed to persist SDK session ID:', err);
+          }
+        }
+
+        // Detect error results
+        if (event.type === 'result' && 'is_error' in event && event.is_error) {
+          finalStatus = 'failed';
+        }
+
+        // Buffer for Convex persistence
+        bufferEvent(session, event);
+
+        // Broadcast to all WebSocket subscribers
+        broadcast(session, { type: 'event', sessionId, event });
       }
 
-      // Detect error results
-      if (event.type === 'result' && 'is_error' in event && event.is_error) {
-        finalStatus = 'failed';
+      // Iterator finished — deliver a queued message immediately, or wait for input
+      waitingForInput = true;
+      broadcast(session, {
+        type: 'status',
+        sessionId,
+        status: 'waiting_input',
+      });
+
+      // If a message was queued while the session was running, use it now
+      let followUp: string | null;
+      if (session.pendingMessage) {
+        followUp = session.pendingMessage;
+        session.pendingMessage = undefined;
+      } else {
+        followUp = await new Promise<string | null>((resolve) => {
+          const timeoutHandle = setTimeout(
+            () => resolve(null),
+            IDLE_TIMEOUT_MS,
+          );
+          session.idleResolve = (text: string) => {
+            clearTimeout(timeoutHandle);
+            resolve(text);
+          };
+        });
+        session.idleResolve = undefined;
       }
 
-      // Buffer for Convex persistence
-      bufferEvent(session, event);
+      if (!followUp) break; // Timeout — complete the session
 
-      // Broadcast to all WebSocket subscribers
-      broadcast(session, { type: 'event', sessionId, event });
+      // Synthesize a user event for the follow-up message
+      const userEvent = {
+        type: 'user',
+        uuid: crypto.randomUUID(),
+        message: { role: 'user', content: followUp },
+      } as SDKMessage;
+      broadcast(session, { type: 'event', sessionId, event: userEvent });
+      bufferEvent(session, userEvent);
+
+      // Start a new SDK query with the follow-up, resuming the session
+      currentIterator = sdkQuery({
+        prompt: followUp,
+        options: {
+          ...options,
+          resume: session.sdkSessionId,
+        },
+      });
+      session.sdkQuery = currentIterator as Query;
     }
   } catch (err) {
     if (session.stoppedByUser) {
@@ -428,6 +506,31 @@ export function respondToApproval(
   return true;
 }
 
+/**
+ * Inject a follow-up user message into a running session.
+ * Uses the SDK's `streamInput` to send the message as a new conversation turn.
+ *
+ * @returns true if the message was queued, false if the session is not found or has no live query.
+ */
+export function sendSessionMessage(sessionId: string, text: string): boolean {
+  const session = sessions.get(sessionId);
+  if (!session) return false;
+
+  // If the session is idle-waiting for input, resolve the promise immediately
+  if (session.idleResolve) {
+    session.idleResolve(text);
+    return true;
+  }
+
+  // Session is still running — queue the message for delivery after the turn ends
+  if (session.sdkQuery) {
+    session.pendingMessage = text;
+    return true;
+  }
+
+  return false;
+}
+
 export function subscribe(
   sessionId: string,
   callback: (msg: WsServerMessage) => void,
@@ -435,6 +538,15 @@ export function subscribe(
   const session = sessions.get(sessionId);
   if (!session) return () => {};
   session.subscribers.add(callback);
+
+  // Replay buffered events so late-connecting clients see the full history
+  for (const buffered of session.eventBuffer) {
+    callback({
+      type: 'event',
+      sessionId,
+      event: buffered.data as SDKMessage,
+    });
+  }
 
   // Replay any pending approvals so late-connecting clients don't miss them
   for (const [requestId, { toolName, input }] of session.approvalQueue) {

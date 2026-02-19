@@ -10,8 +10,8 @@ interface AppState {
   selectedTaskId: Id<'tasks'> | null;
   viewMode: ViewMode;
   backlogCollapsed: boolean;
-  terminalSessionId: string | null;
-  terminalMinimized: boolean;
+  sessionId: string | null;
+  sessionMinimized: boolean;
 
   // Search and filter state
   searchQuery: string;
@@ -28,9 +28,9 @@ interface AppState {
   selectSeedBox: () => void;
   selectTask: (id: Id<'tasks'> | null) => void;
   toggleBacklog: () => void;
-  openTerminal: (sessionId: string) => void;
-  closeTerminal: () => void;
-  toggleTerminalMinimized: () => void;
+  openSession: (sessionId: string) => void;
+  closeSession: () => void;
+  toggleSessionMinimized: () => void;
 
   // Search and filter actions
   setSearchQuery: (query: string) => void;
@@ -54,8 +54,8 @@ export const useAppStore = create<AppState>()(
       selectedTaskId: null,
       viewMode: 'board',
       backlogCollapsed: true,
-      terminalSessionId: null,
-      terminalMinimized: false,
+      sessionId: null,
+      sessionMinimized: false,
 
       searchQuery: '',
       filterLabelIds: [],
@@ -90,12 +90,10 @@ export const useAppStore = create<AppState>()(
       selectTask: (id) => set({ selectedTaskId: id }),
       toggleBacklog: () =>
         set((state) => ({ backlogCollapsed: !state.backlogCollapsed })),
-      openTerminal: (sessionId) =>
-        set({ terminalSessionId: sessionId, terminalMinimized: false }),
-      closeTerminal: () =>
-        set({ terminalSessionId: null, terminalMinimized: false }),
-      toggleTerminalMinimized: () =>
-        set((state) => ({ terminalMinimized: !state.terminalMinimized })),
+      openSession: (id) => set({ sessionId: id, sessionMinimized: false }),
+      closeSession: () => set({ sessionId: null, sessionMinimized: false }),
+      toggleSessionMinimized: () =>
+        set((state) => ({ sessionMinimized: !state.sessionMinimized })),
 
       setSearchQuery: (query) =>
         set({ searchQuery: query, bulkSelectedTaskIds: [] }),

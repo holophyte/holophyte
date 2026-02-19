@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What is Holophyte?
 
-Project management app for running parallel Claude Code sessions. A kanban board UI lets you create tasks with prompts, launch Claude Code in PTY terminals per task, and stream output to the browser via WebSocket.
+Project management app for running parallel Claude Code sessions. A kanban board UI lets you create tasks with prompts, launch Claude Code sessions via the Agent SDK per task, and stream structured events to the browser via WebSocket.
 
 ## Development Principles
 
@@ -72,12 +72,12 @@ Strict mode with additional checks:
 
 ```
 src/server.ts              → Bun.serve() with routes + WebSocket handler
-src/claude/manager.ts      → PTY process management (spawn/stop/resize Claude Code)
+src/claude/manager.ts      → Claude Agent SDK session management (spawn/stop/approve)
 src/frontend/index.tsx     → React entry, Convex client setup
-src/frontend/App.tsx       → Main layout: Sidebar | KanbanBoard + TerminalPanel | TaskDetailPanel
-src/frontend/stores/app.ts → Zustand store (selected repo/task, terminal state)
-src/frontend/hooks/        → useTerminal (xterm.js + WebSocket)
-src/frontend/components/   → UI components (Kanban*, Task*, Terminal*, Sidebar, dialogs)
+src/frontend/App.tsx       → Main layout: Sidebar | KanbanBoard + SessionPanel | TaskDetailPanel
+src/frontend/stores/app.ts → Zustand store (selected repo/task, session state)
+src/frontend/hooks/        → useSession (WebSocket + SDK event state)
+src/frontend/components/   → UI components (Kanban*, Task*, Session*, Sidebar, dialogs)
 src/frontend/components/ui → Radix UI primitives (Button, Dialog, Input, etc.)
 convex/schema.ts           → Data model: repos, tasks, sessions
 convex/{repos,tasks,sessions}.ts → Convex queries and mutations
@@ -85,12 +85,12 @@ scripts/                   → Shared shell scripts (convex-local, dev-local, wo
 .githooks/pre-commit       → Pre-commit hook (codegen + lint + typecheck)
 ```
 
-**Data flow for terminal sessions:**
-1. Frontend POSTs to `/api/sessions/start` with taskId + prompt
-2. Server spawns Claude Code via Bun native PTY (`Bun.spawn` with `terminal` option)
-3. Frontend opens WebSocket to `/ws/terminal/:sessionId`
-4. PTY output → `data` callback → WebSocket → xterm.js in browser
-5. User terminal input → WebSocket → `proc.terminal.write()` → PTY
+**Data flow for SDK sessions:**
+1. Frontend POSTs to `/api/sessions/start` with taskId + prompt + model
+2. Server spawns Claude Code via Claude Agent SDK (`@anthropic-ai/claude-agent-sdk`)
+3. Frontend opens WebSocket to `/ws/session/:sessionId`
+4. SDK events → `consumeIterator()` → WebSocket → SessionPanel conversation UI in browser
+5. User approvals → WebSocket → `respondToApproval()` → SDK resumes
 
 **Path aliases:** `@/*` → `./src/*`, `@convex/*` → `./convex/*`
 
@@ -121,7 +121,7 @@ scripts/                   → Shared shell scripts (convex-local, dev-local, wo
 - **Tailwind v4** via CSS-first config in `src/frontend/styles.css` (`@theme inline {}` block) — no `tailwind.config.ts`
 - **Radix UI** (umbrella `radix-ui` package) + class-variance-authority for component variants
 - **Icons**: `lucide-react`
-- **xterm.js** + FitAddon for terminal rendering
+- **react-markdown** + rehype-highlight for rendered message content
 
 ## Testing
 
@@ -167,15 +167,14 @@ Use `console.error` for errors that need attention in server-side code. Use `con
 
 Extract shared values to avoid magic numbers and duplicated strings:
 - **Task/session statuses**: Import `taskStatusValidator` from `convex/schema.ts` — don't redeclare status literals elsewhere
-- **Terminal defaults** (cols, rows): Define once and import where needed
-- **ANSI escape codes**: Use helper functions rather than inline escape sequences
+- **Default model**: Import `DEFAULT_MODEL` from `src/constants.ts` — shared between backend and frontend
 
 ## Configuration
 
 Server configuration lives in environment variables with sensible defaults:
 - `PORT` (default: `8080`) — server port
 - `CONVEX_URL` — Convex deployment URL (served to frontend via `/api/config`)
-- `SHELL` (default: `/bin/zsh`) — login shell for PTY env resolution
+- `SHELL` (default: `/bin/zsh`) — login shell for environment resolution
 - `CONVEX_DEPLOYMENT` — managed by `convex dev` in `.env.local`
 
 ## Git Workflow
@@ -195,8 +194,6 @@ Server configuration lives in environment variables with sensible defaults:
 
 ## Key Gotchas
 
-- Bun native PTY: `proc.stdin`/`proc.stdout`/`proc.stderr` are all `null` when using `terminal` option — use the `data` callback for output and `proc.terminal.write()` for input
-- `node-pty` does NOT work with Bun — always use Bun's native PTY
 - Bun.serve() route handlers need explicit `Request` type annotation in strict mode
 - Bun.serve() generic `<WsData>` types the `ws.data` object
 - Biome doesn't understand CSS `theme()` function — use `var()` instead

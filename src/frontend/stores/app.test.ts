@@ -12,8 +12,8 @@ beforeEach(() => {
     selectedTaskId: null,
     viewMode: 'board',
     backlogCollapsed: true,
-    terminalSessionId: null,
-    terminalMinimized: false,
+    sessionId: null,
+    sessionMinimized: false,
   });
 });
 
@@ -76,32 +76,32 @@ describe('selectTask', () => {
   });
 });
 
-describe('terminal actions', () => {
-  it('openTerminal sets sessionId and un-minimizes', () => {
-    useAppStore.setState({ terminalMinimized: true });
+describe('session panel actions', () => {
+  it('openSession sets sessionId and un-minimizes', () => {
+    useAppStore.setState({ sessionMinimized: true });
 
-    useAppStore.getState().openTerminal('session-1');
-    expect(useAppStore.getState().terminalSessionId).toBe('session-1');
-    expect(useAppStore.getState().terminalMinimized).toBe(false);
+    useAppStore.getState().openSession('session-1');
+    expect(useAppStore.getState().sessionId).toBe('session-1');
+    expect(useAppStore.getState().sessionMinimized).toBe(false);
   });
 
-  it('closeTerminal clears sessionId and un-minimizes', () => {
-    useAppStore.getState().openTerminal('session-1');
-    useAppStore.setState({ terminalMinimized: true });
+  it('closeSession clears sessionId and un-minimizes', () => {
+    useAppStore.getState().openSession('session-1');
+    useAppStore.setState({ sessionMinimized: true });
 
-    useAppStore.getState().closeTerminal();
-    expect(useAppStore.getState().terminalSessionId).toBeNull();
-    expect(useAppStore.getState().terminalMinimized).toBe(false);
+    useAppStore.getState().closeSession();
+    expect(useAppStore.getState().sessionId).toBeNull();
+    expect(useAppStore.getState().sessionMinimized).toBe(false);
   });
 
-  it('toggleTerminalMinimized toggles the minimized state', () => {
-    expect(useAppStore.getState().terminalMinimized).toBe(false);
+  it('toggleSessionMinimized toggles the minimized state', () => {
+    expect(useAppStore.getState().sessionMinimized).toBe(false);
 
-    useAppStore.getState().toggleTerminalMinimized();
-    expect(useAppStore.getState().terminalMinimized).toBe(true);
+    useAppStore.getState().toggleSessionMinimized();
+    expect(useAppStore.getState().sessionMinimized).toBe(true);
 
-    useAppStore.getState().toggleTerminalMinimized();
-    expect(useAppStore.getState().terminalMinimized).toBe(false);
+    useAppStore.getState().toggleSessionMinimized();
+    expect(useAppStore.getState().sessionMinimized).toBe(false);
   });
 });
 
@@ -153,11 +153,11 @@ describe('persist', () => {
 
   it('does not persist transient state', () => {
     useAppStore.getState().selectTask(fakeTaskId);
-    useAppStore.getState().openTerminal('session-1');
+    useAppStore.getState().openSession('session-1');
 
     const stored = JSON.parse(localStorage.getItem('holophyte-app') ?? '{}');
     expect(stored.state.selectedTaskId).toBeUndefined();
-    expect(stored.state.terminalSessionId).toBeUndefined();
-    expect(stored.state.terminalMinimized).toBeUndefined();
+    expect(stored.state.sessionId).toBeUndefined();
+    expect(stored.state.sessionMinimized).toBeUndefined();
   });
 });

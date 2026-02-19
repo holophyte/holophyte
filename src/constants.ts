@@ -1,4 +1,2 @@
-export const ansi = {
-  red: (text: string) => `\x1b[31m${text}\x1b[0m`,
-  green: (text: string) => `\x1b[32m${text}\x1b[0m`,
-};
+/** Default Claude model used when launching a new session. */
+export const DEFAULT_MODEL = 'claude-haiku-4-5-20251001';

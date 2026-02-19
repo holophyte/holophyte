@@ -5,6 +5,8 @@ import { Loader2, Play, Square } from 'lucide-react';
 import { useState } from 'react';
 import { useStickyValue } from '@/frontend/hooks/useStickyValue';
 import { useAppStore } from '@/frontend/stores/app';
+import type { ClaudeModelId } from './ModelPicker';
+import ModelPicker, { DEFAULT_MODEL } from './ModelPicker';
 import Button from './ui/Button';
 
 interface ClaudeButtonProps {
@@ -18,9 +20,17 @@ export function ClaudeButton({ task }: ClaudeButtonProps) {
   );
   const createSession = useMutation(api.sessions.create);
   const updateSessionStatus = useMutation(api.sessions.updateStatus);
-  const openTerminal = useAppStore((s) => s.openTerminal);
+  const openSession = useAppStore((s) => s.openSession);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [model, setModel] = useState<ClaudeModelId>(DEFAULT_MODEL);
+  const [prevTaskId, setPrevTaskId] = useState(task._id);
+
+  // Reset model to default when switching to a different task
+  if (task._id !== prevTaskId) {
+    setPrevTaskId(task._id);
+    setModel(DEFAULT_MODEL);
+  }
 
   const handleLaunch = async () => {
     if (!task.prompt || !task.repo) return;
@@ -31,7 +41,7 @@ export function ClaudeButton({ task }: ClaudeButtonProps) {
       // Create session in Convex first (frontend has auth context)
       sessionId = await createSession({ taskId: task._id });
 
-      // Then start the PTY on the server
+      // Then start the SDK session on the server
       const res = await fetch('/api/sessions/start', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -39,6 +49,7 @@ export function ClaudeButton({ task }: ClaudeButtonProps) {
           sessionId,
           repoPath: task.repo.path,
           prompt: task.prompt,
+          model,
         }),
       });
       if (!res.ok) {
@@ -47,7 +58,7 @@ export function ClaudeButton({ task }: ClaudeButtonProps) {
         setError(data.error ?? 'Failed to launch session');
         return;
       }
-      openTerminal(sessionId);
+      openSession(sessionId);
     } catch (err) {
       setError(String(err));
       if (sessionId) {
@@ -70,7 +81,7 @@ export function ClaudeButton({ task }: ClaudeButtonProps) {
         const data = await res.json();
         setError(data.error ?? 'Failed to stop session');
       }
-      // Fallback: if terminal panel is closed, the exit event has no subscriber.
+      // Fallback: if session panel is closed, the exit event has no subscriber.
       // Safe to call unconditionally — the mutation is idempotent.
       await updateSessionStatus({ id: session._id, status: 'stopped' });
     } catch (err) {
@@ -82,7 +93,7 @@ export function ClaudeButton({ task }: ClaudeButtonProps) {
 
   const handleResume = () => {
     if (session) {
-      openTerminal(session._id);
+      openSession(session._id);
     }
   };
 
@@ -106,7 +117,7 @@ export function ClaudeButton({ task }: ClaudeButtonProps) {
             onClick={handleResume}
           >
             <Play className="h-4 w-4 mr-1" />
-            View Terminal
+            View Session
           </Button>
           <Button size="sm" variant="destructive" onClick={handleStop}>
             <Square className="h-4 w-4" />
@@ -119,15 +130,18 @@ export function ClaudeButton({ task }: ClaudeButtonProps) {
 
   return (
     <>
-      <Button
-        size="sm"
-        className="w-full"
-        onClick={handleLaunch}
-        disabled={!task.prompt || !task.repo}
-      >
-        <Play className="h-4 w-4 mr-1" />
-        Launch Claude Code
-      </Button>
+      <div className="flex gap-2 items-center">
+        <Button
+          size="sm"
+          className="flex-1"
+          onClick={handleLaunch}
+          disabled={!task.prompt || !task.repo}
+        >
+          <Play className="h-4 w-4 mr-1" />
+          Launch Claude Code
+        </Button>
+        <ModelPicker value={model} onChange={setModel} />
+      </div>
       {error && <p className="text-xs text-red-600 mt-1">{error}</p>}
     </>
   );
