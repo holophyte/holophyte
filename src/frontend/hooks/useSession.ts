@@ -154,12 +154,24 @@ export function useSession(sessionId: string | null): UseSessionReturn {
   }, [persistedBatches]);
 
   // Merge: persisted history first, then WS events (un-flushed tail + live).
-  // The server only buffers events not yet flushed to Convex, so there is no
-  // overlap between persistedEvents and wsEvents under normal operation.
-  const events = useMemo<SDKMessage[]>(
-    () => [...persistedEvents, ...wsEvents],
-    [persistedEvents, wsEvents],
-  );
+  // Deduplicate by uuid — Convex useQuery is reactive, so events that were
+  // received live via WS may later appear in persistedEvents after a flush.
+  const events = useMemo<SDKMessage[]>(() => {
+    const seen = new Set<string>();
+    const result: SDKMessage[] = [];
+    for (const event of persistedEvents) {
+      const uuid = (event as { uuid?: string }).uuid;
+      if (uuid) seen.add(uuid);
+      result.push(event);
+    }
+    for (const event of wsEvents) {
+      const uuid = (event as { uuid?: string }).uuid;
+      if (uuid && seen.has(uuid)) continue;
+      if (uuid) seen.add(uuid);
+      result.push(event);
+    }
+    return result;
+  }, [persistedEvents, wsEvents]);
 
   const approve = useCallback((requestId: string) => {
     const ws = wsRef.current;

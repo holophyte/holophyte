@@ -321,6 +321,7 @@ async function consumeIterator(
     // Show the initial prompt as the first user message in the conversation
     const promptEvent = {
       type: 'user',
+      uuid: crypto.randomUUID(),
       message: { role: 'user', content: prompt },
     } as SDKMessage;
     broadcast(session, { type: 'event', sessionId, event: promptEvent });
@@ -405,6 +406,7 @@ async function consumeIterator(
       // Synthesize a user event for the follow-up message
       const userEvent = {
         type: 'user',
+        uuid: crypto.randomUUID(),
         message: { role: 'user', content: followUp },
       } as SDKMessage;
       broadcast(session, { type: 'event', sessionId, event: userEvent });
