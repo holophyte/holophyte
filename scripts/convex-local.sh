@@ -26,6 +26,14 @@ if ! [[ "${CONVEX_CLOUD_PORT:-}" =~ ^[0-9]+$ ]] || \
   exit 1
 fi
 
+# Kill any lingering processes on Convex ports (prevents Convex from auto-incrementing)
+for PORT_NUM in "$CONVEX_CLOUD_PORT" "$CONVEX_SITE_PORT"; do
+  if lsof -ti :"$PORT_NUM" >/dev/null 2>&1; then
+    echo "Port $PORT_NUM in use — killing lingering process..."
+    lsof -ti :"$PORT_NUM" | xargs kill -9 2>/dev/null || true
+  fi
+done
+
 echo "Starting local Convex (cloud=$CONVEX_CLOUD_PORT, site=$CONVEX_SITE_PORT)..."
 bunx convex dev --local \
   --local-cloud-port "$CONVEX_CLOUD_PORT" \
