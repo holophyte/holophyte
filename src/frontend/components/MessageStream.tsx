@@ -1,5 +1,5 @@
 import type { SDKMessage } from '@anthropic-ai/claude-agent-sdk';
-import { Loader2 } from 'lucide-react';
+import { ChevronRight, Loader2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import ReactMarkdown from 'react-markdown';
 import rehypeHighlight from 'rehype-highlight';
@@ -224,9 +224,7 @@ export default function MessageStream({
         <div key={msg.uuid || i} className={cn('flex flex-col gap-1')}>
           {msg.role === 'user' && (
             <div className="flex gap-2 bg-muted/60 rounded-md px-3 py-2">
-              <span className="text-muted-foreground text-sm select-none shrink-0">
-                &gt;
-              </span>
+              <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
               <p className="text-sm leading-relaxed text-foreground whitespace-pre-wrap break-words">
                 {msg.text}
               </p>
@@ -245,7 +243,7 @@ export default function MessageStream({
                 />
               ))}
               {msg.text && (
-                <div className="prose prose-sm max-w-none text-foreground prose-headings:text-foreground prose-strong:text-foreground prose-code:text-foreground prose-a:text-primary prose-blockquote:text-muted-foreground prose-p:my-1 prose-headings:my-2 prose-pre:my-2 prose-ul:my-1 prose-ol:my-1 prose-li:my-0 prose-table:my-2 text-sm leading-relaxed [&_pre]:overflow-x-auto [&_pre]:text-xs [&_pre]:bg-muted [&_code]:text-xs [&_table]:border-collapse [&_th]:border [&_th]:border-border [&_th]:px-3 [&_th]:py-1.5 [&_th]:text-foreground [&_th]:bg-muted/50 [&_td]:border [&_td]:border-border [&_td]:px-3 [&_td]:py-1.5">
+                <div className="prose prose-sm max-w-none text-foreground prose-headings:text-foreground prose-strong:text-foreground prose-code:text-foreground prose-code:before:content-none prose-code:after:content-none prose-a:text-primary prose-blockquote:text-muted-foreground prose-p:my-1 prose-headings:my-2 prose-pre:my-2 prose-ul:my-1 prose-ol:my-1 prose-li:my-0 prose-table:my-2 text-sm leading-relaxed [&_pre]:overflow-x-auto [&_pre]:text-xs [&_pre]:bg-muted [&_code]:text-xs [&_table]:border-collapse [&_th]:border [&_th]:border-border [&_th]:px-3 [&_th]:py-1.5 [&_th]:text-foreground [&_th]:bg-muted/50 [&_td]:border [&_td]:border-border [&_td]:px-3 [&_td]:py-1.5">
                   <ReactMarkdown
                     remarkPlugins={REMARK_PLUGINS}
                     rehypePlugins={REHYPE_PLUGINS}
