@@ -24,6 +24,13 @@ export function ClaudeButton({ task }: ClaudeButtonProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [model, setModel] = useState<ClaudeModelId>(DEFAULT_MODEL);
+  const [prevTaskId, setPrevTaskId] = useState(task._id);
+
+  // Reset model to default when switching to a different task
+  if (task._id !== prevTaskId) {
+    setPrevTaskId(task._id);
+    setModel(DEFAULT_MODEL);
+  }
 
   const handleLaunch = async () => {
     if (!task.prompt || !task.repo) return;

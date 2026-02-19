@@ -1,4 +1,8 @@
+import { api } from '@convex/_generated/api';
+import type { Id } from '@convex/_generated/dataModel';
+import { useQuery } from 'convex/react';
 import { ChevronDown, ChevronUp, Circle, Wifi, WifiOff, X } from 'lucide-react';
+import { useEffect } from 'react';
 import { useSession } from '@/frontend/hooks/useSession';
 import { cn } from '@/frontend/lib/utils';
 import { useAppStore } from '@/frontend/stores/app';
@@ -44,6 +48,17 @@ export default function SessionPanel() {
   const sessionMinimized = useAppStore((s) => s.sessionMinimized);
   const closeSession = useAppStore((s) => s.closeSession);
   const toggleSessionMinimized = useAppStore((s) => s.toggleSessionMinimized);
+
+  // Close the panel when the underlying session has been deleted (e.g. repo cascade delete)
+  const session = useQuery(
+    api.sessions.get,
+    sessionId ? { id: sessionId as Id<'sessions'> } : 'skip',
+  );
+  useEffect(() => {
+    if (session === null) {
+      closeSession();
+    }
+  }, [session, closeSession]);
 
   const {
     events,

@@ -23,6 +23,20 @@ export const listActive = query({
   },
 });
 
+export const get = query({
+  args: { id: v.id('sessions') },
+  handler: async (ctx, args) => {
+    const session = await ctx.db.get(args.id);
+    if (!session) return null;
+    const task = await ctx.db.get(session.taskId);
+    if (!task) return null;
+    const repo = await ctx.db.get(task.repoId);
+    if (!repo) return null;
+    await requireOrgMembership(ctx, repo.orgId);
+    return session;
+  },
+});
+
 export const getByTask = query({
   args: { taskId: v.id('tasks') },
   handler: async (ctx, args) => {

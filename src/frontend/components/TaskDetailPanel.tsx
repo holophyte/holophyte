@@ -4,7 +4,7 @@ import { PRIORITY_CONFIG, TaskPriority, TaskStatus } from '@convex/schema';
 import { useMutation, useQuery } from 'convex/react';
 import type { FunctionReturnType } from 'convex/server';
 import { ChevronDown, X } from 'lucide-react';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   dateInputToTimestamp,
   formatDuration,
@@ -36,10 +36,17 @@ export function TaskDetailPanel() {
     selectedTaskId ? { id: selectedTaskId } : 'skip',
   );
 
-  // Keep previous task visible while the next one loads
+  // Close the panel when the task has been deleted (query returns null, not undefined)
+  useEffect(() => {
+    if (task === null) {
+      selectTask(null);
+    }
+  }, [task, selectTask]);
+
+  // Keep previous task visible while the next one loads (but not when deleted)
   const prevTaskRef = useRef<Task | null>(null);
   if (task) prevTaskRef.current = task;
-  const displayTask = task ?? prevTaskRef.current;
+  const displayTask = task === null ? null : (task ?? prevTaskRef.current);
 
   return (
     <div className="absolute right-0 top-0 bottom-0 w-96 border-l bg-background flex flex-col overflow-hidden shadow-xl z-10">
