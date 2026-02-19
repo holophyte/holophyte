@@ -12,6 +12,16 @@ These details were discovered during Phase 1 implementation and affect Phase 4:
 - **Unauthenticated Convex mutations must be converted to `internalMutation` before adding more.** Phase 1 added `insertBatch`, `updateSdkSessionId`, and `serverUpdateStatus` as public mutations with no auth (flagged by Greptile and security review). Fix this pattern before Phase 4 adds more server-side mutations (cost updates, status transitions).
 - **Safe-auto Bash allowlisting is already restrictive.** Phase 1 implemented specific subcommand patterns (`bun test`, `bun run lint`, `bun run check`, etc.) plus shell operator rejection (`;&|`$\n<>`). The "Custom Profiles (Future)" section is partially done.
 
+## Phase 2 Findings
+
+These details were discovered during Phase 2 implementation and affect Phase 4:
+
+- **Session replay infrastructure is already in place.** Phase 2 implemented `sessionEvents` persistence to Convex and `useQuery(api.sessionEvents.getBySession)` to load full event history on reconnect. `MessageStream` accepts a plain `events: SDKMessage[]` array with no dependency on a live WebSocket — rendering a past session is just passing stored events to the same component. Phase 4's "session history replay" section can be built by reusing this pattern directly.
+- **Model picker is already implemented.** `ClaudeButton` + `ModelPicker` (Phase 2) handle model selection at launch time, including reset-on-task-switch and the `DEFAULT_MODEL` fallback. Phase 4's launch UI only needs to add the **permission profile** selector and **resume** option to the existing dialog — the model picker is done.
+- **Cost/token capture from the SDK `result` event still needs to be done.** Phase 2 extended the `result` event handling for error status but did not capture `total_cost_usd` or token usage. The extraction point is `manager.ts` where `event.type === 'result'` is already detected — extend it to call a Convex mutation to store cost/token data on the session record.
+- **`internalMutation` conversion is still pending.** Phase 1 added `insertBatch`, `updateSdkSessionId`, and `serverUpdateStatus` as public unauthenticated mutations. Phase 2 added `serverUpdateStatus` calls for idle/queued states. None of these have been converted to `internalMutation` yet. This must be done before Phase 4 adds more server-side mutations for cost and status transitions.
+- **`sessions.get` query was added in Phase 2** (`convex/sessions.ts`). Phase 4's session history UI can use this to check session existence before rendering stored events.
+
 ## Permission Profiles
 
 The `canUseTool` callback in Phase 1 is powerful but raw — it needs a user-facing configuration layer. Permission profiles are presets that determine which tools get auto-approved and which require human intervention.
