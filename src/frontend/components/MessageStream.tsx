@@ -223,10 +223,13 @@ export default function MessageStream({
       {messages.map((msg, i) => (
         <div key={msg.uuid || i} className={cn('flex flex-col gap-1')}>
           {msg.role === 'user' && (
-            <div className="flex justify-end">
-              <div className="max-w-[85%] rounded-2xl rounded-br-sm bg-primary text-primary-foreground px-4 py-2.5 text-sm leading-relaxed">
-                <p className="whitespace-pre-wrap break-words">{msg.text}</p>
-              </div>
+            <div className="flex gap-2 bg-muted/60 rounded-md px-3 py-2">
+              <span className="text-muted-foreground text-sm select-none shrink-0">
+                &gt;
+              </span>
+              <p className="text-sm leading-relaxed text-foreground whitespace-pre-wrap break-words">
+                {msg.text}
+              </p>
             </div>
           )}
 
@@ -242,7 +245,7 @@ export default function MessageStream({
                 />
               ))}
               {msg.text && (
-                <div className="prose prose-sm prose-invert max-w-none text-foreground text-sm leading-relaxed [&_pre]:overflow-x-auto [&_pre]:text-xs [&_code]:text-xs">
+                <div className="prose prose-sm max-w-none text-foreground prose-headings:text-foreground prose-strong:text-foreground prose-code:text-foreground prose-a:text-primary prose-blockquote:text-muted-foreground prose-p:my-1 prose-headings:my-2 prose-pre:my-2 prose-ul:my-1 prose-ol:my-1 prose-li:my-0 prose-table:my-2 text-sm leading-relaxed [&_pre]:overflow-x-auto [&_pre]:text-xs [&_pre]:bg-muted [&_code]:text-xs [&_table]:border-collapse [&_th]:border [&_th]:border-border [&_th]:px-3 [&_th]:py-1.5 [&_th]:text-foreground [&_th]:bg-muted/50 [&_td]:border [&_td]:border-border [&_td]:px-3 [&_td]:py-1.5">
                   <ReactMarkdown
                     remarkPlugins={REMARK_PLUGINS}
                     rehypePlugins={REHYPE_PLUGINS}

@@ -67,7 +67,7 @@ export default function SessionPanel() {
     <div
       className={cn(
         'border-t bg-background flex flex-col transition-all duration-200',
-        sessionMinimized ? 'h-10' : 'h-[40vh] min-h-64',
+        sessionMinimized ? 'h-10' : 'h-[60vh] min-h-80',
       )}
     >
       {/* Header */}

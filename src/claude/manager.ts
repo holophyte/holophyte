@@ -310,6 +310,14 @@ async function consumeIterator(
 
     broadcast(session, { type: 'status', sessionId, status: 'running' });
 
+    // Show the initial prompt as the first user message in the conversation
+    const promptEvent = {
+      type: 'user',
+      message: { role: 'user', content: prompt },
+    } as SDKMessage;
+    broadcast(session, { type: 'event', sessionId, event: promptEvent });
+    bufferEvent(session, promptEvent);
+
     for await (const event of iterator) {
       // Capture SDK session ID from the init event for resume support
       if (
@@ -464,6 +472,15 @@ export function subscribe(
   const session = sessions.get(sessionId);
   if (!session) return () => {};
   session.subscribers.add(callback);
+
+  // Replay buffered events so late-connecting clients see the full history
+  for (const buffered of session.eventBuffer) {
+    callback({
+      type: 'event',
+      sessionId,
+      event: buffered.data as SDKMessage,
+    });
+  }
 
   // Replay any pending approvals so late-connecting clients don't miss them
   for (const [requestId, { toolName, input }] of session.approvalQueue) {
