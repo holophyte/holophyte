@@ -13,11 +13,10 @@ import { formatElapsedSeconds } from '@/frontend/lib/dateUtils';
 import { isEditableElement } from '@/frontend/lib/dom';
 import { cn } from '@/frontend/lib/utils';
 import { useAppStore } from '@/frontend/stores/app';
-import { ClaudeButton } from './ClaudeButton';
 import SessionPanel from './SessionPanel';
 import { TaskDetailContent } from './TaskDetailPanel';
 import Badge from './ui/Badge';
-import Button from './ui/Button';
+import PageHeader from './ui/PageHeader';
 import { Popover, PopoverContent, PopoverTrigger } from './ui/Popover';
 import Skeleton from './ui/Skeleton';
 
@@ -56,10 +55,10 @@ const TASK_STATUS_OPTIONS = [
 
 export default function TaskPageView() {
   const selectedTaskId = useAppStore((s) => s.selectedTaskId);
-  const sessionId = useAppStore((s) => s.sessionId);
   const selectTask = useAppStore((s) => s.selectTask);
   const selectRepo = useAppStore((s) => s.selectRepo);
   const openSession = useAppStore((s) => s.openSession);
+  const closeSession = useAppStore((s) => s.closeSession);
   const taskPageDetailCollapsed = useAppStore((s) => s.taskPageDetailCollapsed);
   const taskPageFocusMode = useAppStore((s) => s.taskPageFocusMode);
   const toggleTaskPageDetail = useAppStore((s) => s.toggleTaskPageDetail);
@@ -86,14 +85,19 @@ export default function TaskPageView() {
   }, [task, selectTask]);
 
   // Open latest task session once per task so the page has immediate context.
+  // The ref tracks which task we last auto-opened for, so we don't re-trigger
+  // when the same latestSession query re-fires.
   useEffect(() => {
     if (!selectedTaskId || latestSession === undefined) return;
     if (autoOpenedTaskRef.current === selectedTaskId) return;
     autoOpenedTaskRef.current = selectedTaskId;
-    if (latestSession && sessionId !== latestSession._id) {
+    if (latestSession) {
       openSession(latestSession._id);
+    } else {
+      // No session for this task — clear any stale session from a previous task.
+      closeSession();
     }
-  }, [selectedTaskId, latestSession, sessionId, openSession]);
+  }, [selectedTaskId, latestSession, openSession, closeSession]);
 
   useEffect(() => {
     if (latestSession?.status !== 'running') return;
@@ -180,89 +184,81 @@ export default function TaskPageView() {
 
   return (
     <div className="flex h-full flex-col overflow-hidden bg-background">
-      <header className="border-b px-4 py-2.5">
-        <div className="flex items-center gap-3">
-          <nav
-            aria-label="breadcrumb"
-            className="min-w-0 flex items-center gap-1.5 text-sm"
+      <PageHeader className="gap-3 px-4">
+        <nav
+          aria-label="breadcrumb"
+          className="min-w-0 flex items-center gap-1.5 text-sm"
+        >
+          <button
+            type="button"
+            className="truncate text-lg font-semibold hover:text-muted-foreground transition-colors"
+            onClick={() => selectRepo(task.repoId)}
           >
-            <Button
-              variant="ghost"
-              className="h-11 px-3 text-sm font-medium max-w-52 justify-start"
-              onClick={() => selectRepo(task.repoId)}
-            >
-              <span className="truncate">{task.repo?.name ?? 'Project'}</span>
-            </Button>
-            <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
-            <span
-              aria-current="page"
-              className="truncate font-medium text-foreground"
-            >
-              {task.title}
-            </span>
-          </nav>
+            {task.repo?.name ?? 'Project'}
+          </button>
+          <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
+          <span
+            aria-current="page"
+            className="truncate font-medium text-foreground"
+          >
+            {task.title}
+          </span>
+        </nav>
 
-          <Popover open={statusPickerOpen} onOpenChange={setStatusPickerOpen}>
-            <PopoverTrigger asChild>
+        <Popover open={statusPickerOpen} onOpenChange={setStatusPickerOpen}>
+          <PopoverTrigger asChild>
+            <button
+              type="button"
+              className="inline-flex min-h-11 items-center gap-2 rounded-md border border-border bg-muted px-3 text-xs font-semibold text-foreground"
+              aria-label="Change task status"
+            >
+              <span
+                aria-hidden="true"
+                className={`h-2 w-2 rounded-full ${statusMeta.dotClass}`}
+              />
+              {statusMeta.label}
+            </button>
+          </PopoverTrigger>
+          <PopoverContent className="w-40 p-1" align="start" role="listbox">
+            {TASK_STATUS_OPTIONS.map((option) => (
               <button
+                key={option.status}
                 type="button"
-                className="inline-flex min-h-11 items-center gap-2 rounded-md border border-border bg-muted px-3 text-xs font-semibold text-foreground"
-                aria-label="Change task status"
+                role="option"
+                aria-selected={option.status === task.status}
+                className={cn(
+                  'flex min-h-11 w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs font-medium hover:bg-muted',
+                  option.status === task.status && 'bg-muted',
+                )}
+                onClick={() => {
+                  setStatusPickerOpen(false);
+                  if (option.status === task.status) return;
+                  void moveTaskBulk({
+                    ids: [task._id],
+                    status: option.status,
+                  });
+                }}
               >
                 <span
                   aria-hidden="true"
-                  className={`h-2 w-2 rounded-full ${statusMeta.dotClass}`}
+                  className={`h-2 w-2 rounded-full ${option.dotClass}`}
                 />
-                {statusMeta.label}
+                {option.label}
               </button>
-            </PopoverTrigger>
-            <PopoverContent className="w-40 p-1" align="start" role="listbox">
-              {TASK_STATUS_OPTIONS.map((option) => (
-                <button
-                  key={option.status}
-                  type="button"
-                  role="option"
-                  aria-selected={option.status === task.status}
-                  className={cn(
-                    'flex min-h-11 w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs font-medium hover:bg-muted',
-                    option.status === task.status && 'bg-muted',
-                  )}
-                  onClick={() => {
-                    setStatusPickerOpen(false);
-                    if (option.status === task.status) return;
-                    void moveTaskBulk({
-                      ids: [task._id],
-                      status: option.status,
-                    });
-                  }}
-                >
-                  <span
-                    aria-hidden="true"
-                    className={`h-2 w-2 rounded-full ${option.dotClass}`}
-                  />
-                  {option.label}
-                </button>
-              ))}
-            </PopoverContent>
-          </Popover>
+            ))}
+          </PopoverContent>
+        </Popover>
 
-          {!taskPageFocusMode && runningElapsed && (
-            <Badge
-              variant="outline"
-              className="inline-flex min-h-11 items-center gap-1.5 px-3 text-xs"
-            >
-              <Clock3 aria-hidden="true" className="h-3.5 w-3.5" />
-              {runningElapsed}
-            </Badge>
-          )}
-
-          {!taskPageFocusMode && (
-            <div className="ml-auto min-w-[14rem] max-w-[22rem]">
-              <ClaudeButton task={task} />
-            </div>
-          )}
-        </div>
-      </header>
+        {!taskPageFocusMode && runningElapsed && (
+          <Badge
+            variant="outline"
+            className="inline-flex min-h-11 items-center gap-1.5 px-3 text-xs"
+          >
+            <Clock3 aria-hidden="true" className="h-3.5 w-3.5" />
+            {runningElapsed}
+          </Badge>
+        )}
+      </PageHeader>
 
       <div className="flex min-h-0 flex-1">
         {!taskPageFocusMode && (
