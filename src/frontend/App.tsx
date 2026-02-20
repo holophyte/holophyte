@@ -13,13 +13,11 @@ import TaskPageView from './components/TaskPageView';
 function AuthenticatedApp() {
   const selectedTaskId = useAppStore((s) => s.selectedTaskId);
   const viewMode = useAppStore((s) => s.viewMode);
-  const taskPageFocusMode = useAppStore((s) => s.taskPageFocusMode);
   const showTaskPage = viewMode === 'task-page';
-  const hideSidebar = showTaskPage && taskPageFocusMode;
 
   return (
     <div className="flex h-screen bg-background text-foreground relative">
-      {!hideSidebar && <Sidebar />}
+      <Sidebar />
       <main className="flex-1 flex flex-col overflow-hidden">
         {showTaskPage ? (
           <TaskPageView />

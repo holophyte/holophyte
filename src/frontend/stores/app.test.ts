@@ -13,7 +13,6 @@ beforeEach(() => {
     viewMode: 'board',
     backlogCollapsed: true,
     taskPageDetailCollapsed: false,
-    taskPageFocusMode: false,
     sessionId: null,
   });
 });
@@ -159,14 +158,6 @@ describe('persist', () => {
     expect(stored.state.viewMode).toBe('board');
     expect(stored.state.backlogCollapsed).toBe(false);
     expect(stored.state.taskPageDetailCollapsed).toBe(true);
-  });
-
-  it('does not persist taskPageFocusMode (transient state)', () => {
-    useAppStore.getState().toggleTaskPageFocusMode();
-    expect(useAppStore.getState().taskPageFocusMode).toBe(true);
-
-    const stored = JSON.parse(localStorage.getItem('holophyte-app') ?? '{}');
-    expect(stored.state.taskPageFocusMode).toBeUndefined();
   });
 
   it('does not persist transient state', () => {

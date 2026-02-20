@@ -62,10 +62,8 @@ export default function TaskPageView() {
   const openSession = useAppStore((s) => s.openSession);
   const closeSession = useAppStore((s) => s.closeSession);
   const taskPageDetailCollapsed = useAppStore((s) => s.taskPageDetailCollapsed);
-  const taskPageFocusMode = useAppStore((s) => s.taskPageFocusMode);
   const toggleTaskPageDetail = useAppStore((s) => s.toggleTaskPageDetail);
   const collapseTaskPage = useAppStore((s) => s.collapseTaskPage);
-  const toggleTaskPageFocusMode = useAppStore((s) => s.toggleTaskPageFocusMode);
   const moveTaskBulk = useMutation(api.tasks.bulkMove);
 
   const task = useQuery(
@@ -130,16 +128,6 @@ export default function TaskPageView() {
       const isEditable = isEditableElement(document.activeElement);
 
       if (
-        (event.metaKey || event.ctrlKey) &&
-        event.shiftKey &&
-        event.key.toLowerCase() === 'f'
-      ) {
-        event.preventDefault();
-        toggleTaskPageFocusMode();
-        return;
-      }
-
-      if (
         !event.metaKey &&
         !event.ctrlKey &&
         !event.altKey &&
@@ -154,7 +142,7 @@ export default function TaskPageView() {
 
     document.addEventListener('keydown', onKeyDown);
     return () => document.removeEventListener('keydown', onKeyDown);
-  }, [toggleTaskPageDetail, toggleTaskPageFocusMode]);
+  }, [toggleTaskPageDetail]);
 
   if (!selectedTaskId) {
     return (
@@ -261,7 +249,7 @@ export default function TaskPageView() {
           </PopoverContent>
         </Popover>
 
-        {!taskPageFocusMode && runningElapsed && (
+        {runningElapsed && (
           <Badge
             variant="outline"
             className="inline-flex min-h-11 items-center gap-1.5 px-3 text-xs"
@@ -292,67 +280,65 @@ export default function TaskPageView() {
       </PageHeader>
 
       <div className="flex min-h-0 flex-1">
-        {!taskPageFocusMode && (
-          <section
+        <section
+          className={cn(
+            'relative shrink-0 border-r transition-[width,min-width,max-width,flex] duration-300 ease-in-out overflow-hidden',
+            taskPageDetailCollapsed
+              ? 'w-10 min-w-[40px] max-w-[40px] flex-none'
+              : 'w-[28rem] min-w-[28rem] max-w-[28rem]',
+          )}
+        >
+          {/* Collapsed pill — matches backlog style */}
+          <button
+            type="button"
+            onClick={toggleTaskPageDetail}
+            aria-label="Expand task details"
+            aria-expanded={false}
+            aria-hidden={!taskPageDetailCollapsed}
+            tabIndex={taskPageDetailCollapsed ? 0 : -1}
             className={cn(
-              'relative shrink-0 border-r transition-[width,min-width,max-width,flex] duration-300 ease-in-out overflow-hidden',
+              'absolute inset-0 w-10 bg-muted/30',
+              'flex flex-col items-center justify-center gap-2',
+              'hover:bg-muted/80 cursor-pointer',
+              'transition-opacity duration-300',
               taskPageDetailCollapsed
-                ? 'w-10 min-w-[40px] max-w-[40px] flex-none'
-                : 'w-[28rem] min-w-[28rem] max-w-[28rem]',
+                ? 'opacity-100 delay-100'
+                : 'opacity-0 pointer-events-none',
             )}
           >
-            {/* Collapsed pill — matches backlog style */}
-            <button
-              type="button"
-              onClick={toggleTaskPageDetail}
-              aria-label="Expand task details"
-              aria-expanded={false}
-              aria-hidden={!taskPageDetailCollapsed}
-              tabIndex={taskPageDetailCollapsed ? 0 : -1}
-              className={cn(
-                'absolute inset-0 w-10 bg-muted/30',
-                'flex flex-col items-center justify-center gap-2',
-                'hover:bg-muted/80 cursor-pointer',
-                'transition-opacity duration-300',
-                taskPageDetailCollapsed
-                  ? 'opacity-100 delay-100'
-                  : 'opacity-0 pointer-events-none',
-              )}
-            >
-              <span className="text-xs font-medium text-muted-foreground [writing-mode:vertical-lr] rotate-180">
-                Task Details
-              </span>
-              <ChevronsRight className="h-3.5 w-3.5 text-muted-foreground" />
-            </button>
-            {/* Expanded content */}
-            <div
-              className={cn(
-                'h-full flex flex-col overflow-hidden bg-muted/30 transition-opacity',
-                taskPageDetailCollapsed
-                  ? 'opacity-0 pointer-events-none duration-100'
-                  : 'opacity-100 delay-100 duration-300',
-              )}
-            >
-              <div className="flex items-center justify-between border-b px-3 py-2">
-                <h2 className="text-sm font-semibold">Task Details</h2>
-                <button
-                  type="button"
-                  aria-label="Collapse task details"
-                  aria-expanded={true}
-                  onClick={toggleTaskPageDetail}
-                  className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-md hover:bg-accent hover:text-accent-foreground"
-                >
-                  <ChevronsLeft className="h-4 w-4" />
-                </button>
-              </div>
-              <TaskDetailContent
-                task={displayTask}
-                showDelete
-                showSessionControls={false}
-              />
+            <span className="text-xs font-medium text-muted-foreground [writing-mode:vertical-lr] rotate-180">
+              Task Details
+            </span>
+            <ChevronsRight className="h-3.5 w-3.5 text-muted-foreground" />
+          </button>
+          {/* Expanded content */}
+          <div
+            className={cn(
+              'h-full flex flex-col overflow-hidden bg-muted/30 transition-opacity',
+              taskPageDetailCollapsed
+                ? 'opacity-0 pointer-events-none duration-100'
+                : 'opacity-100 delay-100 duration-300',
+            )}
+          >
+            <div className="flex items-center justify-between border-b px-3 py-2">
+              <h2 className="text-sm font-semibold">Task Details</h2>
+              <button
+                type="button"
+                aria-label="Collapse task details"
+                aria-expanded={true}
+                onClick={toggleTaskPageDetail}
+                className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-md hover:bg-accent hover:text-accent-foreground"
+              >
+                <ChevronsLeft className="h-4 w-4" />
+              </button>
             </div>
-          </section>
-        )}
+            <TaskDetailContent
+              task={displayTask}
+              showDelete
+              showSessionControls={false}
+            />
+          </div>
+        </section>
         <section className="min-w-0 flex-1">
           <SessionPanel />
         </section>

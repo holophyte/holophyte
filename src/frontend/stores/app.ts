@@ -11,7 +11,6 @@ interface AppState {
   viewMode: ViewMode;
   backlogCollapsed: boolean;
   taskPageDetailCollapsed: boolean;
-  taskPageFocusMode: boolean;
   sessionId: string | null;
 
   // Search and filter state
@@ -31,7 +30,6 @@ interface AppState {
   openTaskPage: (id: Id<'tasks'>) => void;
   toggleBacklog: () => void;
   toggleTaskPageDetail: () => void;
-  toggleTaskPageFocusMode: () => void;
   /** Switch from task page back to board view, keeping the task selected in the side panel. */
   collapseTaskPage: () => void;
   openSession: (sessionId: string) => void;
@@ -60,7 +58,6 @@ export const useAppStore = create<AppState>()(
       viewMode: 'board',
       backlogCollapsed: true,
       taskPageDetailCollapsed: false,
-      taskPageFocusMode: false,
       sessionId: null,
 
       searchQuery: '',
@@ -118,12 +115,7 @@ export const useAppStore = create<AppState>()(
         set((state) => ({
           taskPageDetailCollapsed: !state.taskPageDetailCollapsed,
         })),
-      toggleTaskPageFocusMode: () =>
-        set((state) => ({
-          taskPageFocusMode: !state.taskPageFocusMode,
-        })),
-      collapseTaskPage: () =>
-        set({ viewMode: 'board', taskPageFocusMode: false }),
+      collapseTaskPage: () => set({ viewMode: 'board' }),
       openSession: (id) =>
         set((state) => ({
           sessionId: id,
