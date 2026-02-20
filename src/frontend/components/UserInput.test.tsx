@@ -55,7 +55,7 @@ describe('UserInput', () => {
     });
 
     it('disables send button when disabled and text is present', async () => {
-      const user = userEvent.setup();
+      const _user = userEvent.setup();
       render(<UserInput sessionId="s1" onSend={vi.fn()} disabled />);
       // Textarea is disabled so typing does nothing, but verify button stays disabled
       expect(

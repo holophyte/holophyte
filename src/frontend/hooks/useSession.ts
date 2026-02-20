@@ -149,7 +149,7 @@ export function useSession(sessionId: string | null): UseSessionReturn {
   const persistedEvents = useMemo<SDKMessage[]>(() => {
     if (!persistedBatches) return [];
     return persistedBatches.flatMap((batch) =>
-      batch.events.map((e) => e.data as SDKMessage),
+      batch.events.map((e) => JSON.parse(e.data) as SDKMessage),
     );
   }, [persistedBatches]);
 

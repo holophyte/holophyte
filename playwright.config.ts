@@ -9,7 +9,7 @@ export default defineConfig({
   workers: process.env.CI ? 1 : undefined,
   reporter: 'html',
   use: {
-    baseURL: 'http://localhost:8080',
+    baseURL: 'http://localhost:8081',
     trace: 'on-first-retry',
   },
   projects: [
@@ -18,11 +18,13 @@ export default defineConfig({
       use: { browserName: 'chromium' },
     },
   ],
-  // E2E tests expect `bun run convex:dev` to be running separately
+  // E2E tests expect `bun run convex:dev` to be running separately.
+  // Uses port 8081 (not 8080) so the dev server can run alongside e2e tests
+  // without being reused — the e2e server needs E2E_TEST=1 to bypass auth.
   webServer: {
     command: 'bun run src/server.ts',
-    port: 8080,
-    reuseExistingServer: !process.env.CI,
-    env: { ...process.env, E2E_TEST: '1' },
+    url: 'http://localhost:8081/',
+    reuseExistingServer: false,
+    env: { ...process.env, E2E_TEST: '1', PORT: '8081' },
   },
 });
