@@ -283,7 +283,7 @@ export default function TaskPageView() {
               aria-hidden={!taskPageDetailCollapsed}
               tabIndex={taskPageDetailCollapsed ? 0 : -1}
               className={cn(
-                'absolute inset-0 w-10 rounded-lg bg-muted/30 border border-dashed',
+                'absolute inset-0 w-10 bg-muted/30',
                 'flex flex-col items-center justify-center gap-2',
                 'hover:bg-muted/80 cursor-pointer',
                 'transition-opacity duration-300',
@@ -300,7 +300,7 @@ export default function TaskPageView() {
             {/* Expanded content */}
             <div
               className={cn(
-                'h-full flex flex-col overflow-hidden bg-background transition-opacity duration-300',
+                'h-full flex flex-col overflow-hidden bg-muted/30 transition-opacity duration-300',
                 taskPageDetailCollapsed
                   ? 'opacity-0 pointer-events-none'
                   : 'opacity-100 delay-100',
