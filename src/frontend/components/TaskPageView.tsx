@@ -186,10 +186,13 @@ export default function TaskPageView() {
     );
   }
 
-  const statusMeta =
-    TASK_STATUS_OPTIONS.find(
-      (option) => option.status === displayTask.status,
-    ) ?? TASK_STATUS_OPTIONS[0]!;
+  const statusMeta = TASK_STATUS_OPTIONS.find(
+    (option) => option.status === displayTask.status,
+  ) ?? {
+    status: displayTask.status,
+    label: 'Unknown',
+    dotClass: 'bg-slate-500',
+  };
 
   return (
     <div className="flex h-full flex-col overflow-hidden bg-background">
