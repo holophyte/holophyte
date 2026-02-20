@@ -15,7 +15,6 @@ beforeEach(() => {
     taskPageDetailCollapsed: false,
     taskPageFocusMode: false,
     sessionId: null,
-    sessionMinimized: false,
   });
 });
 
@@ -95,32 +94,22 @@ describe('openTaskPage', () => {
   });
 });
 
-describe('session panel actions', () => {
-  it('openSession sets sessionId and un-minimizes', () => {
-    useAppStore.setState({ sessionMinimized: true });
-
+describe('session actions', () => {
+  it('openSession sets sessionId', () => {
     useAppStore.getState().openSession('session-1');
     expect(useAppStore.getState().sessionId).toBe('session-1');
-    expect(useAppStore.getState().sessionMinimized).toBe(false);
   });
 
-  it('closeSession clears sessionId and un-minimizes', () => {
+  it('openSession switches to task-page view when a task is selected', () => {
+    useAppStore.getState().selectTask(fakeTaskId);
     useAppStore.getState().openSession('session-1');
-    useAppStore.setState({ sessionMinimized: true });
+    expect(useAppStore.getState().viewMode).toBe('task-page');
+  });
 
+  it('closeSession clears sessionId', () => {
+    useAppStore.getState().openSession('session-1');
     useAppStore.getState().closeSession();
     expect(useAppStore.getState().sessionId).toBeNull();
-    expect(useAppStore.getState().sessionMinimized).toBe(false);
-  });
-
-  it('toggleSessionMinimized toggles the minimized state', () => {
-    expect(useAppStore.getState().sessionMinimized).toBe(false);
-
-    useAppStore.getState().toggleSessionMinimized();
-    expect(useAppStore.getState().sessionMinimized).toBe(true);
-
-    useAppStore.getState().toggleSessionMinimized();
-    expect(useAppStore.getState().sessionMinimized).toBe(false);
   });
 });
 
@@ -187,6 +176,5 @@ describe('persist', () => {
     const stored = JSON.parse(localStorage.getItem('holophyte-app') ?? '{}');
     expect(stored.state.selectedTaskId).toBeUndefined();
     expect(stored.state.sessionId).toBeUndefined();
-    expect(stored.state.sessionMinimized).toBeUndefined();
   });
 });

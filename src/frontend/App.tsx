@@ -5,7 +5,6 @@ import { useAppStore } from '@/frontend/stores/app';
 import { CommandPalette } from './components/CommandPalette';
 import { KanbanBoard } from './components/KanbanBoard';
 import { SeedBoard } from './components/SeedBoard';
-import SessionPanel from './components/SessionPanel';
 import { Sidebar } from './components/Sidebar';
 import SignInPage from './components/SignInPage';
 import { TaskDetailPanel } from './components/TaskDetailPanel';
@@ -13,7 +12,6 @@ import TaskPageView from './components/TaskPageView';
 
 function AuthenticatedApp() {
   const selectedTaskId = useAppStore((s) => s.selectedTaskId);
-  const sessionId = useAppStore((s) => s.sessionId);
   const viewMode = useAppStore((s) => s.viewMode);
   const taskPageFocusMode = useAppStore((s) => s.taskPageFocusMode);
   const showTaskPage = viewMode === 'task-page';
@@ -26,10 +24,7 @@ function AuthenticatedApp() {
         {showTaskPage ? (
           <TaskPageView />
         ) : (
-          <>
-            {viewMode === 'seeds' ? <SeedBoard /> : <KanbanBoard />}
-            {sessionId && <SessionPanel />}
-          </>
+          <>{viewMode === 'seeds' ? <SeedBoard /> : <KanbanBoard />}</>
         )}
       </main>
       {!showTaskPage && selectedTaskId && <TaskDetailPanel />}

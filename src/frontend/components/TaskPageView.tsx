@@ -74,6 +74,11 @@ export default function TaskPageView() {
     selectedTaskId ? { taskId: selectedTaskId } : 'skip',
   );
 
+  // Keep previous task visible while the next one loads (same pattern as TaskDetailPanel)
+  const prevTaskRef = useRef<NonNullable<typeof task> | null>(null);
+  if (task) prevTaskRef.current = task;
+  const displayTask = task === null ? null : (task ?? prevTaskRef.current);
+
   const autoOpenedTaskRef = useRef<Id<'tasks'> | null>(null);
   const [statusPickerOpen, setStatusPickerOpen] = useState(false);
   const [now, setNow] = useState(Date.now());
@@ -156,7 +161,7 @@ export default function TaskPageView() {
     );
   }
 
-  if (!task) {
+  if (!displayTask) {
     return (
       <div className="flex h-full flex-col overflow-hidden">
         <div className="border-b px-4 py-3">
@@ -179,8 +184,9 @@ export default function TaskPageView() {
   }
 
   const statusMeta =
-    TASK_STATUS_OPTIONS.find((option) => option.status === task.status) ??
-    TASK_STATUS_OPTIONS[0]!;
+    TASK_STATUS_OPTIONS.find(
+      (option) => option.status === displayTask.status,
+    ) ?? TASK_STATUS_OPTIONS[0]!;
 
   return (
     <div className="flex h-full flex-col overflow-hidden bg-background">
@@ -192,16 +198,16 @@ export default function TaskPageView() {
           <button
             type="button"
             className="truncate text-lg font-semibold hover:text-muted-foreground transition-colors"
-            onClick={() => selectRepo(task.repoId)}
+            onClick={() => selectRepo(displayTask.repoId)}
           >
-            {task.repo?.name ?? 'Project'}
+            {displayTask.repo?.name ?? 'Project'}
           </button>
           <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
           <span
             aria-current="page"
             className="truncate font-medium text-foreground"
           >
-            {task.title}
+            {displayTask.title}
           </span>
         </nav>
 
@@ -225,16 +231,16 @@ export default function TaskPageView() {
                 key={option.status}
                 type="button"
                 role="option"
-                aria-selected={option.status === task.status}
+                aria-selected={option.status === displayTask.status}
                 className={cn(
                   'flex min-h-11 w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs font-medium hover:bg-muted',
-                  option.status === task.status && 'bg-muted',
+                  option.status === displayTask.status && 'bg-muted',
                 )}
                 onClick={() => {
                   setStatusPickerOpen(false);
-                  if (option.status === task.status) return;
+                  if (option.status === displayTask.status) return;
                   void moveTaskBulk({
-                    ids: [task._id],
+                    ids: [displayTask._id],
                     status: option.status,
                   });
                 }}
@@ -296,10 +302,10 @@ export default function TaskPageView() {
             {/* Expanded content */}
             <div
               className={cn(
-                'h-full flex flex-col overflow-hidden bg-muted/30 transition-opacity duration-300',
+                'h-full flex flex-col overflow-hidden bg-muted/30 transition-opacity',
                 taskPageDetailCollapsed
-                  ? 'opacity-0 pointer-events-none'
-                  : 'opacity-100 delay-100',
+                  ? 'opacity-0 pointer-events-none duration-100'
+                  : 'opacity-100 delay-100 duration-300',
               )}
             >
               <div className="flex items-center justify-between border-b px-3 py-2">
@@ -315,7 +321,7 @@ export default function TaskPageView() {
                 </button>
               </div>
               <TaskDetailContent
-                task={task}
+                task={displayTask}
                 showDelete
                 showSessionControls={false}
               />
@@ -323,7 +329,7 @@ export default function TaskPageView() {
           </section>
         )}
         <section className="min-w-0 flex-1">
-          <SessionPanel variant="task-page" />
+          <SessionPanel />
         </section>
       </div>
     </div>

@@ -8,7 +8,6 @@ import {
   FolderGit2,
   LayoutDashboard,
   Lightbulb,
-  PanelBottom,
   Search,
 } from 'lucide-react';
 import { Dialog as RadixDialog, VisuallyHidden } from 'radix-ui';
@@ -36,9 +35,6 @@ export function CommandPalette() {
   const selectTask = useAppStore((s) => s.selectTask);
   const selectSeedBox = useAppStore((s) => s.selectSeedBox);
   const toggleBacklog = useAppStore((s) => s.toggleBacklog);
-  const sessionId = useAppStore((s) => s.sessionId);
-  const closeSession = useAppStore((s) => s.closeSession);
-  const toggleSessionMinimized = useAppStore((s) => s.toggleSessionMinimized);
   const viewMode = useAppStore((s) => s.viewMode);
 
   const tasks = useQuery(
@@ -128,35 +124,15 @@ export function CommandPalette() {
         </Command.Group>
 
         {/* Actions */}
-        {(viewMode === 'board' || sessionId) && (
+        {viewMode === 'board' && (
           <Command.Group heading="Actions" className={GROUP_HEADING_CLASS}>
-            {viewMode === 'board' && (
-              <CommandItem
-                value="action-toggle-backlog"
-                onSelect={() => runAction(toggleBacklog)}
-              >
-                <Columns3 className="h-4 w-4 shrink-0 text-muted-foreground" />
-                Toggle backlog column
-              </CommandItem>
-            )}
-            {sessionId && (
-              <>
-                <CommandItem
-                  value="action-toggle-session"
-                  onSelect={() => runAction(toggleSessionMinimized)}
-                >
-                  <PanelBottom className="h-4 w-4 shrink-0 text-muted-foreground" />
-                  Toggle session panel
-                </CommandItem>
-                <CommandItem
-                  value="action-close-session"
-                  onSelect={() => runAction(closeSession)}
-                >
-                  <PanelBottom className="h-4 w-4 shrink-0 text-muted-foreground" />
-                  Close session panel
-                </CommandItem>
-              </>
-            )}
+            <CommandItem
+              value="action-toggle-backlog"
+              onSelect={() => runAction(toggleBacklog)}
+            >
+              <Columns3 className="h-4 w-4 shrink-0 text-muted-foreground" />
+              Toggle backlog column
+            </CommandItem>
           </Command.Group>
         )}
 

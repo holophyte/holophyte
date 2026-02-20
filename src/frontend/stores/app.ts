@@ -13,7 +13,6 @@ interface AppState {
   taskPageDetailCollapsed: boolean;
   taskPageFocusMode: boolean;
   sessionId: string | null;
-  sessionMinimized: boolean;
 
   // Search and filter state
   searchQuery: string;
@@ -35,7 +34,6 @@ interface AppState {
   toggleTaskPageFocusMode: () => void;
   openSession: (sessionId: string) => void;
   closeSession: () => void;
-  toggleSessionMinimized: () => void;
 
   // Search and filter actions
   setSearchQuery: (query: string) => void;
@@ -62,7 +60,6 @@ export const useAppStore = create<AppState>()(
       taskPageDetailCollapsed: false,
       taskPageFocusMode: false,
       sessionId: null,
-      sessionMinimized: false,
 
       searchQuery: '',
       filterLabelIds: [],
@@ -126,16 +123,13 @@ export const useAppStore = create<AppState>()(
       openSession: (id) =>
         set((state) => ({
           sessionId: id,
-          sessionMinimized: false,
           // If a task is selected, switch to the task page view so the
-          // session isn't awkwardly squeezed into the board layout.
+          // session is always shown in the dedicated task page.
           ...(state.selectedTaskId && state.viewMode !== 'task-page'
             ? { viewMode: 'task-page' as const }
             : {}),
         })),
-      closeSession: () => set({ sessionId: null, sessionMinimized: false }),
-      toggleSessionMinimized: () =>
-        set((state) => ({ sessionMinimized: !state.sessionMinimized })),
+      closeSession: () => set({ sessionId: null }),
 
       setSearchQuery: (query) =>
         set({ searchQuery: query, bulkSelectedTaskIds: [] }),
