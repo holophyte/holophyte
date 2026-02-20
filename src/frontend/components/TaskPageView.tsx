@@ -268,70 +268,62 @@ export default function TaskPageView() {
         {!taskPageFocusMode && (
           <section
             className={cn(
-              'panel-collapse shrink-0 border-r bg-muted/15',
-              taskPageDetailCollapsed ? 'w-20' : 'w-[28rem]',
+              'relative shrink-0 border-r transition-[width,min-width,max-width] duration-300 ease-in-out overflow-hidden panel-collapse',
+              taskPageDetailCollapsed
+                ? 'w-10 min-w-[40px] max-w-[40px]'
+                : 'w-[28rem]',
             )}
           >
-            {taskPageDetailCollapsed ? (
-              <div className="flex h-full flex-col">
+            {/* Collapsed pill — matches backlog style */}
+            <button
+              type="button"
+              onClick={toggleTaskPageDetail}
+              aria-label="Expand task details"
+              aria-expanded={false}
+              aria-hidden={!taskPageDetailCollapsed}
+              tabIndex={taskPageDetailCollapsed ? 0 : -1}
+              className={cn(
+                'absolute inset-0 w-10 rounded-lg bg-muted/30 border border-dashed',
+                'flex flex-col items-center justify-center gap-2',
+                'hover:bg-muted/80 cursor-pointer',
+                'transition-opacity duration-300',
+                taskPageDetailCollapsed
+                  ? 'opacity-100 delay-100'
+                  : 'opacity-0 pointer-events-none',
+              )}
+            >
+              <span className="text-xs font-medium text-muted-foreground [writing-mode:vertical-lr] rotate-180">
+                Task Details
+              </span>
+              <ChevronsRight className="h-3.5 w-3.5 text-muted-foreground" />
+            </button>
+            {/* Expanded content */}
+            <div
+              className={cn(
+                'h-full flex flex-col overflow-hidden bg-background transition-opacity duration-300',
+                taskPageDetailCollapsed
+                  ? 'opacity-0 pointer-events-none'
+                  : 'opacity-100 delay-100',
+              )}
+            >
+              <div className="flex items-center justify-between border-b px-3 py-2">
+                <h2 className="text-sm font-semibold">Task Details</h2>
                 <button
                   type="button"
-                  aria-label={
-                    taskPageDetailCollapsed
-                      ? 'Expand task details'
-                      : 'Collapse task details'
-                  }
-                  aria-expanded={!taskPageDetailCollapsed}
+                  aria-label="Collapse task details"
+                  aria-expanded={true}
                   onClick={toggleTaskPageDetail}
-                  className="flex min-h-11 items-center justify-center border-b hover:bg-muted/60"
+                  className="flex min-h-11 min-w-11 items-center justify-center rounded hover:bg-muted"
                 >
-                  {taskPageDetailCollapsed ? (
-                    <ChevronsRight className="h-4 w-4" />
-                  ) : (
-                    <ChevronsLeft className="h-4 w-4" />
-                  )}
+                  <ChevronsLeft className="h-4 w-4" />
                 </button>
-                <div className="flex-1 px-2 py-3">
-                  <p className="line-clamp-5 text-xs font-medium leading-relaxed">
-                    {task.title}
-                  </p>
-                  <Badge
-                    variant="outline"
-                    className="mt-3 inline-flex text-[10px] leading-none"
-                  >
-                    {statusMeta.label}
-                  </Badge>
-                </div>
               </div>
-            ) : (
-              <div className="flex h-full flex-col overflow-hidden bg-background">
-                <div className="flex items-center justify-between border-b px-3 py-2">
-                  <h2 className="text-sm font-semibold">Task Details</h2>
-                  <button
-                    type="button"
-                    aria-label={
-                      taskPageDetailCollapsed
-                        ? 'Expand task details'
-                        : 'Collapse task details'
-                    }
-                    aria-expanded={!taskPageDetailCollapsed}
-                    onClick={toggleTaskPageDetail}
-                    className="flex min-h-11 min-w-11 items-center justify-center rounded hover:bg-muted"
-                  >
-                    {taskPageDetailCollapsed ? (
-                      <ChevronsRight className="h-4 w-4" />
-                    ) : (
-                      <ChevronsLeft className="h-4 w-4" />
-                    )}
-                  </button>
-                </div>
-                <TaskDetailContent
-                  task={task}
-                  showDelete
-                  showSessionControls={false}
-                />
-              </div>
-            )}
+              <TaskDetailContent
+                task={task}
+                showDelete
+                showSessionControls={false}
+              />
+            </div>
           </section>
         )}
         <section className="min-w-0 flex-1">
