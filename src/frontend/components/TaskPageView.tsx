@@ -268,9 +268,9 @@ export default function TaskPageView() {
         {!taskPageFocusMode && (
           <section
             className={cn(
-              'relative shrink-0 border-r transition-[width,min-width,max-width] duration-300 ease-in-out overflow-hidden panel-collapse',
+              'relative shrink-0 border-r transition-[width,min-width,max-width,flex] duration-300 ease-in-out overflow-hidden',
               taskPageDetailCollapsed
-                ? 'w-10 min-w-[40px] max-w-[40px]'
+                ? 'w-10 min-w-[40px] max-w-[40px] flex-none'
                 : 'w-[28rem]',
             )}
           >
