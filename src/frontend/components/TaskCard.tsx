@@ -1,7 +1,7 @@
 import { api } from '@convex/_generated/api';
 import { PRIORITY_CONFIG, TaskPriority, TaskStatus } from '@convex/schema';
 import { useQuery } from 'convex/react';
-import { CheckSquare, Clock, Terminal } from 'lucide-react';
+import { CheckSquare, Clock, Maximize2, Terminal } from 'lucide-react';
 import { formatRelativeDate } from '@/frontend/lib/dateUtils';
 import { cn } from '@/frontend/lib/utils';
 import { useAppStore } from '@/frontend/stores/app';
@@ -15,6 +15,7 @@ interface TaskCardProps {
 
 export function TaskCard({ task, repoName }: TaskCardProps) {
   const selectTask = useAppStore((s) => s.selectTask);
+  const openTaskPage = useAppStore((s) => s.openTaskPage);
   const toggleBulkSelectTask = useAppStore((s) => s.toggleBulkSelectTask);
   const bulkSelectedTaskIds = useAppStore((s) => s.bulkSelectedTaskIds);
   const session = useQuery(api.sessions.getByTask, { taskId: task._id });
@@ -72,6 +73,18 @@ export function TaskCard({ task, repoName }: TaskCardProps) {
         isSelected && 'ring-2 ring-primary border-primary/50',
       )}
     >
+      <button
+        type="button"
+        onClick={(event) => {
+          event.stopPropagation();
+          openTaskPage(task._id);
+        }}
+        className="absolute right-1 top-1 z-10 flex h-11 w-11 items-center justify-center rounded-md text-muted-foreground opacity-65 hover:bg-muted hover:opacity-100 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+        aria-label={`Open ${task.title} in task page`}
+      >
+        <Maximize2 className="h-4 w-4" />
+      </button>
+
       {/* Bulk selection checkbox */}
       <input
         type="checkbox"
@@ -80,7 +93,7 @@ export function TaskCard({ task, repoName }: TaskCardProps) {
         onClick={(e) => e.stopPropagation()}
         onChange={handleCheckboxChange}
         className={cn(
-          'absolute top-2 right-2 h-4 w-4 accent-primary cursor-pointer transition-opacity',
+          'absolute top-3 right-12 h-4 w-4 accent-primary cursor-pointer transition-opacity',
           isBulkMode ? 'opacity-100' : 'opacity-0 group-hover/card:opacity-100',
         )}
       />
@@ -98,7 +111,7 @@ export function TaskCard({ task, repoName }: TaskCardProps) {
           ))}
         </div>
       )}
-      <div className="flex items-start justify-between gap-2">
+      <div className="flex items-start justify-between gap-2 pr-8">
         <h3 className="text-sm font-medium leading-snug">{task.title}</h3>
         {session?.status === 'running' && (
           <Terminal className="h-3.5 w-3.5 text-green-500 shrink-0 mt-0.5" />

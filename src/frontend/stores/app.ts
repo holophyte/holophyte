@@ -2,7 +2,7 @@ import type { Id } from '@convex/_generated/dataModel';
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
-type ViewMode = 'board' | 'seeds';
+type ViewMode = 'board' | 'seeds' | 'task-page';
 
 interface AppState {
   selectedOrgId: Id<'organizations'> | null;
@@ -10,6 +10,8 @@ interface AppState {
   selectedTaskId: Id<'tasks'> | null;
   viewMode: ViewMode;
   backlogCollapsed: boolean;
+  taskPageDetailCollapsed: boolean;
+  taskPageFocusMode: boolean;
   sessionId: string | null;
   sessionMinimized: boolean;
 
@@ -27,7 +29,10 @@ interface AppState {
   selectRepo: (id: Id<'repos'> | null) => void;
   selectSeedBox: () => void;
   selectTask: (id: Id<'tasks'> | null) => void;
+  openTaskPage: (id: Id<'tasks'>) => void;
   toggleBacklog: () => void;
+  toggleTaskPageDetail: () => void;
+  toggleTaskPageFocusMode: () => void;
   openSession: (sessionId: string) => void;
   closeSession: () => void;
   toggleSessionMinimized: () => void;
@@ -54,6 +59,8 @@ export const useAppStore = create<AppState>()(
       selectedTaskId: null,
       viewMode: 'board',
       backlogCollapsed: true,
+      taskPageDetailCollapsed: false,
+      taskPageFocusMode: false,
       sessionId: null,
       sessionMinimized: false,
 
@@ -79,7 +86,12 @@ export const useAppStore = create<AppState>()(
           bulkSelectedTaskIds: [],
         }),
       selectRepo: (id) =>
-        set({ selectedRepoId: id, viewMode: 'board', bulkSelectedTaskIds: [] }),
+        set({
+          selectedRepoId: id,
+          selectedTaskId: null,
+          viewMode: 'board',
+          bulkSelectedTaskIds: [],
+        }),
       selectSeedBox: () =>
         set({
           selectedRepoId: null,
@@ -87,9 +99,30 @@ export const useAppStore = create<AppState>()(
           selectedTaskId: null,
           bulkSelectedTaskIds: [],
         }),
-      selectTask: (id) => set({ selectedTaskId: id }),
+      selectTask: (id) =>
+        set((state) => ({
+          selectedTaskId: id,
+          viewMode:
+            id === null && state.viewMode === 'task-page'
+              ? 'board'
+              : state.viewMode,
+        })),
+      openTaskPage: (id) =>
+        set({
+          selectedTaskId: id,
+          viewMode: 'task-page',
+          bulkSelectedTaskIds: [],
+        }),
       toggleBacklog: () =>
         set((state) => ({ backlogCollapsed: !state.backlogCollapsed })),
+      toggleTaskPageDetail: () =>
+        set((state) => ({
+          taskPageDetailCollapsed: !state.taskPageDetailCollapsed,
+        })),
+      toggleTaskPageFocusMode: () =>
+        set((state) => ({
+          taskPageFocusMode: !state.taskPageFocusMode,
+        })),
       openSession: (id) => set({ sessionId: id, sessionMinimized: false }),
       closeSession: () => set({ sessionId: null, sessionMinimized: false }),
       toggleSessionMinimized: () =>
@@ -147,6 +180,8 @@ export const useAppStore = create<AppState>()(
         selectedRepoId: state.selectedRepoId,
         viewMode: state.viewMode,
         backlogCollapsed: state.backlogCollapsed,
+        taskPageDetailCollapsed: state.taskPageDetailCollapsed,
+        taskPageFocusMode: state.taskPageFocusMode,
         showArchive: state.showArchive,
         doneColumnCollapsed: state.doneColumnCollapsed,
       }),

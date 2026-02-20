@@ -26,7 +26,9 @@ import Separator from './ui/Separator';
 import Skeleton from './ui/Skeleton';
 import Textarea from './ui/Textarea';
 
-type Task = NonNullable<FunctionReturnType<typeof api.tasks.get>>;
+export type TaskDetailTask = NonNullable<
+  FunctionReturnType<typeof api.tasks.get>
+>;
 
 export function TaskDetailPanel() {
   const selectedTaskId = useAppStore((s) => s.selectedTaskId);
@@ -44,7 +46,7 @@ export function TaskDetailPanel() {
   }, [task, selectTask]);
 
   // Keep previous task visible while the next one loads (but not when deleted)
-  const prevTaskRef = useRef<Task | null>(null);
+  const prevTaskRef = useRef<TaskDetailTask | null>(null);
   if (task) prevTaskRef.current = task;
   const displayTask = task === null ? null : (task ?? prevTaskRef.current);
 
@@ -63,7 +65,7 @@ export function TaskDetailPanel() {
         </Button>
       </PageHeader>
       {displayTask ? (
-        <TaskDetailInner task={displayTask} />
+        <TaskDetailContent task={displayTask} />
       ) : (
         <TaskDetailSkeleton />
       )}
@@ -97,7 +99,15 @@ function TaskDetailSkeleton() {
   );
 }
 
-function TaskDetailInner({ task }: { task: Task }) {
+export function TaskDetailContent({
+  task,
+  showDelete = true,
+  showSessionControls = true,
+}: {
+  task: TaskDetailTask;
+  showDelete?: boolean;
+  showSessionControls?: boolean;
+}) {
   const selectTask = useAppStore((s) => s.selectTask);
   const updateTask = useMutation(api.tasks.update);
   const removeTask = useMutation(api.tasks.remove);
@@ -371,17 +381,23 @@ function TaskDetailInner({ task }: { task: Task }) {
           <SubtaskList taskId={task._id} />
         </div>
 
-        <Separator />
-        <div className="space-y-2">
-          <Label>Claude Code Session</Label>
-          <ClaudeButton task={task} />
+        {showSessionControls && (
+          <>
+            <Separator />
+            <div className="space-y-2">
+              <Label>Claude Code Session</Label>
+              <ClaudeButton task={task} />
+            </div>
+          </>
+        )}
+      </div>
+      {showDelete && (
+        <div className="border-t p-4 flex items-center gap-2">
+          <Button size="sm" variant="destructive" onClick={handleDelete}>
+            Delete
+          </Button>
         </div>
-      </div>
-      <div className="border-t p-4 flex items-center gap-2">
-        <Button size="sm" variant="destructive" onClick={handleDelete}>
-          Delete
-        </Button>
-      </div>
+      )}
     </>
   );
 }

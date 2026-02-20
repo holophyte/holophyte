@@ -1,11 +1,12 @@
 import type { SDKMessage } from '@anthropic-ai/claude-agent-sdk';
-import { ChevronRight, Loader2, Sparkles } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useRef } from 'react';
+import { ArrowDown, ChevronRight, Loader2, Sparkles } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import rehypeHighlight from 'rehype-highlight';
 import remarkGfm from 'remark-gfm';
 import { cn } from '@/frontend/lib/utils';
 import ToolCallCard from './ToolCallCard';
+import Button from './ui/Button';
 
 const REMARK_PLUGINS = [remarkGfm];
 const REHYPE_PLUGINS = [rehypeHighlight];
@@ -29,6 +30,14 @@ interface MessageStreamProps {
    * 'running'` from the session.
    */
   isProcessing: boolean;
+  /** Seconds elapsed in the current running state, if available. */
+  thinkingElapsedSeconds?: number;
+  /** Resolved permission prompts rendered as contextual transcript entries. */
+  resolvedApprovals?: Array<{
+    requestId: string;
+    tool: string;
+    resolved?: { approved: boolean };
+  }>;
 }
 
 // Extract text content from an assistant message's content array
@@ -67,6 +76,12 @@ function getToolUseBlocks(message: { content?: unknown[] }): Array<{
         (b as Record<string, unknown>).type === 'tool_use',
     )
     .map((b) => ({ id: b.id, name: b.name, input: b.input }));
+}
+
+function formatThinkingElapsed(seconds: number): string {
+  const mins = Math.floor(seconds / 60);
+  const secs = seconds % 60;
+  return `${mins}:${String(secs).padStart(2, '0')}`;
 }
 
 /** Rendered message from the stream. */
@@ -175,106 +190,165 @@ function buildMessages(events: SDKMessage[]): RenderedMessage[] {
  * Scrollable conversation view that renders the Claude Code session event
  * stream as a chat-like UI.
  *
- * - `assistant` events render as left-aligned markdown bubbles with inline
- *   {@link ToolCallCard} cards for any tool-use blocks.
- * - `user` events render as right-aligned bubbles (only text messages, not
- *   internal tool-result blocks).
- * - Auto-scrolls to the bottom as new events arrive; pauses auto-scroll
- *   while the user is scrolled up to read earlier content.
- * - Shows a loading spinner while `isLoading` is `true` and no messages exist.
+ * - `assistant` events render as markdown blocks with inline {@link ToolCallCard}
+ *   cards for any tool-use blocks.
+ * - `user` events render as highlighted instruction blocks.
+ * - Auto-scrolls to the bottom while reading live output and pauses when the
+ *   user scrolls away from the bottom.
+ * - Shows a jump-to-latest control when the stream is not pinned.
  */
 export default function MessageStream({
   events,
   isLoading,
   isProcessing,
+  thinkingElapsedSeconds,
+  resolvedApprovals = [],
 }: MessageStreamProps) {
-  const bottomRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const userScrolledRef = useRef(false);
+  const bottomRef = useRef<HTMLDivElement>(null);
+  const [isAtBottom, setIsAtBottom] = useState(true);
 
-  // Auto-scroll to bottom unless user scrolled up
-  // biome-ignore lint/correctness/useExhaustiveDependencies: intentionally using events.length as dep trigger
-  useEffect(() => {
+  const messages = useMemo(() => buildMessages(events), [events]);
+
+  const scrollToBottom = useCallback(() => {
     const container = containerRef.current;
-    const bottom = bottomRef.current;
-    if (!container || !bottom) return;
-    if (!userScrolledRef.current) {
-      bottom.scrollIntoView({ behavior: 'smooth', block: 'end' });
-    }
-  }, [events.length]);
+    if (!container) return;
+    container.scrollTop = container.scrollHeight;
+    setIsAtBottom(true);
+  }, []);
 
   const handleScroll = useCallback(() => {
     const container = containerRef.current;
     if (!container) return;
+    const threshold = 56;
     const atBottom =
       container.scrollHeight - container.scrollTop - container.clientHeight <
-      50;
-    userScrolledRef.current = !atBottom;
+      threshold;
+    setIsAtBottom(atBottom);
   }, []);
 
-  const messages = useMemo(() => buildMessages(events), [events]);
+  // Auto-scroll while the user is at the bottom; no smooth behavior to avoid jank.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: trigger on new stream content
+  useEffect(() => {
+    if (!isAtBottom) return;
+    scrollToBottom();
+  }, [events.length, isAtBottom, scrollToBottom]);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (
+        (event.metaKey || event.ctrlKey) &&
+        event.key === 'ArrowDown' &&
+        !event.shiftKey &&
+        !event.altKey
+      ) {
+        event.preventDefault();
+        scrollToBottom();
+      }
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [scrollToBottom]);
 
   return (
-    <div
-      ref={containerRef}
-      onScroll={handleScroll}
-      className="flex-1 overflow-y-auto px-4 py-3 space-y-4 scroll-smooth"
-    >
-      {isLoading && messages.length === 0 && (
-        <div className="flex items-center gap-2 text-muted-foreground text-sm py-8 justify-center">
-          <Loader2 className="h-4 w-4 animate-spin" />
-          <span>Starting session…</span>
-        </div>
-      )}
-
-      {messages.map((msg, i) => (
-        <div key={msg.uuid || i} className={cn('flex flex-col gap-1')}>
-          {msg.role === 'user' && (
-            <div className="flex gap-2 bg-muted/60 rounded-md px-3 py-2">
-              <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
-              <p className="text-sm leading-relaxed text-foreground whitespace-pre-wrap break-words">
-                {msg.text}
-              </p>
+    <div className="relative flex-1 overflow-hidden">
+      <div
+        ref={containerRef}
+        onScroll={handleScroll}
+        className="h-full overflow-y-auto px-4 py-4"
+        role="log"
+        aria-live="polite"
+        aria-relevant="additions text"
+      >
+        <div className="mx-auto w-full max-w-[72ch] space-y-5">
+          {isLoading && messages.length === 0 && (
+            <div className="flex items-center justify-center gap-2 py-8 text-sm text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin pulse-spin" />
+              <span>Starting session…</span>
             </div>
           )}
 
-          {msg.role === 'assistant' && (
-            <div className="flex flex-col gap-1">
-              {msg.toolUses.map((tu) => (
-                <ToolCallCard
-                  key={tu.id}
-                  toolName={tu.name}
-                  input={tu.input}
-                  result={tu.result}
-                  isError={tu.isError}
-                />
-              ))}
-              {msg.text && (
-                <div className="prose prose-sm max-w-none text-foreground prose-headings:text-foreground prose-strong:text-foreground prose-code:text-foreground prose-code:before:content-none prose-code:after:content-none prose-a:text-primary prose-blockquote:text-muted-foreground prose-p:my-1 prose-headings:my-2 prose-pre:my-2 prose-ul:my-1 prose-ol:my-1 prose-li:my-0 prose-table:my-2 text-sm leading-relaxed [&_pre]:overflow-x-auto [&_pre]:text-xs [&_pre]:bg-muted [&_code]:text-xs [&_table]:border-collapse [&_th]:border [&_th]:border-border [&_th]:px-3 [&_th]:py-1.5 [&_th]:text-foreground [&_th]:bg-muted/50 [&_td]:border [&_td]:border-border [&_td]:px-3 [&_td]:py-1.5">
-                  <ReactMarkdown
-                    remarkPlugins={REMARK_PLUGINS}
-                    rehypePlugins={REHYPE_PLUGINS}
-                  >
+          {messages.map((msg, index) => (
+            <div
+              key={msg.uuid || index}
+              className={cn(
+                'flex flex-col gap-1.5',
+                msg.role === 'assistant' && index > 0 && 'pt-4 border-t',
+              )}
+            >
+              {msg.role === 'user' && (
+                <div className="flex gap-2 rounded-md bg-muted/60 px-3 py-2">
+                  <ChevronRight className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+                  <p className="text-sm leading-relaxed text-foreground whitespace-pre-wrap break-words">
                     {msg.text}
-                  </ReactMarkdown>
+                  </p>
+                </div>
+              )}
+
+              {msg.role === 'assistant' && (
+                <div className="flex flex-col gap-2">
+                  {msg.toolUses.map((tu) => (
+                    <ToolCallCard
+                      key={tu.id}
+                      toolName={tu.name}
+                      input={tu.input}
+                      result={tu.result}
+                      isError={tu.isError}
+                    />
+                  ))}
+                  {msg.text && (
+                    <div className="prose prose-sm max-w-none text-foreground prose-headings:text-foreground prose-strong:text-foreground prose-code:text-foreground prose-code:before:content-none prose-code:after:content-none prose-a:text-primary prose-blockquote:text-muted-foreground prose-p:my-1 prose-headings:my-2 prose-pre:my-2 prose-ul:my-1 prose-ol:my-1 prose-li:my-0 prose-table:my-2 text-sm leading-relaxed [&_pre]:overflow-x-auto [&_pre]:text-xs [&_pre]:bg-slate-900 [&_pre]:text-slate-100 [&_code]:text-xs [&_table]:border-collapse [&_th]:border [&_th]:border-border [&_th]:px-3 [&_th]:py-1.5 [&_th]:text-foreground [&_th]:bg-muted/50 [&_td]:border [&_td]:border-border [&_td]:px-3 [&_td]:py-1.5">
+                      <ReactMarkdown
+                        remarkPlugins={REMARK_PLUGINS}
+                        rehypePlugins={REHYPE_PLUGINS}
+                      >
+                        {msg.text}
+                      </ReactMarkdown>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
-          )}
-        </div>
-      ))}
+          ))}
 
-      {isProcessing && (
-        <div className="flex items-center gap-1.5 text-muted-foreground/50 text-xs py-1">
-          <Sparkles
-            className="h-3 w-3"
-            style={{ animation: 'pulse-spin 2s linear infinite' }}
-          />
-          <span>Thinking…</span>
+          {resolvedApprovals.map((approval) => (
+            <div
+              key={approval.requestId}
+              className="rounded-md border border-border/70 bg-muted/30 px-3 py-2 text-xs text-muted-foreground"
+            >
+              Permission {approval.resolved?.approved ? 'approved' : 'denied'}:{' '}
+              {approval.tool}
+            </div>
+          ))}
+
+          {isProcessing && (
+            <div className="flex items-center gap-1.5 py-1 text-xs text-muted-foreground/70">
+              <Sparkles className="h-3.5 w-3.5 pulse-spin animate-[pulse-spin_2s_linear_infinite]" />
+              <span>
+                Thinking…
+                {typeof thinkingElapsedSeconds === 'number'
+                  ? ` ${formatThinkingElapsed(thinkingElapsedSeconds)}`
+                  : ''}
+              </span>
+            </div>
+          )}
+
+          <div ref={bottomRef} />
+        </div>
+      </div>
+
+      {!isAtBottom && (
+        <div className="jump-to-latest pointer-events-none absolute bottom-4 right-4">
+          <Button
+            size="sm"
+            className="pointer-events-auto min-h-11 rounded-full px-3 shadow-lg"
+            onClick={scrollToBottom}
+          >
+            <ArrowDown className="h-4 w-4" />
+            Jump to latest
+          </Button>
         </div>
       )}
-
-      <div ref={bottomRef} />
     </div>
   );
 }

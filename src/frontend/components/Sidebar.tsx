@@ -39,7 +39,7 @@ export function Sidebar() {
   const viewMode = useAppStore((s) => s.viewMode);
   const selectRepo = useAppStore((s) => s.selectRepo);
   const selectSeedBox = useAppStore((s) => s.selectSeedBox);
-  const selectTask = useAppStore((s) => s.selectTask);
+  const openTaskPage = useAppStore((s) => s.openTaskPage);
   const [addRepoOpen, setAddRepoOpen] = useState(false);
 
   const handleRemove = async (e: React.MouseEvent, repoId: Id<'repos'>) => {
@@ -154,7 +154,7 @@ export function Sidebar() {
                       <button
                         key={task._id}
                         type="button"
-                        onClick={() => selectTask(task._id)}
+                        onClick={() => openTaskPage(task._id)}
                         className={cn(
                           'w-full text-left rounded-md px-2 py-1 transition-colors flex items-center gap-1.5',
                           selectedTaskId === task._id

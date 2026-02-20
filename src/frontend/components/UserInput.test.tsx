@@ -29,6 +29,11 @@ describe('UserInput', () => {
       expect(
         screen.getByPlaceholderText('Session completed'),
       ).toBeInTheDocument();
+      expect(
+        screen.getByText(
+          'Session completed — launch a new session to continue',
+        ),
+      ).toBeInTheDocument();
     });
   });
 

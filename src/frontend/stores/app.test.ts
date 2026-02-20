@@ -12,6 +12,8 @@ beforeEach(() => {
     selectedTaskId: null,
     viewMode: 'board',
     backlogCollapsed: true,
+    taskPageDetailCollapsed: false,
+    taskPageFocusMode: false,
     sessionId: null,
     sessionMinimized: false,
   });
@@ -73,6 +75,23 @@ describe('selectTask', () => {
 
     useAppStore.getState().selectTask(null);
     expect(useAppStore.getState().selectedTaskId).toBeNull();
+  });
+
+  it('returns to board mode when clearing task in task-page view', () => {
+    useAppStore.getState().openTaskPage(fakeTaskId);
+    expect(useAppStore.getState().viewMode).toBe('task-page');
+
+    useAppStore.getState().selectTask(null);
+    expect(useAppStore.getState().viewMode).toBe('board');
+    expect(useAppStore.getState().selectedTaskId).toBeNull();
+  });
+});
+
+describe('openTaskPage', () => {
+  it('sets selectedTaskId and switches to task-page view', () => {
+    useAppStore.getState().openTaskPage(fakeTaskId);
+    expect(useAppStore.getState().selectedTaskId).toBe(fakeTaskId);
+    expect(useAppStore.getState().viewMode).toBe('task-page');
   });
 });
 
@@ -141,14 +160,18 @@ describe('clearOrgSelection', () => {
 });
 
 describe('persist', () => {
-  it('persists selectedRepoId, viewMode, and backlogCollapsed', () => {
+  it('persists selectedRepoId, viewMode, and layout preferences', () => {
     useAppStore.getState().selectRepo(fakeRepoId);
     useAppStore.getState().toggleBacklog();
+    useAppStore.getState().toggleTaskPageDetail();
+    useAppStore.getState().toggleTaskPageFocusMode();
 
     const stored = JSON.parse(localStorage.getItem('holophyte-app') ?? '{}');
     expect(stored.state.selectedRepoId).toBe(fakeRepoId);
     expect(stored.state.viewMode).toBe('board');
     expect(stored.state.backlogCollapsed).toBe(false);
+    expect(stored.state.taskPageDetailCollapsed).toBe(true);
+    expect(stored.state.taskPageFocusMode).toBe(true);
   });
 
   it('does not persist transient state', () => {

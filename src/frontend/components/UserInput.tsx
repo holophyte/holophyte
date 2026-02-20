@@ -1,5 +1,5 @@
 import { Send } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Button from './ui/Button';
 
 /** Props for {@link UserInput}. */
@@ -40,8 +40,25 @@ export default function UserInput({
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const canSend = !disabled && !sending && text.trim().length > 0 && sessionId;
+  const disabledReason = disabled
+    ? 'Session completed — launch a new session to continue'
+    : null;
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: text triggers scrollHeight recalculation
+  useEffect(() => {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+
+    const lineHeight = 24;
+    const maxHeight = lineHeight * 6;
+    textarea.style.height = '0px';
+    textarea.style.height = `${Math.min(textarea.scrollHeight, maxHeight)}px`;
+    textarea.style.overflowY =
+      textarea.scrollHeight > maxHeight ? 'auto' : 'hidden';
+  }, [text]);
 
   const handleSend = async () => {
     if (!canSend) return;
@@ -65,12 +82,13 @@ export default function UserInput({
     <div className="shrink-0 border-t bg-muted/10 px-3 py-2">
       <div className="flex gap-2 items-end">
         <textarea
+          ref={textareaRef}
           value={text}
           onChange={(e) => setText(e.target.value)}
           placeholder={placeholder}
           disabled={disabled || sending}
-          rows={2}
-          className="flex-1 resize-none rounded-md border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground/50 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 min-h-[2.5rem] max-h-32 overflow-y-auto leading-relaxed"
+          rows={1}
+          className="flex-1 resize-none rounded-md border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground/50 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 min-h-11 max-h-36 leading-relaxed"
           onKeyDown={(e) => {
             if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
               e.preventDefault();
@@ -80,14 +98,18 @@ export default function UserInput({
         />
         <Button
           size="icon"
-          className="h-9 w-9 shrink-0"
+          className="h-11 w-11 shrink-0"
           disabled={!canSend}
           onClick={() => void handleSend()}
           aria-label="Send message"
+          title={disabledReason ?? undefined}
         >
           <Send className="h-4 w-4" />
         </Button>
       </div>
+      {disabledReason && (
+        <p className="text-xs text-muted-foreground mt-1">{disabledReason}</p>
+      )}
       {queued && !error && (
         <p className="text-xs text-muted-foreground/60 mt-1">
           Message queued — will be sent when Claude finishes the current turn.
