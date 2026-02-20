@@ -3,7 +3,7 @@ import type { Id } from '@convex/_generated/dataModel';
 import { PRIORITY_CONFIG, TaskPriority, TaskStatus } from '@convex/schema';
 import { useMutation, useQuery } from 'convex/react';
 import type { FunctionReturnType } from 'convex/server';
-import { ChevronDown, X } from 'lucide-react';
+import { ChevronDown, Maximize2, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import {
   dateInputToTimestamp,
@@ -33,6 +33,7 @@ export type TaskDetailTask = NonNullable<
 export function TaskDetailPanel() {
   const selectedTaskId = useAppStore((s) => s.selectedTaskId);
   const selectTask = useAppStore((s) => s.selectTask);
+  const openTaskPage = useAppStore((s) => s.openTaskPage);
   const task = useQuery(
     api.tasks.get,
     selectedTaskId ? { id: selectedTaskId } : 'skip',
@@ -54,15 +55,26 @@ export function TaskDetailPanel() {
     <div className="absolute right-0 top-0 bottom-0 w-96 border-l bg-background flex flex-col overflow-hidden shadow-xl z-10">
       <PageHeader className="justify-between">
         <h2 className="font-semibold text-sm">Task Details</h2>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-7 w-7"
-          onClick={() => selectTask(null)}
-          aria-label="Close task details"
-        >
-          <X className="h-4 w-4" />
-        </Button>
+        <div className="flex items-center gap-1">
+          {selectedTaskId && (
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => openTaskPage(selectedTaskId)}
+              aria-label="Expand to full page"
+            >
+              <Maximize2 className="h-3.5 w-3.5" />
+            </Button>
+          )}
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => selectTask(null)}
+            aria-label="Close task details"
+          >
+            <X className="h-4 w-4" />
+          </Button>
+        </div>
       </PageHeader>
       {displayTask ? (
         <TaskDetailContent task={displayTask} />

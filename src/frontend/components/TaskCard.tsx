@@ -79,10 +79,10 @@ export function TaskCard({ task, repoName }: TaskCardProps) {
           event.stopPropagation();
           openTaskPage(task._id);
         }}
-        className="absolute right-1 top-1 z-10 flex h-11 w-11 items-center justify-center rounded-md text-muted-foreground opacity-65 hover:bg-muted hover:opacity-100 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+        className="absolute right-1 top-1 z-10 flex h-7 w-7 cursor-pointer items-center justify-center rounded-md text-muted-foreground opacity-65 hover:bg-muted hover:opacity-100 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
         aria-label={`Open ${task.title} in task page`}
       >
-        <Maximize2 className="h-4 w-4" />
+        <Maximize2 className="h-3.5 w-3.5" />
       </button>
 
       {/* Bulk selection checkbox */}

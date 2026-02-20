@@ -32,6 +32,8 @@ interface AppState {
   toggleBacklog: () => void;
   toggleTaskPageDetail: () => void;
   toggleTaskPageFocusMode: () => void;
+  /** Switch from task page back to board view, keeping the task selected in the side panel. */
+  collapseTaskPage: () => void;
   openSession: (sessionId: string) => void;
   closeSession: () => void;
 
@@ -120,6 +122,8 @@ export const useAppStore = create<AppState>()(
         set((state) => ({
           taskPageFocusMode: !state.taskPageFocusMode,
         })),
+      collapseTaskPage: () =>
+        set({ viewMode: 'board', taskPageFocusMode: false }),
       openSession: (id) =>
         set((state) => ({
           sessionId: id,

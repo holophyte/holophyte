@@ -23,8 +23,10 @@ function AuthenticatedApp() {
       <main className="flex-1 flex flex-col overflow-hidden">
         {showTaskPage ? (
           <TaskPageView />
+        ) : viewMode === 'seeds' ? (
+          <SeedBoard />
         ) : (
-          <>{viewMode === 'seeds' ? <SeedBoard /> : <KanbanBoard />}</>
+          <KanbanBoard />
         )}
       </main>
       {!showTaskPage && selectedTaskId && <TaskDetailPanel />}

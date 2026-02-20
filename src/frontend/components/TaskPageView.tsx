@@ -7,6 +7,8 @@ import {
   ChevronsLeft,
   ChevronsRight,
   Clock3,
+  Minimize2,
+  X,
 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { formatElapsedSeconds } from '@/frontend/lib/dateUtils';
@@ -62,6 +64,7 @@ export default function TaskPageView() {
   const taskPageDetailCollapsed = useAppStore((s) => s.taskPageDetailCollapsed);
   const taskPageFocusMode = useAppStore((s) => s.taskPageFocusMode);
   const toggleTaskPageDetail = useAppStore((s) => s.toggleTaskPageDetail);
+  const collapseTaskPage = useAppStore((s) => s.collapseTaskPage);
   const toggleTaskPageFocusMode = useAppStore((s) => s.toggleTaskPageFocusMode);
   const moveTaskBulk = useMutation(api.tasks.bulkMove);
 
@@ -197,7 +200,7 @@ export default function TaskPageView() {
         >
           <button
             type="button"
-            className="truncate text-lg font-semibold hover:text-muted-foreground transition-colors"
+            className="truncate text-lg font-semibold cursor-pointer hover:text-muted-foreground transition-colors"
             onClick={() => selectRepo(displayTask.repoId)}
           >
             {displayTask.repo?.name ?? 'Project'}
@@ -215,7 +218,7 @@ export default function TaskPageView() {
           <PopoverTrigger asChild>
             <button
               type="button"
-              className="inline-flex min-h-11 items-center gap-2 rounded-md border border-border bg-muted px-3 text-xs font-semibold text-foreground"
+              className="inline-flex min-h-11 cursor-pointer items-center gap-2 rounded-md border border-border bg-muted px-3 text-xs font-semibold text-foreground"
               aria-label="Change task status"
             >
               <span
@@ -233,7 +236,7 @@ export default function TaskPageView() {
                 role="option"
                 aria-selected={option.status === displayTask.status}
                 className={cn(
-                  'flex min-h-11 w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs font-medium hover:bg-muted',
+                  'flex min-h-11 w-full cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-left text-xs font-medium hover:bg-muted',
                   option.status === displayTask.status && 'bg-muted',
                 )}
                 onClick={() => {
@@ -264,6 +267,25 @@ export default function TaskPageView() {
             {runningElapsed}
           </Badge>
         )}
+
+        <div className="ml-auto flex items-center gap-1">
+          <button
+            type="button"
+            aria-label="Collapse to side panel"
+            onClick={collapseTaskPage}
+            className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-md hover:bg-accent hover:text-accent-foreground"
+          >
+            <Minimize2 className="h-3.5 w-3.5" />
+          </button>
+          <button
+            type="button"
+            aria-label="Close task"
+            onClick={() => selectTask(null)}
+            className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-md hover:bg-accent hover:text-accent-foreground"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
       </PageHeader>
 
       <div className="flex min-h-0 flex-1">
@@ -315,7 +337,7 @@ export default function TaskPageView() {
                   aria-label="Collapse task details"
                   aria-expanded={true}
                   onClick={toggleTaskPageDetail}
-                  className="flex min-h-11 min-w-11 items-center justify-center rounded hover:bg-muted"
+                  className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-md hover:bg-accent hover:text-accent-foreground"
                 >
                   <ChevronsLeft className="h-4 w-4" />
                 </button>
