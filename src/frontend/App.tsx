@@ -9,7 +9,7 @@ import SessionPanel from './components/SessionPanel';
 import { Sidebar } from './components/Sidebar';
 import SignInPage from './components/SignInPage';
 import { TaskDetailPanel } from './components/TaskDetailPanel';
-import { TaskPageView } from './components/TaskPageView';
+import TaskPageView from './components/TaskPageView';
 
 function AuthenticatedApp() {
   const selectedTaskId = useAppStore((s) => s.selectedTaskId);
@@ -46,7 +46,7 @@ export function App() {
     <>
       <AuthLoading>
         <div className="flex h-screen items-center justify-center bg-background">
-          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+          <Loader2 className="h-8 w-8 motion-safe:animate-spin text-muted-foreground" />
         </div>
       </AuthLoading>
       <Unauthenticated>

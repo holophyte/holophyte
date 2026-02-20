@@ -9,6 +9,9 @@ import {
   Clock3,
 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { formatElapsedSeconds } from '@/frontend/lib/dateUtils';
+import { isEditableElement } from '@/frontend/lib/dom';
+import { cn } from '@/frontend/lib/utils';
 import { useAppStore } from '@/frontend/stores/app';
 import { ClaudeButton } from './ClaudeButton';
 import SessionPanel from './SessionPanel';
@@ -51,29 +54,7 @@ const TASK_STATUS_OPTIONS = [
   },
 ] as const;
 
-function isEditableElement(target: EventTarget | null): boolean {
-  if (!(target instanceof HTMLElement)) return false;
-  const tag = target.tagName;
-  return (
-    tag === 'INPUT' ||
-    tag === 'TEXTAREA' ||
-    tag === 'SELECT' ||
-    target.isContentEditable
-  );
-}
-
-function formatElapsed(seconds: number): string {
-  const mins = Math.floor(seconds / 60);
-  const secs = seconds % 60;
-  const hours = Math.floor(mins / 60);
-  const remMins = mins % 60;
-  if (hours > 0) {
-    return `${hours}h ${String(remMins).padStart(2, '0')}m`;
-  }
-  return `${mins}m ${String(secs).padStart(2, '0')}s`;
-}
-
-export function TaskPageView() {
+export default function TaskPageView() {
   const selectedTaskId = useAppStore((s) => s.selectedTaskId);
   const sessionId = useAppStore((s) => s.sessionId);
   const selectTask = useAppStore((s) => s.selectTask);
@@ -127,23 +108,14 @@ export function TaskPageView() {
       0,
       Math.floor((now - latestSession.startedAt) / 1000),
     );
-    return formatElapsed(seconds);
+    return formatElapsedSeconds(seconds);
   }, [latestSession, now]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.defaultPrevented) return;
 
-      const activeElement = document.activeElement;
-      const isEditable = isEditableElement(activeElement);
-      const promptElements = document.querySelectorAll(
-        '[data-permission-prompt][data-resolved="false"]',
-      );
-      const promptFocused =
-        activeElement instanceof HTMLElement &&
-        activeElement.closest('[data-permission-prompt]') !== null;
-      const singlePromptHotkeyEligible =
-        promptElements.length === 1 && !isEditable;
+      const isEditable = isEditableElement(document.activeElement);
 
       if (
         (event.metaKey || event.ctrlKey) &&
@@ -166,26 +138,11 @@ export function TaskPageView() {
         toggleTaskPageDetail();
         return;
       }
-
-      if (event.key === 'Escape') {
-        if (promptFocused || singlePromptHotkeyEligible || isEditable) return;
-        event.preventDefault();
-        if (task?.repoId) {
-          selectRepo(task.repoId);
-        }
-        selectTask(null);
-      }
     };
 
     document.addEventListener('keydown', onKeyDown);
     return () => document.removeEventListener('keydown', onKeyDown);
-  }, [
-    selectRepo,
-    selectTask,
-    task?.repoId,
-    toggleTaskPageDetail,
-    toggleTaskPageFocusMode,
-  ]);
+  }, [toggleTaskPageDetail, toggleTaskPageFocusMode]);
 
   if (!selectedTaskId) {
     return (
@@ -219,7 +176,7 @@ export function TaskPageView() {
 
   const statusMeta =
     TASK_STATUS_OPTIONS.find((option) => option.status === task.status) ??
-    TASK_STATUS_OPTIONS[0];
+    TASK_STATUS_OPTIONS[0]!;
 
   return (
     <div className="flex h-full flex-col overflow-hidden bg-background">
@@ -237,7 +194,10 @@ export function TaskPageView() {
               <span className="truncate">{task.repo?.name ?? 'Project'}</span>
             </Button>
             <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
-            <span className="truncate font-medium text-foreground">
+            <span
+              aria-current="page"
+              className="truncate font-medium text-foreground"
+            >
               {task.title}
             </span>
           </nav>
@@ -256,14 +216,17 @@ export function TaskPageView() {
                 {statusMeta.label}
               </button>
             </PopoverTrigger>
-            <PopoverContent className="w-40 p-1" align="start">
+            <PopoverContent className="w-40 p-1" align="start" role="listbox">
               {TASK_STATUS_OPTIONS.map((option) => (
                 <button
                   key={option.status}
                   type="button"
-                  className={`flex min-h-11 w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs font-medium hover:bg-muted ${
-                    option.status === task.status ? 'bg-muted' : ''
-                  }`}
+                  role="option"
+                  aria-selected={option.status === task.status}
+                  className={cn(
+                    'flex min-h-11 w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs font-medium hover:bg-muted',
+                    option.status === task.status && 'bg-muted',
+                  )}
                   onClick={() => {
                     setStatusPickerOpen(false);
                     if (option.status === task.status) return;
@@ -288,7 +251,7 @@ export function TaskPageView() {
               variant="outline"
               className="inline-flex min-h-11 items-center gap-1.5 px-3 text-xs"
             >
-              <Clock3 className="h-3.5 w-3.5" />
+              <Clock3 aria-hidden="true" className="h-3.5 w-3.5" />
               {runningElapsed}
             </Badge>
           )}
@@ -304,20 +267,29 @@ export function TaskPageView() {
       <div className="flex min-h-0 flex-1">
         {!taskPageFocusMode && (
           <section
-            className={`panel-collapse shrink-0 border-r bg-muted/15 ${
-              taskPageDetailCollapsed ? 'w-20' : 'w-[28rem]'
-            }`}
+            className={cn(
+              'panel-collapse shrink-0 border-r bg-muted/15',
+              taskPageDetailCollapsed ? 'w-20' : 'w-[28rem]',
+            )}
           >
             {taskPageDetailCollapsed ? (
               <div className="flex h-full flex-col">
                 <button
                   type="button"
-                  aria-label="Task details"
-                  aria-expanded={false}
+                  aria-label={
+                    taskPageDetailCollapsed
+                      ? 'Expand task details'
+                      : 'Collapse task details'
+                  }
+                  aria-expanded={!taskPageDetailCollapsed}
                   onClick={toggleTaskPageDetail}
                   className="flex min-h-11 items-center justify-center border-b hover:bg-muted/60"
                 >
-                  <ChevronsRight className="h-4 w-4" />
+                  {taskPageDetailCollapsed ? (
+                    <ChevronsRight className="h-4 w-4" />
+                  ) : (
+                    <ChevronsLeft className="h-4 w-4" />
+                  )}
                 </button>
                 <div className="flex-1 px-2 py-3">
                   <p className="line-clamp-5 text-xs font-medium leading-relaxed">
@@ -337,12 +309,20 @@ export function TaskPageView() {
                   <h2 className="text-sm font-semibold">Task Details</h2>
                   <button
                     type="button"
-                    aria-label="Task details"
-                    aria-expanded
+                    aria-label={
+                      taskPageDetailCollapsed
+                        ? 'Expand task details'
+                        : 'Collapse task details'
+                    }
+                    aria-expanded={!taskPageDetailCollapsed}
                     onClick={toggleTaskPageDetail}
                     className="flex min-h-11 min-w-11 items-center justify-center rounded hover:bg-muted"
                   >
-                    <ChevronsLeft className="h-4 w-4" />
+                    {taskPageDetailCollapsed ? (
+                      <ChevronsRight className="h-4 w-4" />
+                    ) : (
+                      <ChevronsLeft className="h-4 w-4" />
+                    )}
                   </button>
                 </div>
                 <TaskDetailContent

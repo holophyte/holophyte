@@ -1,5 +1,5 @@
 import { Send } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import Button from './ui/Button';
 
 /** Props for {@link UserInput}. */
@@ -47,18 +47,14 @@ export default function UserInput({
     ? 'Session completed — launch a new session to continue'
     : null;
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: text triggers scrollHeight recalculation
-  useEffect(() => {
-    const textarea = textareaRef.current;
-    if (!textarea) return;
-
+  const resizeTextarea = (textarea: HTMLTextAreaElement) => {
     const lineHeight = 24;
     const maxHeight = lineHeight * 6;
     textarea.style.height = '0px';
     textarea.style.height = `${Math.min(textarea.scrollHeight, maxHeight)}px`;
     textarea.style.overflowY =
       textarea.scrollHeight > maxHeight ? 'auto' : 'hidden';
-  }, [text]);
+  };
 
   const handleSend = async () => {
     if (!canSend) return;
@@ -84,7 +80,10 @@ export default function UserInput({
         <textarea
           ref={textareaRef}
           value={text}
-          onChange={(e) => setText(e.target.value)}
+          onChange={(e) => {
+            setText(e.target.value);
+            resizeTextarea(e.target);
+          }}
           placeholder={placeholder}
           disabled={disabled || sending}
           rows={1}
@@ -102,13 +101,19 @@ export default function UserInput({
           disabled={!canSend}
           onClick={() => void handleSend()}
           aria-label="Send message"
+          aria-describedby={disabledReason ? 'send-disabled-reason' : undefined}
           title={disabledReason ?? undefined}
         >
           <Send className="h-4 w-4" />
         </Button>
       </div>
       {disabledReason && (
-        <p className="text-xs text-muted-foreground mt-1">{disabledReason}</p>
+        <p
+          id="send-disabled-reason"
+          className="text-xs text-muted-foreground mt-1"
+        >
+          {disabledReason}
+        </p>
       )}
       {queued && !error && (
         <p className="text-xs text-muted-foreground/60 mt-1">

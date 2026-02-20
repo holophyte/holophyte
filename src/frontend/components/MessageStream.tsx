@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import rehypeHighlight from 'rehype-highlight';
 import remarkGfm from 'remark-gfm';
+import { formatCompactElapsed } from '@/frontend/lib/dateUtils';
 import { cn } from '@/frontend/lib/utils';
 import ToolCallCard from './ToolCallCard';
 import Button from './ui/Button';
@@ -76,12 +77,6 @@ function getToolUseBlocks(message: { content?: unknown[] }): Array<{
         (b as Record<string, unknown>).type === 'tool_use',
     )
     .map((b) => ({ id: b.id, name: b.name, input: b.input }));
-}
-
-function formatThinkingElapsed(seconds: number): string {
-  const mins = Math.floor(seconds / 60);
-  const secs = seconds % 60;
-  return `${mins}:${String(secs).padStart(2, '0')}`;
 }
 
 /** Rendered message from the stream. */
@@ -263,7 +258,7 @@ export default function MessageStream({
         <div className="mx-auto w-full max-w-[72ch] space-y-5">
           {isLoading && messages.length === 0 && (
             <div className="flex items-center justify-center gap-2 py-8 text-sm text-muted-foreground">
-              <Loader2 className="h-4 w-4 animate-spin pulse-spin" />
+              <Loader2 className="h-4 w-4 motion-safe:animate-spin" />
               <span>Starting session…</span>
             </div>
           )}
@@ -316,6 +311,7 @@ export default function MessageStream({
               key={approval.requestId}
               className="rounded-md border border-border/70 bg-muted/30 px-3 py-2 text-xs text-muted-foreground"
             >
+              <span className="sr-only">Permission decision: </span>
               Permission {approval.resolved?.approved ? 'approved' : 'denied'}:{' '}
               {approval.tool}
             </div>
@@ -327,7 +323,7 @@ export default function MessageStream({
               <span>
                 Thinking…
                 {typeof thinkingElapsedSeconds === 'number'
-                  ? ` ${formatThinkingElapsed(thinkingElapsedSeconds)}`
+                  ? ` ${formatCompactElapsed(thinkingElapsedSeconds)}`
                   : ''}
               </span>
             </div>

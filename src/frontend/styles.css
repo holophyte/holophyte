@@ -114,7 +114,8 @@ body {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .pulse-spin {
+  .pulse-spin,
+  .animate-spin {
     animation: none;
   }
 

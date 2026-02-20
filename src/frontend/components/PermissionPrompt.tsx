@@ -64,6 +64,8 @@ export default function PermissionPrompt({
   return (
     <div
       className="px-3 py-2.5 border-b border-amber-500/40 bg-amber-500/10 last:border-b-0"
+      role="group"
+      aria-label={`Permission required: ${approval.tool}`}
       data-permission-prompt="true"
       data-request-id={approval.requestId}
       data-resolved={approval.resolved ? 'true' : 'false'}
@@ -96,6 +98,7 @@ export default function PermissionPrompt({
                   e.target.style.height = 'auto';
                   e.target.style.height = `${Math.min(e.target.scrollHeight, 8 * 20)}px`;
                 }}
+                aria-label="Denial reason (optional)"
                 placeholder="Reason (optional)"
                 rows={1}
                 className="w-full text-xs bg-background border border-input rounded px-2 py-1.5 placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-ring resize-none overflow-y-auto"

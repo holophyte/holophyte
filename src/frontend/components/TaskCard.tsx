@@ -114,7 +114,10 @@ export function TaskCard({ task, repoName }: TaskCardProps) {
       <div className="flex items-start justify-between gap-2 pr-8">
         <h3 className="text-sm font-medium leading-snug">{task.title}</h3>
         {session?.status === 'running' && (
-          <Terminal className="h-3.5 w-3.5 text-green-500 shrink-0 mt-0.5" />
+          <Terminal
+            className="h-3.5 w-3.5 text-green-500 shrink-0 mt-0.5"
+            aria-label="Session running"
+          />
         )}
       </div>
       {task.description && (

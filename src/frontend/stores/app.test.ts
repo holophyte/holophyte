@@ -164,14 +164,20 @@ describe('persist', () => {
     useAppStore.getState().selectRepo(fakeRepoId);
     useAppStore.getState().toggleBacklog();
     useAppStore.getState().toggleTaskPageDetail();
-    useAppStore.getState().toggleTaskPageFocusMode();
 
     const stored = JSON.parse(localStorage.getItem('holophyte-app') ?? '{}');
     expect(stored.state.selectedRepoId).toBe(fakeRepoId);
     expect(stored.state.viewMode).toBe('board');
     expect(stored.state.backlogCollapsed).toBe(false);
     expect(stored.state.taskPageDetailCollapsed).toBe(true);
-    expect(stored.state.taskPageFocusMode).toBe(true);
+  });
+
+  it('does not persist taskPageFocusMode (transient state)', () => {
+    useAppStore.getState().toggleTaskPageFocusMode();
+    expect(useAppStore.getState().taskPageFocusMode).toBe(true);
+
+    const stored = JSON.parse(localStorage.getItem('holophyte-app') ?? '{}');
+    expect(stored.state.taskPageFocusMode).toBeUndefined();
   });
 
   it('does not persist transient state', () => {

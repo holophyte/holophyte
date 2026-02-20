@@ -4,6 +4,7 @@ import { useQuery } from 'convex/react';
 import { ChevronDown, ChevronUp, Circle, Wifi, WifiOff, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useSession } from '@/frontend/hooks/useSession';
+import { isEditableElement } from '@/frontend/lib/dom';
 import { cn } from '@/frontend/lib/utils';
 import { useAppStore } from '@/frontend/stores/app';
 import MessageStream from './MessageStream';
@@ -30,17 +31,6 @@ function statusDot(status: string | null): { color: string; label: string } {
     default:
       return { color: 'text-muted-foreground/50', label: 'Connecting…' };
   }
-}
-
-function isEditableElement(target: EventTarget | null): boolean {
-  if (!(target instanceof HTMLElement)) return false;
-  const tag = target.tagName;
-  return (
-    tag === 'INPUT' ||
-    tag === 'TEXTAREA' ||
-    tag === 'SELECT' ||
-    target.isContentEditable
-  );
 }
 
 /**
@@ -165,6 +155,7 @@ export default function SessionPanel({
           <div className="flex items-center gap-2 min-w-0">
             <Circle
               className={cn('h-2 w-2 shrink-0 fill-current', dot.color)}
+              aria-label={dot.label}
             />
             <span className="text-xs font-medium text-muted-foreground truncate">
               Session

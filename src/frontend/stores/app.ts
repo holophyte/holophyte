@@ -181,7 +181,6 @@ export const useAppStore = create<AppState>()(
         viewMode: state.viewMode,
         backlogCollapsed: state.backlogCollapsed,
         taskPageDetailCollapsed: state.taskPageDetailCollapsed,
-        taskPageFocusMode: state.taskPageFocusMode,
         showArchive: state.showArchive,
         doneColumnCollapsed: state.doneColumnCollapsed,
       }),

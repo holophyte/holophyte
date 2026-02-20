@@ -37,6 +37,29 @@ export function timestampToDateInput(timestamp: number): string {
   return `${year}-${month}-${day}`;
 }
 
+/**
+ * Format seconds as `3m 42s` or `1h 05m` — used for header elapsed timers.
+ */
+export function formatElapsedSeconds(seconds: number): string {
+  const mins = Math.floor(seconds / 60);
+  const secs = seconds % 60;
+  const hours = Math.floor(mins / 60);
+  const remMins = mins % 60;
+  if (hours > 0) {
+    return `${hours}h ${String(remMins).padStart(2, '0')}m`;
+  }
+  return `${mins}m ${String(secs).padStart(2, '0')}s`;
+}
+
+/**
+ * Format seconds as compact `0:42` — used for inline thinking indicators.
+ */
+export function formatCompactElapsed(seconds: number): string {
+  const mins = Math.floor(seconds / 60);
+  const secs = seconds % 60;
+  return `${mins}:${String(secs).padStart(2, '0')}`;
+}
+
 export function dateInputToTimestamp(value: string): number {
   // Parse as local date at start of day
   const parts = value.split('-').map(Number);

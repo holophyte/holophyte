@@ -99,15 +99,17 @@ function TaskDetailSkeleton() {
   );
 }
 
+interface TaskDetailContentProps {
+  task: TaskDetailTask;
+  showDelete?: boolean;
+  showSessionControls?: boolean;
+}
+
 export function TaskDetailContent({
   task,
   showDelete = true,
   showSessionControls = true,
-}: {
-  task: TaskDetailTask;
-  showDelete?: boolean;
-  showSessionControls?: boolean;
-}) {
+}: TaskDetailContentProps) {
   const selectTask = useAppStore((s) => s.selectTask);
   const updateTask = useMutation(api.tasks.update);
   const removeTask = useMutation(api.tasks.remove);
