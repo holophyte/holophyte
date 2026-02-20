@@ -62,9 +62,8 @@ export default function PermissionPrompt({
   };
 
   return (
-    <div
+    <fieldset
       className="px-3 py-2.5 border-b border-amber-500/40 bg-amber-500/10 last:border-b-0"
-      role="group"
       aria-label={`Permission required: ${approval.tool}`}
       data-permission-prompt="true"
       data-request-id={approval.requestId}
@@ -165,6 +164,6 @@ export default function PermissionPrompt({
           </div>
         </div>
       </div>
-    </div>
+    </fieldset>
   );
 }
