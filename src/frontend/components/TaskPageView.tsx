@@ -271,7 +271,7 @@ export default function TaskPageView() {
               'relative shrink-0 border-r transition-[width,min-width,max-width,flex] duration-300 ease-in-out overflow-hidden',
               taskPageDetailCollapsed
                 ? 'w-10 min-w-[40px] max-w-[40px] flex-none'
-                : 'w-[28rem]',
+                : 'w-[28rem] min-w-[28rem] max-w-[28rem]',
             )}
           >
             {/* Collapsed pill — matches backlog style */}
