@@ -255,7 +255,7 @@ export default function MessageStream({
         aria-live="polite"
         aria-relevant="additions text"
       >
-        <div className="mx-auto w-full max-w-[72ch] space-y-5">
+        <div className="w-full max-w-[90ch] space-y-5">
           {isLoading && messages.length === 0 && (
             <div className="flex items-center justify-center gap-2 py-8 text-sm text-muted-foreground">
               <Loader2 className="h-4 w-4 motion-safe:animate-spin" />

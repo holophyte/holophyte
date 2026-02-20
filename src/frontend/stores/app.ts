@@ -123,7 +123,16 @@ export const useAppStore = create<AppState>()(
         set((state) => ({
           taskPageFocusMode: !state.taskPageFocusMode,
         })),
-      openSession: (id) => set({ sessionId: id, sessionMinimized: false }),
+      openSession: (id) =>
+        set((state) => ({
+          sessionId: id,
+          sessionMinimized: false,
+          // If a task is selected, switch to the task page view so the
+          // session isn't awkwardly squeezed into the board layout.
+          ...(state.selectedTaskId && state.viewMode !== 'task-page'
+            ? { viewMode: 'task-page' as const }
+            : {}),
+        })),
       closeSession: () => set({ sessionId: null, sessionMinimized: false }),
       toggleSessionMinimized: () =>
         set((state) => ({ sessionMinimized: !state.sessionMinimized })),
