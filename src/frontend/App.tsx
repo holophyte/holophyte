@@ -5,24 +5,29 @@ import { useAppStore } from '@/frontend/stores/app';
 import { CommandPalette } from './components/CommandPalette';
 import { KanbanBoard } from './components/KanbanBoard';
 import { SeedBoard } from './components/SeedBoard';
-import SessionPanel from './components/SessionPanel';
 import { Sidebar } from './components/Sidebar';
 import SignInPage from './components/SignInPage';
 import { TaskDetailPanel } from './components/TaskDetailPanel';
+import TaskPageView from './components/TaskPageView';
 
 function AuthenticatedApp() {
   const selectedTaskId = useAppStore((s) => s.selectedTaskId);
-  const sessionId = useAppStore((s) => s.sessionId);
   const viewMode = useAppStore((s) => s.viewMode);
+  const showTaskPage = viewMode === 'task-page';
 
   return (
     <div className="flex h-screen bg-background text-foreground relative">
       <Sidebar />
       <main className="flex-1 flex flex-col overflow-hidden">
-        {viewMode === 'seeds' ? <SeedBoard /> : <KanbanBoard />}
-        {sessionId && <SessionPanel />}
+        {showTaskPage ? (
+          <TaskPageView />
+        ) : viewMode === 'seeds' ? (
+          <SeedBoard />
+        ) : (
+          <KanbanBoard />
+        )}
       </main>
-      {selectedTaskId && <TaskDetailPanel />}
+      {!showTaskPage && selectedTaskId && <TaskDetailPanel />}
       <CommandPalette />
     </div>
   );
@@ -36,7 +41,7 @@ export function App() {
     <>
       <AuthLoading>
         <div className="flex h-screen items-center justify-center bg-background">
-          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+          <Loader2 className="h-8 w-8 motion-safe:animate-spin text-muted-foreground" />
         </div>
       </AuthLoading>
       <Unauthenticated>

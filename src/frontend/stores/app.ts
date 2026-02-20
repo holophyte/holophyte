@@ -2,7 +2,7 @@ import type { Id } from '@convex/_generated/dataModel';
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
-type ViewMode = 'board' | 'seeds';
+type ViewMode = 'board' | 'seeds' | 'task-page';
 
 interface AppState {
   selectedOrgId: Id<'organizations'> | null;
@@ -10,8 +10,8 @@ interface AppState {
   selectedTaskId: Id<'tasks'> | null;
   viewMode: ViewMode;
   backlogCollapsed: boolean;
+  taskPageDetailCollapsed: boolean;
   sessionId: string | null;
-  sessionMinimized: boolean;
 
   // Search and filter state
   searchQuery: string;
@@ -27,10 +27,13 @@ interface AppState {
   selectRepo: (id: Id<'repos'> | null) => void;
   selectSeedBox: () => void;
   selectTask: (id: Id<'tasks'> | null) => void;
+  openTaskPage: (id: Id<'tasks'>) => void;
   toggleBacklog: () => void;
+  toggleTaskPageDetail: () => void;
+  /** Switch from task page back to board view, keeping the task selected in the side panel. */
+  collapseTaskPage: () => void;
   openSession: (sessionId: string) => void;
   closeSession: () => void;
-  toggleSessionMinimized: () => void;
 
   // Search and filter actions
   setSearchQuery: (query: string) => void;
@@ -54,8 +57,8 @@ export const useAppStore = create<AppState>()(
       selectedTaskId: null,
       viewMode: 'board',
       backlogCollapsed: true,
+      taskPageDetailCollapsed: false,
       sessionId: null,
-      sessionMinimized: false,
 
       searchQuery: '',
       filterLabelIds: [],
@@ -79,7 +82,12 @@ export const useAppStore = create<AppState>()(
           bulkSelectedTaskIds: [],
         }),
       selectRepo: (id) =>
-        set({ selectedRepoId: id, viewMode: 'board', bulkSelectedTaskIds: [] }),
+        set({
+          selectedRepoId: id,
+          selectedTaskId: null,
+          viewMode: 'board',
+          bulkSelectedTaskIds: [],
+        }),
       selectSeedBox: () =>
         set({
           selectedRepoId: null,
@@ -87,13 +95,37 @@ export const useAppStore = create<AppState>()(
           selectedTaskId: null,
           bulkSelectedTaskIds: [],
         }),
-      selectTask: (id) => set({ selectedTaskId: id }),
+      selectTask: (id) =>
+        set((state) => ({
+          selectedTaskId: id,
+          viewMode:
+            id === null && state.viewMode === 'task-page'
+              ? 'board'
+              : state.viewMode,
+        })),
+      openTaskPage: (id) =>
+        set({
+          selectedTaskId: id,
+          viewMode: 'task-page',
+          bulkSelectedTaskIds: [],
+        }),
       toggleBacklog: () =>
         set((state) => ({ backlogCollapsed: !state.backlogCollapsed })),
-      openSession: (id) => set({ sessionId: id, sessionMinimized: false }),
-      closeSession: () => set({ sessionId: null, sessionMinimized: false }),
-      toggleSessionMinimized: () =>
-        set((state) => ({ sessionMinimized: !state.sessionMinimized })),
+      toggleTaskPageDetail: () =>
+        set((state) => ({
+          taskPageDetailCollapsed: !state.taskPageDetailCollapsed,
+        })),
+      collapseTaskPage: () => set({ viewMode: 'board' }),
+      openSession: (id) =>
+        set((state) => ({
+          sessionId: id,
+          // If a task is selected, switch to the task page view so the
+          // session is always shown in the dedicated task page.
+          ...(state.selectedTaskId && state.viewMode !== 'task-page'
+            ? { viewMode: 'task-page' as const }
+            : {}),
+        })),
+      closeSession: () => set({ sessionId: null }),
 
       setSearchQuery: (query) =>
         set({ searchQuery: query, bulkSelectedTaskIds: [] }),
@@ -147,6 +179,7 @@ export const useAppStore = create<AppState>()(
         selectedRepoId: state.selectedRepoId,
         viewMode: state.viewMode,
         backlogCollapsed: state.backlogCollapsed,
+        taskPageDetailCollapsed: state.taskPageDetailCollapsed,
         showArchive: state.showArchive,
         doneColumnCollapsed: state.doneColumnCollapsed,
       }),

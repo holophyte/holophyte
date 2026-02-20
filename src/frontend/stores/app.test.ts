@@ -12,8 +12,8 @@ beforeEach(() => {
     selectedTaskId: null,
     viewMode: 'board',
     backlogCollapsed: true,
+    taskPageDetailCollapsed: false,
     sessionId: null,
-    sessionMinimized: false,
   });
 });
 
@@ -74,34 +74,41 @@ describe('selectTask', () => {
     useAppStore.getState().selectTask(null);
     expect(useAppStore.getState().selectedTaskId).toBeNull();
   });
+
+  it('returns to board mode when clearing task in task-page view', () => {
+    useAppStore.getState().openTaskPage(fakeTaskId);
+    expect(useAppStore.getState().viewMode).toBe('task-page');
+
+    useAppStore.getState().selectTask(null);
+    expect(useAppStore.getState().viewMode).toBe('board');
+    expect(useAppStore.getState().selectedTaskId).toBeNull();
+  });
 });
 
-describe('session panel actions', () => {
-  it('openSession sets sessionId and un-minimizes', () => {
-    useAppStore.setState({ sessionMinimized: true });
+describe('openTaskPage', () => {
+  it('sets selectedTaskId and switches to task-page view', () => {
+    useAppStore.getState().openTaskPage(fakeTaskId);
+    expect(useAppStore.getState().selectedTaskId).toBe(fakeTaskId);
+    expect(useAppStore.getState().viewMode).toBe('task-page');
+  });
+});
 
+describe('session actions', () => {
+  it('openSession sets sessionId', () => {
     useAppStore.getState().openSession('session-1');
     expect(useAppStore.getState().sessionId).toBe('session-1');
-    expect(useAppStore.getState().sessionMinimized).toBe(false);
   });
 
-  it('closeSession clears sessionId and un-minimizes', () => {
+  it('openSession switches to task-page view when a task is selected', () => {
+    useAppStore.getState().selectTask(fakeTaskId);
     useAppStore.getState().openSession('session-1');
-    useAppStore.setState({ sessionMinimized: true });
+    expect(useAppStore.getState().viewMode).toBe('task-page');
+  });
 
+  it('closeSession clears sessionId', () => {
+    useAppStore.getState().openSession('session-1');
     useAppStore.getState().closeSession();
     expect(useAppStore.getState().sessionId).toBeNull();
-    expect(useAppStore.getState().sessionMinimized).toBe(false);
-  });
-
-  it('toggleSessionMinimized toggles the minimized state', () => {
-    expect(useAppStore.getState().sessionMinimized).toBe(false);
-
-    useAppStore.getState().toggleSessionMinimized();
-    expect(useAppStore.getState().sessionMinimized).toBe(true);
-
-    useAppStore.getState().toggleSessionMinimized();
-    expect(useAppStore.getState().sessionMinimized).toBe(false);
   });
 });
 
@@ -141,14 +148,16 @@ describe('clearOrgSelection', () => {
 });
 
 describe('persist', () => {
-  it('persists selectedRepoId, viewMode, and backlogCollapsed', () => {
+  it('persists selectedRepoId, viewMode, and layout preferences', () => {
     useAppStore.getState().selectRepo(fakeRepoId);
     useAppStore.getState().toggleBacklog();
+    useAppStore.getState().toggleTaskPageDetail();
 
     const stored = JSON.parse(localStorage.getItem('holophyte-app') ?? '{}');
     expect(stored.state.selectedRepoId).toBe(fakeRepoId);
     expect(stored.state.viewMode).toBe('board');
     expect(stored.state.backlogCollapsed).toBe(false);
+    expect(stored.state.taskPageDetailCollapsed).toBe(true);
   });
 
   it('does not persist transient state', () => {
@@ -158,6 +167,5 @@ describe('persist', () => {
     const stored = JSON.parse(localStorage.getItem('holophyte-app') ?? '{}');
     expect(stored.state.selectedTaskId).toBeUndefined();
     expect(stored.state.sessionId).toBeUndefined();
-    expect(stored.state.sessionMinimized).toBeUndefined();
   });
 });

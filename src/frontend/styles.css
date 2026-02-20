@@ -14,6 +14,16 @@
   }
 }
 
+.pulse-spin {
+  will-change: transform;
+}
+
+.jump-to-latest {
+  transition:
+    opacity 0.15s ease,
+    transform 0.15s ease;
+}
+
 @theme inline {
   --color-background: hsl(var(--background));
   --color-foreground: hsl(var(--foreground));
@@ -96,6 +106,15 @@ body {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .pulse-spin,
+  .animate-spin {
+    animation: none;
+  }
+
+  .jump-to-latest {
+    transition: none;
+  }
+
   *,
   *::before,
   *::after {

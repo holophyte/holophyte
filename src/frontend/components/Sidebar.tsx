@@ -39,7 +39,7 @@ export function Sidebar() {
   const viewMode = useAppStore((s) => s.viewMode);
   const selectRepo = useAppStore((s) => s.selectRepo);
   const selectSeedBox = useAppStore((s) => s.selectSeedBox);
-  const selectTask = useAppStore((s) => s.selectTask);
+  const openTaskPage = useAppStore((s) => s.openTaskPage);
   const [addRepoOpen, setAddRepoOpen] = useState(false);
 
   const handleRemove = async (e: React.MouseEvent, repoId: Id<'repos'>) => {
@@ -106,7 +106,7 @@ export function Sidebar() {
         <Button
           variant="ghost"
           size="icon"
-          className="h-6 w-6"
+          className="h-11 w-11"
           onClick={() => setAddRepoOpen(true)}
           aria-label="Add project"
         >
@@ -141,7 +141,7 @@ export function Sidebar() {
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="absolute right-1 top-1/2 -translate-y-1/2 h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive"
+                    className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive"
                     onClick={(e) => handleRemove(e, repo._id)}
                     aria-label={`Delete ${repo.name}`}
                   >
@@ -154,7 +154,7 @@ export function Sidebar() {
                       <button
                         key={task._id}
                         type="button"
-                        onClick={() => selectTask(task._id)}
+                        onClick={() => openTaskPage(task._id)}
                         className={cn(
                           'w-full text-left rounded-md px-2 py-1 transition-colors flex items-center gap-1.5',
                           selectedTaskId === task._id
@@ -168,9 +168,17 @@ export function Sidebar() {
                               'h-3 w-3 shrink-0 text-green-500',
                               task.hasRunningSession && 'animate-pulse',
                             )}
+                            aria-label={
+                              task.hasRunningSession
+                                ? 'Running session'
+                                : 'In progress'
+                            }
                           />
                         ) : (
-                          <Eye className="h-3 w-3 shrink-0 text-amber-500" />
+                          <Eye
+                            className="h-3 w-3 shrink-0 text-amber-500"
+                            aria-label="In review"
+                          />
                         )}
                         <span className="truncate text-xs text-muted-foreground">
                           {task.title}

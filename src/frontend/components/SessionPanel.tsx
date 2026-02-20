@@ -1,53 +1,21 @@
 import { api } from '@convex/_generated/api';
 import type { Id } from '@convex/_generated/dataModel';
 import { useQuery } from 'convex/react';
-import { ChevronDown, ChevronUp, Circle, Wifi, WifiOff, X } from 'lucide-react';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useSession } from '@/frontend/hooks/useSession';
-import { cn } from '@/frontend/lib/utils';
+import { isEditableElement } from '@/frontend/lib/dom';
 import { useAppStore } from '@/frontend/stores/app';
 import MessageStream from './MessageStream';
 import PermissionPrompt from './PermissionPrompt';
 import UserInput from './UserInput';
-import Button from './ui/Button';
-
-function statusDot(status: string | null): { color: string; label: string } {
-  switch (status) {
-    case 'running':
-      return { color: 'text-green-500', label: 'Running' };
-    case 'waiting_input':
-      return { color: 'text-amber-500', label: 'Waiting for approval' };
-    case 'completed':
-      return { color: 'text-muted-foreground', label: 'Completed' };
-    case 'failed':
-      return { color: 'text-destructive', label: 'Failed' };
-    case 'stopped':
-      return { color: 'text-muted-foreground', label: 'Stopped' };
-    default:
-      return { color: 'text-muted-foreground/50', label: 'Connecting…' };
-  }
-}
 
 /**
- * The bottom pane of the Holophyte layout that replaces the xterm.js
- * `TerminalPanel`. It renders the active Claude Code session as a structured
- * conversation UI rather than raw ANSI output.
- *
- * Reads the active session ID and panel collapse state from the Zustand app
- * store, then delegates to {@link useSession} for WebSocket management and
- * event state. Child components:
- *
- * - {@link MessageStream} — scrollable event/message view
- * - {@link PermissionPrompt} — stacked cards for unresolved tool-use approvals
- * - {@link UserInput} — follow-up message input bar
- *
- * No props — all state is sourced from the global store.
+ * Full-height session stream pane with pinned permission prompts + input.
+ * Rendered inside the dedicated task page view.
  */
 export default function SessionPanel() {
   const sessionId = useAppStore((s) => s.sessionId);
-  const sessionMinimized = useAppStore((s) => s.sessionMinimized);
   const closeSession = useAppStore((s) => s.closeSession);
-  const toggleSessionMinimized = useAppStore((s) => s.toggleSessionMinimized);
 
   // Close the panel when the underlying session has been deleted (e.g. repo cascade delete)
   const session = useQuery(
@@ -64,114 +32,109 @@ export default function SessionPanel() {
     events,
     pendingApprovals,
     sessionStatus,
-    isConnected,
     messageQueued,
     approve,
     deny,
     sendMessage,
   } = useSession(sessionId);
 
-  const dot = statusDot(sessionStatus);
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    if (sessionStatus !== 'running') return;
+    setNow(Date.now());
+    const intervalId = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(intervalId);
+  }, [sessionStatus]);
+
+  const thinkingElapsedSeconds =
+    sessionStatus === 'running' && session?.startedAt
+      ? Math.max(0, Math.floor((now - session.startedAt) / 1000))
+      : undefined;
+
+  const unresolvedApprovals = pendingApprovals.filter((a) => !a.resolved);
+
+  useEffect(() => {
+    if (unresolvedApprovals.length === 0) return;
+
+    const handleApprovalHotkeys = (event: KeyboardEvent) => {
+      if (event.defaultPrevented) return;
+
+      const activeElement = document.activeElement;
+      const isEditable = isEditableElement(activeElement);
+
+      const promptEl =
+        activeElement instanceof HTMLElement
+          ? activeElement.closest<HTMLElement>(
+              '[data-permission-prompt][data-resolved="false"]',
+            )
+          : null;
+      const focusedPromptId = promptEl?.dataset.requestId;
+      const fallbackPromptId =
+        unresolvedApprovals.length === 1 && !isEditable
+          ? unresolvedApprovals[0]?.requestId
+          : undefined;
+      const targetPromptId = focusedPromptId ?? fallbackPromptId;
+      if (!targetPromptId) return;
+
+      if (
+        !isEditable &&
+        (event.key.toLowerCase() === 'y' || event.key === 'Enter')
+      ) {
+        event.preventDefault();
+        approve(targetPromptId);
+        return;
+      }
+
+      if (
+        !isEditable &&
+        (event.key.toLowerCase() === 'n' || event.key === 'Escape')
+      ) {
+        event.preventDefault();
+        deny(targetPromptId);
+      }
+    };
+
+    document.addEventListener('keydown', handleApprovalHotkeys);
+    return () => document.removeEventListener('keydown', handleApprovalHotkeys);
+  }, [approve, deny, unresolvedApprovals]);
+
   const isFinished =
     sessionStatus === 'completed' ||
     sessionStatus === 'failed' ||
     sessionStatus === 'stopped';
   const isLoading = !isFinished && events.length === 0 && sessionId !== null;
-  const unresolvedApprovals = pendingApprovals.filter((a) => !a.resolved);
 
   return (
-    <div
-      className={cn(
-        'border-t bg-background flex flex-col transition-all duration-200',
-        sessionMinimized ? 'h-10' : 'h-[60vh] min-h-80',
-      )}
-    >
-      {/* Header */}
-      <div className="flex items-center justify-between px-3 py-1.5 border-b bg-muted/30 shrink-0">
-        <div className="flex items-center gap-2 min-w-0">
-          <Circle className={cn('h-2 w-2 shrink-0 fill-current', dot.color)} />
-          <span className="text-xs font-medium text-muted-foreground truncate">
-            Session
-            {sessionId && (
-              <span className="font-mono ml-1 opacity-60">
-                {sessionId.slice(0, 8)}
-              </span>
-            )}
-          </span>
-          {!isConnected && sessionId && (
-            <WifiOff className="h-3 w-3 text-muted-foreground/50 shrink-0" />
-          )}
-          {isConnected && (
-            <Wifi className="h-3 w-3 text-muted-foreground/30 shrink-0" />
-          )}
-          {!sessionMinimized && (
-            <span className="text-xs text-muted-foreground/60 shrink-0">
-              {dot.label}
-            </span>
-          )}
-        </div>
+    <div className="flex h-full flex-col bg-background">
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+        <MessageStream
+          events={events}
+          isLoading={isLoading}
+          isProcessing={sessionStatus === 'running'}
+          thinkingElapsedSeconds={thinkingElapsedSeconds}
+          resolvedApprovals={pendingApprovals.filter((a) => a.resolved)}
+        />
 
-        <div className="flex items-center gap-1 shrink-0">
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-6 w-6"
-            onClick={toggleSessionMinimized}
-            aria-label={
-              sessionMinimized
-                ? 'Expand session panel'
-                : 'Minimize session panel'
-            }
-          >
-            {sessionMinimized ? (
-              <ChevronUp className="h-3.5 w-3.5" />
-            ) : (
-              <ChevronDown className="h-3.5 w-3.5" />
-            )}
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-6 w-6"
-            onClick={closeSession}
-            aria-label="Close session panel"
-          >
-            <X className="h-3.5 w-3.5" />
-          </Button>
-        </div>
+        {unresolvedApprovals.length > 0 && (
+          <div className="shrink-0 border-t border-border/50 bg-muted/20">
+            {unresolvedApprovals.map((approval) => (
+              <PermissionPrompt
+                key={approval.requestId}
+                approval={approval}
+                onApprove={() => approve(approval.requestId)}
+                onDeny={(msg) => deny(approval.requestId, msg)}
+              />
+            ))}
+          </div>
+        )}
+
+        <UserInput
+          sessionId={sessionId}
+          disabled={!sessionId || isFinished}
+          queued={messageQueued}
+          onSend={sendMessage}
+        />
       </div>
-
-      {/* Body */}
-      {!sessionMinimized && (
-        <div className="flex flex-col flex-1 overflow-hidden">
-          <MessageStream
-            events={events}
-            isLoading={isLoading}
-            isProcessing={sessionStatus === 'running'}
-          />
-
-          {/* Permission prompts stacked above input */}
-          {unresolvedApprovals.length > 0 && (
-            <div className="shrink-0 border-t border-border/50 bg-muted/20">
-              {unresolvedApprovals.map((approval) => (
-                <PermissionPrompt
-                  key={approval.requestId}
-                  approval={approval}
-                  onApprove={() => approve(approval.requestId)}
-                  onDeny={(msg) => deny(approval.requestId, msg)}
-                />
-              ))}
-            </div>
-          )}
-
-          <UserInput
-            sessionId={sessionId}
-            disabled={!sessionId || isFinished}
-            queued={messageQueued}
-            onSend={sendMessage}
-          />
-        </div>
-      )}
     </div>
   );
 }
