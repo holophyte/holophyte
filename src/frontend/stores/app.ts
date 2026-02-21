@@ -2,6 +2,29 @@ import type { Id } from '@convex/_generated/dataModel';
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
+export type ThemeName =
+  | 'neon'
+  | 'flora'
+  | 'infrared'
+  | 'verdant'
+  | 'rosewood'
+  | 'paper'
+  | 'dune'
+  | 'arctic';
+
+const VALID_THEMES: ThemeName[] = [
+  'neon',
+  'flora',
+  'infrared',
+  'verdant',
+  'rosewood',
+  'paper',
+  'dune',
+  'arctic',
+];
+
+const DEFAULT_THEME: ThemeName = 'neon';
+
 type ViewMode = 'board' | 'seeds' | 'task-page';
 
 interface AppState {
@@ -19,9 +42,13 @@ interface AppState {
   showArchive: boolean;
   doneColumnCollapsed: boolean;
 
+  // Theme
+  theme: ThemeName;
+
   // Bulk selection state
   bulkSelectedTaskIds: Id<'tasks'>[];
 
+  setTheme: (theme: ThemeName) => void;
   setSelectedOrgId: (id: Id<'organizations'>) => void;
   clearOrgSelection: () => void;
   selectRepo: (id: Id<'repos'> | null) => void;
@@ -65,8 +92,11 @@ export const useAppStore = create<AppState>()(
       showArchive: false,
       doneColumnCollapsed: false,
 
+      theme: DEFAULT_THEME,
+
       bulkSelectedTaskIds: [],
 
+      setTheme: (theme) => set({ theme }),
       setSelectedOrgId: (id) =>
         set({
           selectedOrgId: id,
@@ -174,6 +204,17 @@ export const useAppStore = create<AppState>()(
     }),
     {
       name: 'holophyte-app',
+      version: 1,
+      migrate: (persisted) => {
+        const state = persisted as Record<string, unknown>;
+        if (
+          typeof state.theme !== 'string' ||
+          !VALID_THEMES.includes(state.theme as ThemeName)
+        ) {
+          state.theme = DEFAULT_THEME;
+        }
+        return state as unknown as AppState;
+      },
       partialize: (state) => ({
         selectedOrgId: state.selectedOrgId,
         selectedRepoId: state.selectedRepoId,
@@ -182,6 +223,7 @@ export const useAppStore = create<AppState>()(
         taskPageDetailCollapsed: state.taskPageDetailCollapsed,
         showArchive: state.showArchive,
         doneColumnCollapsed: state.doneColumnCollapsed,
+        theme: state.theme,
       }),
     },
   ),

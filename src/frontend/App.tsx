@@ -1,5 +1,6 @@
 import { Authenticated, AuthLoading, Unauthenticated } from 'convex/react';
 import { Loader2 } from 'lucide-react';
+import { useTheme } from '@/frontend/hooks/useTheme';
 import { e2eTest } from '@/frontend/lib/config';
 import { useAppStore } from '@/frontend/stores/app';
 import { CommandPalette } from './components/CommandPalette';
@@ -34,6 +35,8 @@ function AuthenticatedApp() {
 }
 
 export function App() {
+  useTheme();
+
   // In E2E test mode, skip auth gates — render the app directly
   if (e2eTest) return <AuthenticatedApp />;
 
