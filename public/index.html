@@ -7,7 +7,7 @@
     <script>
       // Apply theme before CSS loads to prevent FOUC.
       // Theme list must match VALID_THEMES in src/frontend/stores/app.ts
-      try{var v=['neon','flora','infrared','verdant','rosewood','paper','dune','arctic'];var s=JSON.parse(localStorage.getItem('holophyte-app')||'{}');var t=s.state&&s.state.theme;document.documentElement.setAttribute('data-theme',v.indexOf(t)>-1?t:'neon')}catch(e){document.documentElement.setAttribute('data-theme','neon')}
+      try{var v=['neon','flora','infrared','verdant','rosewood','paper','dune','arctic'];var s=JSON.parse(localStorage.getItem('holophyte-app')||'{}');var t=s.state&&s.state.theme;if(v.indexOf(t)>-1){document.documentElement.setAttribute('data-theme',t)}else if(t&&t.indexOf('custom-')===0){document.documentElement.setAttribute('data-theme',t);try{var c=JSON.parse(localStorage.getItem('holophyte-custom-themes')||'[]');var id=t.slice(7);for(var i=0;i<c.length;i++){if(c[i].id===id&&c[i].css){var st=document.createElement('style');st.id='custom-themes-fouc';st.textContent=c[i].css;document.head.appendChild(st);break}}}catch(e2){}}else{document.documentElement.setAttribute('data-theme','neon')}}catch(e){document.documentElement.setAttribute('data-theme','neon')}
     </script>
     <link rel="stylesheet" href="../src/frontend/styles.css" />
   </head>

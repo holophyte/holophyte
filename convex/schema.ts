@@ -186,4 +186,14 @@ export default defineSchema({
     ),
     batchIndex: v.number(),
   }).index('by_session_batch', ['sessionId', 'batchIndex']),
+
+  customThemes: defineTable({
+    name: v.string(),
+    colorScheme: v.union(v.literal('light'), v.literal('dark')),
+    background: v.string(),
+    primary: v.string(),
+    ring: v.string(),
+    overrides: v.optional(v.string()),
+    userId: v.id('users'),
+  }).index('by_user', ['userId']),
 });

@@ -10,7 +10,8 @@ export type ThemeName =
   | 'rosewood'
   | 'paper'
   | 'dune'
-  | 'arctic';
+  | 'arctic'
+  | `custom-${string}`;
 
 export const VALID_THEMES: ThemeName[] = [
   'neon',
@@ -25,7 +26,7 @@ export const VALID_THEMES: ThemeName[] = [
 
 export const DEFAULT_THEME: ThemeName = 'neon';
 
-type ViewMode = 'board' | 'seeds' | 'task-page';
+type ViewMode = 'board' | 'seeds' | 'task-page' | 'theme-creator';
 
 interface AppState {
   selectedOrgId: Id<'organizations'> | null;
@@ -44,6 +45,11 @@ interface AppState {
 
   // Theme
   theme: ThemeName;
+
+  // Theme creator
+  editingThemeId: string | null;
+  openThemeCreator: (themeId?: string) => void;
+  closeThemeCreator: () => void;
 
   // Bulk selection state
   bulkSelectedTaskIds: Id<'tasks'>[];
@@ -94,9 +100,22 @@ export const useAppStore = create<AppState>()(
 
       theme: DEFAULT_THEME,
 
+      editingThemeId: null,
+
       bulkSelectedTaskIds: [],
 
       setTheme: (theme) => set({ theme }),
+      openThemeCreator: (themeId) =>
+        set({
+          viewMode: 'theme-creator',
+          editingThemeId: themeId ?? null,
+          selectedTaskId: null,
+        }),
+      closeThemeCreator: () =>
+        set({
+          viewMode: 'board',
+          editingThemeId: null,
+        }),
       setSelectedOrgId: (id) =>
         set({
           selectedOrgId: id,
@@ -209,7 +228,8 @@ export const useAppStore = create<AppState>()(
         const state = persisted as Record<string, unknown>;
         if (
           typeof state.theme !== 'string' ||
-          !VALID_THEMES.includes(state.theme as ThemeName)
+          (!VALID_THEMES.includes(state.theme as ThemeName) &&
+            !state.theme.startsWith('custom-'))
         ) {
           state.theme = DEFAULT_THEME;
         }

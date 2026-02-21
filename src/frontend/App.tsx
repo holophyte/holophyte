@@ -1,5 +1,7 @@
 import { Authenticated, AuthLoading, Unauthenticated } from 'convex/react';
 import { Loader2 } from 'lucide-react';
+import { lazy, Suspense } from 'react';
+import { useCustomThemes } from '@/frontend/hooks/useCustomThemes';
 import { useTheme } from '@/frontend/hooks/useTheme';
 import { e2eTest } from '@/frontend/lib/config';
 import { useAppStore } from '@/frontend/stores/app';
@@ -11,7 +13,10 @@ import SignInPage from './components/SignInPage';
 import { TaskDetailPanel } from './components/TaskDetailPanel';
 import TaskPageView from './components/TaskPageView';
 
+const ThemeCreatorPage = lazy(() => import('./components/ThemeCreatorPage'));
+
 function AuthenticatedApp() {
+  useCustomThemes();
   const selectedTaskId = useAppStore((s) => s.selectedTaskId);
   const viewMode = useAppStore((s) => s.viewMode);
   const showTaskPage = viewMode === 'task-page';
@@ -22,6 +27,16 @@ function AuthenticatedApp() {
       <main className="flex-1 flex flex-col overflow-hidden">
         {showTaskPage ? (
           <TaskPageView />
+        ) : viewMode === 'theme-creator' ? (
+          <Suspense
+            fallback={
+              <div className="flex-1 flex items-center justify-center">
+                <Loader2 className="h-8 w-8 motion-safe:animate-spin text-muted-foreground" />
+              </div>
+            }
+          >
+            <ThemeCreatorPage />
+          </Suspense>
         ) : viewMode === 'seeds' ? (
           <SeedBoard />
         ) : (

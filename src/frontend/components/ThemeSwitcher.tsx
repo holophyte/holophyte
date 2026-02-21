@@ -1,4 +1,6 @@
-import { Check } from 'lucide-react';
+import { Check, Pencil, Plus } from 'lucide-react';
+import { useCustomThemes } from '@/frontend/hooks/useCustomThemes';
+import { oklchToHex, parseOklch } from '@/frontend/lib/theme';
 import { cn } from '@/frontend/lib/utils';
 import type { ThemeName } from '@/frontend/stores/app';
 import { useAppStore } from '@/frontend/stores/app';
@@ -86,6 +88,8 @@ const THEMES: ThemeOption[] = [
 export function ThemeSwitcher() {
   const theme = useAppStore((s) => s.theme);
   const setTheme = useAppStore((s) => s.setTheme);
+  const { customThemes } = useCustomThemes();
+  const openThemeCreator = useAppStore((s) => s.openThemeCreator);
 
   return (
     <fieldset className="border-0 p-0 m-0">
@@ -172,6 +176,118 @@ export function ThemeSwitcher() {
           );
         })}
       </div>
+      {/* Custom Themes */}
+      {
+        <div className="mt-3">
+          <div className="flex items-center justify-between mb-1.5">
+            <span className="text-xs font-medium text-muted-foreground px-1">
+              Custom
+            </span>
+            <button
+              type="button"
+              onClick={() => openThemeCreator()}
+              className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors px-1"
+            >
+              <Plus className="h-3 w-3" />
+              Create
+            </button>
+          </div>
+          {customThemes.length > 0 && (
+            <div className="grid grid-cols-4 gap-1.5" role="radiogroup">
+              {customThemes.map((t) => {
+                const themeKey = `custom-${t.id}` as const;
+                const isActive = theme === themeKey;
+                // Convert oklch strings to hex for preview swatches
+                const bgParsed = parseOklch(t.background);
+                const bgHex = oklchToHex(bgParsed.l, bgParsed.c, bgParsed.h);
+                const priParsed = parseOklch(t.primary);
+                const priHex = oklchToHex(
+                  priParsed.l,
+                  priParsed.c,
+                  priParsed.h,
+                );
+                const ringParsed = parseOklch(t.ring);
+                const ringHex = oklchToHex(
+                  ringParsed.l,
+                  ringParsed.c,
+                  ringParsed.h,
+                );
+                return (
+                  <button
+                    key={t.id}
+                    type="button"
+                    role="radio"
+                    aria-checked={isActive}
+                    aria-label={`${t.name} theme`}
+                    onClick={() => setTheme(themeKey)}
+                    className={cn(
+                      'relative flex flex-col items-center gap-1 rounded-md p-1.5 text-[11px] transition-all cursor-pointer group',
+                      isActive
+                        ? 'ring-2 ring-ring bg-accent'
+                        : 'hover:bg-accent/50',
+                    )}
+                  >
+                    {/* Mini swatch */}
+                    <div
+                      className="flex h-6 w-full rounded-sm overflow-hidden"
+                      style={{
+                        backgroundColor: bgHex,
+                        boxShadow: 'inset 0 0 0 1px oklch(0.5 0 0 / 0.15)',
+                      }}
+                    >
+                      <div
+                        className="flex-1 m-[3px] mr-0 rounded-[2px] flex items-end px-[3px] pb-[3px] gap-[2px]"
+                        style={{
+                          backgroundColor:
+                            t.colorScheme === 'dark'
+                              ? `color-mix(in oklch, ${bgHex}, white 15%)`
+                              : `color-mix(in oklch, ${bgHex}, black 8%)`,
+                        }}
+                      >
+                        <div
+                          className="w-[4px] h-[4px] rounded-full"
+                          style={{ backgroundColor: priHex }}
+                        />
+                        <div
+                          className="w-[4px] h-[3px] rounded-sm"
+                          style={{ backgroundColor: ringHex }}
+                        />
+                      </div>
+                      <div
+                        className="w-[4px] m-[3px] ml-[2px] rounded-[1px]"
+                        style={{
+                          background: `linear-gradient(180deg, ${priHex}, ${ringHex})`,
+                        }}
+                      />
+                    </div>
+                    <span className="text-muted-foreground leading-none truncate w-full text-center">
+                      {t.name}
+                    </span>
+                    {isActive && (
+                      <Check
+                        className="absolute top-0.5 right-0.5 h-3 w-3 text-primary"
+                        aria-hidden="true"
+                      />
+                    )}
+                    {/* Edit button — visible on hover */}
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        openThemeCreator(t.id);
+                      }}
+                      className="absolute top-0.5 left-0.5 h-4 w-4 rounded-sm flex items-center justify-center bg-background/80 opacity-0 group-hover:opacity-100 transition-opacity"
+                      aria-label={`Edit ${t.name} theme`}
+                    >
+                      <Pencil className="h-2.5 w-2.5 text-muted-foreground" />
+                    </button>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      }
     </fieldset>
   );
 }
