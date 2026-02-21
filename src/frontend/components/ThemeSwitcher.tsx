@@ -100,7 +100,28 @@ export function ThemeSwitcher() {
               role="radio"
               aria-checked={isActive}
               aria-label={`${t.label} theme`}
+              tabIndex={isActive ? 0 : -1}
               onClick={() => setTheme(t.name)}
+              onKeyDown={(e) => {
+                const keys = [
+                  'ArrowRight',
+                  'ArrowDown',
+                  'ArrowLeft',
+                  'ArrowUp',
+                ];
+                const dir = keys.indexOf(e.key);
+                if (dir === -1) return;
+                e.preventDefault();
+                const delta = dir < 2 ? 1 : -1;
+                const next =
+                  (THEMES.indexOf(t) + delta + THEMES.length) % THEMES.length;
+                const nextTheme = THEMES[next];
+                if (!nextTheme) return;
+                setTheme(nextTheme.name);
+                (
+                  e.currentTarget.parentElement?.children[next] as HTMLElement
+                )?.focus();
+              }}
               className={cn(
                 'relative flex flex-col items-center gap-1 rounded-md p-1.5 text-[11px] transition-all cursor-pointer',
                 isActive ? 'ring-2 ring-ring bg-accent' : 'hover:bg-accent/50',
