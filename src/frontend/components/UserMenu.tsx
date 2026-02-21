@@ -3,6 +3,7 @@ import { useAuthActions } from '@convex-dev/auth/react';
 import { useQuery } from 'convex/react';
 import { LogOut } from 'lucide-react';
 import { useAppStore } from '@/frontend/stores/app';
+import { ThemeSwitcher } from './ThemeSwitcher';
 import Avatar from './ui/Avatar';
 import Button from './ui/Button';
 import { Popover, PopoverContent, PopoverTrigger } from './ui/Popover';
@@ -37,6 +38,10 @@ export default function UserMenu() {
               {user.email}
             </p>
           )}
+        </div>
+        <div className="border-t my-1" />
+        <div className="px-1 py-1.5">
+          <ThemeSwitcher />
         </div>
         <div className="border-t my-1" />
         {authActions && (

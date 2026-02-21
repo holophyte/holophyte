@@ -2,6 +2,8 @@
 @import "highlight.js/styles/github-dark.css";
 @plugin "@tailwindcss/typography";
 
+/* ─── Animations ─── */
+
 @keyframes pulse-spin {
   0% {
     transform: rotate(0deg) scale(1);
@@ -24,75 +26,349 @@
     transform 0.15s ease;
 }
 
+/* ─── Tailwind v4 Theme Tokens ─── */
+
 @theme inline {
-  --color-background: hsl(var(--background));
-  --color-foreground: hsl(var(--foreground));
-  --color-card: hsl(var(--card));
-  --color-card-foreground: hsl(var(--card-foreground));
-  --color-popover: hsl(var(--popover));
-  --color-popover-foreground: hsl(var(--popover-foreground));
-  --color-primary: hsl(var(--primary));
-  --color-primary-foreground: hsl(var(--primary-foreground));
-  --color-secondary: hsl(var(--secondary));
-  --color-secondary-foreground: hsl(var(--secondary-foreground));
-  --color-muted: hsl(var(--muted));
-  --color-muted-foreground: hsl(var(--muted-foreground));
-  --color-accent: hsl(var(--accent));
-  --color-accent-foreground: hsl(var(--accent-foreground));
-  --color-destructive: hsl(var(--destructive));
-  --color-destructive-foreground: hsl(var(--destructive-foreground));
-  --color-border: hsl(var(--border));
-  --color-input: hsl(var(--input));
-  --color-ring: hsl(var(--ring));
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
 }
 
-:root {
-  --background: 0 0% 100%;
-  --foreground: 240 10% 3.9%;
-  --card: 0 0% 100%;
-  --card-foreground: 240 10% 3.9%;
-  --popover: 0 0% 100%;
-  --popover-foreground: 240 10% 3.9%;
-  --primary: 240 5.9% 10%;
-  --primary-foreground: 0 0% 98%;
-  --secondary: 240 4.8% 95.9%;
-  --secondary-foreground: 240 5.9% 10%;
-  --muted: 240 4.8% 95.9%;
-  --muted-foreground: 240 3.8% 46.1%;
-  --accent: 240 4.8% 95.9%;
-  --accent-foreground: 240 5.9% 10%;
-  --destructive: 0 84.2% 60.2%;
-  --destructive-foreground: 0 0% 98%;
-  --border: 240 5.9% 90%;
-  --input: 240 5.9% 90%;
-  --ring: 240 5.9% 64.9%;
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   THEMES — oklch + CSS Relative Colors
+
+   8 curated palettes. Each uses color tension between
+   surface hue and accent hues. Surfaces derive card/muted/
+   border via oklch(from var(--background) ...) for
+   maintainability. Tri-color themes map:
+     primary = color 1, ring = color 3,
+     purple/tint sits in surface atmosphere.
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+/* ━━━ Neon ━━━ Pink + purple + cyan — synthwave glow ━━━ */
+
+[data-theme="neon"] {
+  color-scheme: dark;
+
+  --background: oklch(0.11 0.02 290);
+  --foreground: oklch(0.93 0.02 290);
+
+  /* Surfaces: purple-tinted darks */
+  --card: oklch(from var(--background) calc(l + 0.06) 0.02 295);
+  --card-foreground: var(--foreground);
+  --popover: oklch(from var(--background) calc(l + 0.08) 0.02 295);
+  --popover-foreground: var(--foreground);
+
+  /* Primary: hot pink */
+  --primary: oklch(0.64 0.26 350);
+  --primary-foreground: oklch(0.97 0.01 350);
+
+  /* Subtle surfaces — deep purple atmosphere */
+  --secondary: oklch(from var(--background) calc(l + 0.12) 0.025 295);
+  --secondary-foreground: var(--foreground);
+  --muted: oklch(from var(--background) calc(l + 0.12) 0.025 295);
+  --muted-foreground: oklch(0.65 0.035 290);
+  --accent: oklch(from var(--background) calc(l + 0.14) 0.03 298);
+  --accent-foreground: var(--foreground);
+
+  /* Danger */
+  --destructive: oklch(0.55 0.2 25);
+  --destructive-foreground: oklch(0.95 0.01 60);
+
+  /* Chrome — purple-tinted borders, cyan focus ring */
+  --border: oklch(from var(--background) calc(l + 0.2) 0.02 295);
+  --input: oklch(from var(--background) calc(l + 0.2) 0.02 295);
+  --ring: oklch(0.82 0.14 195);
+
   --radius: 0.5rem;
 }
 
-.dark {
-  --background: 240 10% 3.9%;
-  --foreground: 0 0% 98%;
-  --card: 240 10% 3.9%;
-  --card-foreground: 0 0% 98%;
-  --popover: 240 10% 3.9%;
-  --popover-foreground: 0 0% 98%;
-  --primary: 0 0% 98%;
-  --primary-foreground: 240 5.9% 10%;
-  --secondary: 240 3.7% 15.9%;
-  --secondary-foreground: 0 0% 98%;
-  --muted: 240 3.7% 15.9%;
-  --muted-foreground: 240 5% 64.9%;
-  --accent: 240 3.7% 15.9%;
-  --accent-foreground: 0 0% 98%;
-  --destructive: 0 62.8% 30.6%;
-  --destructive-foreground: 0 0% 98%;
-  --border: 240 3.7% 15.9%;
-  --input: 240 3.7% 15.9%;
-  --ring: 240 4.9% 83.9%;
+/* ━━━ Flora ━━━ Pink + purple + green — midnight garden ━━━ */
+
+[data-theme="flora"] {
+  color-scheme: dark;
+
+  --background: oklch(0.11 0.018 290);
+  --foreground: oklch(0.93 0.015 290);
+
+  /* Surfaces: purple-tinted darks */
+  --card: oklch(from var(--background) calc(l + 0.06) 0.018 293);
+  --card-foreground: var(--foreground);
+  --popover: oklch(from var(--background) calc(l + 0.08) 0.018 293);
+  --popover-foreground: var(--foreground);
+
+  /* Primary: hot pink */
+  --primary: oklch(0.63 0.22 345);
+  --primary-foreground: oklch(0.97 0.01 345);
+
+  /* Subtle surfaces — dark purple garden beds */
+  --secondary: oklch(from var(--background) calc(l + 0.12) 0.022 295);
+  --secondary-foreground: var(--foreground);
+  --muted: oklch(from var(--background) calc(l + 0.12) 0.022 295);
+  --muted-foreground: oklch(0.65 0.03 290);
+  --accent: oklch(from var(--background) calc(l + 0.14) 0.027 298);
+  --accent-foreground: var(--foreground);
+
+  /* Danger */
+  --destructive: oklch(0.55 0.2 25);
+  --destructive-foreground: oklch(0.95 0.01 60);
+
+  /* Chrome — purple borders, emerald green focus ring */
+  --border: oklch(from var(--background) calc(l + 0.2) 0.018 293);
+  --input: oklch(from var(--background) calc(l + 0.2) 0.018 293);
+  --ring: oklch(0.7 0.18 155);
+
+  --radius: 0.5rem;
 }
+
+/* ━━━ Infrared ━━━ Near-black + searing pink + cyan ━━━ */
+
+[data-theme="infrared"] {
+  color-scheme: dark;
+
+  --background: oklch(0.1 0.012 20);
+  --foreground: oklch(0.93 0.01 20);
+
+  /* Surfaces: warm-tinted near-blacks */
+  --card: oklch(from var(--background) calc(l + 0.06) 0.012 22);
+  --card-foreground: var(--foreground);
+  --popover: oklch(from var(--background) calc(l + 0.08) 0.012 22);
+  --popover-foreground: var(--foreground);
+
+  /* Primary: searing hot pink-red */
+  --primary: oklch(0.6 0.27 12);
+  --primary-foreground: oklch(0.97 0.01 12);
+
+  /* Subtle surfaces — warm charcoal */
+  --secondary: oklch(from var(--background) calc(l + 0.12) 0.015 22);
+  --secondary-foreground: var(--foreground);
+  --muted: oklch(from var(--background) calc(l + 0.12) 0.015 22);
+  --muted-foreground: oklch(0.63 0.02 20);
+  --accent: oklch(from var(--background) calc(l + 0.14) 0.018 25);
+  --accent-foreground: var(--foreground);
+
+  /* Danger: same hue family as primary — shift to orange to stay distinct */
+  --destructive: oklch(0.55 0.18 40);
+  --destructive-foreground: oklch(0.95 0.01 60);
+
+  /* Chrome — warm borders, cool cyan ring for contrast */
+  --border: oklch(from var(--background) calc(l + 0.2) 0.01 22);
+  --input: oklch(from var(--background) calc(l + 0.2) 0.01 22);
+  --ring: oklch(0.82 0.14 190);
+
+  --radius: 0.5rem;
+}
+
+/* ━━━ Verdant ━━━ Deep forest + warm coral ━━━ */
+
+[data-theme="verdant"] {
+  color-scheme: dark;
+
+  --background: oklch(0.15 0.03 160);
+  --foreground: oklch(0.93 0.025 155);
+
+  /* Surfaces: teal-shifted greens for depth */
+  --card: oklch(from var(--background) calc(l + 0.06) 0.025 168);
+  --card-foreground: var(--foreground);
+  --popover: oklch(from var(--background) calc(l + 0.08) 0.025 168);
+  --popover-foreground: var(--foreground);
+
+  /* Primary: warm coral — complementary to green */
+  --primary: oklch(0.74 0.14 40);
+  --primary-foreground: oklch(0.15 0.04 160);
+
+  /* Subtle surfaces — cooler aqua-green tint */
+  --secondary: oklch(from var(--background) calc(l + 0.11) 0.02 170);
+  --secondary-foreground: var(--foreground);
+  --muted: oklch(from var(--background) calc(l + 0.11) 0.02 170);
+  --muted-foreground: oklch(0.65 0.035 155);
+  --accent: oklch(from var(--background) calc(l + 0.13) 0.025 172);
+  --accent-foreground: var(--foreground);
+
+  /* Danger: vivid warm red — extra chroma to pop against green */
+  --destructive: oklch(0.55 0.22 20);
+  --destructive-foreground: oklch(0.95 0.01 60);
+
+  /* Chrome — aqua-tinted borders */
+  --border: oklch(from var(--background) calc(l + 0.19) 0.015 170);
+  --input: oklch(from var(--background) calc(l + 0.19) 0.015 170);
+  --ring: oklch(from var(--primary) l c h / 0.45);
+
+  --radius: 0.5rem;
+}
+
+/* ━━━ Rosewood ━━━ Deep plum + rose gold ━━━ */
+
+[data-theme="rosewood"] {
+  color-scheme: dark;
+
+  --background: oklch(0.15 0.03 320);
+  --foreground: oklch(0.93 0.015 350);
+
+  /* Surfaces: wine-purple tinted */
+  --card: oklch(from var(--background) calc(l + 0.06) 0.025 330);
+  --card-foreground: var(--foreground);
+  --popover: oklch(from var(--background) calc(l + 0.08) 0.025 330);
+  --popover-foreground: var(--foreground);
+
+  /* Primary: rose gold — warm metallic against cool plum */
+  --primary: oklch(0.75 0.1 55);
+  --primary-foreground: oklch(0.15 0.03 320);
+
+  /* Subtle surfaces — mauve-shifted for depth */
+  --secondary: oklch(from var(--background) calc(l + 0.11) 0.022 335);
+  --secondary-foreground: var(--foreground);
+  --muted: oklch(from var(--background) calc(l + 0.11) 0.022 335);
+  --muted-foreground: oklch(0.65 0.03 340);
+  --accent: oklch(from var(--background) calc(l + 0.13) 0.028 340);
+  --accent-foreground: var(--foreground);
+
+  /* Danger: orange-red, distinct from plum */
+  --destructive: oklch(0.55 0.2 25);
+  --destructive-foreground: oklch(0.95 0.01 60);
+
+  /* Chrome — dusty mauve borders */
+  --border: oklch(from var(--background) calc(l + 0.19) 0.018 335);
+  --input: oklch(from var(--background) calc(l + 0.19) 0.018 335);
+  --ring: oklch(from var(--primary) l c h / 0.45);
+
+  --radius: 0.5rem;
+}
+
+/* ━━━ Paper ━━━ Warm cream + terracotta ━━━ */
+
+[data-theme="paper"] {
+  color-scheme: light;
+
+  --background: oklch(0.97 0.008 80);
+  --foreground: oklch(0.2 0.025 50);
+
+  /* Surfaces: pure warm white for cards */
+  --card: oklch(0.99 0.004 80);
+  --card-foreground: var(--foreground);
+  --popover: oklch(0.99 0.004 80);
+  --popover-foreground: var(--foreground);
+
+  /* Primary: rich terracotta */
+  --primary: oklch(0.52 0.14 35);
+  --primary-foreground: oklch(0.97 0.01 35);
+
+  /* Subtle surfaces — olive-tinted cream */
+  --secondary: oklch(from var(--background) calc(l - 0.04) 0.012 90);
+  --secondary-foreground: var(--foreground);
+  --muted: oklch(from var(--background) calc(l - 0.04) 0.012 90);
+  --muted-foreground: oklch(0.48 0.02 50);
+  --accent: oklch(from var(--background) calc(l - 0.035) 0.018 60);
+  --accent-foreground: var(--foreground);
+
+  /* Danger */
+  --destructive: oklch(0.52 0.2 25);
+  --destructive-foreground: oklch(0.985 0.01 60);
+
+  /* Chrome — warm borders */
+  --border: oklch(from var(--background) calc(l - 0.1) 0.015 75);
+  --input: oklch(from var(--background) calc(l - 0.1) 0.015 75);
+  --ring: oklch(from var(--primary) l c h / 0.4);
+
+  --radius: 0.5rem;
+}
+
+/* ━━━ Dune ━━━ Sun-baked sand + ocean blue ━━━ */
+
+[data-theme="dune"] {
+  color-scheme: light;
+
+  --background: oklch(0.92 0.03 80);
+  --foreground: oklch(0.22 0.025 70);
+
+  /* Surfaces: lighter warm sand */
+  --card: oklch(0.97 0.02 82);
+  --card-foreground: var(--foreground);
+  --popover: oklch(0.97 0.02 82);
+  --popover-foreground: var(--foreground);
+
+  /* Primary: deep ocean blue — complementary to warm sand */
+  --primary: oklch(0.42 0.14 250);
+  --primary-foreground: oklch(0.97 0.01 250);
+
+  /* Subtle surfaces — darker sand with ochre warmth */
+  --secondary: oklch(from var(--background) calc(l - 0.04) 0.035 78);
+  --secondary-foreground: var(--foreground);
+  --muted: oklch(from var(--background) calc(l - 0.04) 0.035 78);
+  --muted-foreground: oklch(0.48 0.03 70);
+  --accent: oklch(from var(--background) calc(l - 0.035) 0.04 75);
+  --accent-foreground: var(--foreground);
+
+  /* Danger */
+  --destructive: oklch(0.52 0.2 25);
+  --destructive-foreground: oklch(0.985 0.01 60);
+
+  /* Chrome — warm sandy borders */
+  --border: oklch(from var(--background) calc(l - 0.1) 0.03 78);
+  --input: oklch(from var(--background) calc(l - 0.1) 0.03 78);
+  --ring: oklch(from var(--primary) l c h / 0.35);
+
+  --radius: 0.5rem;
+}
+
+/* ━━━ Arctic ━━━ Crisp lavender-white + electric violet ━━━ */
+
+[data-theme="arctic"] {
+  color-scheme: light;
+
+  --background: oklch(0.975 0.008 270);
+  --foreground: oklch(0.19 0.03 270);
+
+  /* Surfaces: clean white */
+  --card: oklch(0.99 0.003 270);
+  --card-foreground: var(--foreground);
+  --popover: oklch(0.99 0.003 270);
+  --popover-foreground: var(--foreground);
+
+  /* Primary: electric violet */
+  --primary: oklch(0.53 0.21 295);
+  --primary-foreground: oklch(0.98 0.008 295);
+
+  /* Subtle surfaces — cool lavender wash */
+  --secondary: oklch(from var(--background) calc(l - 0.035) 0.02 285);
+  --secondary-foreground: var(--foreground);
+  --muted: oklch(from var(--background) calc(l - 0.035) 0.02 285);
+  --muted-foreground: oklch(0.47 0.025 270);
+  --accent: oklch(from var(--background) calc(l - 0.03) 0.025 290);
+  --accent-foreground: var(--foreground);
+
+  /* Danger */
+  --destructive: oklch(0.52 0.2 25);
+  --destructive-foreground: oklch(0.985 0.01 60);
+
+  /* Chrome — lavender-tinted borders */
+  --border: oklch(from var(--background) calc(l - 0.09) 0.015 280);
+  --input: oklch(from var(--background) calc(l - 0.09) 0.015 280);
+  --ring: oklch(from var(--primary) l c h / 0.35);
+
+  --radius: 0.5rem;
+}
+
+/* ─── Global Resets ─── */
 
 * {
   border-color: var(--color-border);
@@ -105,6 +381,15 @@ body {
   font-family: system-ui, -apple-system, sans-serif;
 }
 
+/* Theme transition — smooth color changes when switching */
+html[data-theme] {
+  transition:
+    background-color 0.2s ease,
+    color 0.2s ease;
+}
+
+/* ─── Accessibility ─── */
+
 @media (prefers-reduced-motion: reduce) {
   .pulse-spin,
   .animate-spin {
@@ -112,6 +397,10 @@ body {
   }
 
   .jump-to-latest {
+    transition: none;
+  }
+
+  html[data-theme] {
     transition: none;
   }
 
