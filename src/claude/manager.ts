@@ -1,8 +1,5 @@
 import type { Query, SDKMessage } from '@anthropic-ai/claude-agent-sdk';
 import { query as sdkQuery } from '@anthropic-ai/claude-agent-sdk';
-import { api } from '@convex/_generated/api';
-import type { Id } from '@convex/_generated/dataModel';
-import { ConvexHttpClient } from 'convex/browser';
 import { DEFAULT_MODEL } from '@/constants';
 
 /** Permission mode for a session's canUseTool behavior. */
@@ -118,15 +115,31 @@ const SAFE_TOOLS = new Set([
   'TodoRead',
 ]);
 
-let convexClient: ConvexHttpClient | null = null;
+/** Call a Convex HTTP action endpoint with Bearer auth. */
+async function callConvexInternal(
+  path: string,
+  body: Record<string, unknown>,
+): Promise<void> {
+  const baseUrl = process.env.CONVEX_SITE_URL;
+  if (!baseUrl)
+    throw new Error('CONVEX_SITE_URL environment variable is not set');
+  const secret = process.env.INTERNAL_API_SECRET;
+  if (!secret)
+    throw new Error('INTERNAL_API_SECRET environment variable is not set');
 
-function getConvexClient(): ConvexHttpClient {
-  if (!convexClient) {
-    const url = process.env.CONVEX_URL;
-    if (!url) throw new Error('CONVEX_URL environment variable is not set');
-    convexClient = new ConvexHttpClient(url);
+  const res = await fetch(`${baseUrl}${path}`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${secret}`,
+    },
+    body: JSON.stringify(body),
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Convex HTTP action failed (${res.status}): ${text}`);
   }
-  return convexClient;
 }
 
 function broadcast(session: Session, msg: WsServerMessage): void {
@@ -171,9 +184,8 @@ async function flushEvents(session: Session): Promise<void> {
   const batchIndex = session.batchIndex++;
 
   try {
-    const client = getConvexClient();
-    await client.mutation(api.sessionEvents.insertBatch, {
-      sessionId: session.convexSessionId as Id<'sessions'>,
+    await callConvexInternal('/api/internal/sessionEvents/insertBatch', {
+      sessionId: session.convexSessionId,
       events,
       batchIndex,
     });
@@ -355,13 +367,15 @@ async function consumeIterator(
           );
 
           try {
-            const client = getConvexClient();
-            await client.mutation(api.sessions.updateSdkSessionId, {
-              id: session.convexSessionId as Id<'sessions'>,
-              sdkSessionId: session.sdkSessionId,
-              model: session.model,
-              permissionMode: session.permissionMode,
-            });
+            await callConvexInternal(
+              '/api/internal/sessions/updateSdkSessionId',
+              {
+                id: session.convexSessionId,
+                sdkSessionId: session.sdkSessionId,
+                model: session.model,
+                permissionMode: session.permissionMode,
+              },
+            );
           } catch (err) {
             console.error('Failed to persist SDK session ID:', err);
           }
@@ -455,9 +469,8 @@ async function consumeIterator(
 
     // Update session status in Convex
     try {
-      const client = getConvexClient();
-      await client.mutation(api.sessions.serverUpdateStatus, {
-        id: session.convexSessionId as Id<'sessions'>,
+      await callConvexInternal('/api/internal/sessions/updateStatus', {
+        id: session.convexSessionId,
         status: finalStatus,
       });
     } catch (err) {
