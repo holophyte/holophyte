@@ -5,7 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Holophyte</title>
     <script>
-      // Apply theme before CSS loads to prevent flash of unstyled content
+      // Apply theme before CSS loads to prevent FOUC.
+      // Theme list must match VALID_THEMES in src/frontend/stores/app.ts
       try{var v=['neon','flora','infrared','verdant','rosewood','paper','dune','arctic'];var s=JSON.parse(localStorage.getItem('holophyte-app')||'{}');var t=s.state&&s.state.theme;document.documentElement.setAttribute('data-theme',v.indexOf(t)>-1?t:'neon')}catch(e){document.documentElement.setAttribute('data-theme','neon')}
     </script>
     <link rel="stylesheet" href="../src/frontend/styles.css" />

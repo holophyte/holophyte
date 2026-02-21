@@ -14,6 +14,8 @@ interface ThemeOption {
   accent: string;
 }
 
+/** Preview hex colors are hand-picked approximations of the oklch values in
+ *  styles.css. Update these when theme palettes change. */
 const THEMES: ThemeOption[] = [
   {
     name: 'neon',

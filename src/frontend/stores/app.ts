@@ -12,7 +12,7 @@ export type ThemeName =
   | 'dune'
   | 'arctic';
 
-const VALID_THEMES: ThemeName[] = [
+export const VALID_THEMES: ThemeName[] = [
   'neon',
   'flora',
   'infrared',
@@ -23,7 +23,7 @@ const VALID_THEMES: ThemeName[] = [
   'arctic',
 ];
 
-const DEFAULT_THEME: ThemeName = 'neon';
+export const DEFAULT_THEME: ThemeName = 'neon';
 
 type ViewMode = 'board' | 'seeds' | 'task-page';
 
