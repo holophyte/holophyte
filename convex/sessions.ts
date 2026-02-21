@@ -1,5 +1,5 @@
 import { v } from 'convex/values';
-import { mutation, query } from './_generated/server';
+import { internalMutation, mutation, query } from './_generated/server';
 import { requireOrgMembership, requireRole } from './lib/auth';
 
 export const listActive = query({
@@ -99,12 +99,8 @@ export const updateStatus = mutation({
   },
 });
 
-/**
- * Server-side mutation to persist the SDK session ID, model, and permission
- * mode at session init time. Called by the Bun server's ConvexHttpClient.
- * TODO: Convert to internalMutation with admin auth for production.
- */
-export const updateSdkSessionId = mutation({
+/** Server-side mutation to persist the SDK session ID, model, and permission mode. */
+export const updateSdkSessionId = internalMutation({
   args: {
     id: v.id('sessions'),
     sdkSessionId: v.string(),
@@ -124,11 +120,8 @@ export const updateSdkSessionId = mutation({
   },
 });
 
-/**
- * Server-side mutation to update session status without auth.
- * Called by the Bun server when the SDK iterator completes.
- */
-export const serverUpdateStatus = mutation({
+/** Server-side mutation to update session status. Called by the Bun server. */
+export const serverUpdateStatus = internalMutation({
   args: {
     id: v.id('sessions'),
     status: v.union(

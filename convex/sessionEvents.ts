@@ -1,13 +1,9 @@
 import { v } from 'convex/values';
-import { mutation, query } from './_generated/server';
+import { internalMutation, query } from './_generated/server';
 import { requireOrgMembership } from './lib/auth';
 
-/**
- * Server-side mutation for batched event persistence.
- * Called by the Bun server's ConvexHttpClient.
- * TODO: Convert to internalMutation with admin auth for production.
- */
-export const insertBatch = mutation({
+/** Server-side mutation for batched event persistence. */
+export const insertBatch = internalMutation({
   args: {
     sessionId: v.id('sessions'),
     events: v.array(
