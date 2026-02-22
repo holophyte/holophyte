@@ -12,7 +12,9 @@ interface CachedTheme {
   name: string;
   colorScheme: 'light' | 'dark';
   background: string;
+  foreground: string;
   primary: string;
+  accent: string;
   ring: string;
   overrides?: string;
   css: string;
@@ -23,7 +25,9 @@ function docToCustomTheme(doc: {
   name: string;
   colorScheme: 'light' | 'dark';
   background: string;
+  foreground: string;
   primary: string;
+  accent: string;
   ring: string;
   overrides?: string;
 }): CustomTheme {
@@ -32,7 +36,9 @@ function docToCustomTheme(doc: {
     name: doc.name,
     colorScheme: doc.colorScheme,
     background: doc.background,
+    foreground: doc.foreground,
     primary: doc.primary,
+    accent: doc.accent,
     ring: doc.ring,
     overrides: doc.overrides ? JSON.parse(doc.overrides) : undefined,
   };
@@ -54,7 +60,9 @@ function writeCache(themes: CustomTheme[]) {
     name: t.name,
     colorScheme: t.colorScheme,
     background: t.background,
+    foreground: t.foreground,
     primary: t.primary,
+    accent: t.accent,
     ring: t.ring,
     overrides: t.overrides ? JSON.stringify(t.overrides) : undefined,
     css: generateThemeCSS(t),
@@ -80,7 +88,9 @@ export function useCustomThemes() {
           d._id +
           d.name +
           d.background +
+          d.foreground +
           d.primary +
+          d.accent +
           d.ring +
           (d.overrides ?? ''),
       ),

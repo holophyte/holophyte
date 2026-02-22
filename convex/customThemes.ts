@@ -18,7 +18,9 @@ export const create = mutation({
     name: v.string(),
     colorScheme: v.union(v.literal('light'), v.literal('dark')),
     background: v.string(),
+    foreground: v.string(),
     primary: v.string(),
+    accent: v.string(),
     ring: v.string(),
     overrides: v.optional(v.string()),
   },
@@ -28,7 +30,9 @@ export const create = mutation({
       name: args.name,
       colorScheme: args.colorScheme,
       background: args.background,
+      foreground: args.foreground,
       primary: args.primary,
+      accent: args.accent,
       ring: args.ring,
       overrides: args.overrides,
       userId,
@@ -42,7 +46,9 @@ export const update = mutation({
     name: v.optional(v.string()),
     colorScheme: v.optional(v.union(v.literal('light'), v.literal('dark'))),
     background: v.optional(v.string()),
+    foreground: v.optional(v.string()),
     primary: v.optional(v.string()),
+    accent: v.optional(v.string()),
     ring: v.optional(v.string()),
     overrides: v.optional(v.string()),
   },
@@ -58,7 +64,9 @@ export const update = mutation({
     if (fields.colorScheme !== undefined)
       updates.colorScheme = fields.colorScheme;
     if (fields.background !== undefined) updates.background = fields.background;
+    if (fields.foreground !== undefined) updates.foreground = fields.foreground;
     if (fields.primary !== undefined) updates.primary = fields.primary;
+    if (fields.accent !== undefined) updates.accent = fields.accent;
     if (fields.ring !== undefined) updates.ring = fields.ring;
     if (fields.overrides !== undefined) updates.overrides = fields.overrides;
     await ctx.db.patch(id, updates);

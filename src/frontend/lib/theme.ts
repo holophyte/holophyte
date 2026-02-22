@@ -3,7 +3,9 @@ export interface CustomTheme {
   name: string;
   colorScheme: 'light' | 'dark';
   background: string; // oklch string, e.g. "0.11 0.02 290"
+  foreground: string; // oklch string
   primary: string; // oklch string
+  accent: string; // oklch string
   ring: string; // oklch string
   overrides?: Record<string, string>; // advanced mode partial overrides
 }
@@ -132,37 +134,43 @@ export function oklchToHex(l: number, c: number, h: number): string {
 
 export function deriveThemeVariables(
   bg: string,
+  fg: string,
   primary: string,
+  accent: string,
   ring: string,
   colorScheme: 'light' | 'dark',
   overrides?: Record<string, string>,
 ): Record<string, string> {
   const { l: bgL, c: bgC, h: bgH } = parseOklch(bg);
+  const { l: fgL, c: fgC, h: fgH } = parseOklch(fg);
   const { l: priL, c: priC, h: priH } = parseOklch(primary);
+  const { l: accL, c: accC, h: accH } = parseOklch(accent);
   const { l: ringL, c: ringC, h: ringH } = parseOklch(ring);
 
   const oklch = (l: number, c: number, h: number) =>
     `oklch(${formatOklch(l, c, h)})`;
 
+  const fgStr = oklch(fgL, fgC, fgH);
+  const accStr = oklch(accL, accC, accH);
+
   let vars: Record<string, string>;
 
   if (colorScheme === 'dark') {
-    const fg = oklch(0.93, bgC, bgH);
     vars = {
       '--background': oklch(bgL, bgC, bgH),
-      '--foreground': fg,
+      '--foreground': fgStr,
       '--card': oklch(bgL + 0.06, bgC, bgH),
-      '--card-foreground': fg,
+      '--card-foreground': fgStr,
       '--popover': oklch(bgL + 0.08, bgC, bgH),
-      '--popover-foreground': fg,
+      '--popover-foreground': fgStr,
       '--primary': oklch(priL, priC, priH),
       '--primary-foreground': oklch(0.97, 0.01, priH),
       '--secondary': oklch(bgL + 0.12, bgC + 0.005, bgH),
-      '--secondary-foreground': fg,
+      '--secondary-foreground': fgStr,
       '--muted': oklch(bgL + 0.12, bgC + 0.005, bgH),
-      '--muted-foreground': oklch(0.65, bgC, bgH),
-      '--accent': oklch(bgL + 0.14, bgC + 0.01, bgH),
-      '--accent-foreground': fg,
+      '--muted-foreground': oklch((bgL + fgL) / 2, fgC, fgH),
+      '--accent': accStr,
+      '--accent-foreground': fgStr,
       '--destructive': oklch(0.55, 0.2, 25),
       '--destructive-foreground': oklch(0.95, 0.01, 60),
       '--border': oklch(bgL + 0.2, bgC, bgH),
@@ -170,24 +178,23 @@ export function deriveThemeVariables(
       '--ring': oklch(ringL, ringC, ringH),
     };
   } else {
-    const fg = oklch(0.2, bgC, bgH);
     const primaryFg =
       priL > 0.6 ? oklch(0.15, 0.01, priH) : oklch(0.97, 0.01, priH);
     vars = {
       '--background': oklch(bgL, bgC, bgH),
-      '--foreground': fg,
+      '--foreground': fgStr,
       '--card': oklch(bgL - 0.06, bgC, bgH),
-      '--card-foreground': fg,
+      '--card-foreground': fgStr,
       '--popover': oklch(bgL - 0.08, bgC, bgH),
-      '--popover-foreground': fg,
+      '--popover-foreground': fgStr,
       '--primary': oklch(priL, priC, priH),
       '--primary-foreground': primaryFg,
       '--secondary': oklch(bgL - 0.12, bgC + 0.005, bgH),
-      '--secondary-foreground': fg,
+      '--secondary-foreground': fgStr,
       '--muted': oklch(bgL - 0.12, bgC + 0.005, bgH),
-      '--muted-foreground': oklch(0.48, bgC, bgH),
-      '--accent': oklch(bgL - 0.14, bgC + 0.01, bgH),
-      '--accent-foreground': fg,
+      '--muted-foreground': oklch((bgL + fgL) / 2, fgC, fgH),
+      '--accent': accStr,
+      '--accent-foreground': fgStr,
       '--destructive': oklch(0.55, 0.2, 25),
       '--destructive-foreground': oklch(0.95, 0.01, 60),
       '--border': oklch(bgL - 0.2, bgC, bgH),
@@ -208,7 +215,9 @@ export function deriveThemeVariables(
 export function generateThemeCSS(theme: CustomTheme): string {
   const vars = deriveThemeVariables(
     theme.background,
+    theme.foreground,
     theme.primary,
+    theme.accent,
     theme.ring,
     theme.colorScheme,
     theme.overrides,

@@ -69,7 +69,9 @@ export default function ThemeCreatorPage() {
   const [name, setName] = useState('My Theme');
   const [colorScheme, setColorScheme] = useState<'light' | 'dark'>('dark');
   const [bgHex, setBgHex] = useState('#08060f');
+  const [fgHex, setFgHex] = useState('#ece8f4');
   const [primaryHex, setPrimaryHex] = useState('#ff3296');
+  const [accentHex, setAccentHex] = useState('#1c1730');
   const [ringHex, setRingHex] = useState('#00dce8');
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [overrides, setOverrides] = useState<Record<string, string>>({});
@@ -85,25 +87,39 @@ export default function ThemeCreatorPage() {
     setName(theme.name);
     setColorScheme(theme.colorScheme);
     setBgHex(oklchStringToHex(theme.background));
+    setFgHex(oklchStringToHex(theme.foreground));
     setPrimaryHex(oklchStringToHex(theme.primary));
+    setAccentHex(oklchStringToHex(theme.accent));
     setRingHex(oklchStringToHex(theme.ring));
     setOverrides(theme.overrides ?? {});
   }, [editingThemeId, customThemes]);
 
   const bgOklch = hexToOklchString(bgHex);
+  const fgOklch = hexToOklchString(fgHex);
   const primaryOklch = hexToOklchString(primaryHex);
+  const accentOklch = hexToOklchString(accentHex);
   const ringOklch = hexToOklchString(ringHex);
 
   const derivedVars = useMemo(
     () =>
       deriveThemeVariables(
         bgOklch,
+        fgOklch,
         primaryOklch,
+        accentOklch,
         ringOklch,
         colorScheme,
         overrides,
       ),
-    [bgOklch, primaryOklch, ringOklch, colorScheme, overrides],
+    [
+      bgOklch,
+      fgOklch,
+      primaryOklch,
+      accentOklch,
+      ringOklch,
+      colorScheme,
+      overrides,
+    ],
   );
 
   function handleAdvancedOverride(varName: string, hex: string) {
@@ -131,7 +147,9 @@ export default function ThemeCreatorPage() {
         name,
         colorScheme,
         background: bgOklch,
+        foreground: fgOklch,
         primary: primaryOklch,
+        accent: accentOklch,
         ring: ringOklch,
         overrides: overridesStr,
       });
@@ -141,7 +159,9 @@ export default function ThemeCreatorPage() {
         name,
         colorScheme,
         background: bgOklch,
+        foreground: fgOklch,
         primary: primaryOklch,
+        accent: accentOklch,
         ring: ringOklch,
         overrides: overridesStr,
       });
@@ -242,9 +262,19 @@ export default function ThemeCreatorPage() {
               onChange={setBgHex}
             />
             <ColorPickerField
+              label="Foreground"
+              hex={fgHex}
+              onChange={setFgHex}
+            />
+            <ColorPickerField
               label="Primary"
               hex={primaryHex}
               onChange={setPrimaryHex}
+            />
+            <ColorPickerField
+              label="Accent"
+              hex={accentHex}
+              onChange={setAccentHex}
             />
             <ColorPickerField
               label="Ring"
