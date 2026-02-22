@@ -20,14 +20,30 @@ interface CachedTheme {
   css: string;
 }
 
+/** Default foreground/accent for docs missing new fields (e.g. stale cache). */
+function defaultForeground(bg: string, colorScheme: string) {
+  const parts = bg.split(/\s+/);
+  const c = parts[1] ?? '0.02';
+  const h = parts[2] ?? '0';
+  return colorScheme === 'dark' ? `0.93 ${c} ${h}` : `0.2 ${c} ${h}`;
+}
+
+function defaultAccent(bg: string, colorScheme: string) {
+  const l = parseFloat(bg.split(/\s+/)[0] ?? '0.5');
+  const c = parseFloat(bg.split(/\s+/)[1] ?? '0.02');
+  const h = bg.split(/\s+/)[2] ?? '0';
+  const offset = colorScheme === 'dark' ? 0.14 : -0.14;
+  return `${(l + offset).toFixed(4)} ${(c + 0.01).toFixed(4)} ${h}`;
+}
+
 function docToCustomTheme(doc: {
   _id: string;
   name: string;
   colorScheme: 'light' | 'dark';
   background: string;
-  foreground: string;
+  foreground?: string;
   primary: string;
-  accent: string;
+  accent?: string;
   ring: string;
   overrides?: string;
 }): CustomTheme {
@@ -36,9 +52,10 @@ function docToCustomTheme(doc: {
     name: doc.name,
     colorScheme: doc.colorScheme,
     background: doc.background,
-    foreground: doc.foreground,
+    foreground:
+      doc.foreground ?? defaultForeground(doc.background, doc.colorScheme),
     primary: doc.primary,
-    accent: doc.accent,
+    accent: doc.accent ?? defaultAccent(doc.background, doc.colorScheme),
     ring: doc.ring,
     overrides: doc.overrides ? JSON.parse(doc.overrides) : undefined,
   };

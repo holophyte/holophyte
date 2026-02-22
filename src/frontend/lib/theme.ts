@@ -11,6 +11,7 @@ export interface CustomTheme {
 }
 
 export function parseOklch(str: string): { l: number; c: number; h: number } {
+  if (!str) return { l: 0, c: 0, h: 0 };
   const parts = str.trim().split(/\s+/);
   return {
     l: parseFloat(parts[0] ?? '0'),
