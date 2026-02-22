@@ -1,6 +1,6 @@
 import type { Id } from '@convex/_generated/dataModel';
 import { ArrowLeft, ChevronRight } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   useCustomThemeMutations,
   useCustomThemes,
@@ -288,24 +288,13 @@ export default function ThemeCreatorPage() {
                             </button>
                           )}
                         </div>
-                        <div className="flex items-center gap-2">
-                          <input
-                            type="color"
-                            value={getVarHex(varName)}
-                            onChange={(e) =>
-                              handleAdvancedOverride(varName, e.target.value)
-                            }
-                            className="h-7 w-10 cursor-pointer rounded border border-input bg-transparent p-0.5"
-                          />
-                          <span className="text-xs font-mono text-muted-foreground">
-                            {getVarHex(varName)}
-                          </span>
-                          {hasOverride && (
-                            <span className="text-xs text-primary ml-auto">
-                              custom
-                            </span>
-                          )}
-                        </div>
+                        <AdvancedColorInput
+                          hex={getVarHex(varName)}
+                          hasOverride={hasOverride}
+                          onChange={(hex) =>
+                            handleAdvancedOverride(varName, hex)
+                          }
+                        />
                       </div>
                     );
                   })}
@@ -347,28 +336,95 @@ interface ColorPickerFieldProps {
   onChange: (hex: string) => void;
 }
 
+const DEBOUNCE_MS = 50;
+
+function useDebouncedCallback(cb: (value: string) => void, delay: number) {
+  const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const latest = useRef(cb);
+  latest.current = cb;
+
+  return useCallback(
+    (value: string) => {
+      clearTimeout(timer.current);
+      timer.current = setTimeout(() => latest.current(value), delay);
+    },
+    [delay],
+  );
+}
+
 function ColorPickerField({ label, hex, onChange }: ColorPickerFieldProps) {
+  const [local, setLocal] = useState(hex);
+  const debouncedOnChange = useDebouncedCallback(onChange, DEBOUNCE_MS);
+
+  // Sync from parent when hex changes externally (e.g. loading a theme)
+  useEffect(() => {
+    setLocal(hex);
+  }, [hex]);
+
+  function handleColorInput(value: string) {
+    setLocal(value);
+    debouncedOnChange(value);
+  }
+
   return (
     <div className="flex flex-col gap-1.5">
       <Label>{label}</Label>
       <div className="flex items-center gap-2">
         <input
           type="color"
-          value={hex}
-          onChange={(e) => onChange(e.target.value)}
+          value={local}
+          onChange={(e) => handleColorInput(e.target.value)}
           className="h-9 w-12 cursor-pointer rounded-md border border-input bg-transparent p-0.5"
         />
         <Input
-          value={hex}
+          value={local}
           onChange={(e) => {
             const val = e.target.value;
-            if (/^#[0-9a-fA-F]{6}$/.test(val)) onChange(val);
+            setLocal(val);
+            if (/^#[0-9a-fA-F]{6}$/.test(val)) debouncedOnChange(val);
           }}
           placeholder="#000000"
           className="font-mono text-xs flex-1"
           maxLength={7}
         />
       </div>
+    </div>
+  );
+}
+
+interface AdvancedColorInputProps {
+  hex: string;
+  hasOverride: boolean;
+  onChange: (hex: string) => void;
+}
+
+function AdvancedColorInput({
+  hex,
+  hasOverride,
+  onChange,
+}: AdvancedColorInputProps) {
+  const [local, setLocal] = useState(hex);
+  const debouncedOnChange = useDebouncedCallback(onChange, DEBOUNCE_MS);
+
+  useEffect(() => {
+    setLocal(hex);
+  }, [hex]);
+
+  return (
+    <div className="flex items-center gap-2">
+      <input
+        type="color"
+        value={local}
+        onChange={(e) => {
+          setLocal(e.target.value);
+          debouncedOnChange(e.target.value);
+        }}
+        className="h-7 w-10 cursor-pointer rounded border border-input bg-transparent p-0.5"
+      />
+      <span className="text-xs font-mono text-muted-foreground">{local}</span>
+      {hasOverride && (
+        <span className="text-xs text-primary ml-auto">custom</span>
+      )}
     </div>
   );
 }
