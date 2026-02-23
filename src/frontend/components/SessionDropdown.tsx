@@ -25,6 +25,8 @@ function sessionStatusLabel(status: Doc<'sessions'>['status']): string {
       return 'Idle';
     case 'failed':
       return 'Failed';
+    default:
+      return 'Idle';
   }
 }
 
@@ -112,7 +114,7 @@ export default function SessionDropdown({
                   </span>
                   <span className="block text-[10px] text-muted-foreground">
                     {sessionStatusLabel(s.status)} ·{' '}
-                    {formatTimeAgo(s.lastActivityAt)}
+                    {formatTimeAgo(s.lastActivityAt ?? s.startedAt)}
                   </span>
                 </span>
               </button>
