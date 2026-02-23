@@ -129,6 +129,11 @@ const server = Bun.serve<WsData>({
         }
       },
     },
+
+    // SPA catch-all: serve the bundled app HTML for all unmatched GET routes.
+    // Must be in `routes` (not `fetch`) so Bun serves the HTML *bundle* with
+    // compiled asset paths (/_bun/...) rather than the raw source file.
+    '/*': homepage,
   },
 
   async fetch(req, server) {
@@ -213,23 +218,6 @@ const server = Bun.serve<WsData>({
       });
       if (upgraded) return undefined;
       return new Response('WebSocket upgrade failed', { status: 400 });
-    }
-
-    // SPA catch-all: serve the app for any non-API GET request
-    // Exclude requests for static assets (files with extensions) so the browser
-    // can fetch .js/.css/etc. correctly instead of getting the HTML page.
-    if (
-      req.method === 'GET' &&
-      !url.pathname.startsWith('/api/') &&
-      !url.pathname.startsWith('/ws/') &&
-      !url.pathname.match(/\.\w{2,10}$/)
-    ) {
-      // homepage is an HTMLBundle — only works in `routes`. For the catch-all
-      // we need to read the file and return a proper Response.
-      const html = Bun.file(new URL('../public/index.html', import.meta.url));
-      return new Response(html, {
-        headers: { 'Content-Type': 'text/html' },
-      });
     }
 
     return new Response('Not Found', { status: 404 });
