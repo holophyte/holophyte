@@ -8,6 +8,7 @@ import { formatRelativeDate } from '@/frontend/lib/dateUtils';
 import { cn } from '@/frontend/lib/utils';
 import { useAppStore } from '@/frontend/stores/app';
 import type { EnrichedTask } from './KanbanBoard';
+import SessionStatusDot from './SessionStatusDot';
 import Badge from './ui/Badge';
 
 interface TaskCardProps {
@@ -188,13 +189,9 @@ export function TaskCard({ task, repoName }: TaskCardProps) {
             role="img"
             aria-label={`Session: ${session.status}`}
             title={`Session: ${session.status}`}
-            className={cn(
-              'h-2 w-2 shrink-0 rounded-full',
-              session.status === 'running' && 'bg-green-500 animate-pulse',
-              session.status === 'idle' && 'bg-gray-400',
-              session.status === 'failed' && 'bg-red-500',
-            )}
-          />
+          >
+            <SessionStatusDot status={session.status} />
+          </span>
         )}
       </div>
     </div>

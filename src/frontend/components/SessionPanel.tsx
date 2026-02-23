@@ -19,6 +19,7 @@ export default function SessionPanel() {
   const openSession = useAppStore((s) => s.openSession);
   const closeSession = useAppStore((s) => s.closeSession);
   const createSession = useMutation(api.sessions.create);
+  const updateSessionStatus = useMutation(api.sessions.updateStatus);
 
   // Load the session record so we can access taskId, sdkSessionId, etc.
   const session = useQuery(
@@ -121,6 +122,8 @@ export default function SessionPanel() {
   /**
    * Handle sending a message. For idle sessions, this creates a new Convex
    * session and resumes the SDK conversation with the user's text as the prompt.
+   * On any failure, the newly created session record is marked 'failed' so it
+   * doesn't orphan as 'running' with no backend process.
    */
   const handleSend = async (_sid: string, text: string) => {
     // If session is idle and we have a sdkSessionId + repoPath, resume via new session
@@ -130,25 +133,34 @@ export default function SessionPanel() {
       sdkSessionId &&
       task?.repo?.path
     ) {
-      const newSessionId = await createSession({ taskId: session.taskId });
-      const res = await fetch('/api/sessions/start', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          sessionId: newSessionId,
-          repoPath: task.repo.path,
-          prompt: text,
-          resumeSdkSessionId: sdkSessionId,
-        }),
-      });
-      if (!res.ok) {
-        throw new Error(await res.text());
+      let newSessionId: Id<'sessions'> | undefined;
+      try {
+        newSessionId = await createSession({ taskId: session.taskId });
+        const res = await fetch('/api/sessions/start', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            sessionId: newSessionId,
+            repoPath: task.repo.path,
+            prompt: text,
+            resumeSdkSessionId: sdkSessionId,
+          }),
+        });
+        if (!res.ok) {
+          const data = (await res.json()) as { error?: string };
+          throw new Error(data.error ?? 'Failed to resume session');
+        }
+        openSession(newSessionId);
+      } catch (err) {
+        // Clean up the orphaned Convex record — no backend process was started
+        if (newSessionId) {
+          await updateSessionStatus({ id: newSessionId, status: 'failed' });
+        }
+        throw err;
       }
-      openSession(newSessionId);
       return;
     }
     // For running sessions, use the normal send-message endpoint
-    // (currently returns false since idle-wait loop is removed, but kept for future)
     await sendMessage(_sid, text);
   };
 

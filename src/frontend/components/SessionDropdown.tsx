@@ -1,6 +1,6 @@
 import { api } from '@convex/_generated/api';
 import type { Doc, Id } from '@convex/_generated/dataModel';
-import { useMutation, useQuery } from 'convex/react';
+import { useQuery } from 'convex/react';
 import { ChevronDown, Plus } from 'lucide-react';
 import { useState } from 'react';
 import { formatTimeAgo } from '@/frontend/lib/dateUtils';
@@ -46,8 +46,6 @@ export default function SessionDropdown({
 }: SessionDropdownProps) {
   const [open, setOpen] = useState(false);
   const switchSession = useAppStore((s) => s.switchSession);
-  const openSession = useAppStore((s) => s.openSession);
-  const createSession = useMutation(api.sessions.create);
 
   const sessions = useQuery(api.sessions.listByTask, { taskId });
   const activeSession = sessions?.find((s) => s._id === activeSessionId);
@@ -57,10 +55,14 @@ export default function SessionDropdown({
     switchSession(sessionId);
   };
 
-  const handleNewSession = async () => {
+  const handleNewSession = () => {
     setOpen(false);
-    const newSessionId = await createSession({ taskId });
-    openSession(newSessionId);
+    // Clear the active session so the panel shows an empty state.
+    // The user types a prompt in the input and submits it — that creates the
+    // Convex session record and starts the SDK process atomically (same flow as
+    // ClaudeButton). We never pre-create a session record without a prompt
+    // because that would leave an orphan 'running' record with no backend process.
+    switchSession(null);
   };
 
   const triggerLabel = activeSession
@@ -121,9 +123,7 @@ export default function SessionDropdown({
           <button
             type="button"
             className="flex w-full cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-left text-xs hover:bg-muted"
-            onClick={() => {
-              void handleNewSession();
-            }}
+            onClick={handleNewSession}
           >
             <Plus className="h-3.5 w-3.5 text-muted-foreground" />
             <span>New session</span>
