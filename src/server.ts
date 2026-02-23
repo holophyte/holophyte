@@ -215,6 +215,17 @@ const server = Bun.serve<WsData>({
       return new Response('WebSocket upgrade failed', { status: 400 });
     }
 
+    // SPA catch-all: serve the app for any non-API GET request
+    if (
+      req.method === 'GET' &&
+      !url.pathname.startsWith('/api/') &&
+      !url.pathname.startsWith('/ws/')
+    ) {
+      return new Response(homepage as unknown as BodyInit, {
+        headers: { 'Content-Type': 'text/html' },
+      });
+    }
+
     return new Response('Not Found', { status: 404 });
   },
 

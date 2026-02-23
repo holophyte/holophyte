@@ -53,6 +53,7 @@
     "@anthropic-ai/claude-agent-sdk": "^0.2.44",
     "@auth/core": "0.37.0",
     "@convex-dev/auth": "^0.0.90",
+    "@tanstack/react-router": "^1.162.4",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",

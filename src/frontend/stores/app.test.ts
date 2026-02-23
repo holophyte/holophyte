@@ -8,9 +8,6 @@ beforeEach(() => {
   localStorage.clear();
   useAppStore.setState({
     selectedOrgId: null,
-    selectedRepoId: null,
-    selectedTaskId: null,
-    viewMode: 'board',
     backlogCollapsed: true,
     taskPageDetailCollapsed: false,
     sessionId: null,
@@ -23,36 +20,7 @@ afterEach(() => {
 
 const fakeRepoId = 'repo123' as Id<'repos'>;
 const fakeTaskId = 'task456' as Id<'tasks'>;
-
-describe('selectRepo', () => {
-  it('sets selectedRepoId and switches to board view', () => {
-    useAppStore.getState().selectSeedBox();
-    expect(useAppStore.getState().viewMode).toBe('seeds');
-
-    useAppStore.getState().selectRepo(fakeRepoId);
-    expect(useAppStore.getState().selectedRepoId).toBe(fakeRepoId);
-    expect(useAppStore.getState().viewMode).toBe('board');
-  });
-
-  it('sets selectedRepoId to null for all tasks', () => {
-    useAppStore.getState().selectRepo(fakeRepoId);
-    useAppStore.getState().selectRepo(null);
-    expect(useAppStore.getState().selectedRepoId).toBeNull();
-    expect(useAppStore.getState().viewMode).toBe('board');
-  });
-});
-
-describe('selectSeedBox', () => {
-  it('switches to seeds view and clears selections', () => {
-    useAppStore.getState().selectRepo(fakeRepoId);
-    useAppStore.getState().selectTask(fakeTaskId);
-
-    useAppStore.getState().selectSeedBox();
-    expect(useAppStore.getState().viewMode).toBe('seeds');
-    expect(useAppStore.getState().selectedRepoId).toBeNull();
-    expect(useAppStore.getState().selectedTaskId).toBeNull();
-  });
-});
+const fakeOrgId = 'org789' as Id<'organizations'>;
 
 describe('toggleBacklog', () => {
   it('toggles backlogCollapsed state', () => {
@@ -66,43 +34,10 @@ describe('toggleBacklog', () => {
   });
 });
 
-describe('selectTask', () => {
-  it('sets and clears selectedTaskId', () => {
-    useAppStore.getState().selectTask(fakeTaskId);
-    expect(useAppStore.getState().selectedTaskId).toBe(fakeTaskId);
-
-    useAppStore.getState().selectTask(null);
-    expect(useAppStore.getState().selectedTaskId).toBeNull();
-  });
-
-  it('returns to board mode when clearing task in task-page view', () => {
-    useAppStore.getState().openTaskPage(fakeTaskId);
-    expect(useAppStore.getState().viewMode).toBe('task-page');
-
-    useAppStore.getState().selectTask(null);
-    expect(useAppStore.getState().viewMode).toBe('board');
-    expect(useAppStore.getState().selectedTaskId).toBeNull();
-  });
-});
-
-describe('openTaskPage', () => {
-  it('sets selectedTaskId and switches to task-page view', () => {
-    useAppStore.getState().openTaskPage(fakeTaskId);
-    expect(useAppStore.getState().selectedTaskId).toBe(fakeTaskId);
-    expect(useAppStore.getState().viewMode).toBe('task-page');
-  });
-});
-
 describe('session actions', () => {
   it('openSession sets sessionId', () => {
     useAppStore.getState().openSession('session-1');
     expect(useAppStore.getState().sessionId).toBe('session-1');
-  });
-
-  it('openSession switches to task-page view when a task is selected', () => {
-    useAppStore.getState().selectTask(fakeTaskId);
-    useAppStore.getState().openSession('session-1');
-    expect(useAppStore.getState().viewMode).toBe('task-page');
   });
 
   it('closeSession clears sessionId', () => {
@@ -112,60 +47,63 @@ describe('session actions', () => {
   });
 });
 
-describe('clearOrgSelection', () => {
-  const fakeOrgId = 'org789' as Id<'organizations'>;
-  const fakeRepoId = 'repo456' as Id<'repos'>;
-  const fakeTaskId = 'task123' as Id<'tasks'>;
+describe('setSelectedOrgId', () => {
+  it('sets selectedOrgId and clears bulk selection', () => {
+    useAppStore.setState({ bulkSelectedTaskIds: [fakeTaskId] });
 
-  it('clears selectedOrgId and cascades to repo/task/bulk selection', () => {
+    useAppStore.getState().setSelectedOrgId(fakeOrgId);
+
+    expect(useAppStore.getState().selectedOrgId).toBe(fakeOrgId);
+    expect(useAppStore.getState().bulkSelectedTaskIds).toEqual([]);
+  });
+});
+
+describe('clearOrgSelection', () => {
+  it('clears selectedOrgId and bulk selection', () => {
     useAppStore.setState({
       selectedOrgId: fakeOrgId,
-      selectedRepoId: fakeRepoId,
-      selectedTaskId: fakeTaskId,
       bulkSelectedTaskIds: [fakeTaskId],
     });
 
     useAppStore.getState().clearOrgSelection();
 
     expect(useAppStore.getState().selectedOrgId).toBeNull();
-    expect(useAppStore.getState().selectedRepoId).toBeNull();
-    expect(useAppStore.getState().selectedTaskId).toBeNull();
     expect(useAppStore.getState().bulkSelectedTaskIds).toEqual([]);
   });
 
   it('persists cleared selectedOrgId to localStorage', () => {
-    useAppStore.setState({
-      selectedOrgId: fakeOrgId,
-      selectedRepoId: fakeRepoId,
-    });
+    useAppStore.setState({ selectedOrgId: fakeOrgId });
 
     useAppStore.getState().clearOrgSelection();
 
     const stored = JSON.parse(localStorage.getItem('holophyte-app') ?? '{}');
     expect(stored.state.selectedOrgId).toBeNull();
-    expect(stored.state.selectedRepoId).toBeNull();
   });
 });
 
 describe('persist', () => {
-  it('persists selectedRepoId, viewMode, and layout preferences', () => {
-    useAppStore.getState().selectRepo(fakeRepoId);
+  it('persists layout preferences', () => {
     useAppStore.getState().toggleBacklog();
     useAppStore.getState().toggleTaskPageDetail();
 
     const stored = JSON.parse(localStorage.getItem('holophyte-app') ?? '{}');
-    expect(stored.state.selectedRepoId).toBe(fakeRepoId);
-    expect(stored.state.viewMode).toBe('board');
     expect(stored.state.backlogCollapsed).toBe(false);
     expect(stored.state.taskPageDetailCollapsed).toBe(true);
   });
 
   it('does not persist transient state', () => {
-    useAppStore.getState().selectTask(fakeTaskId);
     useAppStore.getState().openSession('session-1');
 
     const stored = JSON.parse(localStorage.getItem('holophyte-app') ?? '{}');
-    expect(stored.state.selectedTaskId).toBeUndefined();
     expect(stored.state.sessionId).toBeUndefined();
   });
+
+  it('does not persist selectedRepoId or viewMode (managed by router)', () => {
+    const stored = JSON.parse(localStorage.getItem('holophyte-app') ?? '{}');
+    expect(stored.state?.selectedRepoId).toBeUndefined();
+    expect(stored.state?.viewMode).toBeUndefined();
+  });
 });
+
+// Satisfy unused variable lint — these are used as type checks
+void fakeRepoId;

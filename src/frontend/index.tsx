@@ -1,9 +1,10 @@
 import { ConvexAuthProvider } from '@convex-dev/auth/react';
+import { RouterProvider } from '@tanstack/react-router';
 import { ConvexProvider, ConvexReactClient } from 'convex/react';
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 import { setE2eTest } from '@/frontend/lib/config';
-import { App } from './App';
+import { router } from './router';
 import './styles.css';
 
 async function init() {
@@ -31,7 +32,7 @@ async function init() {
   root.render(
     <React.StrictMode>
       <Provider client={convex}>
-        <App />
+        <RouterProvider router={router} />
       </Provider>
     </React.StrictMode>,
   );

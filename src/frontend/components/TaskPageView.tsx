@@ -1,6 +1,7 @@
 import { api } from '@convex/_generated/api';
 import type { Id } from '@convex/_generated/dataModel';
 import { TaskStatus } from '@convex/schema';
+import { useNavigate, useParams } from '@tanstack/react-router';
 import { useMutation, useQuery } from 'convex/react';
 import {
   ChevronRight,
@@ -56,14 +57,14 @@ const TASK_STATUS_OPTIONS = [
 ] as const;
 
 export default function TaskPageView() {
-  const selectedTaskId = useAppStore((s) => s.selectedTaskId);
-  const selectTask = useAppStore((s) => s.selectTask);
-  const selectRepo = useAppStore((s) => s.selectRepo);
+  const params = useParams({ strict: false });
+  const navigate = useNavigate();
+  const repoId = params.repoId as Id<'repos'> | undefined;
+  const selectedTaskId = (params.taskId as Id<'tasks'> | undefined) ?? null;
   const openSession = useAppStore((s) => s.openSession);
   const closeSession = useAppStore((s) => s.closeSession);
   const taskPageDetailCollapsed = useAppStore((s) => s.taskPageDetailCollapsed);
   const toggleTaskPageDetail = useAppStore((s) => s.toggleTaskPageDetail);
-  const collapseTaskPage = useAppStore((s) => s.collapseTaskPage);
   const moveTaskBulk = useMutation(api.tasks.bulkMove);
 
   const task = useQuery(
@@ -85,10 +86,10 @@ export default function TaskPageView() {
   const [now, setNow] = useState(Date.now());
 
   useEffect(() => {
-    if (task === null) {
-      selectTask(null);
+    if (task === null && repoId) {
+      void navigate({ to: '/repos/$repoId', params: { repoId } });
     }
-  }, [task, selectTask]);
+  }, [task, navigate, repoId]);
 
   // Open latest task session once per task so the page has immediate context.
   // The ref tracks which task we last auto-opened for, so we don't re-trigger
@@ -192,7 +193,12 @@ export default function TaskPageView() {
           <button
             type="button"
             className="truncate text-lg font-semibold cursor-pointer hover:text-muted-foreground transition-colors"
-            onClick={() => selectRepo(displayTask.repoId)}
+            onClick={() =>
+              void navigate({
+                to: '/repos/$repoId',
+                params: { repoId: String(displayTask.repoId) },
+              })
+            }
           >
             {displayTask.repo?.name ?? 'Project'}
           </button>
@@ -263,7 +269,14 @@ export default function TaskPageView() {
           <button
             type="button"
             aria-label="Collapse to side panel"
-            onClick={collapseTaskPage}
+            onClick={() =>
+              repoId &&
+              selectedTaskId &&
+              void navigate({
+                to: '/repos/$repoId/tasks/$taskId',
+                params: { repoId, taskId: selectedTaskId },
+              })
+            }
             className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-md hover:bg-accent hover:text-accent-foreground"
           >
             <Minimize2 className="h-3.5 w-3.5" />
@@ -271,7 +284,10 @@ export default function TaskPageView() {
           <button
             type="button"
             aria-label="Close task"
-            onClick={() => selectTask(null)}
+            onClick={() =>
+              repoId &&
+              void navigate({ to: '/repos/$repoId', params: { repoId } })
+            }
             className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-md hover:bg-accent hover:text-accent-foreground"
           >
             <X className="h-4 w-4" />

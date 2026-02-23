@@ -1,6 +1,7 @@
 import { api } from '@convex/_generated/api';
-import type { Doc } from '@convex/_generated/dataModel';
+import type { Doc, Id } from '@convex/_generated/dataModel';
 import { TaskStatus } from '@convex/schema';
+import { useParams } from '@tanstack/react-router';
 import { useMutation, useQuery } from 'convex/react';
 import { Archive, ChevronsRight, FolderGit2 } from 'lucide-react';
 import { useMemo, useState } from 'react';
@@ -88,7 +89,8 @@ function BacklogColumn({
 
 export function KanbanBoard() {
   const selectedOrgId = useAppStore((s) => s.selectedOrgId);
-  const selectedRepoId = useAppStore((s) => s.selectedRepoId);
+  const { repoId } = useParams({ strict: false });
+  const selectedRepoId = (repoId as Id<'repos'> | undefined) ?? null;
   const backlogCollapsed = useAppStore((s) => s.backlogCollapsed);
   const toggleBacklog = useAppStore((s) => s.toggleBacklog);
   const showArchive = useAppStore((s) => s.showArchive);

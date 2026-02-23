@@ -1,6 +1,7 @@
 import { api } from '@convex/_generated/api';
 import type { Id } from '@convex/_generated/dataModel';
 import { TaskStatus } from '@convex/schema';
+import { useMatch, useNavigate, useParams } from '@tanstack/react-router';
 import { useMutation, useQuery } from 'convex/react';
 import {
   Eye,
@@ -34,18 +35,18 @@ export function Sidebar() {
     selectedOrgId ? { orgId: selectedOrgId } : 'skip',
   );
   const removeRepo = useMutation(api.repos.remove);
-  const selectedRepoId = useAppStore((s) => s.selectedRepoId);
-  const selectedTaskId = useAppStore((s) => s.selectedTaskId);
-  const viewMode = useAppStore((s) => s.viewMode);
-  const selectRepo = useAppStore((s) => s.selectRepo);
-  const selectSeedBox = useAppStore((s) => s.selectSeedBox);
-  const openTaskPage = useAppStore((s) => s.openTaskPage);
+  const navigate = useNavigate();
+  const params = useParams({ strict: false });
+  const selectedRepoId = (params.repoId as Id<'repos'> | undefined) ?? null;
+  const selectedTaskId = (params.taskId as Id<'tasks'> | undefined) ?? null;
+  const homeMatch = useMatch({ from: '/', shouldThrow: false });
+  const seedsMatch = useMatch({ from: '/seeds', shouldThrow: false });
   const [addRepoOpen, setAddRepoOpen] = useState(false);
 
   const handleRemove = async (e: React.MouseEvent, repoId: Id<'repos'>) => {
     e.stopPropagation();
     if (selectedRepoId === repoId) {
-      selectRepo(null);
+      void navigate({ to: '/' });
     }
     await removeRepo({ id: repoId });
   };
@@ -77,21 +78,17 @@ export function Sidebar() {
       <Separator />
       <div className="p-2 space-y-1">
         <Button
-          variant={
-            viewMode === 'board' && selectedRepoId === null
-              ? 'secondary'
-              : 'ghost'
-          }
+          variant={homeMatch ? 'secondary' : 'ghost'}
           className="w-full justify-start gap-2"
-          onClick={() => selectRepo(null)}
+          onClick={() => void navigate({ to: '/' })}
         >
           <LayoutDashboard className="h-4 w-4" />
           All Tasks
         </Button>
         <Button
-          variant={viewMode === 'seeds' ? 'secondary' : 'ghost'}
+          variant={seedsMatch ? 'secondary' : 'ghost'}
           className="w-full justify-start gap-2"
-          onClick={() => selectSeedBox()}
+          onClick={() => void navigate({ to: '/seeds' })}
         >
           <Lightbulb className="h-4 w-4" />
           Seed Box
@@ -133,7 +130,12 @@ export function Sidebar() {
                       selectedRepoId === repo._id ? 'secondary' : 'ghost'
                     }
                     className={cn('w-full justify-start gap-2 text-sm pr-8')}
-                    onClick={() => selectRepo(repo._id)}
+                    onClick={() =>
+                      void navigate({
+                        to: '/repos/$repoId',
+                        params: { repoId: repo._id },
+                      })
+                    }
                   >
                     <FolderGit2 className="h-4 w-4 shrink-0" />
                     <span className="truncate">{repo.name}</span>
@@ -154,7 +156,15 @@ export function Sidebar() {
                       <button
                         key={task._id}
                         type="button"
-                        onClick={() => openTaskPage(task._id)}
+                        onClick={() =>
+                          void navigate({
+                            to: '/repos/$repoId/tasks/$taskId/page',
+                            params: {
+                              repoId: String(task.repoId),
+                              taskId: task._id,
+                            },
+                          })
+                        }
                         className={cn(
                           'w-full text-left rounded-md px-2 py-1 transition-colors flex items-center gap-1.5',
                           selectedTaskId === task._id
