@@ -6,7 +6,7 @@ slug: /
 
 # Holophyte
 
-Project management app for running parallel Claude Code sessions. A kanban board UI lets you create tasks with prompts, launch Claude Code in PTY terminals per task, and stream output to the browser via WebSocket.
+Project management app for running parallel Claude Code sessions. A kanban board UI lets you create tasks with prompts, launch Claude Code sessions per task via the Agent SDK, and stream structured events to the browser via WebSocket.
 
 ## Getting Started
 
