@@ -22,14 +22,20 @@ vi.mock('@convex/_generated/dataModel', () => ({}));
 
 import { useQuery } from 'convex/react';
 
+// Typed helper: Convex's useQuery overload signature conflicts with simple
+// mock implementations. This wrapper casts once so call sites stay clean.
+// biome-ignore lint/suspicious/noExplicitAny: necessary for mock compatibility
+const mockedUseQuery = vi.mocked(useQuery) as any as {
+  mockImplementation: (fn: (query: unknown) => unknown) => void;
+};
+
 // Default: no session record, no persisted batches
 function resetUseQueryDefaults() {
-  // biome-ignore lint/suspicious/noExplicitAny: mock receives FunctionReference tokens, not real queries
-  vi.mocked(useQuery).mockImplementation(((query: unknown) => {
+  mockedUseQuery.mockImplementation((query: unknown) => {
     if (query === 'sessions:get') return null;
     if (query === 'sessionEvents:getBySession') return [];
     return null;
-  }) as any);
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -156,25 +162,23 @@ describe('useSession', () => {
     });
 
     it('exposes sdkSessionId from Convex session record', () => {
-      // biome-ignore lint/suspicious/noExplicitAny: mock receives FunctionReference tokens
-      vi.mocked(useQuery).mockImplementation(((query: unknown) => {
+      mockedUseQuery.mockImplementation((query: unknown) => {
         if (query === 'sessions:get')
           return { sdkSessionId: 'sdk-abc-123', status: 'idle' };
         if (query === 'sessionEvents:getBySession') return [];
         return null;
-      }) as any);
+      });
 
       const { result } = renderSession('session-1');
       expect(result.current.sdkSessionId).toBe('sdk-abc-123');
     });
 
     it('sdkSessionId is undefined when session record has no sdkSessionId yet', () => {
-      // biome-ignore lint/suspicious/noExplicitAny: mock receives FunctionReference tokens
-      vi.mocked(useQuery).mockImplementation(((query: unknown) => {
+      mockedUseQuery.mockImplementation((query: unknown) => {
         if (query === 'sessions:get') return { status: 'running' };
         if (query === 'sessionEvents:getBySession') return [];
         return null;
-      }) as any);
+      });
 
       const { result } = renderSession('session-1');
       expect(result.current.sdkSessionId).toBeUndefined();
@@ -300,8 +304,7 @@ describe('useSession', () => {
 
     it('deduplicates events by uuid when they appear in both persisted and WS', () => {
       // Simulate persisted events with uuids
-      // biome-ignore lint/suspicious/noExplicitAny: mock receives FunctionReference tokens
-      vi.mocked(useQuery).mockImplementation(((query: unknown) => {
+      mockedUseQuery.mockImplementation((query: unknown) => {
         if (query === 'sessions:get') return null;
         if (query === 'sessionEvents:getBySession') {
           return [
@@ -321,7 +324,7 @@ describe('useSession', () => {
           ];
         }
         return null;
-      }) as any);
+      });
 
       const { result } = renderSession('session-1');
 
@@ -710,14 +713,13 @@ describe('useSession', () => {
 
   describe('sdkSessionId from Convex (for resume flow)', () => {
     it('is available once the Convex session record has sdkSessionId', () => {
-      // biome-ignore lint/suspicious/noExplicitAny: mock receives FunctionReference tokens
-      vi.mocked(useQuery).mockImplementation(((query: unknown) => {
+      mockedUseQuery.mockImplementation((query: unknown) => {
         if (query === 'sessions:get') {
           return { sdkSessionId: 'sdk-resume-id-xyz', status: 'idle' };
         }
         if (query === 'sessionEvents:getBySession') return [];
         return null;
-      }) as any);
+      });
 
       const { result } = renderSession('session-idle');
       expect(result.current.sdkSessionId).toBe('sdk-resume-id-xyz');
@@ -727,12 +729,11 @@ describe('useSession', () => {
       let sessionRecord: { sdkSessionId?: string; status: string } = {
         status: 'running',
       };
-      // biome-ignore lint/suspicious/noExplicitAny: mock receives FunctionReference tokens
-      vi.mocked(useQuery).mockImplementation(((query: unknown) => {
+      mockedUseQuery.mockImplementation((query: unknown) => {
         if (query === 'sessions:get') return sessionRecord;
         if (query === 'sessionEvents:getBySession') return [];
         return null;
-      }) as any);
+      });
 
       const { result, rerender } = renderSession('session-live');
       expect(result.current.sdkSessionId).toBeUndefined();
