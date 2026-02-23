@@ -184,16 +184,17 @@ export function TaskCard({ task, repoName }: TaskCardProps) {
           </Badge>
         )}
         {session && (
-          <Badge
-            variant={session.status === 'running' ? 'default' : 'outline'}
+          <span
+            role="img"
+            aria-label={`Session: ${session.status}`}
+            title={`Session: ${session.status}`}
             className={cn(
-              'text-[10px] px-1.5 py-0',
-              session.status === 'idle' && 'text-gray-500',
-              session.status === 'failed' && 'text-red-600',
+              'h-2 w-2 shrink-0 rounded-full',
+              session.status === 'running' && 'bg-green-500 animate-pulse',
+              session.status === 'idle' && 'bg-gray-400',
+              session.status === 'failed' && 'bg-red-500',
             )}
-          >
-            {session.status}
-          </Badge>
+          />
         )}
       </div>
     </div>
