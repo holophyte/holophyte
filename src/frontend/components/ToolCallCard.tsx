@@ -1,13 +1,5 @@
-import {
-  FileEdit,
-  FileSearch,
-  FileText,
-  Globe,
-  Search,
-  Terminal,
-  Wrench,
-} from 'lucide-react';
 import { useState } from 'react';
+import { toolIcon, toolSummary } from '@/frontend/lib/toolDisplay';
 import { cn } from '@/frontend/lib/utils';
 
 /** Props for {@link ToolCallCard}. */
@@ -20,70 +12,6 @@ interface ToolCallCardProps {
   result?: string;
   /** When `true`, renders the result with an error style (red background). */
   isError?: boolean;
-}
-
-function toolIcon(name: string) {
-  switch (name) {
-    case 'Read':
-      return <FileText className="h-3.5 w-3.5" />;
-    case 'Edit':
-      return <FileEdit className="h-3.5 w-3.5" />;
-    case 'Write':
-      return <FileEdit className="h-3.5 w-3.5" />;
-    case 'Bash':
-      return <Terminal className="h-3.5 w-3.5" />;
-    case 'Grep':
-      return <Search className="h-3.5 w-3.5" />;
-    case 'Glob':
-      return <FileSearch className="h-3.5 w-3.5" />;
-    case 'WebFetch':
-    case 'WebSearch':
-      return <Globe className="h-3.5 w-3.5" />;
-    default:
-      return <Wrench className="h-3.5 w-3.5" />;
-  }
-}
-
-function toolSummary(name: string, input: Record<string, unknown>): string {
-  switch (name) {
-    case 'Read': {
-      const path = typeof input.file_path === 'string' ? input.file_path : '';
-      return path || 'Read file';
-    }
-    case 'Edit': {
-      const path = typeof input.file_path === 'string' ? input.file_path : '';
-      return path || 'Edit file';
-    }
-    case 'Write': {
-      const path = typeof input.file_path === 'string' ? input.file_path : '';
-      return path || 'Write file';
-    }
-    case 'Bash': {
-      const cmd = typeof input.command === 'string' ? input.command : '';
-      return cmd.length > 80 ? `${cmd.slice(0, 80)}…` : cmd || 'bash command';
-    }
-    case 'Grep': {
-      const pattern = typeof input.pattern === 'string' ? input.pattern : '';
-      const path = typeof input.path === 'string' ? ` in ${input.path}` : '';
-      return `${pattern}${path}` || 'Search';
-    }
-    case 'Glob': {
-      const pattern = typeof input.pattern === 'string' ? input.pattern : '';
-      return pattern || 'Glob pattern';
-    }
-    case 'WebFetch':
-    case 'WebSearch': {
-      const url =
-        typeof input.url === 'string'
-          ? input.url
-          : typeof input.query === 'string'
-            ? input.query
-            : '';
-      return url.length > 80 ? `${url.slice(0, 80)}…` : url || name;
-    }
-    default:
-      return JSON.stringify(input).slice(0, 80);
-  }
 }
 
 const MAX_RESULT_CHARS = 2000;
