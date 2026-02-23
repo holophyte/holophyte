@@ -1,5 +1,7 @@
 import { api } from '@convex/_generated/api';
+import type { Id } from '@convex/_generated/dataModel';
 import { PRIORITY_CONFIG, TaskPriority, TaskStatus } from '@convex/schema';
+import { useNavigate, useParams } from '@tanstack/react-router';
 import { useQuery } from 'convex/react';
 import { CheckSquare, Clock, Maximize2, Terminal } from 'lucide-react';
 import { formatRelativeDate } from '@/frontend/lib/dateUtils';
@@ -14,8 +16,10 @@ interface TaskCardProps {
 }
 
 export function TaskCard({ task, repoName }: TaskCardProps) {
-  const selectTask = useAppStore((s) => s.selectTask);
-  const openTaskPage = useAppStore((s) => s.openTaskPage);
+  const navigate = useNavigate();
+  const params = useParams({ strict: false });
+  const repoId =
+    (params.repoId as Id<'repos'> | undefined) ?? String(task.repoId);
   const toggleBulkSelectTask = useAppStore((s) => s.toggleBulkSelectTask);
   const bulkSelectedTaskIds = useAppStore((s) => s.bulkSelectedTaskIds);
   const session = useQuery(api.sessions.getByTask, { taskId: task._id });
@@ -39,7 +43,10 @@ export function TaskCard({ task, repoName }: TaskCardProps) {
     if (isBulkMode) {
       toggleBulkSelectTask(task._id);
     } else {
-      selectTask(task._id);
+      void navigate({
+        to: '/repos/$repoId/tasks/$taskId',
+        params: { repoId: String(repoId), taskId: task._id },
+      });
     }
   };
 
@@ -63,7 +70,10 @@ export function TaskCard({ task, repoName }: TaskCardProps) {
           if (isBulkMode) {
             toggleBulkSelectTask(task._id);
           } else {
-            selectTask(task._id);
+            void navigate({
+              to: '/repos/$repoId/tasks/$taskId',
+              params: { repoId: String(repoId), taskId: task._id },
+            });
           }
         }
       }}
@@ -77,7 +87,10 @@ export function TaskCard({ task, repoName }: TaskCardProps) {
         type="button"
         onClick={(event) => {
           event.stopPropagation();
-          openTaskPage(task._id);
+          void navigate({
+            to: '/repos/$repoId/tasks/$taskId/page',
+            params: { repoId: String(repoId), taskId: task._id },
+          });
         }}
         className="absolute right-1 top-1 z-10 flex h-7 w-7 cursor-pointer items-center justify-center rounded-md text-muted-foreground opacity-65 hover:bg-muted hover:opacity-100 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
         aria-label={`Open ${task.title} in task page`}

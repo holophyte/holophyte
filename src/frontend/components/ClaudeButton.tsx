@@ -1,5 +1,6 @@
 import { api } from '@convex/_generated/api';
 import type { Doc, Id } from '@convex/_generated/dataModel';
+import { useMatch, useNavigate } from '@tanstack/react-router';
 import { useMutation, useQuery } from 'convex/react';
 import { Loader2, Play, Square } from 'lucide-react';
 import { useState } from 'react';
@@ -21,6 +22,11 @@ export function ClaudeButton({ task }: ClaudeButtonProps) {
   const createSession = useMutation(api.sessions.create);
   const updateSessionStatus = useMutation(api.sessions.updateStatus);
   const openSession = useAppStore((s) => s.openSession);
+  const navigate = useNavigate();
+  const taskPageMatch = useMatch({
+    from: '/repos/$repoId/tasks/$taskId/page',
+    shouldThrow: false,
+  });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [model, setModel] = useState<ClaudeModelId>(DEFAULT_MODEL);
@@ -59,6 +65,13 @@ export function ClaudeButton({ task }: ClaudeButtonProps) {
         return;
       }
       openSession(sessionId);
+      // Navigate to task page after launching, unless already there
+      if (!taskPageMatch) {
+        void navigate({
+          to: '/repos/$repoId/tasks/$taskId/page',
+          params: { repoId: String(task.repoId), taskId: task._id },
+        });
+      }
     } catch (err) {
       setError(String(err));
       if (sessionId) {

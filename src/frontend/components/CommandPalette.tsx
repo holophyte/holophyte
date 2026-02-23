@@ -1,5 +1,6 @@
 import { api } from '@convex/_generated/api';
 import { TaskStatus } from '@convex/schema';
+import { useMatch, useNavigate } from '@tanstack/react-router';
 import { Command } from 'cmdk';
 import { useQuery } from 'convex/react';
 import {
@@ -31,11 +32,11 @@ export function CommandPalette() {
   const [open, setOpen] = useState(false);
 
   const selectedOrgId = useAppStore((s) => s.selectedOrgId);
-  const selectRepo = useAppStore((s) => s.selectRepo);
-  const selectTask = useAppStore((s) => s.selectTask);
-  const selectSeedBox = useAppStore((s) => s.selectSeedBox);
   const toggleBacklog = useAppStore((s) => s.toggleBacklog);
-  const viewMode = useAppStore((s) => s.viewMode);
+  const navigate = useNavigate();
+  const boardMatch = useMatch({ from: '/repos/$repoId', shouldThrow: false });
+  const homeMatch = useMatch({ from: '/', shouldThrow: false });
+  const showBoardActions = !!(homeMatch || boardMatch);
 
   const tasks = useQuery(
     api.tasks.listAll,
@@ -106,8 +107,7 @@ export function CommandPalette() {
             value="nav-all-tasks"
             onSelect={() =>
               runAction(() => {
-                selectRepo(null);
-                selectTask(null);
+                void navigate({ to: '/' });
               })
             }
           >
@@ -116,7 +116,7 @@ export function CommandPalette() {
           </CommandItem>
           <CommandItem
             value="nav-seed-box"
-            onSelect={() => runAction(() => selectSeedBox())}
+            onSelect={() => runAction(() => void navigate({ to: '/seeds' }))}
           >
             <Lightbulb className="h-4 w-4 shrink-0 text-muted-foreground" />
             Seed Box
@@ -124,7 +124,7 @@ export function CommandPalette() {
         </Command.Group>
 
         {/* Actions */}
-        {viewMode === 'board' && (
+        {showBoardActions && (
           <Command.Group heading="Actions" className={GROUP_HEADING_CLASS}>
             <CommandItem
               value="action-toggle-backlog"
@@ -145,8 +145,10 @@ export function CommandPalette() {
                 value={`${repo.name} repo-${repo._id}`}
                 onSelect={() =>
                   runAction(() => {
-                    selectRepo(repo._id);
-                    selectTask(null);
+                    void navigate({
+                      to: '/repos/$repoId',
+                      params: { repoId: repo._id },
+                    });
                   })
                 }
               >
@@ -166,8 +168,10 @@ export function CommandPalette() {
                 value={`${task.title} task-${task._id}`}
                 onSelect={() =>
                   runAction(() => {
-                    selectRepo(task.repoId);
-                    selectTask(task._id);
+                    void navigate({
+                      to: '/repos/$repoId/tasks/$taskId',
+                      params: { repoId: task.repoId, taskId: task._id },
+                    });
                   })
                 }
               >

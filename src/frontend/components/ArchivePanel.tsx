@@ -1,4 +1,6 @@
 import { api } from '@convex/_generated/api';
+import type { Id } from '@convex/_generated/dataModel';
+import { useParams } from '@tanstack/react-router';
 import { useMutation, useQuery } from 'convex/react';
 import { ArchiveRestore, ArrowLeft, Search, Trash2 } from 'lucide-react';
 import { useState } from 'react';
@@ -10,8 +12,9 @@ import PageHeader from './ui/PageHeader';
 
 export function ArchivePanel() {
   const selectedOrgId = useAppStore((s) => s.selectedOrgId);
-  const selectedRepoId = useAppStore((s) => s.selectedRepoId);
   const toggleArchive = useAppStore((s) => s.toggleArchive);
+  const params = useParams({ strict: false });
+  const selectedRepoId = (params.repoId as Id<'repos'> | undefined) ?? null;
   const [search, setSearch] = useState('');
 
   const archivedTasks = useQuery(

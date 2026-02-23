@@ -25,13 +25,8 @@ export const VALID_THEMES: ThemeName[] = [
 
 export const DEFAULT_THEME: ThemeName = 'neon';
 
-type ViewMode = 'board' | 'seeds' | 'task-page';
-
 interface AppState {
   selectedOrgId: Id<'organizations'> | null;
-  selectedRepoId: Id<'repos'> | null;
-  selectedTaskId: Id<'tasks'> | null;
-  viewMode: ViewMode;
   backlogCollapsed: boolean;
   taskPageDetailCollapsed: boolean;
   sessionId: string | null;
@@ -51,14 +46,8 @@ interface AppState {
   setTheme: (theme: ThemeName) => void;
   setSelectedOrgId: (id: Id<'organizations'>) => void;
   clearOrgSelection: () => void;
-  selectRepo: (id: Id<'repos'> | null) => void;
-  selectSeedBox: () => void;
-  selectTask: (id: Id<'tasks'> | null) => void;
-  openTaskPage: (id: Id<'tasks'>) => void;
   toggleBacklog: () => void;
   toggleTaskPageDetail: () => void;
-  /** Switch from task page back to board view, keeping the task selected in the side panel. */
-  collapseTaskPage: () => void;
   openSession: (sessionId: string) => void;
   closeSession: () => void;
 
@@ -80,9 +69,6 @@ export const useAppStore = create<AppState>()(
   persist(
     (set) => ({
       selectedOrgId: null,
-      selectedRepoId: null,
-      selectedTaskId: null,
-      viewMode: 'board',
       backlogCollapsed: true,
       taskPageDetailCollapsed: false,
       sessionId: null,
@@ -100,43 +86,11 @@ export const useAppStore = create<AppState>()(
       setSelectedOrgId: (id) =>
         set({
           selectedOrgId: id,
-          selectedRepoId: null,
-          selectedTaskId: null,
           bulkSelectedTaskIds: [],
         }),
       clearOrgSelection: () =>
         set({
           selectedOrgId: null,
-          selectedRepoId: null,
-          selectedTaskId: null,
-          bulkSelectedTaskIds: [],
-        }),
-      selectRepo: (id) =>
-        set({
-          selectedRepoId: id,
-          selectedTaskId: null,
-          viewMode: 'board',
-          bulkSelectedTaskIds: [],
-        }),
-      selectSeedBox: () =>
-        set({
-          selectedRepoId: null,
-          viewMode: 'seeds',
-          selectedTaskId: null,
-          bulkSelectedTaskIds: [],
-        }),
-      selectTask: (id) =>
-        set((state) => ({
-          selectedTaskId: id,
-          viewMode:
-            id === null && state.viewMode === 'task-page'
-              ? 'board'
-              : state.viewMode,
-        })),
-      openTaskPage: (id) =>
-        set({
-          selectedTaskId: id,
-          viewMode: 'task-page',
           bulkSelectedTaskIds: [],
         }),
       toggleBacklog: () =>
@@ -145,16 +99,7 @@ export const useAppStore = create<AppState>()(
         set((state) => ({
           taskPageDetailCollapsed: !state.taskPageDetailCollapsed,
         })),
-      collapseTaskPage: () => set({ viewMode: 'board' }),
-      openSession: (id) =>
-        set((state) => ({
-          sessionId: id,
-          // If a task is selected, switch to the task page view so the
-          // session is always shown in the dedicated task page.
-          ...(state.selectedTaskId && state.viewMode !== 'task-page'
-            ? { viewMode: 'task-page' as const }
-            : {}),
-        })),
+      openSession: (id) => set({ sessionId: id }),
       closeSession: () => set({ sessionId: null }),
 
       setSearchQuery: (query) =>
@@ -204,7 +149,7 @@ export const useAppStore = create<AppState>()(
     }),
     {
       name: 'holophyte-app',
-      version: 1,
+      version: 2,
       migrate: (persisted) => {
         const state = persisted as Record<string, unknown>;
         if (
@@ -213,12 +158,14 @@ export const useAppStore = create<AppState>()(
         ) {
           state.theme = DEFAULT_THEME;
         }
+        // Remove keys managed by router
+        delete state.selectedRepoId;
+        delete state.selectedTaskId;
+        delete state.viewMode;
         return state as unknown as AppState;
       },
       partialize: (state) => ({
         selectedOrgId: state.selectedOrgId,
-        selectedRepoId: state.selectedRepoId,
-        viewMode: state.viewMode,
         backlogCollapsed: state.backlogCollapsed,
         taskPageDetailCollapsed: state.taskPageDetailCollapsed,
         showArchive: state.showArchive,

@@ -1,6 +1,7 @@
 import { api } from '@convex/_generated/api';
 import type { Id } from '@convex/_generated/dataModel';
 import { PRIORITY_CONFIG, TaskPriority, TaskStatus } from '@convex/schema';
+import { useNavigate, useParams } from '@tanstack/react-router';
 import { useMutation, useQuery } from 'convex/react';
 import type { FunctionReturnType } from 'convex/server';
 import { ChevronDown, Maximize2, X } from 'lucide-react';
@@ -11,7 +12,6 @@ import {
   timestampToDateInput,
 } from '@/frontend/lib/dateUtils';
 import { cn } from '@/frontend/lib/utils';
-import { useAppStore } from '@/frontend/stores/app';
 import { ClaudeButton } from './ClaudeButton';
 import { LabelDots, LabelPicker } from './LabelPicker';
 import { PromptHistory } from './PromptHistory';
@@ -31,20 +31,18 @@ export type TaskDetailTask = NonNullable<
 >;
 
 export function TaskDetailPanel() {
-  const selectedTaskId = useAppStore((s) => s.selectedTaskId);
-  const selectTask = useAppStore((s) => s.selectTask);
-  const openTaskPage = useAppStore((s) => s.openTaskPage);
-  const task = useQuery(
-    api.tasks.get,
-    selectedTaskId ? { id: selectedTaskId } : 'skip',
-  );
+  const params = useParams({ strict: false });
+  const navigate = useNavigate();
+  const repoId = params.repoId as Id<'repos'> | undefined;
+  const taskId = params.taskId as Id<'tasks'> | undefined;
+  const task = useQuery(api.tasks.get, taskId ? { id: taskId } : 'skip');
 
   // Close the panel when the task has been deleted (query returns null, not undefined)
   useEffect(() => {
-    if (task === null) {
-      selectTask(null);
+    if (task === null && repoId) {
+      void navigate({ to: '/repos/$repoId', params: { repoId } });
     }
-  }, [task, selectTask]);
+  }, [task, navigate, repoId]);
 
   // Keep previous task visible while the next one loads (but not when deleted)
   const prevTaskRef = useRef<TaskDetailTask | null>(null);
@@ -56,11 +54,16 @@ export function TaskDetailPanel() {
       <PageHeader className="justify-between">
         <h2 className="font-semibold text-sm">Task Details</h2>
         <div className="flex items-center gap-1">
-          {selectedTaskId && (
+          {taskId && repoId && (
             <Button
               variant="ghost"
               size="icon"
-              onClick={() => openTaskPage(selectedTaskId)}
+              onClick={() =>
+                void navigate({
+                  to: '/repos/$repoId/tasks/$taskId/page',
+                  params: { repoId, taskId },
+                })
+              }
               aria-label="Expand to full page"
             >
               <Maximize2 className="h-3.5 w-3.5" />
@@ -69,7 +72,10 @@ export function TaskDetailPanel() {
           <Button
             variant="ghost"
             size="icon"
-            onClick={() => selectTask(null)}
+            onClick={() =>
+              repoId &&
+              void navigate({ to: '/repos/$repoId', params: { repoId } })
+            }
             aria-label="Close task details"
           >
             <X className="h-4 w-4" />
@@ -122,7 +128,7 @@ export function TaskDetailContent({
   showDelete = true,
   showSessionControls = true,
 }: TaskDetailContentProps) {
-  const selectTask = useAppStore((s) => s.selectTask);
+  const navigate = useNavigate();
   const updateTask = useMutation(api.tasks.update);
   const removeTask = useMutation(api.tasks.remove);
 
@@ -179,7 +185,10 @@ export function TaskDetailContent({
 
   const handleDelete = async () => {
     await removeTask({ id: task._id });
-    selectTask(null);
+    void navigate({
+      to: '/repos/$repoId',
+      params: { repoId: String(task.repoId) },
+    });
   };
 
   const descriptionChanged = description !== task.description;
