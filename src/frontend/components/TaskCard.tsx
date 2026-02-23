@@ -188,9 +188,8 @@ export function TaskCard({ task, repoName }: TaskCardProps) {
             variant={session.status === 'running' ? 'default' : 'outline'}
             className={cn(
               'text-[10px] px-1.5 py-0',
-              session.status === 'completed' && 'text-green-600',
+              session.status === 'idle' && 'text-gray-500',
               session.status === 'failed' && 'text-red-600',
-              session.status === 'stopped' && 'text-yellow-600',
             )}
           >
             {session.status}

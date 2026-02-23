@@ -96,7 +96,7 @@ export function ClaudeButton({ task }: ClaudeButtonProps) {
       }
       // Fallback: if session panel is closed, the exit event has no subscriber.
       // Safe to call unconditionally — the mutation is idempotent.
-      await updateSessionStatus({ id: session._id, status: 'stopped' });
+      await updateSessionStatus({ id: session._id, status: 'idle' });
     } catch (err) {
       setError(String(err));
     } finally {
