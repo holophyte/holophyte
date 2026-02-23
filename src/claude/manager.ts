@@ -204,22 +204,58 @@ function bufferEvent(session: Session, event: SDKMessage): void {
   }
 }
 
+/**
+ * Returns the in-memory session state for a running session, or `undefined` if
+ * no session with the given ID is currently active.
+ *
+ * Only active (running) sessions are present in memory — idle sessions exist
+ * only in Convex and must be resumed via {@link startSession} with
+ * `resumeSdkSessionId`.
+ */
 export function getSession(sessionId: string): Session | undefined {
   return sessions.get(sessionId);
 }
 
+/** Returns the IDs of all currently active (running) sessions. */
 export function getActiveSessions(): string[] {
   return Array.from(sessions.keys());
 }
 
+/** Returns the number of currently active (running) sessions. */
 export function getActiveSessionCount(): number {
   return sessions.size;
 }
 
+/**
+ * Returns `true` when active sessions have reached or exceeded the warning
+ * threshold (`WARN_ACTIVE_SESSIONS = 5`).
+ *
+ * Used by the frontend to show a caution banner before allowing new sessions to
+ * be launched, without blocking the user outright.
+ */
 export function isApproachingSessionLimit(): boolean {
   return sessions.size >= WARN_ACTIVE_SESSIONS;
 }
 
+/**
+ * Spawns a Claude Code SDK process for the given session and begins streaming
+ * events to any WebSocket subscribers.
+ *
+ * **New session** — omit `resumeSdkSessionId`. A fresh conversation starts with
+ * `prompt` as the first user message.
+ *
+ * **Resume** — pass the `sdkSessionId` from a previous idle session. The SDK
+ * picks up the conversation context and treats `prompt` as a follow-up message.
+ *
+ * The function returns as soon as the background iterator is launched. Actual
+ * SDK events arrive asynchronously via {@link subscribe}.
+ *
+ * @throws If the global active session cap (`MAX_ACTIVE_SESSIONS = 10`) is reached.
+ * @throws If `permissionMode` is not one of `'default' | 'safe-auto' | 'bypass'`.
+ *
+ * @returns The `sessionId` echoed back, and an optional `warning` string when
+ *   the session count is at or above the warning threshold.
+ */
 export async function startSession(opts: {
   sessionId: string;
   repoPath: string;
@@ -454,6 +490,15 @@ async function consumeIterator(
   }
 }
 
+/**
+ * Aborts the running SDK process for a session.
+ *
+ * Sets `stoppedByUser = true` so the cleanup path in `consumeIterator` treats
+ * the abort as a user-initiated stop rather than an error, transitioning the
+ * session to `idle` (resumable) instead of `failed`.
+ *
+ * No-op if the session is not currently active.
+ */
 export function stopSession(sessionId: string): void {
   const session = sessions.get(sessionId);
   if (!session) return;
@@ -504,6 +549,19 @@ export function sendSessionMessage(sessionId: string, _text: string): boolean {
   return false; // Not supported in single-turn mode; use resume flow instead
 }
 
+/**
+ * Subscribes to WebSocket messages for an active session.
+ *
+ * Immediately replays any buffered events (un-flushed SDK messages still in
+ * memory) and any pending permission prompts so late-connecting clients see the
+ * complete in-progress state. Subsequent events are delivered in real-time via
+ * `callback`.
+ *
+ * @param sessionId - The Convex session ID of the active session.
+ * @param callback - Invoked for each {@link WsServerMessage} (event, permission,
+ *   status, or error).
+ * @returns An unsubscribe function. Call it in the WebSocket `close` handler.
+ */
 export function subscribe(
   sessionId: string,
   callback: (msg: WsServerMessage) => void,
