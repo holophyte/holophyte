@@ -356,7 +356,7 @@ export default function TaskPageView() {
           </div>
         </section>
         <section className="min-w-0 flex-1">
-          <SessionPanel />
+          <SessionPanel taskId={selectedTaskId} />
         </section>
       </div>
     </div>

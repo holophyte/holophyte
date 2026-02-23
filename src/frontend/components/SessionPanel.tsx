@@ -10,26 +10,32 @@ import PermissionPrompt from './PermissionPrompt';
 import SessionDropdown from './SessionDropdown';
 import UserInput from './UserInput';
 
+/** Props for {@link SessionPanel}. */
+interface SessionPanelProps {
+  /** The task this panel is scoped to — used to create the first session. */
+  taskId: Id<'tasks'>;
+}
+
 /**
  * Full-height session stream pane with pinned permission prompts + input.
  * Rendered inside the dedicated task page view.
  */
-export default function SessionPanel() {
+export default function SessionPanel({ taskId }: SessionPanelProps) {
   const sessionId = useAppStore((s) => s.activeSessionId);
   const closeSession = useAppStore((s) => s.closeSession);
+  const openSession = useAppStore((s) => s.openSession);
   const updateSessionStatus = useMutation(api.sessions.updateStatus);
+  const createSession = useMutation(api.sessions.create);
 
-  // Load the session record so we can access taskId, sdkSessionId, etc.
+  // Load the session record so we can access sdkSessionId, etc.
   const session = useQuery(
     api.sessions.get,
     sessionId ? { id: sessionId as Id<'sessions'> } : 'skip',
   );
 
-  // Load the task (with repo) so we have repoPath for the resume flow
-  const task = useQuery(
-    api.tasks.get,
-    session?.taskId ? { id: session.taskId } : 'skip',
-  );
+  // Load the task (with repo) using the prop directly — needed for repoPath
+  // whether or not there's an active session.
+  const task = useQuery(api.tasks.get, { id: taskId });
 
   // Close the panel when the underlying session has been deleted (e.g. repo cascade delete)
   useEffect(() => {
@@ -123,13 +129,41 @@ export default function SessionPanel() {
     sessionId !== null;
 
   /**
-   * Handle sending a message. For idle sessions, this reuses the existing
-   * Convex session record — setting it back to 'running' and resuming the SDK
-   * conversation with the user's text as the prompt. On any failure, the
-   * session is marked 'failed' so it doesn't stay stuck in 'running'.
+   * Handle sending a message. Covers three cases:
+   * 1. No session — create a new one and start it with the given prompt.
+   * 2. Idle session — resume the existing session in-place.
+   * 3. Running session — forward the message via WebSocket.
    */
   const handleSend = async (_sid: string, text: string) => {
-    // If session is idle and we have a sdkSessionId + repoPath, resume in-place
+    // Case 1: No active session — create one and start it
+    if (!sessionId && task?.repo?.path) {
+      let newSessionId: Id<'sessions'> | undefined;
+      try {
+        newSessionId = await createSession({ taskId });
+        const res = await fetch('/api/sessions/start', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            sessionId: newSessionId,
+            repoPath: task.repo.path,
+            prompt: text,
+          }),
+        });
+        if (!res.ok) {
+          const data = (await res.json()) as { error?: string };
+          throw new Error(data.error ?? 'Failed to start session');
+        }
+        openSession(newSessionId);
+      } catch (err) {
+        if (newSessionId) {
+          await updateSessionStatus({ id: newSessionId, status: 'failed' });
+        }
+        throw err;
+      }
+      return;
+    }
+
+    // Case 2: Idle session — resume in-place
     if (
       sessionStatus === 'idle' &&
       session?.taskId &&
@@ -159,20 +193,16 @@ export default function SessionPanel() {
       }
       return;
     }
-    // For running sessions, use the normal send-message endpoint
+
+    // Case 3: Running session — use the normal send-message endpoint
     await sendMessage(_sid, text);
   };
 
   return (
     <div className="flex h-full flex-col bg-background">
-      {session?.taskId && (
-        <div className="flex shrink-0 items-center gap-2 border-b border-border/50 px-3 py-2">
-          <SessionDropdown
-            taskId={session.taskId}
-            activeSessionId={sessionId}
-          />
-        </div>
-      )}
+      <div className="flex shrink-0 items-center gap-2 border-b border-border/50 px-3 py-2">
+        <SessionDropdown taskId={taskId} activeSessionId={sessionId} />
+      </div>
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
         <MessageStream
           events={events}
@@ -196,8 +226,8 @@ export default function SessionPanel() {
         )}
 
         <UserInput
-          sessionId={sessionId}
-          disabled={!sessionId || isFinished}
+          sessionId={sessionId ?? 'new'}
+          disabled={isFinished}
           queued={messageQueued}
           onSend={handleSend}
         />
