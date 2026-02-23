@@ -259,6 +259,30 @@ export const serverUpdateActivity = internalMutation({
 });
 
 /**
+ * Marks all sessions that are still in `running` status as `idle`.
+ *
+ * Called once on server startup to recover from a crash or restart where the
+ * server process died before it could transition sessions to `idle` or
+ * `failed`. Sessions left as `running` with no active backend process are
+ * effectively stale — resetting them to `idle` lets users resume or start
+ * fresh. Internal — not callable from the browser.
+ */
+export const serverMarkStaleRunning = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    const runningSessions = await ctx.db
+      .query('sessions')
+      .withIndex('by_status', (q) => q.eq('status', 'running'))
+      .collect();
+    const now = Date.now();
+    for (const session of runningSessions) {
+      await ctx.db.patch(session._id, { status: 'idle', lastActivityAt: now });
+    }
+    return { count: runningSessions.length };
+  },
+});
+
+/**
  * Sets the human-readable display name for a session.
  *
  * Called by the Bun server at session start with the first 30 characters of

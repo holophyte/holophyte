@@ -263,7 +263,15 @@ export function useSession(sessionId: string | null): UseSessionReturn {
           setMessageQueued(false);
         }
       } else if (msg.type === 'error') {
-        setSessionStatus('failed');
+        // If the server says "Session not found", the session process died
+        // before it could update Convex (e.g. server restart). In that case
+        // the session is stale-running rather than truly failed — treat it as
+        // idle so the user can resume it. For all other errors, mark failed.
+        if (msg.message === 'Session not found') {
+          setSessionStatus('idle');
+        } else {
+          setSessionStatus('failed');
+        }
         setMessageQueued(false);
       }
     };

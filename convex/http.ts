@@ -39,6 +39,29 @@ async function parseBody(request: Request): Promise<any | Response> {
 auth.addHttpRoutes(http);
 
 http.route({
+  path: '/api/internal/sessions/markStaleRunning',
+  method: 'POST',
+  handler: httpAction(async (ctx, request) => {
+    const authError = validateSecret(request);
+    if (authError) return authError;
+
+    try {
+      const result = await ctx.runMutation(
+        internal.sessions.serverMarkStaleRunning,
+        {},
+      );
+      return new Response(JSON.stringify({ ok: true, ...result }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    } catch (err) {
+      console.error('serverMarkStaleRunning failed:', err);
+      return jsonError('Mutation failed', 500);
+    }
+  }),
+});
+
+http.route({
   path: '/api/internal/sessions/updateSdkSessionId',
   method: 'POST',
   handler: httpAction(async (ctx, request) => {

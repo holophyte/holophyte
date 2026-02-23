@@ -286,6 +286,39 @@ const server = Bun.serve<WsData>({
 
 console.log(`Holophyte running at http://localhost:${server.port}`);
 
+// On startup, mark any sessions left as 'running' (from a prior crash/restart)
+// as 'idle' so users can resume them rather than seeing a broken state.
+(async () => {
+  const convexSiteUrl = process.env.CONVEX_SITE_URL;
+  const secret = process.env.INTERNAL_API_SECRET;
+  if (!convexSiteUrl || !secret) return;
+  try {
+    const res = await fetch(
+      `${convexSiteUrl}/api/internal/sessions/markStaleRunning`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${secret}`,
+        },
+        body: JSON.stringify({}),
+      },
+    );
+    if (res.ok) {
+      const data = (await res.json()) as { count?: number };
+      if (data.count && data.count > 0) {
+        console.log(
+          `Marked ${data.count} stale running session(s) as idle on startup.`,
+        );
+      }
+    } else {
+      console.error('Failed to mark stale sessions on startup:', res.status);
+    }
+  } catch (err) {
+    console.error('Failed to mark stale sessions on startup:', err);
+  }
+})();
+
 process.on('SIGINT', () => {
   server.stop();
   process.exit(0);
