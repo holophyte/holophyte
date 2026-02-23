@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "playwright": {
+      "command": "npx",
+      "args": ["@playwright/mcp@latest"]
+    },
+    "convex": {
+      "command": "npx",
+      "args": ["convex", "mcp", "start", "--project-dir", "/Users/ko/Development/holophyte"]
+    }
+  }
+}
