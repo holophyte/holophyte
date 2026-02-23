@@ -216,12 +216,18 @@ const server = Bun.serve<WsData>({
     }
 
     // SPA catch-all: serve the app for any non-API GET request
+    // Exclude requests for static assets (files with extensions) so the browser
+    // can fetch .js/.css/etc. correctly instead of getting the HTML page.
     if (
       req.method === 'GET' &&
       !url.pathname.startsWith('/api/') &&
-      !url.pathname.startsWith('/ws/')
+      !url.pathname.startsWith('/ws/') &&
+      !url.pathname.match(/\.\w{2,10}$/)
     ) {
-      return new Response(homepage as unknown as BodyInit, {
+      // homepage is an HTMLBundle — only works in `routes`. For the catch-all
+      // we need to read the file and return a proper Response.
+      const html = Bun.file(new URL('../public/index.html', import.meta.url));
+      return new Response(html, {
         headers: { 'Content-Type': 'text/html' },
       });
     }
