@@ -60,8 +60,13 @@ export default function SessionPanel() {
   }, [sessionStatus]);
 
   const thinkingElapsedSeconds =
-    sessionStatus === 'running' && session?.startedAt
-      ? Math.max(0, Math.floor((now - session.startedAt) / 1000))
+    sessionStatus === 'running' && session
+      ? Math.max(
+          0,
+          Math.floor(
+            (now - (session.lastActivityAt ?? session.startedAt)) / 1000,
+          ),
+        )
       : undefined;
 
   const unresolvedApprovals = pendingApprovals.filter((a) => !a.resolved);

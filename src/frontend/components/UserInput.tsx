@@ -29,7 +29,7 @@ interface UserInputProps {
  *
  * - Supports Cmd+Enter (macOS) or Ctrl+Enter to submit.
  * - Clears the textarea on successful send.
- * - Shows "Session completed" as placeholder when `disabled` is `true`.
+ * - Shows "Session failed" as placeholder when `disabled` is `true`.
  */
 export default function UserInput({
   sessionId,
@@ -44,7 +44,7 @@ export default function UserInput({
 
   const canSend = !disabled && !sending && text.trim().length > 0 && sessionId;
   const disabledReason = disabled
-    ? 'Session completed — launch a new session to continue'
+    ? 'Session failed — launch a new session to continue'
     : null;
 
   const resizeTextarea = (textarea: HTMLTextAreaElement) => {
@@ -71,7 +71,7 @@ export default function UserInput({
   };
 
   const placeholder = disabled
-    ? 'Session completed'
+    ? 'Session failed'
     : 'Send a message to Claude… (Cmd+Enter to send)';
 
   return (

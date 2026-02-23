@@ -24,15 +24,11 @@ describe('UserInput', () => {
       ).toBeInTheDocument();
     });
 
-    it('shows "Session completed" placeholder when disabled', () => {
+    it('shows "Session failed" placeholder when disabled', () => {
       render(<UserInput sessionId="s1" onSend={vi.fn()} disabled />);
+      expect(screen.getByPlaceholderText('Session failed')).toBeInTheDocument();
       expect(
-        screen.getByPlaceholderText('Session completed'),
-      ).toBeInTheDocument();
-      expect(
-        screen.getByText(
-          'Session completed — launch a new session to continue',
-        ),
+        screen.getByText('Session failed — launch a new session to continue'),
       ).toBeInTheDocument();
     });
   });
