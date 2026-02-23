@@ -447,9 +447,11 @@ describe('session-rethink: concurrent session limits', () => {
     await new Promise((r) => setTimeout(r, 200));
   });
 
-  it('startSession returns a warning when approaching the limit', async () => {
-    const WARNING_THRESHOLD = 5;
-    const blockers = Array.from({ length: WARNING_THRESHOLD }, () =>
+  it('startSession returns a warning when 5+ sessions already active', async () => {
+    // Warning fires when activeCount >= WARN_ACTIVE_SESSIONS (5) at the moment of starting.
+    // So we need 5 sessions already running, then start the 6th to get a warning.
+    const SESSION_COUNT = 6;
+    const blockers = Array.from({ length: SESSION_COUNT }, () =>
       createBlockingIterator(),
     );
     let blockerIdx = 0;
@@ -461,8 +463,8 @@ describe('session-rethink: concurrent session limits', () => {
 
     const { startSession } = await import('./manager');
 
-    // Fill to threshold - 1 (no warning)
-    for (let i = 0; i < WARNING_THRESHOLD - 1; i++) {
+    // First 5 sessions: 0..4 active when starting each — no warning
+    for (let i = 0; i < 5; i++) {
       const result = await startSession({
         sessionId: `no-warn-${i}`,
         repoPath: '/tmp',
@@ -473,7 +475,7 @@ describe('session-rethink: concurrent session limits', () => {
 
     await new Promise((r) => setTimeout(r, 30));
 
-    // This one hits the threshold (5th session)
+    // 6th session: 5 already active → warning fires
     const warnResult = await startSession({
       sessionId: 'warn-hit',
       repoPath: '/tmp',

@@ -98,11 +98,13 @@ export default function SessionPanel() {
     return () => document.removeEventListener('keydown', handleApprovalHotkeys);
   }, [approve, deny, unresolvedApprovals]);
 
-  const isFinished =
-    sessionStatus === 'completed' ||
-    sessionStatus === 'failed' ||
-    sessionStatus === 'stopped';
-  const isLoading = !isFinished && events.length === 0 && sessionId !== null;
+  // 'idle' is not finished from the user's perspective — they can still resume
+  const isFinished = sessionStatus === 'failed';
+  const isLoading =
+    !isFinished &&
+    sessionStatus !== 'idle' &&
+    events.length === 0 &&
+    sessionId !== null;
 
   return (
     <div className="flex h-full flex-col bg-background">

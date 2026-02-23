@@ -8,6 +8,12 @@ const sessionStatusValidator = v.union(
   v.literal('failed'),
 );
 
+/**
+ * Returns all currently running sessions scoped to an org.
+ *
+ * Uses the `by_status` index for an O(1) status scan, then cross-checks each
+ * session's task→repo chain to filter by org. Requires org membership.
+ */
 export const listActive = query({
   args: { orgId: v.id('organizations') },
   handler: async (ctx, args) => {
@@ -29,6 +35,12 @@ export const listActive = query({
   },
 });
 
+/**
+ * Returns the global count of currently running sessions (across all orgs).
+ *
+ * Used by the server to enforce the concurrent session cap before spawning a
+ * new SDK process. No auth check — callers on the server trust this value.
+ */
 export const countActive = query({
   args: {},
   handler: async (ctx) => {
@@ -40,6 +52,10 @@ export const countActive = query({
   },
 });
 
+/**
+ * Returns a single session by ID, or `null` if not found.
+ * Verifies that the caller is a member of the session's parent org.
+ */
 export const get = query({
   args: { id: v.id('sessions') },
   handler: async (ctx, args) => {

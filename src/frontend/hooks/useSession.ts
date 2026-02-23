@@ -28,16 +28,10 @@ export interface PendingApproval {
  *
  * - `running` — session is actively processing
  * - `waiting_input` — derived state: one or more tool-use approvals are pending
- * - `completed` — session finished successfully
+ * - `idle` — session turn completed; process has exited. Can be resumed.
  * - `failed` — session ended with an error
- * - `stopped` — session was stopped by the user
  */
-export type SessionStatus =
-  | 'running'
-  | 'waiting_input'
-  | 'completed'
-  | 'failed'
-  | 'stopped';
+export type SessionStatus = 'running' | 'waiting_input' | 'idle' | 'failed';
 
 /**
  * Return value of {@link useSession}.
@@ -62,6 +56,11 @@ export interface UseSessionReturn {
    * state and is queued for delivery once the current turn ends.
    */
   messageQueued: boolean;
+  /**
+   * The SDK session ID from Convex, used to resume idle sessions.
+   * Available once the session has been initialized by the SDK.
+   */
+  sdkSessionId: string | undefined;
   /**
    * Approve a pending tool-use request. Sends `{ type: 'approve', requestId }`
    * over the WebSocket and marks the approval as resolved in local state.
@@ -137,6 +136,12 @@ export function useSession(sessionId: string | null): UseSessionReturn {
   const [messageQueued, setMessageQueued] = useState(false);
 
   const wsRef = useRef<WebSocket | null>(null);
+
+  // Load the session record so we can access sdkSessionId for resume.
+  const sessionRecord = useQuery(
+    api.sessions.get,
+    sessionId ? { id: sessionId as Id<'sessions'> } : 'skip',
+  );
 
   // Load persisted event batches from Convex (already-flushed history).
   // Returns undefined while loading; skip when sessionId is null.
@@ -277,9 +282,8 @@ export function useSession(sessionId: string | null): UseSessionReturn {
   // (handles the case where a 'running' status arrives after a permission prompt)
   const derivedStatus: SessionStatus | null =
     pendingApprovals.some((a) => !a.resolved) &&
-    sessionStatus !== 'completed' &&
-    sessionStatus !== 'failed' &&
-    sessionStatus !== 'stopped'
+    sessionStatus !== 'idle' &&
+    sessionStatus !== 'failed'
       ? 'waiting_input'
       : sessionStatus;
 
@@ -289,6 +293,7 @@ export function useSession(sessionId: string | null): UseSessionReturn {
     sessionStatus: derivedStatus,
     isConnected,
     messageQueued,
+    sdkSessionId: sessionRecord?.sdkSessionId,
     approve,
     deny,
     sendMessage,
