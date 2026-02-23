@@ -6,6 +6,7 @@ import { useState } from 'react';
 import { formatTimeAgo } from '@/frontend/lib/dateUtils';
 import { cn } from '@/frontend/lib/utils';
 import { useAppStore } from '@/frontend/stores/app';
+import SessionStatusDot from './SessionStatusDot';
 import { Popover, PopoverContent, PopoverTrigger } from './ui/Popover';
 
 interface SessionDropdownProps {
@@ -15,17 +16,7 @@ interface SessionDropdownProps {
   repoPath?: string;
 }
 
-function sessionStatusDot(status: Doc<'sessions'>['status']): string {
-  switch (status) {
-    case 'running':
-      return 'bg-green-500';
-    case 'idle':
-      return 'bg-gray-400';
-    case 'failed':
-      return 'bg-red-500';
-  }
-}
-
+/** Maps a session status to a human-readable label shown in the dropdown row. */
 function sessionStatusLabel(status: Doc<'sessions'>['status']): string {
   switch (status) {
     case 'running':
@@ -37,6 +28,18 @@ function sessionStatusLabel(status: Doc<'sessions'>['status']): string {
   }
 }
 
+/**
+ * Popover trigger that lists all sessions for a task and lets the user switch
+ * between them or start a new one.
+ *
+ * The trigger button shows the active session's name and a status dot. Clicking
+ * it opens a popover with the full session list (ordered by `lastActivityAt`
+ * desc) plus a "New session" action at the bottom.
+ *
+ * Data is loaded reactively from Convex via `sessions.listByTask`. The popover
+ * integrates with the Zustand store: `switchSession` to change the displayed
+ * session, `openSession` after creating a new one.
+ */
 export default function SessionDropdown({
   taskId,
   activeSessionId,
@@ -72,16 +75,7 @@ export default function SessionDropdown({
           className="inline-flex min-h-8 max-w-48 cursor-pointer items-center gap-1.5 rounded-md border border-border bg-muted px-2.5 text-xs font-medium text-foreground hover:bg-muted/80 transition-colors"
           aria-label="Switch session"
         >
-          {activeSession && (
-            <span
-              aria-hidden="true"
-              className={cn(
-                'h-2 w-2 shrink-0 rounded-full',
-                sessionStatusDot(activeSession.status),
-                activeSession.status === 'running' && 'animate-pulse',
-              )}
-            />
-          )}
+          {activeSession && <SessionStatusDot status={activeSession.status} />}
           <span className="truncate">{triggerLabel}</span>
           <ChevronDown className="h-3 w-3 shrink-0 text-muted-foreground" />
         </button>
@@ -109,14 +103,7 @@ export default function SessionDropdown({
                 )}
                 onClick={() => handleSelectSession(s._id)}
               >
-                <span
-                  aria-hidden="true"
-                  className={cn(
-                    'h-2 w-2 shrink-0 rounded-full',
-                    sessionStatusDot(s.status),
-                    s.status === 'running' && 'animate-pulse',
-                  )}
-                />
+                <SessionStatusDot status={s.status} />
                 <span className="min-w-0 flex-1">
                   <span className="block truncate font-medium">
                     {s.name ?? `Session ${s._id.slice(-6)}`}

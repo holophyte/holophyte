@@ -1,12 +1,12 @@
 import { v } from 'convex/values';
-import { internalMutation, mutation, query } from './_generated/server';
+import {
+  internalMutation,
+  internalQuery,
+  mutation,
+  query,
+} from './_generated/server';
 import { requireOrgMembership, requireRole } from './lib/auth';
-
-const sessionStatusValidator = v.union(
-  v.literal('running'),
-  v.literal('idle'),
-  v.literal('failed'),
-);
+import { sessionStatusValidator } from './schema';
 
 /**
  * Returns all currently running sessions scoped to an org.
@@ -41,7 +41,7 @@ export const listActive = query({
  * Used by the server to enforce the concurrent session cap before spawning a
  * new SDK process. No auth check — callers on the server trust this value.
  */
-export const countActive = query({
+export const countActive = internalQuery({
   args: {},
   handler: async (ctx) => {
     const runningSessions = await ctx.db
@@ -70,6 +70,12 @@ export const get = query({
   },
 });
 
+/**
+ * Returns the most recently active session for a task, or `null` if none exist.
+ *
+ * Uses the `by_task_activity` index ordered descending so the first result is
+ * always the session with the highest `lastActivityAt`. Requires org membership.
+ */
 export const getByTask = query({
   args: { taskId: v.id('tasks') },
   handler: async (ctx, args) => {
@@ -87,6 +93,14 @@ export const getByTask = query({
   },
 });
 
+/**
+ * Returns all sessions for a task, ordered by `lastActivityAt` descending
+ * (most recently active first).
+ *
+ * Used by the session dropdown to show the full session history. Returns an
+ * empty array when the task doesn't exist (rather than null), so callers can
+ * always render without a null-check. Requires org membership.
+ */
 export const listByTask = query({
   args: { taskId: v.id('tasks') },
   handler: async (ctx, args) => {
@@ -103,6 +117,12 @@ export const listByTask = query({
   },
 });
 
+/**
+ * Creates a new session record in `running` status and returns its ID.
+ *
+ * Initialises both `startedAt` and `lastActivityAt` to the current timestamp.
+ * Requires at least `member` role in the task's org.
+ */
 export const create = mutation({
   args: {
     taskId: v.id('tasks'),
@@ -124,6 +144,12 @@ export const create = mutation({
   },
 });
 
+/**
+ * Updates the status of a session and bumps `lastActivityAt`.
+ *
+ * Valid transitions: `running → idle | failed`. Requires at least `member`
+ * role in the session's parent org. Called from the frontend (e.g. stop button).
+ */
 export const updateStatus = mutation({
   args: {
     id: v.id('sessions'),
@@ -145,6 +171,13 @@ export const updateStatus = mutation({
   },
 });
 
+/**
+ * Bumps `lastActivityAt` to the current time.
+ *
+ * Called from the frontend when the user sends a message, so the session list
+ * sort order stays accurate even before the server processes the turn. Requires
+ * org membership (any role).
+ */
 export const updateLastActivity = mutation({
   args: { id: v.id('sessions') },
   handler: async (ctx, args) => {
@@ -159,7 +192,14 @@ export const updateLastActivity = mutation({
   },
 });
 
-/** Server-side mutation to persist the SDK session ID, model, and permission mode. */
+/**
+ * Persists the SDK session ID returned by the `system/init` event, along with
+ * the model and permission mode used for this turn.
+ *
+ * The `sdkSessionId` is the key used to resume a session in a future turn via
+ * `sdkOptions.resume`. Stored here so it survives a server restart or process
+ * exit. Internal — called only by the Bun server via HTTP action.
+ */
 export const updateSdkSessionId = internalMutation({
   args: {
     id: v.id('sessions'),
@@ -180,7 +220,13 @@ export const updateSdkSessionId = internalMutation({
   },
 });
 
-/** Server-side mutation to update session status. Called by the Bun server. */
+/**
+ * Updates session status and bumps `lastActivityAt`.
+ *
+ * Called by the Bun server at the end of a turn to transition the session to
+ * `idle` (success) or `failed` (error). Internal — not callable from the
+ * browser. Unlike {@link updateStatus}, skips auth since the server is trusted.
+ */
 export const serverUpdateStatus = internalMutation({
   args: {
     id: v.id('sessions'),
@@ -196,7 +242,13 @@ export const serverUpdateStatus = internalMutation({
   },
 });
 
-/** Server-side mutation to update lastActivityAt. Called by the Bun server during active sessions. */
+/**
+ * Bumps `lastActivityAt` without changing status.
+ *
+ * Called by the Bun server after each `assistant` or `result` SDK event so the
+ * session list sort order in the UI updates reactively while a turn is in
+ * progress. Internal — not callable from the browser.
+ */
 export const serverUpdateActivity = internalMutation({
   args: { id: v.id('sessions') },
   handler: async (ctx, args) => {
@@ -206,7 +258,14 @@ export const serverUpdateActivity = internalMutation({
   },
 });
 
-/** Server-side mutation to update the session name. */
+/**
+ * Sets the human-readable display name for a session.
+ *
+ * Called by the Bun server at session start with the first 30 characters of
+ * the prompt (plus an ellipsis if truncated). Future: overwritten when haiku
+ * generates a richer name after the first turn. Internal — not callable from
+ * the browser.
+ */
 export const serverUpdateName = internalMutation({
   args: {
     id: v.id('sessions'),

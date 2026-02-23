@@ -22,6 +22,12 @@ export const taskStatusValidator = v.union(
   v.literal(TaskStatus.Archived),
 );
 
+export const sessionStatusValidator = v.union(
+  v.literal('running'),
+  v.literal('idle'),
+  v.literal('failed'),
+);
+
 export enum TaskPriority {
   None = 'none',
   Low = 'low',
@@ -171,6 +177,8 @@ export default defineSchema({
     sdkSessionId: v.optional(v.string()),
     model: v.optional(v.string()),
     permissionMode: v.optional(v.string()),
+    // Kept optional for backwards compatibility with pre-rethink documents
+    endedAt: v.optional(v.number()),
   })
     .index('by_task', ['taskId'])
     .index('by_status', ['status'])
