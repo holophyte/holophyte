@@ -89,6 +89,48 @@ http.route({
 });
 
 http.route({
+  path: '/api/internal/sessions/updateActivity',
+  method: 'POST',
+  handler: httpAction(async (ctx, request) => {
+    const authError = validateSecret(request);
+    if (authError) return authError;
+
+    const body = await parseBody(request);
+    if (body instanceof Response) return body;
+
+    try {
+      const { id } = body;
+      await ctx.runMutation(internal.sessions.serverUpdateActivity, { id });
+      return jsonOk();
+    } catch (err) {
+      console.error('serverUpdateActivity failed:', err);
+      return jsonError('Mutation failed', 400);
+    }
+  }),
+});
+
+http.route({
+  path: '/api/internal/sessions/updateName',
+  method: 'POST',
+  handler: httpAction(async (ctx, request) => {
+    const authError = validateSecret(request);
+    if (authError) return authError;
+
+    const body = await parseBody(request);
+    if (body instanceof Response) return body;
+
+    try {
+      const { id, name } = body;
+      await ctx.runMutation(internal.sessions.serverUpdateName, { id, name });
+      return jsonOk();
+    } catch (err) {
+      console.error('serverUpdateName failed:', err);
+      return jsonError('Mutation failed', 400);
+    }
+  }),
+});
+
+http.route({
   path: '/api/internal/sessionEvents/insertBatch',
   method: 'POST',
   handler: httpAction(async (ctx, request) => {

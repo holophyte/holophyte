@@ -29,7 +29,7 @@ interface AppState {
   selectedOrgId: Id<'organizations'> | null;
   backlogCollapsed: boolean;
   taskPageDetailCollapsed: boolean;
-  sessionId: string | null;
+  activeSessionId: string | null;
 
   // Search and filter state
   searchQuery: string;
@@ -49,6 +49,7 @@ interface AppState {
   toggleBacklog: () => void;
   toggleTaskPageDetail: () => void;
   openSession: (sessionId: string) => void;
+  switchSession: (sessionId: string | null) => void;
   closeSession: () => void;
 
   // Search and filter actions
@@ -71,7 +72,7 @@ export const useAppStore = create<AppState>()(
       selectedOrgId: null,
       backlogCollapsed: true,
       taskPageDetailCollapsed: false,
-      sessionId: null,
+      activeSessionId: null,
 
       searchQuery: '',
       filterLabelIds: [],
@@ -99,8 +100,9 @@ export const useAppStore = create<AppState>()(
         set((state) => ({
           taskPageDetailCollapsed: !state.taskPageDetailCollapsed,
         })),
-      openSession: (id) => set({ sessionId: id }),
-      closeSession: () => set({ sessionId: null }),
+      openSession: (id) => set({ activeSessionId: id }),
+      switchSession: (id) => set({ activeSessionId: id }),
+      closeSession: () => set({ activeSessionId: null }),
 
       setSearchQuery: (query) =>
         set({ searchQuery: query, bulkSelectedTaskIds: [] }),

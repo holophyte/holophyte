@@ -14,7 +14,7 @@ import UserInput from './UserInput';
  * Rendered inside the dedicated task page view.
  */
 export default function SessionPanel() {
-  const sessionId = useAppStore((s) => s.sessionId);
+  const sessionId = useAppStore((s) => s.activeSessionId);
   const closeSession = useAppStore((s) => s.closeSession);
 
   // Close the panel when the underlying session has been deleted (e.g. repo cascade delete)
