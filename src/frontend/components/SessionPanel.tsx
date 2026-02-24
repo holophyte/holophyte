@@ -146,6 +146,7 @@ export default function SessionPanel({ taskId }: SessionPanelProps) {
 
   // 'idle' is not finished from the user's perspective — they can still resume
   const isFinished = sessionStatus === 'failed';
+  const isRunning = sessionStatus === 'running';
   const isLoading =
     !isFinished &&
     sessionStatus !== 'idle' &&
@@ -277,7 +278,7 @@ export default function SessionPanel({ taskId }: SessionPanelProps) {
 
         <UserInput
           sessionId={sessionId ?? 'new'}
-          disabled={isFinished}
+          disabled={isFinished || isRunning}
           queued={messageQueued}
           onSend={handleSend}
         />

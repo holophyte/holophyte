@@ -16,8 +16,7 @@ vi.mock('@anthropic-ai/claude-agent-sdk', () => ({
 global.fetch = vi.fn().mockResolvedValue({
   ok: true,
   text: async () => '',
-  // biome-ignore lint/suspicious/noExplicitAny: vi.fn mock doesn't satisfy strict fetch types
-} as Response) as any;
+} as Response) as unknown as typeof fetch;
 
 process.env.CONVEX_SITE_URL = 'http://localhost:3211';
 process.env.INTERNAL_API_SECRET = 'test-secret';
