@@ -316,9 +316,16 @@ export async function startSession(opts: {
     flushEvents(session);
   }, FLUSH_INTERVAL_MS);
 
-  // Build SDK options
+  // Build SDK options.
+  // Strip CLAUDECODE env var — if the Holophyte server is itself launched from
+  // a Claude Code session, spawned SDK sessions inherit it and refuse to start
+  // ("cannot be launched inside another Claude Code session").
+  const sdkEnv = { ...process.env };
+  delete sdkEnv.CLAUDECODE;
+
   const sdkOptions: Parameters<typeof sdkQuery>[0]['options'] = {
     cwd: opts.repoPath,
+    env: sdkEnv,
     abortController: controller,
     canUseTool: async (toolName, input, toolOpts) => {
       if (shouldAutoApprove(session, toolName, input)) {
@@ -448,6 +455,7 @@ async function consumeIterator(
       }
     }
   } catch (err) {
+    console.error(`[session ${sessionId}] SDK error:`, err);
     if (session.stoppedByUser) {
       finalStatus = 'idle';
     } else {
