@@ -40,7 +40,7 @@ done
 # Check if .env.local already has a local deployment configured
 CURRENT_DEPLOYMENT=""
 if [ -f "$ENV_LOCAL" ]; then
-  CURRENT_DEPLOYMENT=$(grep '^CONVEX_DEPLOYMENT=' "$ENV_LOCAL" | cut -d= -f2 | cut -d' ' -f1 || true)
+  CURRENT_DEPLOYMENT=$(grep '^CONVEX_DEPLOYMENT=' "$ENV_LOCAL" | cut -d= -f2 | cut -d' ' -f1 | sed 's/^"\(.*\)"$/\1/' || true)
 fi
 
 if [[ "$CURRENT_DEPLOYMENT" == local:* ]]; then
