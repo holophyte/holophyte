@@ -11,7 +11,7 @@ import {
   TreePine,
   X,
 } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { cn } from '@/frontend/lib/utils';
 import { useAppStore } from '@/frontend/stores/app';
 import Badge from './ui/Badge';
@@ -50,10 +50,6 @@ function CreateSeedInline({ onDone }: { onDone: () => void }) {
   const createSeed = useMutation(api.seeds.create);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
-    inputRef.current?.focus();
-  }, []);
-
   const handleSubmit = async () => {
     if (!title.trim() || !selectedOrgId) return;
     await createSeed({ title: title.trim(), orgId: selectedOrgId });
@@ -73,6 +69,7 @@ function CreateSeedInline({ onDone }: { onDone: () => void }) {
         <Sprout className="h-4 w-4 text-primary/40 shrink-0" />
         <Input
           ref={inputRef}
+          autoFocus
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           placeholder="What's the idea?"
@@ -214,16 +211,19 @@ function SeedCard({ seed }: { seed: Doc<'seeds'> }) {
   const updateSeed = useMutation(api.seeds.update);
   const removeSeed = useMutation(api.seeds.remove);
   const [editing, setEditing] = useState(false);
+  const [prevSeedId, setPrevSeedId] = useState(seed._id);
   const [title, setTitle] = useState(seed.title);
   const [description, setDescription] = useState(seed.description);
   const [plantOpen, setPlantOpen] = useState(false);
 
   const isPlanted = seed.status === 'planted';
 
-  useEffect(() => {
+  // Reset local state when switching seeds (synchronous, no useEffect)
+  if (seed._id !== prevSeedId) {
+    setPrevSeedId(seed._id);
     setTitle(seed.title);
     setDescription(seed.description);
-  }, [seed.title, seed.description]);
+  }
 
   const handleSave = async () => {
     if (!title.trim()) return;
