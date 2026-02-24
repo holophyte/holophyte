@@ -481,6 +481,10 @@ async function consumeIterator(
 
       // Detect error results
       if (event.type === 'result' && 'is_error' in event && event.is_error) {
+        console.error(
+          `[session ${sessionId}] SDK result error:`,
+          (event as Record<string, unknown>).error,
+        );
         finalStatus = 'failed';
       }
 
