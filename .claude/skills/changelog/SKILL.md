@@ -27,7 +27,7 @@ Read `CHANGELOG.md` and find the most recent `## YYYY-MM-DD` heading. This is th
 ### 2. Fetch New Commits
 
 ```bash
-git log --pretty=format:"%h %ad %s" --date=short --no-merges --after=<cutoff-date>
+git log --pretty=format:"%h %ad %s" --date=short --no-merges --after=<day-before-cutoff-date>
 ```
 
 If no `CHANGELOG.md` exists or it has no date entries, fetch all commits:

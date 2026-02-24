@@ -146,23 +146,6 @@ Grouped by date, following [Keep a Changelog](https://keepachangelog.com/) categ
 - Add priority config fallback and tighten getColumnTasks type
 - Prevent realtime updates from clobbering unsaved description/prompt edits
 - Distinct hover/selected bg colors and dashed border on collapsed backlog
-- Use origin/main for accurate merged detection from any branch
-- Use iso8601 dates and --sort for branch-status stale ordering
-- Restore --prune flag for accurate gone detection in branch-status
-- Clarify gone detection and deps check limitations
-- Use --dry-run for dependency check to keep health read-only
-- Make changelog fetch step conditional for no-range fallback
-- Address round 3 review comments
-- Flag worktree-cleanup as destructive in branch-status notes
-- Use explicit TASK_STATUSES array instead of Object.values(TaskStatus)
-- Gate Convex check on file existence before grepping
-- Make branch-status notes consistent with process (no --prune)
-- Remove deployment value from health check example output
-- Guard against missing CONVEX_URL in session manager
-- Use TaskStatus enum instead of string literals in frontend comparisons
-
-### Refactored
-- Apply CLAUDE.md best practices across codebase
 
 ### Tests
 - Add unit tests for priority/status and labels CRUD, update e2e tests
@@ -185,6 +168,20 @@ Grouped by date, following [Keep a Changelog](https://keepachangelog.com/) categ
 - Core CI workflow for lint, type-check, and unit tests
 
 ### Fixed
+- Use origin/main for accurate merged detection from any branch
+- Use iso8601 dates and --sort for branch-status stale ordering
+- Restore --prune flag for accurate gone detection in branch-status
+- Clarify gone detection and deps check limitations
+- Use --dry-run for dependency check to keep health read-only
+- Make changelog fetch step conditional for no-range fallback
+- Address round 3 review comments
+- Flag worktree-cleanup as destructive in branch-status notes
+- Use explicit TASK_STATUSES array instead of Object.values(TaskStatus)
+- Gate Convex check on file existence before grepping
+- Make branch-status notes consistent with process (no --prune)
+- Remove deployment value from health check example output
+- Guard against missing CONVEX_URL in session manager
+- Use TaskStatus enum instead of string literals in frontend comparisons
 - Fix address PR review comments on new skills
 - Validate date input and fetch actual subtask counts
 - Use by_status index in labels.remove instead of full table scan
@@ -197,6 +194,9 @@ Grouped by date, following [Keep a Changelog](https://keepachangelog.com/) categ
 - Fix type errors caught by CI typecheck
 - Fix deploy workflow to use 'dev' environment name
 - Fix CI: pass both CONVEX_DEPLOYMENT and CONVEX_DEPLOY_KEY to codegen
+
+### Refactored
+- Apply CLAUDE.md best practices across codebase
 
 ### Chores
 - Add worktree skills and document codebase conventions
