@@ -56,14 +56,16 @@ mkdir -p "$WORKTREE_DIR"
 echo "Creating worktree at ~/.holophyte-dev/$FEATURE_NAME on branch $BRANCH..."
 git worktree add "$WORKTREE_PATH" -b "$BRANCH"
 
-# Copy env files — only non-Convex vars (API keys, secrets).
-# Convex-managed vars (CONVEX_DEPLOYMENT, CONVEX_URL, CONVEX_SITE_URL) are
-# stripped so `convex dev --configure existing` creates a fresh deployment
-# instead of reusing the main repo's.
+# Copy .env (shared config). Don't copy .env.local yet — Convex will create it
+# during provisioning. Non-Convex vars (API keys, secrets) are appended after.
 cp "$REPO_ROOT/.env" "$WORKTREE_PATH/" 2>/dev/null || true
+
+# Save non-Convex vars from .env.local to restore after Convex provisioning
+# (convex dev --configure existing overwrites the file)
+NON_CONVEX_VARS=""
 if [ -f "$REPO_ROOT/.env.local" ]; then
-  grep -v '^\(CONVEX_DEPLOYMENT\|CONVEX_URL\|CONVEX_SITE_URL\|# Deployment used by\)' \
-    "$REPO_ROOT/.env.local" > "$WORKTREE_PATH/.env.local" || true
+  NON_CONVEX_VARS=$(grep -v '^\(CONVEX_DEPLOYMENT\|CONVEX_URL\|CONVEX_SITE_URL\|# Deployment used by\|^$\)' \
+    "$REPO_ROOT/.env.local" || true)
 fi
 
 # Install dependencies
@@ -106,25 +108,32 @@ while true; do
   N=$((N + 1))
 done
 
-# Write .dev-ports (inherit team/project from main repo)
+# Derive a unique project name so each worktree gets its own Convex deployment
+PROJECT_HASH=$(printf '%s' "$FEATURE_NAME" | shasum -a 256 | cut -c1-6)
+WORKTREE_PROJECT="${CONVEX_PROJECT}-${PROJECT_HASH}"
+
+# Write .dev-ports (unique project per worktree for deployment isolation)
 cat > "$WORKTREE_PATH/.dev-ports" <<EOF
 DEV_PORT=$DEV_PORT
 CONVEX_CLOUD_PORT=$CONVEX_CLOUD_PORT
 CONVEX_SITE_PORT=$CONVEX_SITE_PORT
 CONVEX_TEAM=$CONVEX_TEAM
-CONVEX_PROJECT=$CONVEX_PROJECT
+CONVEX_PROJECT=$WORKTREE_PROJECT
 EOF
 
-# Initialize local Convex — .env.local has no CONVEX_DEPLOYMENT at this point
-# so --configure existing will provision a fresh local deployment with unique name
-echo "Initializing local Convex backend (cloud=$CONVEX_CLOUD_PORT, site=$CONVEX_SITE_PORT)..."
+echo "Initializing local Convex backend (cloud=$CONVEX_CLOUD_PORT, site=$CONVEX_SITE_PORT, project=$WORKTREE_PROJECT)..."
 cd "$WORKTREE_PATH" && bunx convex dev --configure existing \
   --team "$CONVEX_TEAM" \
-  --project "$CONVEX_PROJECT" \
+  --project "$WORKTREE_PROJECT" \
   --dev-deployment local \
   --local-cloud-port "$CONVEX_CLOUD_PORT" \
   --local-site-port "$CONVEX_SITE_PORT" \
   --once
+
+# Restore non-Convex vars (API keys, secrets) that Convex overwrote
+if [ -n "$NON_CONVEX_VARS" ]; then
+  printf '\n%s\n' "$NON_CONVEX_VARS" >> "$WORKTREE_PATH/.env.local"
+fi
 
 # Auth keys are configured on first `bun run dev:local` (needs a running backend)
 
