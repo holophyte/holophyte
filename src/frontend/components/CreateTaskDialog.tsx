@@ -2,10 +2,11 @@ import { api } from '@convex/_generated/api';
 import type { Id } from '@convex/_generated/dataModel';
 import type { TaskStatus } from '@convex/schema';
 import { PRIORITY_CONFIG, TaskPriority } from '@convex/schema';
-import { useMutation } from 'convex/react';
-import { ChevronDown } from 'lucide-react';
-import { useState } from 'react';
+import { useMutation, useQuery } from 'convex/react';
+import { Check, ChevronDown, FolderGit2 } from 'lucide-react';
+import { useEffect, useState } from 'react';
 import { cn } from '@/frontend/lib/utils';
+import { useAppStore } from '@/frontend/stores/app';
 import { PromptTemplatePicker } from './PromptTemplatePicker';
 import Button from './ui/Button';
 import {
@@ -24,7 +25,7 @@ import Textarea from './ui/Textarea';
 interface CreateTaskDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  repoId: Id<'repos'>;
+  repoId?: Id<'repos'>;
   initialStatus?: TaskStatus;
 }
 
@@ -34,24 +35,59 @@ export function CreateTaskDialog({
   repoId,
   initialStatus,
 }: CreateTaskDialogProps) {
+  const selectedOrgId = useAppStore((s) => s.selectedOrgId);
+  const lastUsedRepoId = useAppStore((s) => s.lastUsedRepoId);
+  const setLastUsedRepoId = useAppStore((s) => s.setLastUsedRepoId);
+
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [prompt, setPrompt] = useState('');
   const [priority, setPriority] = useState<TaskPriority>(TaskPriority.None);
+  const [selectedRepoId, setSelectedRepoId] = useState<Id<'repos'> | null>(
+    repoId ?? lastUsedRepoId,
+  );
   const createTask = useMutation(api.tasks.create);
+
+  // Query repos only when no fixed repoId is provided (all-tasks view)
+  const repos = useQuery(
+    api.repos.list,
+    !repoId && selectedOrgId ? { orgId: selectedOrgId } : 'skip',
+  );
+
+  // Sync selectedRepoId when dialog opens
+  useEffect(() => {
+    if (open) {
+      setSelectedRepoId(repoId ?? lastUsedRepoId);
+    }
+  }, [open, repoId, lastUsedRepoId]);
+
+  // Auto-select first repo if nothing is selected yet
+  useEffect(() => {
+    const firstRepo = repos?.[0];
+    if (!repoId && !selectedRepoId && firstRepo) {
+      setSelectedRepoId(firstRepo._id);
+    }
+  }, [repoId, selectedRepoId, repos]);
+
+  const effectiveRepoId = repoId ?? selectedRepoId;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title.trim()) return;
+    if (!title.trim() || !effectiveRepoId) return;
 
     await createTask({
-      repoId,
+      repoId: effectiveRepoId,
       title: title.trim(),
       description: description.trim() || undefined,
       prompt: prompt.trim() || undefined,
       status: initialStatus,
       priority: priority !== TaskPriority.None ? priority : undefined,
     });
+
+    // Remember the repo choice for next time
+    if (!repoId && effectiveRepoId) {
+      setLastUsedRepoId(effectiveRepoId);
+    }
 
     setTitle('');
     setDescription('');
@@ -75,6 +111,49 @@ export function CreateTaskDialog({
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
+            {/* Repo picker — only shown when no fixed repoId */}
+            {!repoId && repos && (
+              <div className="space-y-2">
+                <Label>Project</Label>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <button
+                      type="button"
+                      className="flex items-center gap-2 px-2.5 py-1.5 rounded-md border text-sm hover:bg-muted/50 transition-colors w-full"
+                    >
+                      <FolderGit2 className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                      <span className="flex-1 text-left truncate">
+                        {repos.find((r) => r._id === selectedRepoId)?.name ??
+                          'Select a project...'}
+                      </span>
+                      <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+                    </button>
+                  </PopoverTrigger>
+                  <PopoverContent
+                    className="w-[var(--radix-popover-trigger-width)] p-1"
+                    align="start"
+                  >
+                    {repos.map((r) => (
+                      <button
+                        key={r._id}
+                        type="button"
+                        onClick={() => setSelectedRepoId(r._id)}
+                        className={cn(
+                          'w-full flex items-center gap-2 px-2.5 py-1.5 rounded text-sm hover:bg-muted/50 transition-colors text-left',
+                          selectedRepoId === r._id && 'bg-muted',
+                        )}
+                      >
+                        <FolderGit2 className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                        <span className="flex-1 truncate">{r.name}</span>
+                        {selectedRepoId === r._id && (
+                          <Check className="h-3.5 w-3.5 text-muted-foreground" />
+                        )}
+                      </button>
+                    ))}
+                  </PopoverContent>
+                </Popover>
+              </div>
+            )}
             <div className="space-y-2">
               <Label htmlFor="task-title">Title</Label>
               <Input
@@ -98,7 +177,12 @@ export function CreateTaskDialog({
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <Label htmlFor="task-prompt">Claude Prompt</Label>
-                <PromptTemplatePicker repoId={repoId} onApply={setPrompt} />
+                {effectiveRepoId && (
+                  <PromptTemplatePicker
+                    repoId={effectiveRepoId}
+                    onApply={setPrompt}
+                  />
+                )}
               </div>
               <Textarea
                 id="task-prompt"
@@ -167,7 +251,7 @@ export function CreateTaskDialog({
             >
               Cancel
             </Button>
-            <Button type="submit" disabled={!title.trim()}>
+            <Button type="submit" disabled={!title.trim() || !effectiveRepoId}>
               Create
             </Button>
           </DialogFooter>

@@ -41,9 +41,13 @@ interface AppState {
   // Theme
   theme: ThemeName;
 
+  // Last repo used when creating a task from the "All Tasks" view
+  lastUsedRepoId: Id<'repos'> | null;
+
   // Bulk selection state
   bulkSelectedTaskIds: Id<'tasks'>[];
 
+  setLastUsedRepoId: (id: Id<'repos'>) => void;
   setTheme: (theme: ThemeName) => void;
   setSelectedOrgId: (id: Id<'organizations'>) => void;
   clearOrgSelection: () => void;
@@ -91,8 +95,11 @@ export const useAppStore = create<AppState>()(
 
       theme: DEFAULT_THEME,
 
+      lastUsedRepoId: null,
+
       bulkSelectedTaskIds: [],
 
+      setLastUsedRepoId: (id) => set({ lastUsedRepoId: id }),
       setTheme: (theme) => set({ theme }),
       setSelectedOrgId: (id) =>
         set({
@@ -182,6 +189,7 @@ export const useAppStore = create<AppState>()(
         taskPageDetailCollapsed: state.taskPageDetailCollapsed,
         showArchive: state.showArchive,
         doneColumnCollapsed: state.doneColumnCollapsed,
+        lastUsedRepoId: state.lastUsedRepoId,
         theme: state.theme,
       }),
     },
