@@ -123,6 +123,13 @@ scripts/                   → Shared shell scripts (convex-local, dev-local, wo
 
 ## Frontend Patterns
 
+- **Minimize `useEffect`** — Follow [You Might Not Need an Effect](https://react.dev/learn/you-might-not-need-an-effect). Only use `useEffect` for synchronizing with external systems (WebSocket, DOM APIs, timers, keyboard listeners). Do NOT use `useEffect` for:
+  - **Deriving state**: Compute during render or use `useMemo` instead of `setState` inside an effect
+  - **Event responses**: Put logic in the event handler that triggers it, not in an effect that watches for the result
+  - **Resetting state on prop change**: Use the `key` prop to reset component state instead of `useEffect` + `setState`
+  - **Initializing state**: Use `useState(initialValue)` or lazy initializers, not `useEffect(fn, [])`
+  - **Notifying parents**: Call parent callbacks in event handlers, not in effects reacting to state changes
+  - **Data fetching**: Use Convex `useQuery` (already reactive) — never `fetch` inside `useEffect`
 - **React 19** with Convex `useQuery`/`useMutation` for real-time data
 - **Zustand** for UI-only state — persists `selectedRepoId`, `viewMode`, `backlogCollapsed` to localStorage (key: `"holophyte-app"`)
 - **Zustand selectors**: always use inline selectors for minimal re-renders: `useAppStore((s) => s.selectTask)`

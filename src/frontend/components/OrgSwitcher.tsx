@@ -1,7 +1,6 @@
 import { api } from '@convex/_generated/api';
 import { useQuery } from 'convex/react';
 import { Building2, Check, ChevronsUpDown } from 'lucide-react';
-import { useEffect } from 'react';
 import { cn } from '@/frontend/lib/utils';
 import { useAppStore } from '@/frontend/stores/app';
 import Button from './ui/Button';
@@ -13,14 +12,20 @@ export default function OrgSwitcher() {
   const setSelectedOrgId = useAppStore((s) => s.setSelectedOrgId);
 
   // Auto-select the first org, or reset if selected org is no longer valid
-  useEffect(() => {
-    if (!orgs || orgs.length === 0) return;
-    const stillValid =
-      selectedOrgId && orgs.some((o) => o._id === selectedOrgId);
-    if (!stillValid && orgs[0]) {
-      setSelectedOrgId(orgs[0]._id);
-    }
-  }, [selectedOrgId, orgs, setSelectedOrgId]);
+  const stillValid =
+    orgs &&
+    orgs.length > 0 &&
+    selectedOrgId &&
+    orgs.some((o) => o._id === selectedOrgId);
+  if (
+    orgs &&
+    orgs.length > 0 &&
+    !stillValid &&
+    orgs[0] &&
+    selectedOrgId !== orgs[0]._id
+  ) {
+    setSelectedOrgId(orgs[0]._id);
+  }
 
   const selectedOrg = orgs?.find((o) => o._id === selectedOrgId);
 
