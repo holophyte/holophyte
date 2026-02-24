@@ -17,7 +17,13 @@ export default function OrgSwitcher() {
     orgs.length > 0 &&
     selectedOrgId &&
     orgs.some((o) => o._id === selectedOrgId);
-  if (orgs && orgs.length > 0 && !stillValid && orgs[0]) {
+  if (
+    orgs &&
+    orgs.length > 0 &&
+    !stillValid &&
+    orgs[0] &&
+    selectedOrgId !== orgs[0]._id
+  ) {
     setSelectedOrgId(orgs[0]._id);
   }
 
