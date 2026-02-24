@@ -1,5 +1,5 @@
 import { v } from 'convex/values';
-import { internalMutation, query } from './_generated/server';
+import { internalMutation, internalQuery, query } from './_generated/server';
 import { requireOrgMembership } from './lib/auth';
 
 /** Server-side mutation for batched event persistence. */
@@ -21,6 +21,19 @@ export const insertBatch = internalMutation({
       events: args.events,
       batchIndex: args.batchIndex,
     });
+  },
+});
+
+/** Return the next available batchIndex for a session (max + 1, or 0). */
+export const getNextBatchIndex = internalQuery({
+  args: { sessionId: v.id('sessions') },
+  handler: async (ctx, args) => {
+    const lastBatch = await ctx.db
+      .query('sessionEvents')
+      .withIndex('by_session_batch', (q) => q.eq('sessionId', args.sessionId))
+      .order('desc')
+      .first();
+    return lastBatch ? lastBatch.batchIndex + 1 : 0;
   },
 });
 

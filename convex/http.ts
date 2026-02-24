@@ -178,4 +178,31 @@ http.route({
   }),
 });
 
+http.route({
+  path: '/api/internal/sessionEvents/getNextBatchIndex',
+  method: 'POST',
+  handler: httpAction(async (ctx, request) => {
+    const authError = validateSecret(request);
+    if (authError) return authError;
+
+    const body = await parseBody(request);
+    if (body instanceof Response) return body;
+
+    try {
+      const { sessionId } = body;
+      const nextBatchIndex = await ctx.runQuery(
+        internal.sessionEvents.getNextBatchIndex,
+        { sessionId },
+      );
+      return new Response(JSON.stringify({ nextBatchIndex }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    } catch (err) {
+      console.error('getNextBatchIndex failed:', err);
+      return jsonError('Query failed', 400);
+    }
+  }),
+});
+
 export default http;

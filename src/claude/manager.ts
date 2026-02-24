@@ -109,16 +109,21 @@ const SAFE_TOOLS = new Set([
 ]);
 
 /** Call a Convex HTTP action endpoint with Bearer auth. */
-async function callConvexInternal(
-  path: string,
-  body: Record<string, unknown>,
-): Promise<void> {
+function getConvexConfig() {
   const baseUrl = process.env.CONVEX_SITE_URL;
   if (!baseUrl)
     throw new Error('CONVEX_SITE_URL environment variable is not set');
   const secret = process.env.INTERNAL_API_SECRET;
   if (!secret)
     throw new Error('INTERNAL_API_SECRET environment variable is not set');
+  return { baseUrl, secret };
+}
+
+async function callConvexInternal(
+  path: string,
+  body: Record<string, unknown>,
+): Promise<void> {
+  const { baseUrl, secret } = getConvexConfig();
 
   const res = await fetch(`${baseUrl}${path}`, {
     method: 'POST',
@@ -133,6 +138,29 @@ async function callConvexInternal(
     const text = await res.text();
     throw new Error(`Convex HTTP action failed (${res.status}): ${text}`);
   }
+}
+
+async function queryConvexInternal<T>(
+  path: string,
+  body: Record<string, unknown>,
+): Promise<T> {
+  const { baseUrl, secret } = getConvexConfig();
+
+  const res = await fetch(`${baseUrl}${path}`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${secret}`,
+    },
+    body: JSON.stringify(body),
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Convex HTTP action failed (${res.status}): ${text}`);
+  }
+
+  return (await res.json()) as T;
 }
 
 function broadcast(session: Session, msg: WsServerMessage): void {
@@ -286,13 +314,27 @@ export async function startSession(opts: {
     throw new Error(`Invalid permissionMode: ${mode}`);
   }
 
+  // When resuming, start batchIndex after existing persisted batches so new
+  // events sort after the previous session's history.
+  let initialBatchIndex = 0;
+  if (opts.resumeSdkSessionId) {
+    try {
+      const { nextBatchIndex } = await queryConvexInternal<{
+        nextBatchIndex: number;
+      }>('/api/internal/sessionEvents/getNextBatchIndex', { sessionId });
+      initialBatchIndex = nextBatchIndex;
+    } catch (err) {
+      console.error('Failed to fetch next batch index, defaulting to 0:', err);
+    }
+  }
+
   const session: Session = {
     controller,
     stoppedByUser: false,
     subscribers: new Set(),
     approvalQueue: new Map(),
     eventBuffer: [],
-    batchIndex: 0,
+    batchIndex: initialBatchIndex,
     flushing: false,
     convexSessionId: sessionId,
     permissionMode: mode,
