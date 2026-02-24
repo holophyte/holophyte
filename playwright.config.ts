@@ -1,4 +1,17 @@
+import { readFileSync } from 'node:fs';
 import { defineConfig } from '@playwright/test';
+
+function resolveE2ePort(): number {
+  if (process.env.E2E_PORT) return Number(process.env.E2E_PORT);
+  try {
+    const devPorts = readFileSync('.dev-ports', 'utf-8');
+    const match = devPorts.match(/^DEV_PORT=(\d+)/m);
+    if (match?.[1]) return Number(match[1]) + 1;
+  } catch {}
+  return 8081;
+}
+
+const e2ePort = resolveE2ePort();
 
 export default defineConfig({
   testDir: './e2e',
@@ -10,7 +23,7 @@ export default defineConfig({
   workers: process.env.CI ? 1 : undefined,
   reporter: 'html',
   use: {
-    baseURL: 'http://localhost:8081',
+    baseURL: `http://localhost:${e2ePort}`,
     trace: 'on-first-retry',
     storageState: 'e2e/.auth/storage-state.json',
   },
@@ -20,13 +33,12 @@ export default defineConfig({
       use: { browserName: 'chromium' },
     },
   ],
-  // E2E tests expect `bun run convex:dev` to be running separately.
-  // Uses port 8081 (not 8080) so the dev server can run alongside e2e tests
-  // without being reused — the e2e server needs E2E_TEST=1 to bypass auth.
+  // E2E server runs on DEV_PORT+1 so it doesn't collide with the dev server.
+  // Override with E2E_PORT env var if needed.
   webServer: {
     command: 'bun run src/server.ts',
-    url: 'http://localhost:8081/',
+    url: `http://localhost:${e2ePort}/`,
     reuseExistingServer: false,
-    env: { ...process.env, E2E_TEST: '1', PORT: '8081' },
+    env: { ...process.env, E2E_TEST: '1', PORT: String(e2ePort) },
   },
 });
