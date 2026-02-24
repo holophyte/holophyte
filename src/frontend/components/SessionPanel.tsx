@@ -27,6 +27,7 @@ export default function SessionPanel({ taskId }: SessionPanelProps) {
   const closeSession = useAppStore((s) => s.closeSession);
   const openSession = useAppStore((s) => s.openSession);
   const updateSessionStatus = useMutation(api.sessions.updateStatus);
+  const resumeSessionMutation = useMutation(api.sessions.resumeSession);
   const createSession = useMutation(api.sessions.create);
 
   // Load the session record so we can access sdkSessionId, etc.
@@ -193,8 +194,16 @@ export default function SessionPanel({ taskId }: SessionPanelProps) {
       sdkSessionId &&
       task?.repo?.path
     ) {
+      // Atomic guard: only one tab can transition idle → running
+      const result = await resumeSessionMutation({ id: session._id });
+      if (!result.ok) {
+        // Another tab already resumed this session — silently bail out.
+        // The Convex reactive query will update the UI to reflect the
+        // running state from the other tab.
+        return;
+      }
+
       try {
-        await updateSessionStatus({ id: session._id, status: 'running' });
         const res = await fetch('/api/sessions/start', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -214,7 +223,7 @@ export default function SessionPanel({ taskId }: SessionPanelProps) {
       } catch (err) {
         // Revert the status so the session doesn't stay stuck as 'running'
         try {
-          await updateSessionStatus({ id: session._id, status: 'failed' });
+          await updateSessionStatus({ id: session._id, status: 'idle' });
         } catch (cleanupErr) {
           console.error('Failed to revert session status:', cleanupErr);
         }
