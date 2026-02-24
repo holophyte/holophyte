@@ -4,6 +4,7 @@ const sidebars: SidebarsConfig = {
   docs: [
     'intro',
     'sessions',
+    'local-development',
     {
       type: 'category',
       label: 'Testing',

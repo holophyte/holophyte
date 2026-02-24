@@ -103,6 +103,22 @@ pkill -f "chrome.*remote-debugging"
 
 Then retry. Playwright MCP will start a fresh instance.
 
+### Orphaned Chromium processes after failed setup
+
+If `e2e/global-setup.ts` fails mid-way (e.g., timeout waiting for hydration), the Chromium process may not be cleaned up. Symptoms: subsequent test runs fail to launch a browser, or orphaned Chrome processes consume memory.
+
+The setup uses `try/finally` to ensure `browser.close()` always runs. If you still see orphaned processes:
+
+```bash
+pkill -f "chromium.*--headless"
+```
+
+### E2E tests in worktrees connecting to wrong Convex
+
+When running E2E tests in a worktree, the web server spawned by Playwright reads `.env.local` for `CONVEX_URL`. If `.env.local` has stale URLs from another worktree or main repo, the test server connects to the wrong Convex database.
+
+`playwright.config.ts` passes `CONVEX_URL` derived from `.dev-ports` via the web server env config, which takes precedence. Make sure your worktree's `.dev-ports` is correctly configured and `bun run convex:local` is running before running E2E tests.
+
 ### Sessions completing too fast
 
 Short prompts (`What is 2+2?`) finish in under a second — too fast to test the running state. Use prompts that require file reads, multiple tool calls, or long outputs when you need the session to stay running.
@@ -118,5 +134,7 @@ If `browser_snapshot` shows loading spinners or empty lists right after navigati
 ## Reference
 
 - Formal E2E tests: `e2e/app.spec.ts`
-- Playwright config: `playwright.config.ts`
+- Playwright config: `playwright.config.ts` — parses `.dev-ports` for port resolution and `CONVEX_URL` override
+- Global setup: `e2e/global-setup.ts` — seeds auth state and test repo; uses `try/finally` for browser cleanup
 - `waitForApp` helper: defined at the top of `e2e/app.spec.ts` — waits for the sidebar header before asserting
+- Local development guide: `docs/docs/local-development.md` — worktree isolation, port allocation, and Convex deployment gotchas
