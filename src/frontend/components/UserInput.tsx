@@ -8,7 +8,7 @@ interface UserInputProps {
   sessionId: string | null;
   /**
    * When `true`, disables the textarea and send button. Pass `true` when
-   * the session is completed, failed, or stopped.
+   * the session is running, failed, or otherwise not accepting input.
    */
   disabled?: boolean;
   /**
@@ -29,7 +29,7 @@ interface UserInputProps {
  *
  * - Supports Cmd+Enter (macOS) or Ctrl+Enter to submit.
  * - Clears the textarea on successful send.
- * - Shows "Session failed" as placeholder when `disabled` is `true`.
+ * - Shows a "waiting" placeholder when `disabled` is `true`.
  */
 export default function UserInput({
   sessionId,
@@ -44,7 +44,7 @@ export default function UserInput({
 
   const canSend = !disabled && !sending && text.trim().length > 0 && sessionId;
   const disabledReason = disabled
-    ? 'Session failed — launch a new session to continue'
+    ? 'Input is disabled while the session is busy or has ended'
     : null;
 
   const resizeTextarea = (textarea: HTMLTextAreaElement) => {
@@ -71,7 +71,7 @@ export default function UserInput({
   };
 
   const placeholder = disabled
-    ? 'Session failed'
+    ? 'Waiting for session to become idle…'
     : 'Send a message to Claude… (Cmd+Enter to send)';
 
   return (

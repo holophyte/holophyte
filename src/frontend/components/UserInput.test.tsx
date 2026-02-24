@@ -24,11 +24,15 @@ describe('UserInput', () => {
       ).toBeInTheDocument();
     });
 
-    it('shows "Session failed" placeholder when disabled', () => {
+    it('shows waiting placeholder when disabled', () => {
       render(<UserInput sessionId="s1" onSend={vi.fn()} disabled />);
-      expect(screen.getByPlaceholderText('Session failed')).toBeInTheDocument();
       expect(
-        screen.getByText('Session failed — launch a new session to continue'),
+        screen.getByPlaceholderText('Waiting for session to become idle…'),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByText(
+          'Input is disabled while the session is busy or has ended',
+        ),
       ).toBeInTheDocument();
     });
   });
