@@ -20,8 +20,6 @@ function sessionStatusLabel(status: Doc<'sessions'>['status']): string {
     case 'running':
       return 'Running';
     case 'idle':
-    case 'completed': // Legacy — treat as idle
-    case 'stopped': // Legacy — treat as idle
       return 'Idle';
     case 'failed':
       return 'Failed';

@@ -190,28 +190,6 @@ describe('sessions.updateStatus (client-side)', () => {
     const session = await authed.query(api.sessions.get, { id: sessionId });
     expect(session?.status).toBe('failed');
   });
-
-  it('rejects obsolete completed and stopped statuses', async () => {
-    const t = convexTest(schema);
-    const { authed, taskId } = await setupTaskEnv(t);
-
-    const sessionId = await authed.mutation(api.sessions.create, { taskId });
-
-    // These statuses no longer exist in the simplified schema
-    await expect(
-      authed.mutation(api.sessions.updateStatus, {
-        id: sessionId,
-        status: 'completed' as 'idle', // type assertion to bypass compile-time check
-      }),
-    ).rejects.toThrow();
-
-    await expect(
-      authed.mutation(api.sessions.updateStatus, {
-        id: sessionId,
-        status: 'stopped' as 'idle',
-      }),
-    ).rejects.toThrow();
-  });
 });
 
 describe('sessions.updateLastActivity', () => {

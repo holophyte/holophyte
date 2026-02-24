@@ -170,10 +170,6 @@ export default defineSchema({
       v.literal('running'),
       v.literal('idle'),
       v.literal('failed'),
-      // Legacy statuses kept for backwards compatibility during migration.
-      // New code only writes 'running' | 'idle' | 'failed'.
-      v.literal('completed'),
-      v.literal('stopped'),
     ),
     startedAt: v.number(),
     lastActivityAt: v.optional(v.number()),

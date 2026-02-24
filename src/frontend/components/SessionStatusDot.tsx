@@ -18,8 +18,6 @@ interface SessionStatusDotProps {
  * | `running` | green | pulsing |
  * | `idle` | gray | none |
  * | `failed` | red | none |
- * | `completed` | gray | none | (legacy)
- * | `stopped` | gray | none | (legacy)
  *
  * Rendered as an `aria-hidden` decorative element — pair it with an accessible
  * label on the parent if the status information must be conveyed to screen
@@ -41,8 +39,7 @@ export default function SessionStatusDot({
       className={cn(
         'h-2 w-2 shrink-0 rounded-full',
         status === 'running' && 'bg-green-500 animate-pulse',
-        (status === 'idle' || status === 'completed' || status === 'stopped') &&
-          'bg-gray-400',
+        status === 'idle' && 'bg-gray-400',
         status === 'failed' && 'bg-red-500',
         className,
       )}

@@ -2,7 +2,7 @@
 /**
  * Tests for the session-rethink manager changes:
  * - No idle timeout: sessions become 'idle' in Convex after each turn
- * - 'completed' and 'stopped' statuses replaced by 'idle'
+ * - Only three statuses: 'running' | 'idle' | 'failed'
  * - Concurrent session limit: max 10 active sessions globally
  * - Warning threshold at 5 active sessions
  */
