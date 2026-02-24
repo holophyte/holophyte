@@ -93,12 +93,7 @@ export default function SessionPanel({ taskId }: SessionPanelProps) {
 
   const thinkingElapsedSeconds =
     sessionStatus === 'running' && session
-      ? Math.max(
-          0,
-          Math.floor(
-            (now - (session.lastActivityAt ?? session.startedAt)) / 1000,
-          ),
-        )
+      ? Math.max(0, Math.floor((now - session.startedAt) / 1000))
       : undefined;
 
   const unresolvedApprovals = pendingApprovals.filter((a) => !a.resolved);
@@ -218,7 +213,11 @@ export default function SessionPanel({ taskId }: SessionPanelProps) {
         reconnectWs();
       } catch (err) {
         // Revert the status so the session doesn't stay stuck as 'running'
-        await updateSessionStatus({ id: session._id, status: 'failed' });
+        try {
+          await updateSessionStatus({ id: session._id, status: 'failed' });
+        } catch (cleanupErr) {
+          console.error('Failed to revert session status:', cleanupErr);
+        }
         throw err;
       }
       return;

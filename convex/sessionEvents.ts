@@ -33,7 +33,7 @@ export const getNextBatchIndex = internalQuery({
       .withIndex('by_session_batch', (q) => q.eq('sessionId', args.sessionId))
       .order('desc')
       .first();
-    return lastBatch ? lastBatch.batchIndex + 1 : 0;
+    return { nextBatchIndex: lastBatch ? lastBatch.batchIndex + 1 : 0 };
   },
 });
 

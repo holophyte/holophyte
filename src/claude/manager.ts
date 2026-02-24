@@ -324,7 +324,8 @@ export async function startSession(opts: {
       }>('/api/internal/sessionEvents/getNextBatchIndex', { sessionId });
       initialBatchIndex = nextBatchIndex;
     } catch (err) {
-      console.error('Failed to fetch next batch index, defaulting to 0:', err);
+      console.error('Failed to fetch next batch index:', err);
+      throw new Error('Cannot resume session: failed to determine batch index');
     }
   }
 
@@ -346,12 +347,14 @@ export async function startSession(opts: {
   // Persist session name from first 30 chars of prompt
   const sessionName =
     opts.prompt.slice(0, 30).trim() + (opts.prompt.length > 30 ? '…' : '');
-  callConvexInternal('/api/internal/sessions/updateName', {
-    id: sessionId,
-    name: sessionName,
-  }).catch((err) => {
+  try {
+    await callConvexInternal('/api/internal/sessions/updateName', {
+      id: sessionId,
+      name: sessionName,
+    });
+  } catch (err) {
     console.error('Failed to set session name:', err);
-  });
+  }
 
   // Periodic event flush to Convex
   session.flushTimer = setInterval(() => {

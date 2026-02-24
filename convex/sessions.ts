@@ -274,9 +274,11 @@ export const serverMarkStaleRunning = internalMutation({
       .query('sessions')
       .withIndex('by_status', (q) => q.eq('status', 'running'))
       .collect();
-    const now = Date.now();
     for (const session of runningSessions) {
-      await ctx.db.patch(session._id, { status: 'idle', lastActivityAt: now });
+      await ctx.db.patch(session._id, {
+        status: 'idle',
+        lastActivityAt: session.lastActivityAt ?? session.startedAt,
+      });
     }
     return { count: runningSessions.length };
   },
