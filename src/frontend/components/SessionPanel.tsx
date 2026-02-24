@@ -1,6 +1,7 @@
 import { api } from '@convex/_generated/api';
 import type { Id } from '@convex/_generated/dataModel';
 import { useMutation, useQuery } from 'convex/react';
+import { Square } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useSession } from '@/frontend/hooks/useSession';
 import { isEditableElement } from '@/frontend/lib/dom';
@@ -9,6 +10,7 @@ import MessageStream from './MessageStream';
 import PermissionPrompt from './PermissionPrompt';
 import SessionDropdown from './SessionDropdown';
 import UserInput from './UserInput';
+import Button from './ui/Button';
 
 /** Props for {@link SessionPanel}. */
 interface SessionPanelProps {
@@ -54,6 +56,31 @@ export default function SessionPanel({ taskId }: SessionPanelProps) {
     deny,
     sendMessage,
   } = useSession(sessionId);
+
+  const [stopping, setStopping] = useState(false);
+
+  const handleStop = async () => {
+    if (!sessionId) return;
+    setStopping(true);
+    try {
+      const res = await fetch(`/api/sessions/${sessionId}/stop`, {
+        method: 'POST',
+      });
+      if (!res.ok) {
+        const data = (await res.json()) as { error?: string };
+        console.error('Failed to stop session:', data.error);
+      }
+      // Fallback: ensure status is updated even if the exit event has no subscriber
+      await updateSessionStatus({
+        id: sessionId as Id<'sessions'>,
+        status: 'idle',
+      });
+    } catch (err) {
+      console.error('Failed to stop session:', err);
+    } finally {
+      setStopping(false);
+    }
+  };
 
   const [now, setNow] = useState(Date.now());
   useEffect(() => {
@@ -202,6 +229,18 @@ export default function SessionPanel({ taskId }: SessionPanelProps) {
     <div className="flex h-full flex-col bg-background">
       <div className="flex shrink-0 items-center gap-2 border-b border-border/50 px-3 py-2">
         <SessionDropdown taskId={taskId} activeSessionId={sessionId} />
+        {sessionStatus === 'running' && (
+          <Button
+            size="sm"
+            variant="destructive"
+            disabled={stopping}
+            onClick={() => void handleStop()}
+            aria-label="Stop session"
+          >
+            <Square className="h-3.5 w-3.5" />
+            {stopping ? 'Stopping…' : 'Stop'}
+          </Button>
+        )}
       </div>
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
         <MessageStream
