@@ -102,52 +102,39 @@ Playwright E2E tests (`bun run test:e2e`) work in worktrees with some considerat
 - `playwright.config.ts` passes `CONVEX_URL` derived from `.dev-ports` to the E2E web server, ensuring it connects to the correct local Convex instance
 - You must have `bun run convex:local` running in the worktree before running E2E tests
 
-## Gotchas
+## Troubleshooting
 
-### `.env.local` with stale Convex vars causes silent cross-contamination
+### `convex dev --local` silently connects to cloud
 
-If `.env.local` contains `CONVEX_DEPLOYMENT` or `CONVEX_URL` from another workspace, the app server silently connects to the wrong Convex database. Symptoms: data appearing/disappearing unexpectedly, or mutations in one workspace affecting another.
+If `.dev-ports` is missing `CONVEX_TEAM` or `CONVEX_PROJECT`, and `.env.local` has a `dev:` deployment (cloud), `convex dev --local` silently connects to cloud instead of starting a local backend. Always include both in `.dev-ports`.
 
-**Fix:** `convex-local.sh` now auto-detects port mismatches and reconfigures. If you suspect contamination, delete `CONVEX_DEPLOYMENT`, `CONVEX_URL`, and `CONVEX_SITE_URL` from `.env.local` and restart `bun run dev:local`.
+### Orphaned Chromium processes after E2E tests
 
-### `convex dev --configure existing` reuses deployment names when `CONVEX_DEPLOYMENT` is present
-
-Convex treats an existing `CONVEX_DEPLOYMENT=local:*` in `.env.local` as "already configured" and reinitializes with the same name. This is correct behavior for restarting a workspace, but causes collisions when the value was copied from another workspace.
-
-**Fix:** Always strip Convex-managed vars before provisioning. The worktree creation script does this automatically.
-
-### `convex dev --local` silently connects to cloud without `CONVEX_TEAM`/`CONVEX_PROJECT`
-
-If `.env.local` has a `dev:` deployment (cloud) and `.dev-ports` is missing `CONVEX_TEAM`/`CONVEX_PROJECT`, `convex dev --local` silently connects to cloud instead of starting a local backend. Always include both in `.dev-ports`.
-
-### `@convex-dev/auth` requires a running backend
-
-The Convex Auth setup command (`bunx @convex-dev/auth`) needs the backend running to set environment variables. It cannot run after `convex dev --once` exits. Auth keys are configured automatically on first `bun run dev:local` when the backend is running.
-
-### Port allocation doesn't survive worktree deletion and recreation
-
-If you delete a worktree and its `.dev-ports` file, then create a new worktree, the new one may reuse the deleted worktree's port slot. This is usually fine, but can cause issues if the old worktree's Convex backend is still running.
-
-**Fix:** Stop all running dev servers before creating new worktrees, or manually check for port conflicts with `lsof -iTCP -sTCP:LISTEN`.
-
-### Playwright browser processes can linger after failed setup
-
-If `e2e/global-setup.ts` fails mid-way (e.g., timeout waiting for hydration), the Chromium process may not be cleaned up. Symptoms: subsequent test runs fail to launch a browser, or orphaned Chrome processes consume memory.
-
-**Fix:** The setup now uses `try/finally` to ensure `browser.close()` always runs. If you still see orphaned processes:
+If a test run crashes or is killed mid-way, Chromium processes may linger. Symptoms: subsequent test runs fail to launch a browser, or memory usage spikes.
 
 ```bash
 pkill -f "chromium.*--headless"
 ```
 
-### Playwright E2E server may use wrong Convex URL in worktrees
+### Port conflicts after deleting a worktree
 
-The E2E web server spawned by Playwright reads `CONVEX_URL` from `.env.local`. If `.env.local` has stale URLs from another worktree, the test server connects to the wrong database.
+If you delete a worktree but its dev server is still running, the ports stay occupied. The next `worktree:create` will skip those ports (it checks `lsof`), but if you kill the process after creation, you may end up with two worktrees on the same slot.
 
-**Fix:** `playwright.config.ts` now passes `CONVEX_URL` derived from `.dev-ports` via the web server env config, which takes precedence over `.env.local` (Bun doesn't override env vars already set in the process environment).
+```bash
+# Check what's listening
+lsof -iTCP -sTCP:LISTEN | grep -E '(8080|3210)'
+```
 
 ### `bun run --watch` swallows subprocess stderr
 
-When using `bun run --watch`, subprocess stderr is invisible. This hides SDK errors, Convex connection failures, and other critical debugging output.
+`bun run --watch` hides subprocess stderr output. This makes SDK errors, Convex connection failures, and other critical debugging output invisible.
 
-**Fix:** Run `bun src/server.ts` directly (without `--watch`) when debugging issues.
+Run `bun src/server.ts` directly (without `--watch`) when debugging.
+
+### E2E tests require `convex:local` running
+
+Playwright's `webServer` config starts the app server but not Convex. You must have `bun run convex:local` running in the same workspace before running `bun run test:e2e`.
+
+### `bunx @convex-dev/auth` needs a running backend
+
+If you need to manually configure auth keys (e.g., after a fresh worktree), start `bun run convex:local` in one terminal first, then run `bunx @convex-dev/auth` in another. It won't work standalone because it talks to the Convex backend over HTTP.

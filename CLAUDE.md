@@ -219,8 +219,7 @@ Server configuration lives in environment variables with sensible defaults:
 - Pre-commit hooks configured via `.githooks/` — `prepare` script in package.json sets `core.hooksPath` on `bun install`
 - `bun run --watch` swallows subprocess stderr — run `bun src/server.ts` directly when debugging SDK session issues
 - No CI/CD or Docker configured
-- **Worktree `.env.local` must not contain main repo's Convex vars** — copying `CONVEX_DEPLOYMENT`/`CONVEX_URL` from main causes worktrees to share the same database. `worktree-create.sh` strips these automatically
-- **`convex dev --configure existing` reuses deployment names** when `CONVEX_DEPLOYMENT` is already in `.env.local` — always strip before provisioning a new workspace
-- **`convex-local.sh` validates port alignment** — if `CONVEX_URL` in `.env.local` doesn't match `CONVEX_CLOUD_PORT` from `.dev-ports`, it auto-reconfigures to prevent silent cross-contamination
-- **Playwright `global-setup.ts` must use `try/finally`** around `browser.close()` — otherwise failed setup leaves orphaned Chromium processes
-- **E2E tests in worktrees**: `playwright.config.ts` passes `CONVEX_URL` from `.dev-ports` to the web server env to override stale `.env.local` values
+- **`convex dev --local` silently connects to cloud** if `.dev-ports` is missing `CONVEX_TEAM`/`CONVEX_PROJECT` — always include both
+- **E2E tests require `convex:local` running** — Playwright starts the app server but not Convex
+- **`bunx @convex-dev/auth` needs a running backend** — start `convex:local` first, then run auth setup in another terminal
+- See `docs/docs/local-development.md` for the full worktree guide and troubleshooting
