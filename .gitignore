@@ -31,6 +31,7 @@ convex/_generated
 test-results
 playwright-report
 e2e/.auth/
+.playwright-mcp/
 
 # storybook
 storybook-static
