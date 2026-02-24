@@ -2,14 +2,41 @@ import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useSession } from './useSession';
 
-// Mock Convex modules so the hook can render without a ConvexProvider.
+// ---------------------------------------------------------------------------
+// Convex mocks
+// ---------------------------------------------------------------------------
+
+// useQuery is mocked as a plain vi.fn() — the factory must not reference
+// outer variables (vi.mock is hoisted). Override behavior in beforeEach.
 vi.mock('convex/react', () => ({
-  useQuery: vi.fn().mockReturnValue([]),
+  useQuery: vi.fn(),
 }));
+
 vi.mock('@convex/_generated/api', () => ({
-  api: { sessionEvents: { getBySession: 'sessionEvents:getBySession' } },
+  api: {
+    sessions: { get: 'sessions:get' },
+    sessionEvents: { getBySession: 'sessionEvents:getBySession' },
+  },
 }));
 vi.mock('@convex/_generated/dataModel', () => ({}));
+
+import { useQuery } from 'convex/react';
+
+// Typed helper: Convex's useQuery overload signature conflicts with simple
+// mock implementations. This wrapper casts once so call sites stay clean.
+// biome-ignore lint/suspicious/noExplicitAny: necessary for mock compatibility
+const mockedUseQuery = vi.mocked(useQuery) as any as {
+  mockImplementation: (fn: (query: unknown) => unknown) => void;
+};
+
+// Default: no session record, no persisted batches
+function resetUseQueryDefaults() {
+  mockedUseQuery.mockImplementation((query: unknown) => {
+    if (query === 'sessions:get') return null;
+    if (query === 'sessionEvents:getBySession') return [];
+    return null;
+  });
+}
 
 // ---------------------------------------------------------------------------
 // WebSocket mock
@@ -69,6 +96,7 @@ class MockWebSocket {
 beforeEach(() => {
   lastWsInstance = null;
   vi.stubGlobal('WebSocket', MockWebSocket);
+  resetUseQueryDefaults();
 });
 
 afterEach(() => {
@@ -101,6 +129,7 @@ describe('useSession', () => {
       expect(result.current.pendingApprovals).toEqual([]);
       expect(result.current.sessionStatus).toBeNull();
       expect(result.current.isConnected).toBe(false);
+      expect(result.current.sdkSessionId).toBeUndefined();
     });
 
     it('opens a WebSocket when sessionId is provided', () => {
@@ -130,6 +159,29 @@ describe('useSession', () => {
       expect(constructorSpy).toHaveBeenCalledWith(
         expect.stringMatching(/^wss:/),
       );
+    });
+
+    it('exposes sdkSessionId from Convex session record', () => {
+      mockedUseQuery.mockImplementation((query: unknown) => {
+        if (query === 'sessions:get')
+          return { sdkSessionId: 'sdk-abc-123', status: 'idle' };
+        if (query === 'sessionEvents:getBySession') return [];
+        return null;
+      });
+
+      const { result } = renderSession('session-1');
+      expect(result.current.sdkSessionId).toBe('sdk-abc-123');
+    });
+
+    it('sdkSessionId is undefined when session record has no sdkSessionId yet', () => {
+      mockedUseQuery.mockImplementation((query: unknown) => {
+        if (query === 'sessions:get') return { status: 'running' };
+        if (query === 'sessionEvents:getBySession') return [];
+        return null;
+      });
+
+      const { result } = renderSession('session-1');
+      expect(result.current.sdkSessionId).toBeUndefined();
     });
   });
 
@@ -185,6 +237,25 @@ describe('useSession', () => {
       expect(result.current.events).toHaveLength(0);
       expect(result.current.pendingApprovals).toHaveLength(0);
     });
+
+    it('resets messageQueued on new session', () => {
+      let id = 'session-a';
+      const { result, rerender } = renderHook(() => useSession(id));
+
+      // Mark messageQueued by simulating a running status then send
+      act(() => {
+        ws()._simulateMessage({
+          type: 'status',
+          sessionId: 'session-a',
+          status: 'running',
+        });
+      });
+
+      // Switch session — messageQueued should be cleared
+      id = 'session-b';
+      rerender();
+      expect(result.current.messageQueued).toBe(false);
+    });
   });
 
   describe('event message parsing', () => {
@@ -230,6 +301,48 @@ describe('useSession', () => {
       });
       expect(result.current.events).toHaveLength(0);
     });
+
+    it('deduplicates events by uuid when they appear in both persisted and WS', () => {
+      // Simulate persisted events with uuids
+      mockedUseQuery.mockImplementation((query: unknown) => {
+        if (query === 'sessions:get') return null;
+        if (query === 'sessionEvents:getBySession') {
+          return [
+            {
+              batchIndex: 0,
+              events: [
+                {
+                  data: JSON.stringify({
+                    type: 'text',
+                    uuid: 'uuid-1',
+                    text: 'From Convex',
+                  }),
+                  timestamp: Date.now(),
+                },
+              ],
+            },
+          ];
+        }
+        return null;
+      });
+
+      const { result } = renderSession('session-1');
+
+      // WS also delivers the same event (with same uuid) — should be deduplicated
+      act(() =>
+        ws()._simulateMessage({
+          type: 'event',
+          sessionId: 'session-1',
+          event: { type: 'text', uuid: 'uuid-1', text: 'From Convex' },
+        }),
+      );
+
+      // Should only appear once despite coming from both sources
+      const matching = result.current.events.filter(
+        (e) => (e as { uuid?: string }).uuid === 'uuid-1',
+      );
+      expect(matching).toHaveLength(1);
+    });
   });
 
   describe('status messages', () => {
@@ -257,16 +370,53 @@ describe('useSession', () => {
       expect(result.current.sessionStatus).toBe('failed');
     });
 
-    it('tracks completed status', () => {
+    it('tracks idle status (replaces completed/stopped)', () => {
       const { result } = renderSession('session-1');
       act(() =>
         ws()._simulateMessage({
           type: 'status',
           sessionId: 'session-1',
-          status: 'completed',
+          status: 'idle',
         }),
       );
-      expect(result.current.sessionStatus).toBe('completed');
+      expect(result.current.sessionStatus).toBe('idle');
+    });
+
+    it('clears messageQueued when status moves past running', () => {
+      const { result } = renderSession('session-1');
+
+      // Start running
+      act(() =>
+        ws()._simulateMessage({
+          type: 'status',
+          sessionId: 'session-1',
+          status: 'running',
+        }),
+      );
+      // messageQueued is false unless sendMessage was called
+      expect(result.current.messageQueued).toBe(false);
+
+      // Transition to idle — messageQueued (if set) should clear
+      act(() =>
+        ws()._simulateMessage({
+          type: 'status',
+          sessionId: 'session-1',
+          status: 'idle',
+        }),
+      );
+      expect(result.current.messageQueued).toBe(false);
+    });
+
+    it('clears messageQueued on error', () => {
+      const { result } = renderSession('session-1');
+      act(() =>
+        ws()._simulateMessage({
+          type: 'error',
+          sessionId: 'session-1',
+          message: 'boom',
+        }),
+      );
+      expect(result.current.messageQueued).toBe(false);
     });
   });
 
@@ -507,7 +657,7 @@ describe('useSession', () => {
       expect(result.current.sessionStatus).toBe('running');
     });
 
-    it('does not show waiting_input when session is completed', () => {
+    it('does not show waiting_input when session is idle', () => {
       const { result } = renderSession('session-1');
 
       // Permission arrives
@@ -521,17 +671,78 @@ describe('useSession', () => {
         }),
       );
 
-      // Session completes without resolving the approval
+      // Session goes idle without resolving the approval
       act(() =>
         ws()._simulateMessage({
           type: 'status',
           sessionId: 'session-1',
-          status: 'completed',
+          status: 'idle',
         }),
       );
 
-      // completed takes priority over waiting_input
-      expect(result.current.sessionStatus).toBe('completed');
+      // idle takes priority over waiting_input
+      expect(result.current.sessionStatus).toBe('idle');
+    });
+
+    it('does not show waiting_input when session has failed', () => {
+      const { result } = renderSession('session-1');
+
+      // Permission arrives
+      act(() =>
+        ws()._simulateMessage({
+          type: 'permission',
+          sessionId: 'session-1',
+          requestId: 'req-1',
+          tool: 'Write',
+          input: {},
+        }),
+      );
+
+      // Session fails without resolving the approval
+      act(() =>
+        ws()._simulateMessage({
+          type: 'status',
+          sessionId: 'session-1',
+          status: 'failed',
+        }),
+      );
+
+      expect(result.current.sessionStatus).toBe('failed');
+    });
+  });
+
+  describe('sdkSessionId from Convex (for resume flow)', () => {
+    it('is available once the Convex session record has sdkSessionId', () => {
+      mockedUseQuery.mockImplementation((query: unknown) => {
+        if (query === 'sessions:get') {
+          return { sdkSessionId: 'sdk-resume-id-xyz', status: 'idle' };
+        }
+        if (query === 'sessionEvents:getBySession') return [];
+        return null;
+      });
+
+      const { result } = renderSession('session-idle');
+      expect(result.current.sdkSessionId).toBe('sdk-resume-id-xyz');
+    });
+
+    it('updates reactively when Convex session record updates', () => {
+      let sessionRecord: { sdkSessionId?: string; status: string } = {
+        status: 'running',
+      };
+      mockedUseQuery.mockImplementation((query: unknown) => {
+        if (query === 'sessions:get') return sessionRecord;
+        if (query === 'sessionEvents:getBySession') return [];
+        return null;
+      });
+
+      const { result, rerender } = renderSession('session-live');
+      expect(result.current.sdkSessionId).toBeUndefined();
+
+      // Simulate Convex updating the record with sdkSessionId
+      sessionRecord = { sdkSessionId: 'sdk-newly-set', status: 'idle' };
+      rerender();
+
+      expect(result.current.sdkSessionId).toBe('sdk-newly-set');
     });
   });
 
@@ -555,6 +766,65 @@ describe('useSession', () => {
           body: JSON.stringify({ type: 'message', text: 'Hello Claude' }),
         }),
       );
+    });
+
+    it('sets messageQueued when session is running and message is sent', async () => {
+      vi.spyOn(global, 'fetch').mockResolvedValue(new Response('{}'));
+
+      const { result } = renderSession('session-running');
+
+      // Simulate running status
+      act(() =>
+        ws()._simulateMessage({
+          type: 'status',
+          sessionId: 'session-running',
+          status: 'running',
+        }),
+      );
+
+      expect(result.current.sessionStatus).toBe('running');
+
+      await act(async () => {
+        await result.current.sendMessage('session-running', 'follow-up');
+      });
+
+      expect(result.current.messageQueued).toBe(true);
+    });
+
+    it('does not set messageQueued when session is idle', async () => {
+      vi.spyOn(global, 'fetch').mockResolvedValue(new Response('{}'));
+
+      const { result } = renderSession('session-idle');
+
+      // Session is idle
+      act(() =>
+        ws()._simulateMessage({
+          type: 'status',
+          sessionId: 'session-idle',
+          status: 'idle',
+        }),
+      );
+
+      await act(async () => {
+        await result.current.sendMessage('session-idle', 'resume message');
+      });
+
+      // Not running, so messageQueued stays false
+      expect(result.current.messageQueued).toBe(false);
+    });
+
+    it('throws when the server responds with an error', async () => {
+      vi.spyOn(global, 'fetch').mockResolvedValue(
+        new Response('Session not found', { status: 404 }),
+      );
+
+      const { result } = renderSession('session-missing');
+
+      await expect(
+        act(async () => {
+          await result.current.sendMessage('session-missing', 'hello');
+        }),
+      ).rejects.toThrow();
     });
   });
 });

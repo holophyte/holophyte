@@ -28,16 +28,10 @@ export interface PendingApproval {
  *
  * - `running` — session is actively processing
  * - `waiting_input` — derived state: one or more tool-use approvals are pending
- * - `completed` — session finished successfully
+ * - `idle` — session turn completed; process has exited. Can be resumed.
  * - `failed` — session ended with an error
- * - `stopped` — session was stopped by the user
  */
-export type SessionStatus =
-  | 'running'
-  | 'waiting_input'
-  | 'completed'
-  | 'failed'
-  | 'stopped';
+export type SessionStatus = 'running' | 'waiting_input' | 'idle' | 'failed';
 
 /**
  * Return value of {@link useSession}.
@@ -62,6 +56,16 @@ export interface UseSessionReturn {
    * state and is queued for delivery once the current turn ends.
    */
   messageQueued: boolean;
+  /**
+   * The SDK session ID from Convex, used to resume idle sessions.
+   * Available once the session has been initialized by the SDK.
+   */
+  sdkSessionId: string | undefined;
+  /**
+   * Force the WebSocket to reconnect. Used after resuming an idle session so
+   * the WS picks up the newly created server-side session.
+   */
+  reconnectWs: () => void;
   /**
    * Approve a pending tool-use request. Sends `{ type: 'approve', requestId }`
    * over the WebSocket and marks the approval as resolved in local state.
@@ -136,7 +140,17 @@ export function useSession(sessionId: string | null): UseSessionReturn {
   const [isConnected, setIsConnected] = useState(false);
   const [messageQueued, setMessageQueued] = useState(false);
 
+  // Bumping this forces the WS effect to reconnect (used after resume).
+  const [wsConnectKey, setWsConnectKey] = useState(0);
+  const reconnectWs = useCallback(() => setWsConnectKey((k) => k + 1), []);
+
   const wsRef = useRef<WebSocket | null>(null);
+
+  // Load the session record so we can access sdkSessionId for resume.
+  const sessionRecord = useQuery(
+    api.sessions.get,
+    sessionId ? { id: sessionId as Id<'sessions'> } : 'skip',
+  );
 
   // Load persisted event batches from Convex (already-flushed history).
   // Returns undefined while loading; skip when sessionId is null.
@@ -213,6 +227,7 @@ export function useSession(sessionId: string | null): UseSessionReturn {
     [sessionStatus],
   );
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: wsConnectKey is an intentional re-trigger dependency for reconnectWs()
   useEffect(() => {
     if (!sessionId) return;
 
@@ -258,7 +273,15 @@ export function useSession(sessionId: string | null): UseSessionReturn {
           setMessageQueued(false);
         }
       } else if (msg.type === 'error') {
-        setSessionStatus('failed');
+        // If the server says "Session not found", the session process died
+        // before it could update Convex (e.g. server restart). In that case
+        // the session is stale-running rather than truly failed — treat it as
+        // idle so the user can resume it. For all other errors, mark failed.
+        if (msg.message === 'Session not found') {
+          setSessionStatus('idle');
+        } else {
+          setSessionStatus('failed');
+        }
         setMessageQueued(false);
       }
     };
@@ -271,17 +294,24 @@ export function useSession(sessionId: string | null): UseSessionReturn {
       ws.close();
       wsRef.current = null;
     };
-  }, [sessionId]);
+  }, [sessionId, wsConnectKey]);
+
+  // Fall back to the Convex record status when the WebSocket hasn't reported
+  // a status yet (e.g. the WS connected before the server created the session,
+  // got "Session not found", and closed — but Convex already shows "running").
+  const effectiveStatus: SessionStatus | null =
+    sessionStatus ??
+    (sessionRecord?.status as SessionStatus | undefined) ??
+    null;
 
   // Derive sessionStatus: if there are unresolved approvals, show waiting_input
   // (handles the case where a 'running' status arrives after a permission prompt)
   const derivedStatus: SessionStatus | null =
     pendingApprovals.some((a) => !a.resolved) &&
-    sessionStatus !== 'completed' &&
-    sessionStatus !== 'failed' &&
-    sessionStatus !== 'stopped'
+    effectiveStatus !== 'idle' &&
+    effectiveStatus !== 'failed'
       ? 'waiting_input'
-      : sessionStatus;
+      : effectiveStatus;
 
   return {
     events,
@@ -289,6 +319,8 @@ export function useSession(sessionId: string | null): UseSessionReturn {
     sessionStatus: derivedStatus,
     isConnected,
     messageQueued,
+    sdkSessionId: sessionRecord?.sdkSessionId,
+    reconnectWs,
     approve,
     deny,
     sendMessage,

@@ -10,7 +10,7 @@ beforeEach(() => {
     selectedOrgId: null,
     backlogCollapsed: true,
     taskPageDetailCollapsed: false,
-    sessionId: null,
+    activeSessionId: null,
   });
 });
 
@@ -35,15 +35,15 @@ describe('toggleBacklog', () => {
 });
 
 describe('session actions', () => {
-  it('openSession sets sessionId', () => {
+  it('openSession sets activeSessionId', () => {
     useAppStore.getState().openSession('session-1');
-    expect(useAppStore.getState().sessionId).toBe('session-1');
+    expect(useAppStore.getState().activeSessionId).toBe('session-1');
   });
 
-  it('closeSession clears sessionId', () => {
+  it('closeSession clears activeSessionId', () => {
     useAppStore.getState().openSession('session-1');
     useAppStore.getState().closeSession();
-    expect(useAppStore.getState().sessionId).toBeNull();
+    expect(useAppStore.getState().activeSessionId).toBeNull();
   });
 });
 

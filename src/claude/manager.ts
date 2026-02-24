@@ -24,12 +24,7 @@ export type WsServerMessage =
   | { type: 'status'; sessionId: string; status: SessionStatus }
   | { type: 'error'; sessionId: string; message: string };
 
-export type SessionStatus =
-  | 'running'
-  | 'waiting_input'
-  | 'completed'
-  | 'failed'
-  | 'stopped';
+export type SessionStatus = 'running' | 'waiting_input' | 'idle' | 'failed';
 
 interface PendingApproval {
   resolve: (result: PermissionResult) => void;
@@ -55,8 +50,10 @@ interface BufferedEvent {
   timestamp: number;
 }
 
-/** How long to wait for a follow-up message after the SDK turn completes. */
-const IDLE_TIMEOUT_MS = 60_000;
+/** Max concurrent active sessions globally. */
+const MAX_ACTIVE_SESSIONS = 10;
+/** Warn when active sessions reach this threshold. */
+const WARN_ACTIVE_SESSIONS = 5;
 
 interface Session {
   controller: AbortController;
@@ -73,10 +70,6 @@ interface Session {
   model?: string;
   /** The live SDK query object — used to inject follow-up messages. */
   sdkQuery?: Query;
-  /** Resolves the idle-timeout promise when a follow-up message arrives. */
-  idleResolve?: (text: string) => void;
-  /** Message queued while the session is running; delivered when the turn ends. */
-  pendingMessage?: string;
 }
 
 const sessions = new Map<string, Session>();
@@ -116,16 +109,21 @@ const SAFE_TOOLS = new Set([
 ]);
 
 /** Call a Convex HTTP action endpoint with Bearer auth. */
-async function callConvexInternal(
-  path: string,
-  body: Record<string, unknown>,
-): Promise<void> {
+function getConvexConfig() {
   const baseUrl = process.env.CONVEX_SITE_URL;
   if (!baseUrl)
     throw new Error('CONVEX_SITE_URL environment variable is not set');
   const secret = process.env.INTERNAL_API_SECRET;
   if (!secret)
     throw new Error('INTERNAL_API_SECRET environment variable is not set');
+  return { baseUrl, secret };
+}
+
+async function callConvexInternal(
+  path: string,
+  body: Record<string, unknown>,
+): Promise<void> {
+  const { baseUrl, secret } = getConvexConfig();
 
   const res = await fetch(`${baseUrl}${path}`, {
     method: 'POST',
@@ -140,6 +138,29 @@ async function callConvexInternal(
     const text = await res.text();
     throw new Error(`Convex HTTP action failed (${res.status}): ${text}`);
   }
+}
+
+async function queryConvexInternal<T>(
+  path: string,
+  body: Record<string, unknown>,
+): Promise<T> {
+  const { baseUrl, secret } = getConvexConfig();
+
+  const res = await fetch(`${baseUrl}${path}`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${secret}`,
+    },
+    body: JSON.stringify(body),
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Convex HTTP action failed (${res.status}): ${text}`);
+  }
+
+  return (await res.json()) as T;
 }
 
 function broadcast(session: Session, msg: WsServerMessage): void {
@@ -211,14 +232,58 @@ function bufferEvent(session: Session, event: SDKMessage): void {
   }
 }
 
+/**
+ * Returns the in-memory session state for a running session, or `undefined` if
+ * no session with the given ID is currently active.
+ *
+ * Only active (running) sessions are present in memory — idle sessions exist
+ * only in Convex and must be resumed via {@link startSession} with
+ * `resumeSdkSessionId`.
+ */
 export function getSession(sessionId: string): Session | undefined {
   return sessions.get(sessionId);
 }
 
+/** Returns the IDs of all currently active (running) sessions. */
 export function getActiveSessions(): string[] {
   return Array.from(sessions.keys());
 }
 
+/** Returns the number of currently active (running) sessions. */
+export function getActiveSessionCount(): number {
+  return sessions.size;
+}
+
+/**
+ * Returns `true` when active sessions have reached or exceeded the warning
+ * threshold (`WARN_ACTIVE_SESSIONS = 5`).
+ *
+ * Used by the frontend to show a caution banner before allowing new sessions to
+ * be launched, without blocking the user outright.
+ */
+export function isApproachingSessionLimit(): boolean {
+  return sessions.size >= WARN_ACTIVE_SESSIONS;
+}
+
+/**
+ * Spawns a Claude Code SDK process for the given session and begins streaming
+ * events to any WebSocket subscribers.
+ *
+ * **New session** — omit `resumeSdkSessionId`. A fresh conversation starts with
+ * `prompt` as the first user message.
+ *
+ * **Resume** — pass the `sdkSessionId` from a previous idle session. The SDK
+ * picks up the conversation context and treats `prompt` as a follow-up message.
+ *
+ * The function returns as soon as the background iterator is launched. Actual
+ * SDK events arrive asynchronously via {@link subscribe}.
+ *
+ * @throws If the global active session cap (`MAX_ACTIVE_SESSIONS = 10`) is reached.
+ * @throws If `permissionMode` is not one of `'default' | 'safe-auto' | 'bypass'`.
+ *
+ * @returns The `sessionId` echoed back, and an optional `warning` string when
+ *   the session count is at or above the warning threshold.
+ */
 export async function startSession(opts: {
   sessionId: string;
   repoPath: string;
@@ -226,13 +291,42 @@ export async function startSession(opts: {
   model?: string;
   permissionMode?: PermissionMode;
   resumeSdkSessionId?: string;
-}): Promise<{ sessionId: string }> {
+}): Promise<{ sessionId: string; warning?: string }> {
   const { sessionId } = opts;
+
+  // Enforce concurrent session limits
+  const activeCount = sessions.size;
+  if (activeCount >= MAX_ACTIVE_SESSIONS) {
+    throw new Error(
+      `Maximum concurrent session limit reached (${MAX_ACTIVE_SESSIONS}). Stop an existing session before starting a new one.`,
+    );
+  }
+
+  const warning =
+    activeCount >= WARN_ACTIVE_SESSIONS
+      ? `Warning: ${activeCount} active sessions running. Consider stopping idle sessions to free resources.`
+      : undefined;
+
   const controller = new AbortController();
 
   const mode = opts.permissionMode ?? 'safe-auto';
   if (!VALID_PERMISSION_MODES.has(mode)) {
     throw new Error(`Invalid permissionMode: ${mode}`);
+  }
+
+  // When resuming, start batchIndex after existing persisted batches so new
+  // events sort after the previous session's history.
+  let initialBatchIndex = 0;
+  if (opts.resumeSdkSessionId) {
+    try {
+      const { nextBatchIndex } = await queryConvexInternal<{
+        nextBatchIndex: number;
+      }>('/api/internal/sessionEvents/getNextBatchIndex', { sessionId });
+      initialBatchIndex = nextBatchIndex;
+    } catch (err) {
+      console.error('Failed to fetch next batch index:', err);
+      throw new Error('Cannot resume session: failed to determine batch index');
+    }
   }
 
   const session: Session = {
@@ -241,7 +335,7 @@ export async function startSession(opts: {
     subscribers: new Set(),
     approvalQueue: new Map(),
     eventBuffer: [],
-    batchIndex: 0,
+    batchIndex: initialBatchIndex,
     flushing: false,
     convexSessionId: sessionId,
     permissionMode: mode,
@@ -250,14 +344,33 @@ export async function startSession(opts: {
 
   sessions.set(sessionId, session);
 
+  // Persist session name from first 30 chars of prompt
+  const sessionName =
+    opts.prompt.slice(0, 30).trim() + (opts.prompt.length > 30 ? '…' : '');
+  try {
+    await callConvexInternal('/api/internal/sessions/updateName', {
+      id: sessionId,
+      name: sessionName,
+    });
+  } catch (err) {
+    console.error('Failed to set session name:', err);
+  }
+
   // Periodic event flush to Convex
   session.flushTimer = setInterval(() => {
     flushEvents(session);
   }, FLUSH_INTERVAL_MS);
 
-  // Build SDK options
+  // Build SDK options.
+  // Strip CLAUDECODE env var — if the Holophyte server is itself launched from
+  // a Claude Code session, spawned SDK sessions inherit it and refuse to start
+  // ("cannot be launched inside another Claude Code session").
+  const sdkEnv = { ...process.env };
+  delete sdkEnv.CLAUDECODE;
+
   const sdkOptions: Parameters<typeof sdkQuery>[0]['options'] = {
     cwd: opts.repoPath,
+    env: sdkEnv,
     abortController: controller,
     canUseTool: async (toolName, input, toolOpts) => {
       if (shouldAutoApprove(session, toolName, input)) {
@@ -313,7 +426,7 @@ export async function startSession(opts: {
     console.error('Unhandled error in session iterator:', err);
   });
 
-  return { sessionId };
+  return { sessionId, warning };
 }
 
 async function consumeIterator(
@@ -322,7 +435,7 @@ async function consumeIterator(
   prompt: string,
   options: Parameters<typeof sdkQuery>[0]['options'],
 ): Promise<void> {
-  let finalStatus: SessionStatus = 'completed';
+  let finalStatus: 'idle' | 'failed' = 'idle';
 
   try {
     const iterator = sdkQuery({ prompt, options });
@@ -339,111 +452,57 @@ async function consumeIterator(
     broadcast(session, { type: 'event', sessionId, event: promptEvent });
     bufferEvent(session, promptEvent);
 
-    // Consume SDK events, then wait for follow-up messages in a loop
-    let currentIterator: AsyncIterable<SDKMessage> = iterator;
-    let waitingForInput = false;
+    for await (const event of iterator) {
+      // Capture SDK session ID from the init event for resume support
+      if (
+        event.type === 'system' &&
+        'subtype' in event &&
+        event.subtype === 'init' &&
+        'session_id' in event
+      ) {
+        session.sdkSessionId = String(
+          (event as Record<string, unknown>).session_id,
+        );
 
-    while (true) {
-      for await (const event of currentIterator) {
-        // If we were idle-waiting, we're back to running
-        if (waitingForInput) {
-          waitingForInput = false;
-          broadcast(session, {
-            type: 'status',
-            sessionId,
-            status: 'running',
-          });
-        }
-
-        // Capture SDK session ID from the init event for resume support
-        if (
-          event.type === 'system' &&
-          'subtype' in event &&
-          event.subtype === 'init' &&
-          'session_id' in event
-        ) {
-          session.sdkSessionId = String(
-            (event as Record<string, unknown>).session_id,
+        try {
+          await callConvexInternal(
+            '/api/internal/sessions/updateSdkSessionId',
+            {
+              id: session.convexSessionId,
+              sdkSessionId: session.sdkSessionId,
+              model: session.model,
+              permissionMode: session.permissionMode,
+            },
           );
-
-          try {
-            await callConvexInternal(
-              '/api/internal/sessions/updateSdkSessionId',
-              {
-                id: session.convexSessionId,
-                sdkSessionId: session.sdkSessionId,
-                model: session.model,
-                permissionMode: session.permissionMode,
-              },
-            );
-          } catch (err) {
-            console.error('Failed to persist SDK session ID:', err);
-          }
+        } catch (err) {
+          console.error('Failed to persist SDK session ID:', err);
         }
-
-        // Detect error results
-        if (event.type === 'result' && 'is_error' in event && event.is_error) {
-          finalStatus = 'failed';
-        }
-
-        // Buffer for Convex persistence
-        bufferEvent(session, event);
-
-        // Broadcast to all WebSocket subscribers
-        broadcast(session, { type: 'event', sessionId, event });
       }
 
-      // Iterator finished — deliver a queued message immediately, or wait for input
-      waitingForInput = true;
-      broadcast(session, {
-        type: 'status',
-        sessionId,
-        status: 'waiting_input',
-      });
+      // Detect error results
+      if (event.type === 'result' && 'is_error' in event && event.is_error) {
+        finalStatus = 'failed';
+      }
 
-      // If a message was queued while the session was running, use it now
-      let followUp: string | null;
-      if (session.pendingMessage) {
-        followUp = session.pendingMessage;
-        session.pendingMessage = undefined;
-      } else {
-        followUp = await new Promise<string | null>((resolve) => {
-          const timeoutHandle = setTimeout(
-            () => resolve(null),
-            IDLE_TIMEOUT_MS,
-          );
-          session.idleResolve = (text: string) => {
-            clearTimeout(timeoutHandle);
-            resolve(text);
-          };
+      // Buffer for Convex persistence
+      bufferEvent(session, event);
+
+      // Broadcast to all WebSocket subscribers
+      broadcast(session, { type: 'event', sessionId, event });
+
+      // Update lastActivityAt on significant events
+      if (event.type === 'result' || event.type === 'assistant') {
+        callConvexInternal('/api/internal/sessions/updateActivity', {
+          id: session.convexSessionId,
+        }).catch((err) => {
+          console.error('Failed to update session activity:', err);
         });
-        session.idleResolve = undefined;
       }
-
-      if (!followUp) break; // Timeout — complete the session
-
-      // Synthesize a user event for the follow-up message
-      const userEvent = {
-        type: 'user',
-        uuid: crypto.randomUUID(),
-        message: { role: 'user', content: followUp },
-      } as SDKMessage;
-      broadcast(session, { type: 'event', sessionId, event: userEvent });
-      bufferEvent(session, userEvent);
-
-      // Start a new SDK query with the follow-up, resuming the session
-      currentIterator = sdkQuery({
-        prompt: followUp,
-        options: {
-          ...options,
-          resume: session.sdkSessionId,
-        },
-      });
-      session.sdkQuery = currentIterator as Query;
     }
   } catch (err) {
+    console.error(`[session ${sessionId}] SDK error:`, err);
     if (session.stoppedByUser) {
-      finalStatus = 'stopped';
+      finalStatus = 'idle';
     } else {
       finalStatus = 'failed';
       broadcast(session, {
@@ -484,6 +543,15 @@ async function consumeIterator(
   }
 }
 
+/**
+ * Aborts the running SDK process for a session.
+ *
+ * Sets `stoppedByUser = true` so the cleanup path in `consumeIterator` treats
+ * the abort as a user-initiated stop rather than an error, transitioning the
+ * session to `idle` (resumable) instead of `failed`.
+ *
+ * No-op if the session is not currently active.
+ */
 export function stopSession(sessionId: string): void {
   const session = sessions.get(sessionId);
   if (!session) return;
@@ -519,30 +587,18 @@ export function respondToApproval(
 }
 
 /**
- * Inject a follow-up user message into a running session.
- * Uses the SDK's `streamInput` to send the message as a new conversation turn.
+ * Subscribes to WebSocket messages for an active session.
  *
- * @returns true if the message was queued, false if the session is not found or has no live query.
+ * Immediately replays any buffered events (un-flushed SDK messages still in
+ * memory) and any pending permission prompts so late-connecting clients see the
+ * complete in-progress state. Subsequent events are delivered in real-time via
+ * `callback`.
+ *
+ * @param sessionId - The Convex session ID of the active session.
+ * @param callback - Invoked for each {@link WsServerMessage} (event, permission,
+ *   status, or error).
+ * @returns An unsubscribe function. Call it in the WebSocket `close` handler.
  */
-export function sendSessionMessage(sessionId: string, text: string): boolean {
-  const session = sessions.get(sessionId);
-  if (!session) return false;
-
-  // If the session is idle-waiting for input, resolve the promise immediately
-  if (session.idleResolve) {
-    session.idleResolve(text);
-    return true;
-  }
-
-  // Session is still running — queue the message for delivery after the turn ends
-  if (session.sdkQuery) {
-    session.pendingMessage = text;
-    return true;
-  }
-
-  return false;
-}
-
 export function subscribe(
   sessionId: string,
   callback: (msg: WsServerMessage) => void,

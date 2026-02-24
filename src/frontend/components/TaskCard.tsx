@@ -3,11 +3,12 @@ import type { Id } from '@convex/_generated/dataModel';
 import { PRIORITY_CONFIG, TaskPriority, TaskStatus } from '@convex/schema';
 import { useNavigate, useParams } from '@tanstack/react-router';
 import { useQuery } from 'convex/react';
-import { CheckSquare, Clock, Maximize2, Terminal } from 'lucide-react';
+import { CheckSquare, Clock, Maximize2 } from 'lucide-react';
 import { formatRelativeDate } from '@/frontend/lib/dateUtils';
 import { cn } from '@/frontend/lib/utils';
 import { useAppStore } from '@/frontend/stores/app';
 import type { EnrichedTask } from './KanbanBoard';
+import SessionStatusDot from './SessionStatusDot';
 import Badge from './ui/Badge';
 
 interface TaskCardProps {
@@ -126,12 +127,6 @@ export function TaskCard({ task, repoName }: TaskCardProps) {
       )}
       <div className="flex items-start justify-between gap-2 pr-8">
         <h3 className="text-sm font-medium leading-snug">{task.title}</h3>
-        {session?.status === 'running' && (
-          <Terminal
-            className="h-3.5 w-3.5 text-green-500 shrink-0 mt-0.5"
-            aria-label="Session running"
-          />
-        )}
       </div>
       {task.description && (
         <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
@@ -184,17 +179,13 @@ export function TaskCard({ task, repoName }: TaskCardProps) {
           </Badge>
         )}
         {session && (
-          <Badge
-            variant={session.status === 'running' ? 'default' : 'outline'}
-            className={cn(
-              'text-[10px] px-1.5 py-0',
-              session.status === 'completed' && 'text-green-600',
-              session.status === 'failed' && 'text-red-600',
-              session.status === 'stopped' && 'text-yellow-600',
-            )}
+          <span
+            role="img"
+            aria-label={`Session: ${session.status}`}
+            title={`Session: ${session.status}`}
           >
-            {session.status}
-          </Badge>
+            <SessionStatusDot status={session.status} />
+          </span>
         )}
       </div>
     </div>

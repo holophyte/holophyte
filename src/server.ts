@@ -3,7 +3,6 @@ import homepage from '../public/index.html';
 import {
   getSession,
   respondToApproval,
-  sendSessionMessage,
   startSession,
   stopSession,
   subscribe,
@@ -129,6 +128,12 @@ const server = Bun.serve<WsData>({
         }
       },
     },
+
+    // SPA catch-all: serve the bundled app HTML for all unmatched GET routes.
+    // Must be in `routes` (not `fetch`) so Bun serves the HTML *bundle* with
+    // compiled asset paths (/_bun/...) rather than the raw source file.
+    // Only match GET — POST/etc. must fall through to `fetch` for dynamic API routes.
+    '/*': { GET: homepage },
   },
 
   async fetch(req, server) {
@@ -150,7 +155,7 @@ const server = Bun.serve<WsData>({
       }
     }
 
-    // POST /api/sessions/:id/respond — approve/deny a permission OR send a follow-up message
+    // POST /api/sessions/:id/respond — approve/deny a permission
     const respondMatch = url.pathname.match(/^\/api\/sessions\/(.+)\/respond$/);
     if (respondMatch && req.method === 'POST') {
       const sessionId = respondMatch[1];
@@ -159,26 +164,6 @@ const server = Bun.serve<WsData>({
       }
       try {
         const body = await req.json();
-
-        // Follow-up message injection
-        if (body.type === 'message') {
-          if (typeof body.text !== 'string' || !body.text.trim()) {
-            return Response.json(
-              { error: 'text is required for type "message"' },
-              { status: 400 },
-            );
-          }
-          const sent = sendSessionMessage(sessionId, body.text);
-          if (!sent) {
-            return Response.json(
-              { error: 'Session not found or not running' },
-              { status: 404 },
-            );
-          }
-          return Response.json({ ok: true });
-        }
-
-        // Permission approval/denial
         const { requestId, approved, message } = body;
         if (!requestId || typeof approved !== 'boolean') {
           return Response.json(
@@ -213,17 +198,6 @@ const server = Bun.serve<WsData>({
       });
       if (upgraded) return undefined;
       return new Response('WebSocket upgrade failed', { status: 400 });
-    }
-
-    // SPA catch-all: serve the app for any non-API GET request
-    if (
-      req.method === 'GET' &&
-      !url.pathname.startsWith('/api/') &&
-      !url.pathname.startsWith('/ws/')
-    ) {
-      return new Response(homepage as unknown as BodyInit, {
-        headers: { 'Content-Type': 'text/html' },
-      });
     }
 
     return new Response('Not Found', { status: 404 });
@@ -285,6 +259,39 @@ const server = Bun.serve<WsData>({
 });
 
 console.log(`Holophyte running at http://localhost:${server.port}`);
+
+// On startup, mark any sessions left as 'running' (from a prior crash/restart)
+// as 'idle' so users can resume them rather than seeing a broken state.
+(async () => {
+  const convexSiteUrl = process.env.CONVEX_SITE_URL;
+  const secret = process.env.INTERNAL_API_SECRET;
+  if (!convexSiteUrl || !secret) return;
+  try {
+    const res = await fetch(
+      `${convexSiteUrl}/api/internal/sessions/markStaleRunning`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${secret}`,
+        },
+        body: JSON.stringify({}),
+      },
+    );
+    if (res.ok) {
+      const data = (await res.json()) as { count?: number };
+      if (data.count && data.count > 0) {
+        console.log(
+          `Marked ${data.count} stale running session(s) as idle on startup.`,
+        );
+      }
+    } else {
+      console.error('Failed to mark stale sessions on startup:', res.status);
+    }
+  } catch (err) {
+    console.error('Failed to mark stale sessions on startup:', err);
+  }
+})();
 
 process.on('SIGINT', () => {
   server.stop();

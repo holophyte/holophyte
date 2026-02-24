@@ -306,9 +306,9 @@ describe('tasks.remove', () => {
     await t.run(async (ctx) => {
       await ctx.db.insert('sessions', {
         taskId,
-        status: 'completed',
+        status: 'idle',
         startedAt: Date.now(),
-        endedAt: Date.now(),
+        lastActivityAt: Date.now(),
       });
     });
 

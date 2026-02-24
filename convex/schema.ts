@@ -22,6 +22,12 @@ export const taskStatusValidator = v.union(
   v.literal(TaskStatus.Archived),
 );
 
+export const sessionStatusValidator = v.union(
+  v.literal('running'),
+  v.literal('idle'),
+  v.literal('failed'),
+);
+
 export enum TaskPriority {
   None = 'none',
   Low = 'low',
@@ -162,18 +168,21 @@ export default defineSchema({
     taskId: v.id('tasks'),
     status: v.union(
       v.literal('running'),
-      v.literal('completed'),
+      v.literal('idle'),
       v.literal('failed'),
-      v.literal('stopped'),
     ),
     startedAt: v.number(),
-    endedAt: v.optional(v.number()),
+    lastActivityAt: v.optional(v.number()),
+    name: v.optional(v.string()),
     sdkSessionId: v.optional(v.string()),
     model: v.optional(v.string()),
     permissionMode: v.optional(v.string()),
+    // Kept optional for backwards compatibility with pre-rethink documents
+    endedAt: v.optional(v.number()),
   })
     .index('by_task', ['taskId'])
-    .index('by_status', ['status']),
+    .index('by_status', ['status'])
+    .index('by_task_activity', ['taskId', 'lastActivityAt']),
 
   sessionEvents: defineTable({
     sessionId: v.id('sessions'),

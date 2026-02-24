@@ -1,7 +1,19 @@
 import { v } from 'convex/values';
-import { internalMutation, mutation, query } from './_generated/server';
+import {
+  internalMutation,
+  internalQuery,
+  mutation,
+  query,
+} from './_generated/server';
 import { requireOrgMembership, requireRole } from './lib/auth';
+import { sessionStatusValidator } from './schema';
 
+/**
+ * Returns all currently running sessions scoped to an org.
+ *
+ * Uses the `by_status` index for an O(1) status scan, then cross-checks each
+ * session's task→repo chain to filter by org. Requires org membership.
+ */
 export const listActive = query({
   args: { orgId: v.id('organizations') },
   handler: async (ctx, args) => {
@@ -23,6 +35,27 @@ export const listActive = query({
   },
 });
 
+/**
+ * Returns the global count of currently running sessions (across all orgs).
+ *
+ * Used by the server to enforce the concurrent session cap before spawning a
+ * new SDK process. No auth check — callers on the server trust this value.
+ */
+export const countActive = internalQuery({
+  args: {},
+  handler: async (ctx) => {
+    const runningSessions = await ctx.db
+      .query('sessions')
+      .withIndex('by_status', (q) => q.eq('status', 'running'))
+      .collect();
+    return runningSessions.length;
+  },
+});
+
+/**
+ * Returns a single session by ID, or `null` if not found.
+ * Verifies that the caller is a member of the session's parent org.
+ */
 export const get = query({
   args: { id: v.id('sessions') },
   handler: async (ctx, args) => {
@@ -37,6 +70,12 @@ export const get = query({
   },
 });
 
+/**
+ * Returns the most recently active session for a task, or `null` if none exist.
+ *
+ * Uses the `by_task_activity` index ordered descending so the first result is
+ * always the session with the highest `lastActivityAt`. Requires org membership.
+ */
 export const getByTask = query({
   args: { taskId: v.id('tasks') },
   handler: async (ctx, args) => {
@@ -47,12 +86,43 @@ export const getByTask = query({
     await requireOrgMembership(ctx, repo.orgId);
     const sessions = await ctx.db
       .query('sessions')
-      .withIndex('by_task', (q) => q.eq('taskId', args.taskId))
-      .collect();
-    return sessions.length > 0 ? sessions[sessions.length - 1] : null;
+      .withIndex('by_task_activity', (q) => q.eq('taskId', args.taskId))
+      .order('desc')
+      .first();
+    return sessions ?? null;
   },
 });
 
+/**
+ * Returns all sessions for a task, ordered by `lastActivityAt` descending
+ * (most recently active first).
+ *
+ * Used by the session dropdown to show the full session history. Returns an
+ * empty array when the task doesn't exist (rather than null), so callers can
+ * always render without a null-check. Requires org membership.
+ */
+export const listByTask = query({
+  args: { taskId: v.id('tasks') },
+  handler: async (ctx, args) => {
+    const task = await ctx.db.get(args.taskId);
+    if (!task) return [];
+    const repo = await ctx.db.get(task.repoId);
+    if (!repo) return [];
+    await requireOrgMembership(ctx, repo.orgId);
+    return await ctx.db
+      .query('sessions')
+      .withIndex('by_task_activity', (q) => q.eq('taskId', args.taskId))
+      .order('desc')
+      .collect();
+  },
+});
+
+/**
+ * Creates a new session record in `running` status and returns its ID.
+ *
+ * Initialises both `startedAt` and `lastActivityAt` to the current timestamp.
+ * Requires at least `member` role in the task's org.
+ */
 export const create = mutation({
   args: {
     taskId: v.id('tasks'),
@@ -64,23 +134,26 @@ export const create = mutation({
     if (!repo) throw new Error('Repo not found');
     const { membership } = await requireOrgMembership(ctx, repo.orgId);
     requireRole(membership, 'member');
+    const now = Date.now();
     return await ctx.db.insert('sessions', {
       taskId: args.taskId,
       status: 'running',
-      startedAt: Date.now(),
+      startedAt: now,
+      lastActivityAt: now,
     });
   },
 });
 
+/**
+ * Updates the status of a session and bumps `lastActivityAt`.
+ *
+ * Valid transitions: `running → idle | failed`. Requires at least `member`
+ * role in the session's parent org. Called from the frontend (e.g. stop button).
+ */
 export const updateStatus = mutation({
   args: {
     id: v.id('sessions'),
-    status: v.union(
-      v.literal('running'),
-      v.literal('completed'),
-      v.literal('failed'),
-      v.literal('stopped'),
-    ),
+    status: sessionStatusValidator,
   },
   handler: async (ctx, args) => {
     const session = await ctx.db.get(args.id);
@@ -91,15 +164,42 @@ export const updateStatus = mutation({
     if (!repo) throw new Error('Repo not found');
     const { membership } = await requireOrgMembership(ctx, repo.orgId);
     requireRole(membership, 'member');
-    const updates: Record<string, unknown> = { status: args.status };
-    if (args.status !== 'running') {
-      updates.endedAt = Date.now();
-    }
-    await ctx.db.patch(args.id, updates);
+    await ctx.db.patch(args.id, {
+      status: args.status,
+      lastActivityAt: Date.now(),
+    });
   },
 });
 
-/** Server-side mutation to persist the SDK session ID, model, and permission mode. */
+/**
+ * Bumps `lastActivityAt` to the current time.
+ *
+ * Called from the frontend when the user sends a message, so the session list
+ * sort order stays accurate even before the server processes the turn. Requires
+ * org membership (any role).
+ */
+export const updateLastActivity = mutation({
+  args: { id: v.id('sessions') },
+  handler: async (ctx, args) => {
+    const session = await ctx.db.get(args.id);
+    if (!session) throw new Error('Session not found');
+    const task = await ctx.db.get(session.taskId);
+    if (!task) throw new Error('Task not found');
+    const repo = await ctx.db.get(task.repoId);
+    if (!repo) throw new Error('Repo not found');
+    await requireOrgMembership(ctx, repo.orgId);
+    await ctx.db.patch(args.id, { lastActivityAt: Date.now() });
+  },
+});
+
+/**
+ * Persists the SDK session ID returned by the `system/init` event, along with
+ * the model and permission mode used for this turn.
+ *
+ * The `sdkSessionId` is the key used to resume a session in a future turn via
+ * `sdkOptions.resume`. Stored here so it survives a server restart or process
+ * exit. Internal — called only by the Bun server via HTTP action.
+ */
 export const updateSdkSessionId = internalMutation({
   args: {
     id: v.id('sessions'),
@@ -120,24 +220,86 @@ export const updateSdkSessionId = internalMutation({
   },
 });
 
-/** Server-side mutation to update session status. Called by the Bun server. */
+/**
+ * Updates session status and bumps `lastActivityAt`.
+ *
+ * Called by the Bun server at the end of a turn to transition the session to
+ * `idle` (success) or `failed` (error). Internal — not callable from the
+ * browser. Unlike {@link updateStatus}, skips auth since the server is trusted.
+ */
 export const serverUpdateStatus = internalMutation({
   args: {
     id: v.id('sessions'),
-    status: v.union(
-      v.literal('running'),
-      v.literal('completed'),
-      v.literal('failed'),
-      v.literal('stopped'),
-    ),
+    status: sessionStatusValidator,
   },
   handler: async (ctx, args) => {
     const session = await ctx.db.get(args.id);
     if (!session) throw new Error('Session not found');
-    const updates: Record<string, unknown> = { status: args.status };
-    if (args.status !== 'running') {
-      updates.endedAt = Date.now();
+    await ctx.db.patch(args.id, {
+      status: args.status,
+      lastActivityAt: Date.now(),
+    });
+  },
+});
+
+/**
+ * Bumps `lastActivityAt` without changing status.
+ *
+ * Called by the Bun server after each `assistant` or `result` SDK event so the
+ * session list sort order in the UI updates reactively while a turn is in
+ * progress. Internal — not callable from the browser.
+ */
+export const serverUpdateActivity = internalMutation({
+  args: { id: v.id('sessions') },
+  handler: async (ctx, args) => {
+    const session = await ctx.db.get(args.id);
+    if (!session) throw new Error('Session not found');
+    await ctx.db.patch(args.id, { lastActivityAt: Date.now() });
+  },
+});
+
+/**
+ * Marks all sessions that are still in `running` status as `idle`.
+ *
+ * Called once on server startup to recover from a crash or restart where the
+ * server process died before it could transition sessions to `idle` or
+ * `failed`. Sessions left as `running` with no active backend process are
+ * effectively stale — resetting them to `idle` lets users resume or start
+ * fresh. Internal — not callable from the browser.
+ */
+export const serverMarkStaleRunning = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    const runningSessions = await ctx.db
+      .query('sessions')
+      .withIndex('by_status', (q) => q.eq('status', 'running'))
+      .collect();
+    for (const session of runningSessions) {
+      await ctx.db.patch(session._id, {
+        status: 'idle',
+        lastActivityAt: session.lastActivityAt ?? session.startedAt,
+      });
     }
-    await ctx.db.patch(args.id, updates);
+    return { count: runningSessions.length };
+  },
+});
+
+/**
+ * Sets the human-readable display name for a session.
+ *
+ * Called by the Bun server at session start with the first 30 characters of
+ * the prompt (plus an ellipsis if truncated). Future: overwritten when haiku
+ * generates a richer name after the first turn. Internal — not callable from
+ * the browser.
+ */
+export const serverUpdateName = internalMutation({
+  args: {
+    id: v.id('sessions'),
+    name: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const session = await ctx.db.get(args.id);
+    if (!session) throw new Error('Session not found');
+    await ctx.db.patch(args.id, { name: args.name });
   },
 });

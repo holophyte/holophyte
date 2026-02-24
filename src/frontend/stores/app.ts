@@ -29,7 +29,8 @@ interface AppState {
   selectedOrgId: Id<'organizations'> | null;
   backlogCollapsed: boolean;
   taskPageDetailCollapsed: boolean;
-  sessionId: string | null;
+  /** The Convex session ID currently displayed in `SessionPanel`. `null` means no session is open. */
+  activeSessionId: string | null;
 
   // Search and filter state
   searchQuery: string;
@@ -48,7 +49,17 @@ interface AppState {
   clearOrgSelection: () => void;
   toggleBacklog: () => void;
   toggleTaskPageDetail: () => void;
+  /** Sets the active session ID. Navigation to the task page is handled by the router. */
   openSession: (sessionId: string) => void;
+  /**
+   * Switches which session is displayed in `SessionPanel` without changing the
+   * view mode.
+   *
+   * Use this for the session dropdown — the user is already on the task page
+   * and is simply choosing a different session to view.
+   */
+  switchSession: (sessionId: string | null) => void;
+  /** Clears the active session, hiding `SessionPanel`. */
   closeSession: () => void;
 
   // Search and filter actions
@@ -71,7 +82,7 @@ export const useAppStore = create<AppState>()(
       selectedOrgId: null,
       backlogCollapsed: true,
       taskPageDetailCollapsed: false,
-      sessionId: null,
+      activeSessionId: null,
 
       searchQuery: '',
       filterLabelIds: [],
@@ -99,8 +110,9 @@ export const useAppStore = create<AppState>()(
         set((state) => ({
           taskPageDetailCollapsed: !state.taskPageDetailCollapsed,
         })),
-      openSession: (id) => set({ sessionId: id }),
-      closeSession: () => set({ sessionId: null }),
+      openSession: (id) => set({ activeSessionId: id }),
+      switchSession: (id) => set({ activeSessionId: id }),
+      closeSession: () => set({ activeSessionId: null }),
 
       setSearchQuery: (query) =>
         set({ searchQuery: query, bulkSelectedTaskIds: [] }),
