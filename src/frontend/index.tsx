@@ -1,6 +1,6 @@
 import { ConvexAuthProvider } from '@convex-dev/auth/react';
 import { RouterProvider } from '@tanstack/react-router';
-import { ConvexProvider, ConvexReactClient } from 'convex/react';
+import { ConvexReactClient } from 'convex/react';
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 import { setE2eTest } from '@/frontend/lib/config';
@@ -26,14 +26,11 @@ async function init() {
   if (!rootEl) throw new Error('Root element not found');
   const root = createRoot(rootEl);
 
-  // In E2E mode, skip auth provider — app renders immediately with queries in loading state
-  const Provider = isE2e ? ConvexProvider : ConvexAuthProvider;
-
   root.render(
     <React.StrictMode>
-      <Provider client={convex}>
+      <ConvexAuthProvider client={convex}>
         <RouterProvider router={router} />
-      </Provider>
+      </ConvexAuthProvider>
     </React.StrictMode>,
   );
 }

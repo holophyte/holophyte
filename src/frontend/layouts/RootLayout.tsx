@@ -3,6 +3,7 @@ import { Authenticated, AuthLoading, Unauthenticated } from 'convex/react';
 import { Loader2 } from 'lucide-react';
 import { useTheme } from '@/frontend/hooks/useTheme';
 import { e2eTest } from '@/frontend/lib/config';
+import AutoAnonymousAuth from '../components/AutoAnonymousAuth';
 import { CommandPalette } from '../components/CommandPalette';
 import { Sidebar } from '../components/Sidebar';
 import SignInPage from '../components/SignInPage';
@@ -36,19 +37,17 @@ function AuthenticatedLayout() {
 export default function RootLayout() {
   useTheme();
 
-  // In E2E test mode, skip auth gates — render the app directly
-  if (e2eTest) return <AuthenticatedLayout />;
+  const spinner = (
+    <div className="flex h-screen items-center justify-center bg-background">
+      <Loader2 className="h-8 w-8 motion-safe:animate-spin text-muted-foreground" />
+    </div>
+  );
 
   return (
     <>
-      <AuthLoading>
-        <div className="flex h-screen items-center justify-center bg-background">
-          <Loader2 className="h-8 w-8 motion-safe:animate-spin text-muted-foreground" />
-        </div>
-      </AuthLoading>
-      <Unauthenticated>
-        <SignInPage />
-      </Unauthenticated>
+      {e2eTest && <AutoAnonymousAuth />}
+      <AuthLoading>{spinner}</AuthLoading>
+      <Unauthenticated>{e2eTest ? spinner : <SignInPage />}</Unauthenticated>
       <Authenticated>
         <AuthenticatedLayout />
       </Authenticated>
