@@ -13,6 +13,9 @@ Sessions are the core unit of interaction in Holophyte. Each session is a conver
 running  →  idle
               ↓
            (deleted)
+running  →  failed
+              ↓
+           (resumable)
 ```
 
 | Status | Meaning |
@@ -36,6 +39,23 @@ The backend is **stateless between turns**. When Claude finishes a response, the
 When a task page loads and its most recent session is idle, `SessionPanel` loads that session's conversation and the input box is pre-wired to resume it. No "resume" button needed — typing a message and hitting Send continues the conversation automatically.
 
 "New session" is a secondary action available from the session dropdown, for cases where you want a fresh start on the same task.
+
+### Session Resume Flow
+
+1. Frontend reads the `sdkSessionId` from the Convex session record (available via `useSession` → `sdkSessionId`).
+2. Frontend POSTs to `POST /api/sessions/start` with `resumeSdkSessionId` set to the captured `sdkSessionId`.
+3. Server calls `queryConvexInternal` to get the next `batchIndex` for appending new events after the existing history.
+4. Server spawns a new SDK process with `options.resume = resumeSdkSessionId`.
+5. Frontend calls `reconnectWs()` to reconnect the WebSocket to the newly started server-side session.
+6. Conversation continues seamlessly — the SDK reloads prior context from its own storage.
+
+### batchIndex Continuation
+
+Events are persisted in numbered batches (`batchIndex`). On resume, the server fetches `nextBatchIndex` from Convex so new events sort after the previous session's history — preventing ordering gaps in the event log across resume boundaries.
+
+### reconnectWs
+
+`useSession` exposes a `reconnectWs()` callback. Calling it increments an internal `wsConnectKey` state value, which triggers the `useEffect` to close the current WebSocket and open a new one to the same session ID. This is used immediately after submitting a resume request so the WebSocket connects to the newly spawned server-side session rather than getting "Session not found".
 
 ## Session List per Task
 
@@ -68,9 +88,44 @@ The indicators update in real time via Convex reactivity.
 
 All SDK events are persisted to the `sessionEvents` table in Convex in batches (flushed every 5 seconds or when the buffer reaches 200 events). On page refresh or reconnect, `useSession` replays the persisted event history from Convex so the full conversation is always visible.
 
+The `useSession` hook merges two sources of events, deduplicating by UUID:
+
+1. **Persisted batches** from Convex (`sessionEvents.getBySession`) — ordered by `batchIndex`.
+2. **Live WebSocket events** — the un-flushed tail and any events received in real time.
+
+This ensures a reconnecting client always sees the complete history even if some events were recently flushed.
+
+## WebSocket Protocol
+
+Connect to `ws[s]://<host>/ws/session/:sessionId` to receive real-time session events.
+
+### Server → Client Messages
+
+| Message type | Fields | Description |
+|---|---|---|
+| `event` | `sessionId`, `event: SDKMessage` | An SDK event (assistant turn, tool call, result, etc.) |
+| `permission` | `sessionId`, `requestId`, `tool`, `input` | A tool-use approval request that requires user action |
+| `status` | `sessionId`, `status: 'running' \| 'idle' \| 'failed'` | Session lifecycle state change |
+| `error` | `sessionId`, `message` | Unrecoverable error; session will not proceed |
+
+On connect, the server immediately replays any buffered (un-flushed) events and any outstanding permission prompts so late-connecting clients see the full in-progress state.
+
+### Client → Server Messages
+
+| Message type | Fields | Description |
+|---|---|---|
+| `approve` | `requestId` | Approve a pending tool-use request |
+| `deny` | `requestId`, `message?` | Deny a pending tool-use request; optional `message` is shown to Claude |
+
+Permission responses can also be sent via `POST /api/sessions/:id/respond`.
+
+### Derived Status: `waiting_input`
+
+The frontend `useSession` hook derives a fourth status not present in the backend: `waiting_input`. This is set when there are unresolved `PendingApproval` entries and the session is not yet `idle` or `failed`. It overrides a backend `running` status in the UI, signaling that user action is required before Claude can proceed.
+
 ## Stop
 
-Stopping a running session (`POST /api/sessions/:id/stop`) aborts the SDK process. The session transitions to `idle` — it remains resumable. Stop does not delete the session or its history.
+Stopping a running session (`POST /api/sessions/:id/stop`) sets `stoppedByUser = true` on the in-memory session and aborts the SDK controller. The cleanup path in `consumeIterator` detects this flag and transitions the session to `idle` rather than `failed` — so the session remains resumable. Stop does not delete the session or its history.
 
 ## Error Handling on Resume
 
