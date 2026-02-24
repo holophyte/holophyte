@@ -1,12 +1,12 @@
 {
   "mcpServers": {
     "playwright": {
-      "command": "npx",
+      "command": "bunx",
       "args": ["@playwright/mcp@latest"]
     },
     "convex": {
-      "command": "npx",
-      "args": ["convex", "mcp", "start", "--project-dir", "/Users/ko/Development/holophyte"]
+      "command": "bunx",
+      "args": ["convex", "mcp", "start", "--project-dir", "."]
     }
   }
 }

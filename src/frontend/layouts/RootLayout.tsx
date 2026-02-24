@@ -37,23 +37,17 @@ function AuthenticatedLayout() {
 export default function RootLayout() {
   useTheme();
 
+  const spinner = (
+    <div className="flex h-screen items-center justify-center bg-background">
+      <Loader2 className="h-8 w-8 motion-safe:animate-spin text-muted-foreground" />
+    </div>
+  );
+
   return (
     <>
       {e2eTest && <AutoAnonymousAuth />}
-      <AuthLoading>
-        <div className="flex h-screen items-center justify-center bg-background">
-          <Loader2 className="h-8 w-8 motion-safe:animate-spin text-muted-foreground" />
-        </div>
-      </AuthLoading>
-      <Unauthenticated>
-        {e2eTest ? (
-          <div className="flex h-screen items-center justify-center bg-background">
-            <Loader2 className="h-8 w-8 motion-safe:animate-spin text-muted-foreground" />
-          </div>
-        ) : (
-          <SignInPage />
-        )}
-      </Unauthenticated>
+      <AuthLoading>{spinner}</AuthLoading>
+      <Unauthenticated>{e2eTest ? spinner : <SignInPage />}</Unauthenticated>
       <Authenticated>
         <AuthenticatedLayout />
       </Authenticated>

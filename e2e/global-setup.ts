@@ -47,6 +47,7 @@ export default async function globalSetup(config: FullConfig) {
     timeout: 10000,
   });
 
+  mkdirSync('e2e/.auth', { recursive: true });
   await page.context().storageState({ path: 'e2e/.auth/storage-state.json' });
   await browser.close();
 }
