@@ -72,11 +72,12 @@ port_in_use() {
 
 N=$(git worktree list | wc -l | tr -d ' ')
 while true; do
-  DEV_PORT=$((8080 + N - 1))
+  DEV_PORT=$((8080 + (N - 1) * 2))
   CONVEX_CLOUD_PORT=$((3210 + (N - 1) * 2))
   CONVEX_SITE_PORT=$((3211 + (N - 1) * 2))
 
-  if ! port_in_use "$DEV_PORT" && ! port_in_use "$CONVEX_CLOUD_PORT" && ! port_in_use "$CONVEX_SITE_PORT"; then
+  E2E_PORT=$((DEV_PORT + 1))
+  if ! port_in_use "$DEV_PORT" && ! port_in_use "$E2E_PORT" && ! port_in_use "$CONVEX_CLOUD_PORT" && ! port_in_use "$CONVEX_SITE_PORT"; then
     break
   fi
   echo "Ports for slot $N in use, trying next..."
