@@ -208,4 +208,5 @@ Server configuration lives in environment variables with sensible defaults:
 - `useSemanticElements` biome rule is set to "warn" (kanban board needs div-based drag-drop)
 - `bunfig.toml` configures `bun-plugin-tailwind` under `[serve.static]`
 - Pre-commit hooks configured via `.githooks/` — `prepare` script in package.json sets `core.hooksPath` on `bun install`
+- `bun run --watch` swallows subprocess stderr — run `bun src/server.ts` directly when debugging SDK session issues
 - No CI/CD or Docker configured
