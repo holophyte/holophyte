@@ -103,6 +103,10 @@ cd "$WORKTREE_PATH" && bunx convex dev --configure existing \
   --local-site-port "$CONVEX_SITE_PORT" \
   --once
 
+# Set up Convex Auth JWT keys for the local deployment
+echo "Configuring Convex Auth keys..."
+cd "$WORKTREE_PATH" && bunx @convex-dev/auth
+
 echo ""
 echo "Worktree created: ~/.holophyte-dev/$FEATURE_NAME"
 echo "Ports: dev=$DEV_PORT, convex=$CONVEX_CLOUD_PORT/$CONVEX_SITE_PORT"
