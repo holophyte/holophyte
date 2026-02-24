@@ -52,6 +52,7 @@ export default function SessionPanel({ taskId }: SessionPanelProps) {
     sessionStatus,
     messageQueued,
     sdkSessionId,
+    reconnectWs,
     approve,
     deny,
     sendMessage,
@@ -213,6 +214,8 @@ export default function SessionPanel({ taskId }: SessionPanelProps) {
           const data = (await res.json()) as { error?: string };
           throw new Error(data.error ?? 'Failed to resume session');
         }
+        // Reconnect the WebSocket so it picks up the new server-side session
+        reconnectWs();
       } catch (err) {
         // Revert the status so the session doesn't stay stuck as 'running'
         await updateSessionStatus({ id: session._id, status: 'failed' });

@@ -62,6 +62,11 @@ export interface UseSessionReturn {
    */
   sdkSessionId: string | undefined;
   /**
+   * Force the WebSocket to reconnect. Used after resuming an idle session so
+   * the WS picks up the newly created server-side session.
+   */
+  reconnectWs: () => void;
+  /**
    * Approve a pending tool-use request. Sends `{ type: 'approve', requestId }`
    * over the WebSocket and marks the approval as resolved in local state.
    *
@@ -134,6 +139,10 @@ export function useSession(sessionId: string | null): UseSessionReturn {
   );
   const [isConnected, setIsConnected] = useState(false);
   const [messageQueued, setMessageQueued] = useState(false);
+
+  // Bumping this forces the WS effect to reconnect (used after resume).
+  const [wsConnectKey, setWsConnectKey] = useState(0);
+  const reconnectWs = useCallback(() => setWsConnectKey((k) => k + 1), []);
 
   const wsRef = useRef<WebSocket | null>(null);
 
@@ -218,6 +227,7 @@ export function useSession(sessionId: string | null): UseSessionReturn {
     [sessionStatus],
   );
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: wsConnectKey is an intentional re-trigger dependency for reconnectWs()
   useEffect(() => {
     if (!sessionId) return;
 
@@ -284,16 +294,24 @@ export function useSession(sessionId: string | null): UseSessionReturn {
       ws.close();
       wsRef.current = null;
     };
-  }, [sessionId]);
+  }, [sessionId, wsConnectKey]);
+
+  // Fall back to the Convex record status when the WebSocket hasn't reported
+  // a status yet (e.g. the WS connected before the server created the session,
+  // got "Session not found", and closed — but Convex already shows "running").
+  const effectiveStatus: SessionStatus | null =
+    sessionStatus ??
+    (sessionRecord?.status as SessionStatus | undefined) ??
+    null;
 
   // Derive sessionStatus: if there are unresolved approvals, show waiting_input
   // (handles the case where a 'running' status arrives after a permission prompt)
   const derivedStatus: SessionStatus | null =
     pendingApprovals.some((a) => !a.resolved) &&
-    sessionStatus !== 'idle' &&
-    sessionStatus !== 'failed'
+    effectiveStatus !== 'idle' &&
+    effectiveStatus !== 'failed'
       ? 'waiting_input'
-      : sessionStatus;
+      : effectiveStatus;
 
   return {
     events,
@@ -302,6 +320,7 @@ export function useSession(sessionId: string | null): UseSessionReturn {
     isConnected,
     messageQueued,
     sdkSessionId: sessionRecord?.sdkSessionId,
+    reconnectWs,
     approve,
     deny,
     sendMessage,

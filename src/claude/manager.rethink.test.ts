@@ -14,10 +14,10 @@ vi.mock('@anthropic-ai/claude-agent-sdk', () => ({
 }));
 
 // Mock fetch for Convex internal calls
-// biome-ignore lint/suspicious/noExplicitAny: vi.fn mock doesn't satisfy strict fetch types
 global.fetch = vi.fn().mockResolvedValue({
   ok: true,
   text: async () => '',
+  // biome-ignore lint/suspicious/noExplicitAny: vi.fn mock doesn't satisfy strict fetch types
 } as Response) as any;
 
 process.env.CONVEX_SITE_URL = 'http://localhost:3211';

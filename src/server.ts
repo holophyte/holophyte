@@ -133,7 +133,8 @@ const server = Bun.serve<WsData>({
     // SPA catch-all: serve the bundled app HTML for all unmatched GET routes.
     // Must be in `routes` (not `fetch`) so Bun serves the HTML *bundle* with
     // compiled asset paths (/_bun/...) rather than the raw source file.
-    '/*': homepage,
+    // Only match GET — POST/etc. must fall through to `fetch` for dynamic API routes.
+    '/*': { GET: homepage },
   },
 
   async fetch(req, server) {
