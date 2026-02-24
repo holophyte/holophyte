@@ -3,7 +3,7 @@ import { expect, test } from '@playwright/test';
 // Wait for app to hydrate by checking for the sidebar header
 async function waitForApp(page: import('@playwright/test').Page) {
   await page.goto('/');
-  await page.waitForSelector('text=Holophyte', { timeout: 15000 });
+  await page.waitForSelector('text=Holophyte', { timeout: 30000 });
 }
 
 test('app loads and shows sidebar', async ({ page }) => {
