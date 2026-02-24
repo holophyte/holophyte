@@ -172,6 +172,46 @@ export const updateStatus = mutation({
 });
 
 /**
+ * Atomically transitions an idle session to `running` for resume.
+ *
+ * Guards against the race condition where two browser tabs attempt to resume
+ * the same session simultaneously: the first caller wins and the second gets
+ * `{ ok: false }` instead of a thrown error, so the frontend can handle it
+ * gracefully without surfacing an error boundary.
+ *
+ * Requires at least `member` role in the session's parent org.
+ *
+ * @returns `{ ok: true }` if the transition succeeded, `{ ok: false }` if the
+ *   session was not in `idle` status (i.e. another tab already resumed it).
+ */
+export const resumeSession = mutation({
+  args: {
+    id: v.id('sessions'),
+  },
+  handler: async (ctx, args) => {
+    const session = await ctx.db.get(args.id);
+    if (!session) throw new Error('Session not found');
+    const task = await ctx.db.get(session.taskId);
+    if (!task) throw new Error('Task not found');
+    const repo = await ctx.db.get(task.repoId);
+    if (!repo) throw new Error('Repo not found');
+    const { membership } = await requireOrgMembership(ctx, repo.orgId);
+    requireRole(membership, 'member');
+
+    // Atomic guard: only transition from idle → running
+    if (session.status !== 'idle') {
+      return { ok: false };
+    }
+
+    await ctx.db.patch(args.id, {
+      status: 'running',
+      lastActivityAt: Date.now(),
+    });
+    return { ok: true };
+  },
+});
+
+/**
  * Bumps `lastActivityAt` to the current time.
  *
  * Called from the frontend when the user sends a message, so the session list
