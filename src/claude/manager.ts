@@ -584,22 +584,6 @@ export function respondToApproval(
 }
 
 /**
- * Inject a follow-up user message into an actively running session.
- * Only works if the session is still running (process hasn't exited yet).
- * For idle sessions, start a new session with resumeSdkSessionId instead.
- *
- * @returns true if the message was queued, false if the session is not found or has no live query.
- */
-export function sendSessionMessage(sessionId: string, _text: string): boolean {
-  const session = sessions.get(sessionId);
-  if (!session || !session.sdkQuery) return false;
-
-  // Queue the message - the SDK will deliver it in-flight if supported
-  // This path is only reached for sessions still actively running
-  return false; // Not supported in single-turn mode; use resume flow instead
-}
-
-/**
  * Subscribes to WebSocket messages for an active session.
  *
  * Immediately replays any buffered events (un-flushed SDK messages still in

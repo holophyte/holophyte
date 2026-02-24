@@ -12,8 +12,6 @@ import { Popover, PopoverContent, PopoverTrigger } from './ui/Popover';
 interface SessionDropdownProps {
   taskId: Id<'tasks'>;
   activeSessionId: string | null;
-  /** Repo path needed for "new session" / resume flow */
-  repoPath?: string;
 }
 
 /** Maps a session status to a human-readable label shown in the dropdown row. */
@@ -22,6 +20,8 @@ function sessionStatusLabel(status: Doc<'sessions'>['status']): string {
     case 'running':
       return 'Running';
     case 'idle':
+    case 'completed': // Legacy — treat as idle
+    case 'stopped': // Legacy — treat as idle
       return 'Idle';
     case 'failed':
       return 'Failed';

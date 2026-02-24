@@ -3,7 +3,6 @@ import homepage from '../public/index.html';
 import {
   getSession,
   respondToApproval,
-  sendSessionMessage,
   startSession,
   stopSession,
   subscribe,
@@ -156,7 +155,7 @@ const server = Bun.serve<WsData>({
       }
     }
 
-    // POST /api/sessions/:id/respond — approve/deny a permission OR send a follow-up message
+    // POST /api/sessions/:id/respond — approve/deny a permission
     const respondMatch = url.pathname.match(/^\/api\/sessions\/(.+)\/respond$/);
     if (respondMatch && req.method === 'POST') {
       const sessionId = respondMatch[1];
@@ -165,26 +164,6 @@ const server = Bun.serve<WsData>({
       }
       try {
         const body = await req.json();
-
-        // Follow-up message injection
-        if (body.type === 'message') {
-          if (typeof body.text !== 'string' || !body.text.trim()) {
-            return Response.json(
-              { error: 'text is required for type "message"' },
-              { status: 400 },
-            );
-          }
-          const sent = sendSessionMessage(sessionId, body.text);
-          if (!sent) {
-            return Response.json(
-              { error: 'Session not found or not running' },
-              { status: 404 },
-            );
-          }
-          return Response.json({ ok: true });
-        }
-
-        // Permission approval/denial
         const { requestId, approved, message } = body;
         if (!requestId || typeof approved !== 'boolean') {
           return Response.json(

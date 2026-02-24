@@ -5,7 +5,6 @@
  * - 'completed' and 'stopped' statuses replaced by 'idle'
  * - Concurrent session limit: max 10 active sessions globally
  * - Warning threshold at 5 active sessions
- * - sendSessionMessage returns false in single-turn mode (resume via new session)
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -491,29 +490,6 @@ describe('session-rethink: concurrent session limits', () => {
 });
 
 describe('session-rethink: single-turn mode (no follow-up loop)', () => {
-  it('sendSessionMessage returns false — resume flow is used instead', async () => {
-    const blocker = createBlockingIterator();
-    vi.mocked(mockSdkQuery).mockReturnValue(blocker.iter as never);
-
-    const { startSession, sendSessionMessage } = await import('./manager');
-
-    await startSession({
-      sessionId: 'no-followup-test',
-      repoPath: '/tmp',
-      prompt: 'test',
-    });
-
-    await new Promise((r) => setTimeout(r, 30));
-
-    // sendSessionMessage is a no-op in single-turn mode
-    const result = sendSessionMessage('no-followup-test', 'follow-up');
-    expect(result).toBe(false);
-
-    // Resolve so session cleans up
-    blocker.resolveBlock();
-    await new Promise((r) => setTimeout(r, 100));
-  });
-
   it('session is removed from active map after turn completes', async () => {
     const mockIter = createMockIterator([
       {

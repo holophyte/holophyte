@@ -645,62 +645,6 @@ describe('claude/manager (SDK-based)', () => {
     });
   });
 
-  describe('sendSessionMessage', () => {
-    it('returns false — single-turn mode (resume via new session with sdkSessionId)', async () => {
-      // In the session-rethink model, sessions are single-turn.
-      // sendSessionMessage is a no-op; follow-ups use startSession with resumeSdkSessionId.
-      let resolveBlock: (() => void) | undefined;
-
-      vi.mocked(mockSdkQuery).mockImplementation(() => {
-        return {
-          async *[Symbol.asyncIterator]() {
-            yield {
-              type: 'system',
-              subtype: 'init',
-              session_id: 'sdk-queue',
-              tools: [],
-              model: 'claude-sonnet-4-5-20250929',
-            };
-            await new Promise<void>((r) => {
-              resolveBlock = r;
-            });
-            yield {
-              type: 'result',
-              subtype: 'success',
-              is_error: false,
-              result: 'Done',
-              session_id: 'sdk-queue',
-            };
-          },
-        } as never;
-      });
-
-      const { startSession, sendSessionMessage } = await import('./manager');
-
-      await startSession({
-        sessionId: 'queue-msg-test',
-        repoPath: '/tmp',
-        prompt: 'initial',
-      });
-
-      // Wait for the session to be running
-      await new Promise((r) => setTimeout(r, 30));
-
-      // sendSessionMessage is a no-op in single-turn mode
-      const sent = sendSessionMessage('queue-msg-test', 'follow-up text');
-      expect(sent).toBe(false);
-
-      // Unblock and let session clean up
-      resolveBlock?.();
-      await new Promise((r) => setTimeout(r, 100));
-    });
-
-    it('returns false when session does not exist', async () => {
-      const { sendSessionMessage } = await import('./manager');
-      expect(sendSessionMessage('nonexistent', 'hello')).toBe(false);
-    });
-  });
-
   describe('stop session with pending approval', () => {
     it('resolves pending approvals as denied when session is stopped', async () => {
       let pendingResult: { behavior: string; message?: string } | undefined;
