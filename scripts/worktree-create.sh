@@ -22,6 +22,21 @@ WORKTREE_DIR="$HOME/.holophyte-dev"
 WORKTREE_PATH="$WORKTREE_DIR/$FEATURE_NAME"
 BRANCH="feat/$FEATURE_NAME"
 
+# Read team/project from main repo's .dev-ports
+MAIN_DEV_PORTS="$REPO_ROOT/.dev-ports"
+if [ ! -f "$MAIN_DEV_PORTS" ]; then
+  echo "Error: .dev-ports not found in main repo ($MAIN_DEV_PORTS)"
+  exit 1
+fi
+
+# shellcheck source=/dev/null
+source "$MAIN_DEV_PORTS"
+
+if [ -z "${CONVEX_TEAM:-}" ] || [ -z "${CONVEX_PROJECT:-}" ]; then
+  echo "Error: .dev-ports is missing CONVEX_TEAM and CONVEX_PROJECT"
+  exit 1
+fi
+
 # Check if branch already exists
 if git rev-parse --verify "$BRANCH" >/dev/null 2>&1; then
   echo "Error: Branch '$BRANCH' already exists"
@@ -68,16 +83,22 @@ while true; do
   N=$((N + 1))
 done
 
-# Write .dev-ports
+# Write .dev-ports (inherit team/project from main repo)
 cat > "$WORKTREE_PATH/.dev-ports" <<EOF
 DEV_PORT=$DEV_PORT
 CONVEX_CLOUD_PORT=$CONVEX_CLOUD_PORT
 CONVEX_SITE_PORT=$CONVEX_SITE_PORT
+CONVEX_TEAM=$CONVEX_TEAM
+CONVEX_PROJECT=$CONVEX_PROJECT
 EOF
 
-# Initialize local Convex (push schema, generate types, then exit)
+# Initialize local Convex — always use --configure existing since the copied
+# .env.local may have cloud deployment, and we need a fresh local instance
 echo "Initializing local Convex backend (cloud=$CONVEX_CLOUD_PORT, site=$CONVEX_SITE_PORT)..."
-cd "$WORKTREE_PATH" && bunx convex dev --local \
+cd "$WORKTREE_PATH" && bunx convex dev --configure existing \
+  --team "$CONVEX_TEAM" \
+  --project "$CONVEX_PROJECT" \
+  --dev-deployment local \
   --local-cloud-port "$CONVEX_CLOUD_PORT" \
   --local-site-port "$CONVEX_SITE_PORT" \
   --once

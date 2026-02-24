@@ -107,11 +107,19 @@ scripts/                   → Shared shell scripts (convex-local, dev-local, wo
 
 **Local-first development:**
 - Development uses local Convex backends — each workspace (main repo + worktrees) gets its own isolated instance
-- Ports are configured in `.dev-ports` (gitignored, per-workspace): `DEV_PORT`, `CONVEX_CLOUD_PORT`, `CONVEX_SITE_PORT`
+- Ports and project identity configured in `.dev-ports` (gitignored, per-workspace):
+  ```
+  DEV_PORT=8080
+  CONVEX_CLOUD_PORT=3210
+  CONVEX_SITE_PORT=3211
+  CONVEX_TEAM=ko-vial
+  CONVEX_PROJECT=holophyte
+  ```
+- `CONVEX_TEAM`/`CONVEX_PROJECT` are needed to switch from cloud to local deployment — `convex dev --local` silently connects to cloud if `.env.local` has a `dev:` deployment without these
 - Main repo: dev=8080, convex=3210/3211. Worktrees get auto-assigned ports via `bun run worktree:create`
 - `bun run dev:local` starts app server + local Convex from `.dev-ports`
 - `bun run convex:dev` (cloud) is still available for production deployment workflows
-- `.env.local` is copied from main repo during worktree setup (provides project context), then overwritten by `convex dev --local --once` with local deployment config
+- `.env.local` is managed by `convex dev` — scripts auto-reconfigure from cloud to local when needed
 
 ## Frontend Patterns
 

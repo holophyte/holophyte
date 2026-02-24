@@ -42,6 +42,20 @@ cd holophyte
 bun install
 ```
 
+### Setup `.dev-ports`
+
+Create a `.dev-ports` file in the repo root (gitignored, per-workspace):
+
+```
+DEV_PORT=8080
+CONVEX_CLOUD_PORT=3210
+CONVEX_SITE_PORT=3211
+CONVEX_TEAM=ko-vial
+CONVEX_PROJECT=holophyte
+```
+
+This is required for `bun run dev:local` and `bun run convex:local`. Worktrees get their own `.dev-ports` automatically via `bun run worktree:create`.
+
 ### Development
 
 **Cloud Convex (recommended for production workflows):**
