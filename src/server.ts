@@ -24,6 +24,9 @@ const server = Bun.serve<WsData>({
           convexUrl: process.env.CONVEX_URL ?? '',
           e2eTest:
             !!process.env.E2E_TEST && process.env.NODE_ENV !== 'production',
+          allowAnonymousAuth:
+            process.env.NODE_ENV !== 'production' &&
+            !!process.env.ALLOW_ANONYMOUS_AUTH,
         });
       },
     },
@@ -127,6 +130,35 @@ const server = Bun.serve<WsData>({
           return Response.json({ error: String(err) }, { status: 500 });
         }
       },
+    },
+
+    // Proxy /api/auth/* to the Convex site URL so OAuth callbacks work through
+    // the app port. GitHub/Google redirect back to SITE_URL (the app port) and
+    // we forward the request to Convex's HTTP actions to complete the flow.
+    // Must be in `routes` (above the SPA catch-all) so GET requests aren't
+    // swallowed by the `/*` → homepage handler.
+    '/api/auth/*': async (req: Request) => {
+      const convexSiteUrl = process.env.CONVEX_SITE_URL;
+      if (!convexSiteUrl) {
+        return new Response('CONVEX_SITE_URL not configured', { status: 500 });
+      }
+      const url = new URL(req.url);
+      const target = `${convexSiteUrl}${url.pathname}${url.search}`;
+      try {
+        const proxyRes = await fetch(target, {
+          method: req.method,
+          headers: req.headers,
+          body: req.body,
+          redirect: 'manual',
+        });
+        return new Response(proxyRes.body, {
+          status: proxyRes.status,
+          headers: proxyRes.headers,
+        });
+      } catch (err) {
+        console.error('Auth proxy error:', err);
+        return Response.json({ error: 'Auth proxy failed' }, { status: 502 });
+      }
     },
 
     // SPA catch-all: serve the bundled app HTML for all unmatched GET routes.

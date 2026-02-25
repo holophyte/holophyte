@@ -2,14 +2,23 @@ import { api } from '@convex/_generated/api';
 import type { Id } from '@convex/_generated/dataModel';
 import { useMutation, useQuery } from 'convex/react';
 import { Square } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useSession } from '@/frontend/hooks/useSession';
-import { isEditableElement } from '@/frontend/lib/dom';
 import { useAppStore } from '@/frontend/stores/app';
-import MessageStream from './MessageStream';
-import PermissionPrompt from './PermissionPrompt';
 import SessionDropdown from './SessionDropdown';
-import UserInput from './UserInput';
+import SessionRuntimeProvider from './session/SessionRuntimeProvider';
+import SessionThread from './session/SessionThread';
+import {
+  BashToolUI,
+  EditToolUI,
+  GenericToolUI,
+  GlobToolUI,
+  GrepToolUI,
+  ReadToolUI,
+  WebFetchToolUI,
+  WebSearchToolUI,
+  WriteToolUI,
+} from './session/toolUIs';
 import Button from './ui/Button';
 
 /** Props for {@link SessionPanel}. */
@@ -47,16 +56,16 @@ export default function SessionPanel({ taskId }: SessionPanelProps) {
     }
   }, [session, closeSession]);
 
+  // Single useSession call — state is passed down to SessionRuntimeProvider as props
+  // to avoid duplicate WebSocket connections.
   const {
     events,
     pendingApprovals,
     sessionStatus,
-    messageQueued,
     sdkSessionId,
     reconnectWs,
     approve,
     deny,
-    sendMessage,
   } = useSession(sessionId);
 
   const [stopping, setStopping] = useState(false);
@@ -84,125 +93,20 @@ export default function SessionPanel({ taskId }: SessionPanelProps) {
     }
   };
 
-  const [now, setNow] = useState(Date.now());
-  useEffect(() => {
-    if (sessionStatus !== 'running') return;
-    setNow(Date.now());
-    const intervalId = window.setInterval(() => setNow(Date.now()), 1000);
-    return () => window.clearInterval(intervalId);
-  }, [sessionStatus]);
+  /** Resume an idle session by starting a new SDK turn. */
+  const resumeIdleSession = useCallback(
+    async (text: string) => {
+      if (!session?.taskId) throw new Error('Session has no associated task');
+      if (!sdkSessionId)
+        throw new Error('Cannot resume: no SDK session ID available');
+      if (!task?.repo?.path)
+        throw new Error('Cannot resume: task has no repo path');
 
-  const thinkingElapsedSeconds =
-    sessionStatus === 'running' && session
-      ? Math.max(0, Math.floor((now - session.startedAt) / 1000))
-      : undefined;
-
-  const unresolvedApprovals = pendingApprovals.filter((a) => !a.resolved);
-
-  useEffect(() => {
-    if (unresolvedApprovals.length === 0) return;
-
-    const handleApprovalHotkeys = (event: KeyboardEvent) => {
-      if (event.defaultPrevented) return;
-
-      const activeElement = document.activeElement;
-      const isEditable = isEditableElement(activeElement);
-
-      const promptEl =
-        activeElement instanceof HTMLElement
-          ? activeElement.closest<HTMLElement>(
-              '[data-permission-prompt][data-resolved="false"]',
-            )
-          : null;
-      const focusedPromptId = promptEl?.dataset.requestId;
-      const fallbackPromptId =
-        unresolvedApprovals.length === 1 && !isEditable
-          ? unresolvedApprovals[0]?.requestId
-          : undefined;
-      const targetPromptId = focusedPromptId ?? fallbackPromptId;
-      if (!targetPromptId) return;
-
-      if (
-        !isEditable &&
-        (event.key.toLowerCase() === 'y' || event.key === 'Enter')
-      ) {
-        event.preventDefault();
-        approve(targetPromptId);
-        return;
-      }
-
-      if (
-        !isEditable &&
-        (event.key.toLowerCase() === 'n' || event.key === 'Escape')
-      ) {
-        event.preventDefault();
-        deny(targetPromptId);
-      }
-    };
-
-    document.addEventListener('keydown', handleApprovalHotkeys);
-    return () => document.removeEventListener('keydown', handleApprovalHotkeys);
-  }, [approve, deny, unresolvedApprovals]);
-
-  // 'idle' is not finished from the user's perspective — they can still resume
-  const isFinished = sessionStatus === 'failed';
-  const isRunning = sessionStatus === 'running';
-  const isLoading =
-    !isFinished &&
-    sessionStatus !== 'idle' &&
-    events.length === 0 &&
-    sessionId !== null;
-
-  /**
-   * Handle sending a message. Covers three cases:
-   * 1. No session — create a new one and start it with the given prompt.
-   * 2. Idle session — resume the existing session in-place.
-   * 3. Running session — forward the message via WebSocket.
-   */
-  const handleSend = async (_sid: string, text: string) => {
-    // Case 1: No active session — create one and start it
-    if (!sessionId && task?.repo?.path) {
-      let newSessionId: Id<'sessions'> | undefined;
-      try {
-        newSessionId = await createSession({ taskId });
-        const res = await fetch('/api/sessions/start', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            sessionId: newSessionId,
-            repoPath: task.repo.path,
-            prompt: text,
-          }),
-        });
-        if (!res.ok) {
-          const data = (await res.json()) as { error?: string };
-          throw new Error(data.error ?? 'Failed to start session');
-        }
-        openSession(newSessionId);
-      } catch (err) {
-        if (newSessionId) {
-          await updateSessionStatus({ id: newSessionId, status: 'failed' });
-        }
-        throw err;
-      }
-      return;
-    }
-
-    // Case 2: Idle session — resume in-place
-    if (
-      sessionStatus === 'idle' &&
-      session?.taskId &&
-      sdkSessionId &&
-      task?.repo?.path
-    ) {
-      // Atomic guard: only one tab can transition idle → running
       const result = await resumeSessionMutation({ id: session._id });
-      if (!result.ok) {
-        // Another tab already resumed this session — silently bail out.
-        // The Convex reactive query will update the UI to reflect the
-        // running state from the other tab.
-        return;
-      }
+      if (!result.ok)
+        throw new Error(
+          'Session is no longer idle (resumed from another tab?)',
+        );
 
       try {
         const res = await fetch('/api/sessions/start', {
@@ -219,10 +123,8 @@ export default function SessionPanel({ taskId }: SessionPanelProps) {
           const data = (await res.json()) as { error?: string };
           throw new Error(data.error ?? 'Failed to resume session');
         }
-        // Reconnect the WebSocket so it picks up the new server-side session
         reconnectWs();
       } catch (err) {
-        // Revert the status so the session doesn't stay stuck as 'running'
         try {
           await updateSessionStatus({ id: session._id, status: 'idle' });
         } catch (cleanupErr) {
@@ -230,11 +132,64 @@ export default function SessionPanel({ taskId }: SessionPanelProps) {
         }
         throw err;
       }
-      return;
-    }
+    },
+    [
+      session,
+      sdkSessionId,
+      task?.repo?.path,
+      resumeSessionMutation,
+      reconnectWs,
+      updateSessionStatus,
+    ],
+  );
 
-    // Case 3: Running session — use the normal send-message endpoint
-    await sendMessage(_sid, text);
+  /**
+   * Unified send handler passed to SessionRuntimeProvider.
+   * The composer is only enabled during `idle` state, so this always triggers
+   * a resume. The running-state branch is a safety net in case the composer
+   * enable/disable timing races with a status change.
+   */
+  const handleSendMessage = useCallback(
+    async (_sessionId: string, text: string) => {
+      if (sessionStatus === 'idle') {
+        await resumeIdleSession(text);
+        return;
+      }
+      // Safety: composer should be disabled for non-idle states, but log if reached
+      console.error(
+        '[SessionPanel] handleSendMessage called in unexpected status:',
+        sessionStatus,
+      );
+    },
+    [sessionStatus, resumeIdleSession],
+  );
+
+  /** Create a brand-new session (used by NoSessionPlaceholder). */
+  const handleNewSession = async (text: string) => {
+    if (!task?.repo?.path) return;
+    let newSessionId: Id<'sessions'> | undefined;
+    try {
+      newSessionId = await createSession({ taskId });
+      const res = await fetch('/api/sessions/start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sessionId: newSessionId,
+          repoPath: task.repo.path,
+          prompt: text,
+        }),
+      });
+      if (!res.ok) {
+        const data = (await res.json()) as { error?: string };
+        throw new Error(data.error ?? 'Failed to start session');
+      }
+      openSession(newSessionId);
+    } catch (err) {
+      if (newSessionId) {
+        await updateSessionStatus({ id: newSessionId, status: 'failed' });
+      }
+      throw err;
+    }
   };
 
   return (
@@ -254,34 +209,95 @@ export default function SessionPanel({ taskId }: SessionPanelProps) {
           </Button>
         )}
       </div>
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-        <MessageStream
-          events={events}
-          isLoading={isLoading}
-          isProcessing={sessionStatus === 'running'}
-          thinkingElapsedSeconds={thinkingElapsedSeconds}
-          resolvedApprovals={pendingApprovals.filter((a) => a.resolved)}
-        />
 
-        {unresolvedApprovals.length > 0 && (
-          <div className="shrink-0 border-t border-border/50 bg-muted/20">
-            {unresolvedApprovals.map((approval) => (
-              <PermissionPrompt
-                key={approval.requestId}
-                approval={approval}
-                onApprove={() => approve(approval.requestId)}
-                onDeny={(msg) => deny(approval.requestId, msg)}
-              />
-            ))}
-          </div>
+      <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
+        {sessionId ? (
+          <SessionRuntimeProvider
+            sessionId={sessionId}
+            events={events}
+            pendingApprovals={pendingApprovals}
+            sessionStatus={sessionStatus}
+            approve={approve}
+            deny={deny}
+            sendMessage={handleSendMessage}
+          >
+            <BashToolUI />
+            <ReadToolUI />
+            <EditToolUI />
+            <WriteToolUI />
+            <GlobToolUI />
+            <GrepToolUI />
+            <WebFetchToolUI />
+            <WebSearchToolUI />
+            <GenericToolUI />
+            <SessionThread />
+          </SessionRuntimeProvider>
+        ) : (
+          <NoSessionPlaceholder
+            taskPath={task?.repo?.path ?? ''}
+            onStart={handleNewSession}
+          />
         )}
+      </div>
+    </div>
+  );
+}
 
-        <UserInput
-          sessionId={sessionId ?? 'new'}
-          disabled={isFinished || isRunning}
-          queued={messageQueued}
-          onSend={handleSend}
+interface NoSessionPlaceholderProps {
+  taskPath: string;
+  onStart: (text: string) => Promise<void>;
+}
+
+function NoSessionPlaceholder({
+  taskPath,
+  onStart,
+}: NoSessionPlaceholderProps) {
+  const [text, setText] = useState('');
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleSend = async () => {
+    if (!text.trim() || !taskPath) return;
+    setSending(true);
+    setError(null);
+    try {
+      await onStart(text.trim());
+      setText('');
+    } catch {
+      setError('Failed to start session. Try again.');
+    } finally {
+      setSending(false);
+    }
+  };
+
+  return (
+    <div className="flex flex-1 flex-col items-center justify-center gap-4 px-4">
+      <p className="text-sm text-muted-foreground">
+        No active session. Start one by sending a prompt.
+      </p>
+      <div className="w-full max-w-lg space-y-2">
+        <textarea
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          placeholder="What would you like Claude to do?"
+          rows={3}
+          disabled={sending || !taskPath}
+          className="w-full resize-none rounded-md border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground/50 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+          onKeyDown={(e) => {
+            if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+              e.preventDefault();
+              void handleSend();
+            }
+          }}
         />
+        {error && <p className="text-xs text-destructive">{error}</p>}
+        <Button
+          className="w-full"
+          disabled={!text.trim() || sending || !taskPath}
+          onClick={() => void handleSend()}
+        >
+          {sending ? 'Starting…' : 'Start session'}
+        </Button>
       </div>
     </div>
   );
