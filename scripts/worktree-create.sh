@@ -108,23 +108,19 @@ while true; do
   N=$((N + 1))
 done
 
-# Derive a unique project name so each worktree gets its own Convex deployment
-PROJECT_HASH=$(printf '%s' "$FEATURE_NAME" | shasum -a 256 | cut -c1-6)
-WORKTREE_PROJECT="${CONVEX_PROJECT}-${PROJECT_HASH}"
-
-# Write .dev-ports (unique project per worktree for deployment isolation)
+# Write .dev-ports (inherit team/project from main repo)
 cat > "$WORKTREE_PATH/.dev-ports" <<EOF
 DEV_PORT=$DEV_PORT
 CONVEX_CLOUD_PORT=$CONVEX_CLOUD_PORT
 CONVEX_SITE_PORT=$CONVEX_SITE_PORT
 CONVEX_TEAM=$CONVEX_TEAM
-CONVEX_PROJECT=$WORKTREE_PROJECT
+CONVEX_PROJECT=$CONVEX_PROJECT
 EOF
 
-echo "Initializing local Convex backend (cloud=$CONVEX_CLOUD_PORT, site=$CONVEX_SITE_PORT, project=$WORKTREE_PROJECT)..."
+echo "Initializing local Convex backend (cloud=$CONVEX_CLOUD_PORT, site=$CONVEX_SITE_PORT)..."
 cd "$WORKTREE_PATH" && bunx convex dev --configure existing \
   --team "$CONVEX_TEAM" \
-  --project "$WORKTREE_PROJECT" \
+  --project "$CONVEX_PROJECT" \
   --dev-deployment local \
   --local-cloud-port "$CONVEX_CLOUD_PORT" \
   --local-site-port "$CONVEX_SITE_PORT" \
