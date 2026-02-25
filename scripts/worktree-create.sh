@@ -144,6 +144,10 @@ CONVEX_BG_PID=$!
 
 # Wait for the backend to be ready
 for i in $(seq 1 30); do
+  if ! kill -0 "$CONVEX_BG_PID" 2>/dev/null; then
+    echo "Warning: Convex backend crashed — env vars may not be set"
+    break
+  fi
   if curl -sf "http://127.0.0.1:$CONVEX_CLOUD_PORT" >/dev/null 2>&1; then
     break
   fi
