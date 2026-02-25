@@ -31,7 +31,7 @@ function ThinkingIndicator() {
       aria-label="Claude is thinking"
       className="flex items-center gap-1.5 py-1 text-xs text-muted-foreground/70"
     >
-      <Sparkles className="h-3.5 w-3.5 animate-pulse" />
+      <Sparkles className="h-3.5 w-3.5 pulse-spin animate-[pulse-spin_2s_linear_infinite]" />
       <span>Thinking… {elapsed > 0 ? `${elapsed}s` : ''}</span>
     </output>
   );
@@ -39,7 +39,7 @@ function ThinkingIndicator() {
 
 export default function SessionThread() {
   return (
-    <ThreadPrimitive.Root className="flex h-full flex-col">
+    <ThreadPrimitive.Root className="relative flex h-full flex-col">
       <ThreadPrimitive.Viewport className="flex-1 overflow-y-auto px-4 py-4">
         <div className="w-full max-w-[90ch] space-y-5">
           <ThreadPrimitive.Messages
