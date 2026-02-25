@@ -4,8 +4,8 @@ import { ChevronRight } from 'lucide-react';
 export default function CustomUserMessage() {
   const message = useMessage();
   const text = message.content
-    .filter((p) => p.type === 'text')
-    .map((p) => (p as { type: 'text'; text: string }).text)
+    .filter((p): p is { type: 'text'; text: string } => p.type === 'text')
+    .map((p) => p.text)
     .join('');
 
   return (

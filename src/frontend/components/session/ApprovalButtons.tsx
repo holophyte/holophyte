@@ -1,7 +1,6 @@
 import { Check, X } from 'lucide-react';
 import { useState } from 'react';
 import Button from '@/frontend/components/ui/Button';
-import { cn } from '@/frontend/lib/utils';
 import { useSessionActions } from './SessionActionsContext';
 
 interface ApprovalButtonsProps {
@@ -29,9 +28,7 @@ export default function ApprovalButtons({ requestId }: ApprovalButtonsProps) {
         <div className="flex gap-1.5">
           <Button
             size="sm"
-            className={cn(
-              'min-h-11 px-3 text-xs bg-green-600 hover:bg-green-700 text-white',
-            )}
+            className="min-h-11 px-3 text-xs bg-green-600 hover:bg-green-700 text-white"
             onClick={handleApprove}
           >
             <Check className="h-3 w-3 mr-1" />
