@@ -140,8 +140,8 @@ If `browser_snapshot` shows loading spinners or empty lists right after navigati
 
 ## Reference
 
-- Formal E2E tests: `e2e/app.spec.ts`, `e2e/all-tasks-create.spec.ts`, `e2e/session-panel.spec.ts`
+- Formal E2E tests: `e2e/*.spec.ts`
 - Playwright config: `playwright.config.ts`
-- Global setup: `e2e/global-setup.ts` — seeds auth state and test repo
-- `waitForApp` helper: defined at the top of `e2e/app.spec.ts` — waits for the sidebar header before asserting
+- Global setup/teardown: `e2e/global-setup.ts`, `e2e/global-teardown.ts`
+- `waitForApp` helper: defined at the top of each spec — waits for the sidebar header before asserting
 - [Local Development & Worktrees](/local-development) — port allocation, Convex isolation, troubleshooting
