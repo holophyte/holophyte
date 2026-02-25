@@ -22,7 +22,7 @@ bun run convex:dev       # Start cloud Convex dev
 bun run convex:local     # Start local Convex backend (reads .dev-ports)
 bun run test             # Run unit tests (vitest)
 bun run test:ui          # Vitest UI dashboard
-bun run test:e2e         # Playwright E2E tests (requires convex:dev running)
+bun run test:e2e         # Playwright E2E tests (pre-checks convex:local + auth)
 bun run lint             # Biome check
 bun run lint:fix         # Biome auto-fix
 bun run check            # lint + typecheck + test (all-in-one)
@@ -151,9 +151,12 @@ scripts/                   → Shared shell scripts (convex-local, dev-local, wo
 
 **E2E tests (Playwright):**
 - Tests in `e2e/` directory, pattern `*.spec.ts`
-- Chromium only, base URL `http://localhost:8080`
-- Auto-starts the dev server, but **`bun run convex:dev` must be running separately**
+- Chromium only, base URL `http://localhost:<DEV_PORT+1>` (resolved from `.dev-ports`)
+- Auto-starts the dev server, but **`bun run convex:local` must be running separately**
+- Requires `ALLOW_ANONYMOUS_AUTH=1` set on Convex env: `bunx convex env set ALLOW_ANONYMOUS_AUTH 1`
 - Use `waitForApp(page)` helper to wait for hydration before assertions
+- **Manual testing**: Navigate to `http://localhost:<port>?auth` — the `?auth` param triggers anonymous auth
+- See `docs/docs/testing/playwright-manual.md` for the full E2E and manual testing guide
 
 ## Error Handling
 
@@ -221,5 +224,7 @@ Server configuration lives in environment variables with sensible defaults:
 - No CI/CD or Docker configured
 - **`convex dev --local` silently connects to cloud** if `.dev-ports` is missing `CONVEX_TEAM`/`CONVEX_PROJECT` — always include both
 - **E2E tests require `convex:local` running** — Playwright starts the app server but not Convex
+- **E2E/manual testing require `ALLOW_ANONYMOUS_AUTH=1`** on Convex env — `bunx convex env set ALLOW_ANONYMOUS_AUTH 1` (auto-set by `worktree:create` for new worktrees)
+- **Manual testing requires `?auth` in URL** — `http://localhost:<port>?auth` triggers anonymous auth; without it the app silently stalls
 - **`bunx @convex-dev/auth` needs a running backend** — start `convex:local` first, then run auth setup in another terminal
 - See `docs/docs/local-development.md` for the full worktree guide and troubleshooting
