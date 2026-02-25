@@ -4,11 +4,11 @@ import { useSessionActions } from './SessionActionsContext';
 
 export default function SessionComposer() {
   const { sessionStatus } = useSessionActions();
-  const isDisabled = sessionStatus === 'running' || sessionStatus === 'failed';
+  const isDisabled = sessionStatus !== 'idle';
 
   const placeholder = isDisabled
-    ? 'Waiting for session to become idle…'
-    : 'Send a message to Claude… (Enter to send)';
+    ? 'Waiting for session to finish…'
+    : 'Send a follow-up to Claude… (Enter to send)';
 
   return (
     <ComposerPrimitive.Root className="shrink-0 border-t bg-muted/10 px-3 py-2">

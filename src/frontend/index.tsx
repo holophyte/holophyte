@@ -3,7 +3,7 @@ import { RouterProvider } from '@tanstack/react-router';
 import { ConvexReactClient } from 'convex/react';
 import React from 'react';
 import { createRoot } from 'react-dom/client';
-import { setE2eTest } from '@/frontend/lib/config';
+import { setAllowAnonymousAuth, setE2eTest } from '@/frontend/lib/config';
 import { router } from './router';
 import './styles.css';
 
@@ -14,6 +14,7 @@ async function init() {
   const convexUrl = config.convexUrl;
   const isE2e = !!config.e2eTest;
   setE2eTest(isE2e);
+  setAllowAnonymousAuth(!!config.allowAnonymousAuth);
 
   if (!convexUrl) {
     console.error('CONVEX_URL not configured');

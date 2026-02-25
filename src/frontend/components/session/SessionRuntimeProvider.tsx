@@ -45,13 +45,14 @@ export default function SessionRuntimeProvider({
     () => ({
       messages,
       isRunning,
-      // convertMessage is a pass-through since messages are already ThreadMessageLike
       convertMessage: (m: ThreadMessageLike) => m,
       onNew: async (message: AppendMessage) => {
+        if (isRunning) return; // Can't send while session is active
         const text = message.content
           .filter((p): p is { type: 'text'; text: string } => p.type === 'text')
           .map((p) => p.text)
           .join('\n');
+        if (!text.trim()) return;
         await sendMessage(sessionId, text);
       },
     }),

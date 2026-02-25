@@ -44,6 +44,7 @@ echo $$ > "$LOCKFILE"
 trap 'rm -f "$LOCKFILE"' EXIT
 
 export PORT="$DEV_PORT"
+export ALLOW_ANONYMOUS_AUTH="${ALLOW_ANONYMOUS_AUTH:-}"
 
 # Kill any lingering processes on dev ports (prevents Bun/Convex from auto-incrementing)
 for PORT_NUM in "$DEV_PORT" "$CONVEX_CLOUD_PORT" "$CONVEX_SITE_PORT"; do

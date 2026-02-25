@@ -24,6 +24,9 @@ const server = Bun.serve<WsData>({
           convexUrl: process.env.CONVEX_URL ?? '',
           e2eTest:
             !!process.env.E2E_TEST && process.env.NODE_ENV !== 'production',
+          allowAnonymousAuth:
+            process.env.NODE_ENV !== 'production' &&
+            !!process.env.ALLOW_ANONYMOUS_AUTH,
         });
       },
     },
