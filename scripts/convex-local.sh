@@ -63,9 +63,11 @@ if [ "$NEEDS_RECONFIGURE" = true ]; then
     exit 1
   fi
 
-  # Strip stale Convex-managed vars so --configure existing provisions a fresh deployment
+  # Save non-Convex vars — convex dev --configure existing overwrites .env.local
+  NON_CONVEX_VARS=""
   if [ -f "$ENV_LOCAL" ]; then
-    sed -i '' '/^\(CONVEX_DEPLOYMENT\|CONVEX_URL\|CONVEX_SITE_URL\|# Deployment used by\)/d' "$ENV_LOCAL"
+    NON_CONVEX_VARS=$(grep -vE '^(CONVEX_DEPLOYMENT|CONVEX_URL|CONVEX_SITE_URL|# Deployment used by|$)' \
+      "$ENV_LOCAL" || true)
   fi
 
   echo "Configuring local Convex deployment (cloud=$CONVEX_CLOUD_PORT, site=$CONVEX_SITE_PORT)..."
@@ -75,6 +77,11 @@ if [ "$NEEDS_RECONFIGURE" = true ]; then
     --dev-deployment local \
     --local-cloud-port "$CONVEX_CLOUD_PORT" \
     --local-site-port "$CONVEX_SITE_PORT"
+
+  # Restore non-Convex vars (API keys, secrets) that Convex overwrote
+  if [ -n "$NON_CONVEX_VARS" ]; then
+    printf '\n%s\n' "$NON_CONVEX_VARS" >> "$ENV_LOCAL"
+  fi
 else
   echo "Starting local Convex (cloud=$CONVEX_CLOUD_PORT, site=$CONVEX_SITE_PORT)..."
   bunx convex dev --local \
