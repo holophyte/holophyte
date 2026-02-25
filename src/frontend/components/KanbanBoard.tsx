@@ -239,14 +239,10 @@ export function KanbanBoard() {
                     ? handleArchiveAll
                     : undefined
                 }
-                onAddTask={
-                  selectedRepoId
-                    ? () => {
-                        setCreateDialogStatus(col.status);
-                        setCreateDialogOpen(true);
-                      }
-                    : undefined
-                }
+                onAddTask={() => {
+                  setCreateDialogStatus(col.status);
+                  setCreateDialogOpen(true);
+                }}
               />
             );
 
@@ -269,14 +265,12 @@ export function KanbanBoard() {
         </div>
       )}
       <BulkActionBar allTasks={enrichedTasks} />
-      {selectedRepoId && (
-        <CreateTaskDialog
-          open={createDialogOpen}
-          onOpenChange={setCreateDialogOpen}
-          repoId={selectedRepoId}
-          initialStatus={createDialogStatus}
-        />
-      )}
+      <CreateTaskDialog
+        open={createDialogOpen}
+        onOpenChange={setCreateDialogOpen}
+        repoId={selectedRepoId ?? undefined}
+        initialStatus={createDialogStatus}
+      />
     </div>
   );
 }
