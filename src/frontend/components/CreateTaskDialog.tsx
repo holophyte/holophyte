@@ -128,26 +128,32 @@ export function CreateTaskDialog({
                     className="w-[var(--radix-popover-trigger-width)] p-1"
                     align="start"
                   >
-                    {repos.map((r) => (
-                      <button
-                        key={r._id}
-                        type="button"
-                        onClick={() => {
-                          setSelectedRepoId(r._id);
-                          setRepoPickerOpen(false);
-                        }}
-                        className={cn(
-                          'w-full flex items-center gap-2 px-2.5 py-1.5 rounded text-sm hover:bg-muted/50 transition-colors text-left',
-                          effectiveRepoId === r._id && 'bg-muted',
-                        )}
-                      >
-                        <FolderGit2 className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                        <span className="flex-1 truncate">{r.name}</span>
-                        {effectiveRepoId === r._id && (
-                          <Check className="h-3.5 w-3.5 text-muted-foreground" />
-                        )}
-                      </button>
-                    ))}
+                    {repos.length === 0 ? (
+                      <p className="px-2.5 py-1.5 text-sm text-muted-foreground">
+                        No projects available
+                      </p>
+                    ) : (
+                      repos.map((r) => (
+                        <button
+                          key={r._id}
+                          type="button"
+                          onClick={() => {
+                            setSelectedRepoId(r._id);
+                            setRepoPickerOpen(false);
+                          }}
+                          className={cn(
+                            'w-full flex items-center gap-2 px-2.5 py-1.5 rounded text-sm hover:bg-muted/50 transition-colors text-left',
+                            effectiveRepoId === r._id && 'bg-muted',
+                          )}
+                        >
+                          <FolderGit2 className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                          <span className="flex-1 truncate">{r.name}</span>
+                          {effectiveRepoId === r._id && (
+                            <Check className="h-3.5 w-3.5 text-muted-foreground" />
+                          )}
+                        </button>
+                      ))
+                    )}
                   </PopoverContent>
                 </Popover>
               </div>
