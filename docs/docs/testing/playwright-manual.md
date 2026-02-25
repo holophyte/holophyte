@@ -112,19 +112,19 @@ If a test run crashes or is killed, Chromium processes may linger. Symptoms: sub
 pkill -f "chromium.*--headless"
 ```
 
-### E2E tests need `convex:local` running
+### Stop `convex:local` before running E2E tests
 
-Playwright starts the app server automatically but does **not** start Convex. Make sure `bun run convex:local` is running in the worktree before running `bun run test:e2e`.
+`bun run test:e2e` spins up its own ephemeral Convex backend automatically. The Convex CLI refuses to provision when another local backend is active, so stop `convex:local` first (Ctrl+C in that terminal).
 
-### Anonymous auth not set up
+### Anonymous auth not set up (manual testing)
 
-E2E and manual testing require `ALLOW_ANONYMOUS_AUTH=1` on the Convex environment. Without it, auth never completes and the app appears stuck. Run once per Convex instance:
+Manual testing requires `ALLOW_ANONYMOUS_AUTH=1` on the Convex environment. Without it, auth never completes and the app appears stuck. Run once per Convex instance:
 
 ```bash
 bunx convex env set ALLOW_ANONYMOUS_AUTH 1
 ```
 
-> **Note:** `bun run worktree:create` sets this automatically for new worktrees. For existing worktrees created before this fix, set it manually.
+> **Note:** `bun run worktree:create` sets this automatically for new worktrees. E2E tests (`bun run test:e2e`) handle this automatically via the ephemeral backend.
 
 ### Missing `?auth` query param
 

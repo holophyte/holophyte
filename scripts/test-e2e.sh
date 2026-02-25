@@ -1,41 +1,29 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Pre-flight checks before running Playwright E2E tests
+# Run Playwright E2E tests with an ephemeral Convex backend.
+# No manual setup needed — spins up a fresh Convex instance, runs tests,
+# then tears it down. Each run gets a clean database.
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-DEV_PORTS="$REPO_ROOT/.dev-ports"
 
-# Read .dev-ports
-if [ ! -f "$DEV_PORTS" ]; then
-  echo "Error: .dev-ports not found — run from a project root with local Convex configured"
-  exit 1
-fi
+# Ensure cleanup on exit (Ctrl+C, test failure, etc.)
+cleanup() {
+  "$SCRIPT_DIR/e2e-convex.sh" stop 2>/dev/null || true
+}
+trap cleanup EXIT
 
+# Start ephemeral Convex
+"$SCRIPT_DIR/e2e-convex.sh" start
+
+# Read the ephemeral ports
 # shellcheck source=/dev/null
-source "$DEV_PORTS"
+source "$REPO_ROOT/.e2e-convex-ports"
 
-CONVEX_PORT="${CONVEX_CLOUD_PORT:-3210}"
-
-# Check if Convex is running
-if ! lsof -iTCP:"$CONVEX_PORT" -sTCP:LISTEN >/dev/null 2>&1; then
-  echo "Error: Local Convex backend is not running on port $CONVEX_PORT"
-  echo ""
-  echo "Start it first:"
-  echo "  bun run convex:local"
-  echo ""
-  echo "Then re-run:"
-  echo "  bun run test:e2e"
-  exit 1
-fi
-
-# Check ALLOW_ANONYMOUS_AUTH is set
-AUTH_CHECK=$(cd "$REPO_ROOT" && bunx convex env get ALLOW_ANONYMOUS_AUTH 2>&1 || true)
-if [[ "$AUTH_CHECK" != *"1"* ]]; then
-  echo "Setting ALLOW_ANONYMOUS_AUTH=1 on local Convex..."
-  cd "$REPO_ROOT" && bunx convex env set ALLOW_ANONYMOUS_AUTH 1
-fi
+# Export for playwright.config.ts to pick up
+export E2E_CONVEX_CLOUD_PORT
+export E2E_CONVEX_SITE_PORT
 
 # Run Playwright
-exec bunx playwright test "$@"
+cd "$REPO_ROOT" && bunx playwright test "$@"
