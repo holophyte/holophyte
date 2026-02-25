@@ -133,6 +133,11 @@ start_e2e_convex() {
 
   # Wait for backend to be ready
   for i in $(seq 1 30); do
+    if ! kill -0 "$bg_pid" 2>/dev/null; then
+      echo "Error: E2E Convex backend crashed during startup"
+      stop_e2e_convex
+      exit 1
+    fi
     if curl -sf "http://127.0.0.1:$cloud_port" >/dev/null 2>&1; then
       break
     fi
