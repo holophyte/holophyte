@@ -374,7 +374,11 @@ export async function startSession(opts: {
     abortController: controller,
     canUseTool: async (toolName, input, toolOpts) => {
       if (shouldAutoApprove(session, toolName, input)) {
-        return { behavior: 'allow' as const, toolUseID: toolOpts.toolUseID };
+        return {
+          behavior: 'allow' as const,
+          updatedInput: input,
+          toolUseID: toolOpts.toolUseID,
+        };
       }
 
       const requestId = toolOpts.toolUseID;
@@ -579,7 +583,11 @@ export function respondToApproval(
   session.approvalQueue.delete(requestId);
 
   if (approved) {
-    pending.resolve({ behavior: 'allow', toolUseID: requestId });
+    pending.resolve({
+      behavior: 'allow',
+      updatedInput: pending.input,
+      toolUseID: requestId,
+    });
   } else {
     pending.resolve({
       behavior: 'deny',
