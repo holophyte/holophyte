@@ -55,13 +55,20 @@ export function CreateTaskDialog({
     !repoId && selectedOrgId ? { orgId: selectedOrgId } : 'skip',
   );
 
-  // Derived: effective repo — prop > user selection > last used > first available
-  const effectiveRepoId = repoId ?? selectedRepoId ?? repos?.[0]?._id ?? null;
+  // Validate lastUsedRepoId still exists in the loaded repos list
+  const validLastUsedRepoId =
+    lastUsedRepoId && repos?.some((r) => r._id === lastUsedRepoId)
+      ? lastUsedRepoId
+      : null;
+
+  // Derived: effective repo — prop > user selection > last used (if valid) > first available
+  const effectiveRepoId =
+    repoId ?? selectedRepoId ?? validLastUsedRepoId ?? repos?.[0]?._id ?? null;
 
   const handleOpenChange = (nextOpen: boolean) => {
     if (nextOpen) {
       // Reset repo selection when dialog opens
-      setSelectedRepoId(repoId ?? lastUsedRepoId);
+      setSelectedRepoId(repoId ?? validLastUsedRepoId);
     }
     onOpenChange(nextOpen);
   };
