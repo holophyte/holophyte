@@ -56,9 +56,18 @@ export default function SessionPanel({ taskId }: SessionPanelProps) {
     }
   }, [session, closeSession]);
 
-  // useSession is used here for session lifecycle management (resume, stop, status).
-  // SessionRuntimeProvider also calls useSession internally for the assistant-ui adapter.
-  const { sessionStatus, sdkSessionId, reconnectWs } = useSession(sessionId);
+  // Single useSession call — state is passed down to SessionRuntimeProvider as props
+  // to avoid duplicate WebSocket connections.
+  const {
+    events,
+    pendingApprovals,
+    sessionStatus,
+    sdkSessionId,
+    reconnectWs,
+    approve,
+    deny,
+    sendMessage,
+  } = useSession(sessionId);
 
   const [stopping, setStopping] = useState(false);
 
@@ -183,7 +192,15 @@ export default function SessionPanel({ taskId }: SessionPanelProps) {
 
       <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
         {sessionId ? (
-          <SessionRuntimeProvider sessionId={sessionId}>
+          <SessionRuntimeProvider
+            sessionId={sessionId}
+            events={events}
+            pendingApprovals={pendingApprovals}
+            sessionStatus={sessionStatus}
+            approve={approve}
+            deny={deny}
+            sendMessage={sendMessage}
+          >
             <BashToolUI />
             <ReadToolUI />
             <EditToolUI />

@@ -1,3 +1,4 @@
+import type { SDKMessage } from '@anthropic-ai/claude-agent-sdk';
 import type { AppendMessage, ThreadMessageLike } from '@assistant-ui/react';
 import {
   AssistantRuntimeProvider,
@@ -5,28 +6,34 @@ import {
 } from '@assistant-ui/react';
 import type { ReactNode } from 'react';
 import { useMemo } from 'react';
-import { useSession } from '@/frontend/hooks/useSession';
+import type {
+  PendingApproval,
+  SessionStatus,
+} from '@/frontend/hooks/useSession';
 import { sdkToThreadMessages } from '@/frontend/lib/sdkToThreadMessages';
 import { SessionActionsProvider } from './SessionActionsContext';
 
 interface SessionRuntimeProviderProps {
   sessionId: string;
+  events: SDKMessage[];
+  pendingApprovals: PendingApproval[];
+  sessionStatus: SessionStatus | null;
+  approve: (requestId: string) => void;
+  deny: (requestId: string, message?: string) => void;
+  sendMessage: (sessionId: string, text: string) => Promise<void>;
   children: ReactNode;
 }
 
 export default function SessionRuntimeProvider({
   sessionId,
+  events,
+  pendingApprovals,
+  sessionStatus,
+  approve,
+  deny,
+  sendMessage,
   children,
 }: SessionRuntimeProviderProps) {
-  const {
-    events,
-    pendingApprovals,
-    sessionStatus,
-    approve,
-    deny,
-    sendMessage,
-  } = useSession(sessionId);
-
   const isRunning = sessionStatus === 'running';
 
   const messages = useMemo(
@@ -42,8 +49,8 @@ export default function SessionRuntimeProvider({
       convertMessage: (m: ThreadMessageLike) => m,
       onNew: async (message: AppendMessage) => {
         const text = message.content
-          .filter((p) => p.type === 'text')
-          .map((p) => (p as { type: 'text'; text: string }).text)
+          .filter((p): p is { type: 'text'; text: string } => p.type === 'text')
+          .map((p) => p.text)
           .join('\n');
         await sendMessage(sessionId, text);
       },
