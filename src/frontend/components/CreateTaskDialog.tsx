@@ -44,7 +44,7 @@ export function CreateTaskDialog({
   const [prompt, setPrompt] = useState('');
   const [priority, setPriority] = useState<TaskPriority>(TaskPriority.None);
   const [selectedRepoId, setSelectedRepoId] = useState<Id<'repos'> | null>(
-    repoId ?? lastUsedRepoId,
+    null,
   );
   const [repoPickerOpen, setRepoPickerOpen] = useState(false);
   const createTask = useMutation(api.tasks.create);
