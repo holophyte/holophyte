@@ -139,6 +139,33 @@ const server = Bun.serve<WsData>({
   async fetch(req, server) {
     const url = new URL(req.url);
 
+    // Proxy /api/auth/* to the Convex site URL so OAuth callbacks work through
+    // the app port. GitHub/Google redirect back to SITE_URL (the app port) and
+    // we forward the request to Convex's HTTP actions to complete the flow.
+    if (url.pathname.startsWith('/api/auth/')) {
+      const convexSiteUrl = process.env.CONVEX_SITE_URL;
+      if (!convexSiteUrl) {
+        return new Response('CONVEX_SITE_URL not configured', { status: 500 });
+      }
+      const target = `${convexSiteUrl}${url.pathname}${url.search}`;
+      try {
+        const proxyRes = await fetch(target, {
+          method: req.method,
+          headers: req.headers,
+          body: req.body,
+          redirect: 'manual',
+        });
+        // Forward the response (including redirects) back to the browser
+        return new Response(proxyRes.body, {
+          status: proxyRes.status,
+          headers: proxyRes.headers,
+        });
+      } catch (err) {
+        console.error('Auth proxy error:', err);
+        return Response.json({ error: 'Auth proxy failed' }, { status: 502 });
+      }
+    }
+
     // POST /api/sessions/:id/stop
     const stopMatch = url.pathname.match(/^\/api\/sessions\/(.+)\/stop$/);
     if (stopMatch && req.method === 'POST') {

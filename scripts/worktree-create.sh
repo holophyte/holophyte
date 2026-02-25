@@ -108,6 +108,13 @@ cd "$WORKTREE_PATH" && bunx convex dev --configure existing \
 echo "Configuring Convex Auth keys..."
 cd "$WORKTREE_PATH" && bunx @convex-dev/auth
 
+# Override SITE_URL to point at the app server port. The app server proxies
+# /api/auth/* to the Convex site port so OAuth callbacks work through a single
+# origin (matches what's configured in GitHub/Google OAuth apps).
+echo "Setting SITE_URL to app server (http://localhost:$DEV_PORT)..."
+cd "$WORKTREE_PATH" && bunx convex env set SITE_URL "http://localhost:$DEV_PORT"
+cd "$WORKTREE_PATH" && bunx convex env set ALLOW_ANONYMOUS_AUTH 1
+
 echo ""
 echo "Worktree created: ~/.holophyte-dev/$FEATURE_NAME"
 echo "Ports: dev=$DEV_PORT, convex=$CONVEX_CLOUD_PORT/$CONVEX_SITE_PORT"
