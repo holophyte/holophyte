@@ -64,7 +64,7 @@ cp "$REPO_ROOT/.env" "$WORKTREE_PATH/" 2>/dev/null || true
 # (convex dev --configure existing overwrites the file)
 NON_CONVEX_VARS=""
 if [ -f "$REPO_ROOT/.env.local" ]; then
-  NON_CONVEX_VARS=$(grep -v '^\(CONVEX_DEPLOYMENT\|CONVEX_URL\|CONVEX_SITE_URL\|# Deployment used by\|^$\)' \
+  NON_CONVEX_VARS=$(grep -vE '^(CONVEX_DEPLOYMENT|CONVEX_URL|CONVEX_SITE_URL|# Deployment used by|$)' \
     "$REPO_ROOT/.env.local" || true)
 fi
 
@@ -87,6 +87,7 @@ allocated_dev_ports() {
 }
 
 # Start scanning from slot 1 (slot 0 is main repo @ 8080)
+ALLOCATED=$(allocated_dev_ports)
 N=1
 while true; do
   DEV_PORT=$((8080 + N * 2))
@@ -95,7 +96,7 @@ while true; do
   E2E_PORT=$((DEV_PORT + 1))
 
   # Skip if this slot's DEV_PORT is already allocated to another worktree
-  if allocated_dev_ports | grep -qx "$DEV_PORT"; then
+  if echo "$ALLOCATED" | grep -qx "$DEV_PORT"; then
     N=$((N + 1))
     continue
   fi
