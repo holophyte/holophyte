@@ -45,13 +45,13 @@ test('clicking collapsed backlog expands it', async ({ page }) => {
   await expect(columnHeader).toBeVisible();
 });
 
-test('per-lane add buttons are not visible without repo selected', async ({
-  page,
-}) => {
+test('per-lane add buttons are visible in all tasks view', async ({ page }) => {
   await waitForApp(page);
-  // Without a repo, the "+ Add" buttons should not appear in any column
+  // Add buttons should appear on every visible column, even without a repo selected
   const addButtons = page.locator('button', { hasText: /^Add$/ });
-  await expect(addButtons).toHaveCount(0);
+  // To Do, In Progress, Review, Done are visible (Backlog is collapsed)
+  await expect(addButtons.first()).toBeVisible();
+  expect(await addButtons.count()).toBeGreaterThanOrEqual(4);
 });
 
 test('add repo dialog opens', async ({ page }) => {
