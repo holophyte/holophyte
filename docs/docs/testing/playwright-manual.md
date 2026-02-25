@@ -103,13 +103,21 @@ pkill -f "chrome.*remote-debugging"
 
 Then retry. Playwright MCP will start a fresh instance.
 
+### Orphaned Chromium processes
+
+If a test run crashes or is killed, Chromium processes may linger. Symptoms: subsequent runs fail to launch a browser, or memory usage spikes.
+
+```bash
+pkill -f "chromium.*--headless"
+```
+
+### E2E tests need `convex:local` running
+
+Playwright starts the app server automatically but does **not** start Convex. Make sure `bun run convex:local` is running in the worktree before running `bun run test:e2e`.
+
 ### Sessions completing too fast
 
 Short prompts (`What is 2+2?`) finish in under a second — too fast to test the running state. Use prompts that require file reads, multiple tool calls, or long outputs when you need the session to stay running.
-
-### Route catch-all was blocking POST requests
-
-The SPA catch-all route in `src/server.ts` is GET-only. POST requests to `/api/*` go to the correct handlers. This was a past bug (now fixed) — if you see 405 errors on session start, check that the catch-all has an explicit method guard.
 
 ### Convex not hydrated yet
 
@@ -119,4 +127,6 @@ If `browser_snapshot` shows loading spinners or empty lists right after navigati
 
 - Formal E2E tests: `e2e/app.spec.ts`
 - Playwright config: `playwright.config.ts`
+- Global setup: `e2e/global-setup.ts` — seeds auth state and test repo
 - `waitForApp` helper: defined at the top of `e2e/app.spec.ts` — waits for the sidebar header before asserting
+- [Local Development & Worktrees](/local-development) — port allocation, Convex isolation, troubleshooting

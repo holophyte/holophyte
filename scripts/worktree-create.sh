@@ -56,27 +56,52 @@ mkdir -p "$WORKTREE_DIR"
 echo "Creating worktree at ~/.holophyte-dev/$FEATURE_NAME on branch $BRANCH..."
 git worktree add "$WORKTREE_PATH" -b "$BRANCH"
 
-# Copy env files — .env.local gives Convex the project context so
-# `convex dev --local` can skip the interactive setup prompt
+# Copy .env (shared config). Don't copy .env.local yet — Convex will create it
+# during provisioning. Non-Convex vars (API keys, secrets) are appended after.
 cp "$REPO_ROOT/.env" "$WORKTREE_PATH/" 2>/dev/null || true
-cp "$REPO_ROOT/.env.local" "$WORKTREE_PATH/" 2>/dev/null || true
+
+# Save non-Convex vars from .env.local to restore after Convex provisioning
+# (convex dev --configure existing overwrites the file)
+NON_CONVEX_VARS=""
+if [ -f "$REPO_ROOT/.env.local" ]; then
+  NON_CONVEX_VARS=$(grep -vE '^(CONVEX_DEPLOYMENT|CONVEX_URL|CONVEX_SITE_URL|# Deployment used by|$)' \
+    "$REPO_ROOT/.env.local" || true)
+fi
 
 # Install dependencies
 echo "Installing dependencies..."
 cd "$WORKTREE_PATH" && bun install
 
-# Assign ports — start from worktree count, bump if any port is already in use
+# Assign ports — scan all existing .dev-ports files to avoid collisions with
+# other worktrees, even if they aren't currently running.
 port_in_use() {
   lsof -iTCP:"$1" -sTCP:LISTEN >/dev/null 2>&1
 }
 
-N=$(git worktree list | wc -l | tr -d ' ')
-while true; do
-  DEV_PORT=$((8080 + (N - 1) * 2))
-  CONVEX_CLOUD_PORT=$((3210 + (N - 1) * 2))
-  CONVEX_SITE_PORT=$((3211 + (N - 1) * 2))
+# Collect DEV_PORTs already allocated to main repo and other worktrees
+allocated_dev_ports() {
+  for dp in "$REPO_ROOT/.dev-ports" "$WORKTREE_DIR"/*/.dev-ports; do
+    [ -f "$dp" ] || continue
+    grep '^DEV_PORT=' "$dp" 2>/dev/null | cut -d= -f2
+  done
+}
 
+# Start scanning from slot 1 (slot 0 is main repo @ 8080)
+ALLOCATED=$(allocated_dev_ports)
+N=1
+while true; do
+  DEV_PORT=$((8080 + N * 2))
+  CONVEX_CLOUD_PORT=$((3210 + N * 2))
+  CONVEX_SITE_PORT=$((3211 + N * 2))
   E2E_PORT=$((DEV_PORT + 1))
+
+  # Skip if this slot's DEV_PORT is already allocated to another worktree
+  if echo "$ALLOCATED" | grep -qx "$DEV_PORT"; then
+    N=$((N + 1))
+    continue
+  fi
+
+  # Skip if any port in this slot is currently in use
   if ! port_in_use "$DEV_PORT" && ! port_in_use "$E2E_PORT" && ! port_in_use "$CONVEX_CLOUD_PORT" && ! port_in_use "$CONVEX_SITE_PORT"; then
     break
   fi
@@ -93,8 +118,6 @@ CONVEX_TEAM=$CONVEX_TEAM
 CONVEX_PROJECT=$CONVEX_PROJECT
 EOF
 
-# Initialize local Convex — always use --configure existing since the copied
-# .env.local may have cloud deployment, and we need a fresh local instance
 echo "Initializing local Convex backend (cloud=$CONVEX_CLOUD_PORT, site=$CONVEX_SITE_PORT)..."
 cd "$WORKTREE_PATH" && bunx convex dev --configure existing \
   --team "$CONVEX_TEAM" \
@@ -104,9 +127,12 @@ cd "$WORKTREE_PATH" && bunx convex dev --configure existing \
   --local-site-port "$CONVEX_SITE_PORT" \
   --once
 
-# Set up Convex Auth JWT keys for the local deployment
-echo "Configuring Convex Auth keys..."
-cd "$WORKTREE_PATH" && bunx @convex-dev/auth
+# Restore non-Convex vars (API keys, secrets) that Convex overwrote
+if [ -n "$NON_CONVEX_VARS" ]; then
+  printf '\n%s\n' "$NON_CONVEX_VARS" >> "$WORKTREE_PATH/.env.local"
+fi
+
+# Auth keys are configured on first `bun run dev:local` (needs a running backend)
 
 # Override SITE_URL to point at the app server port. The app server proxies
 # /api/auth/* to the Convex site port so OAuth callbacks work through a single

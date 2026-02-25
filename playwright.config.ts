@@ -1,17 +1,29 @@
 import { readFileSync } from 'node:fs';
 import { defineConfig } from '@playwright/test';
 
-function resolveE2ePort(): number {
-  if (process.env.E2E_PORT) return Number(process.env.E2E_PORT);
+function parseDevPorts(): Record<string, string> {
   try {
-    const devPorts = readFileSync('.dev-ports', 'utf-8');
-    const match = devPorts.match(/^DEV_PORT=(\d+)/m);
-    if (match?.[1]) return Number(match[1]) + 1;
-  } catch {}
+    const content = readFileSync('.dev-ports', 'utf-8');
+    const ports: Record<string, string> = {};
+    for (const line of content.split('\n')) {
+      const match = line.match(/^(\w+)=(.+)$/);
+      if (match?.[1] && match[2]) ports[match[1]] = match[2];
+    }
+    return ports;
+  } catch {
+    return {};
+  }
+}
+
+function resolveE2ePort(devPorts: Record<string, string>): number {
+  if (process.env.E2E_PORT) return Number(process.env.E2E_PORT);
+  const devPort = devPorts.DEV_PORT;
+  if (devPort) return Number(devPort) + 1;
   return 8081;
 }
 
-const e2ePort = resolveE2ePort();
+const devPorts = parseDevPorts();
+const e2ePort = resolveE2ePort(devPorts);
 
 export default defineConfig({
   testDir: './e2e',
@@ -39,6 +51,15 @@ export default defineConfig({
     command: 'bun run src/server.ts',
     url: `http://localhost:${e2ePort}/`,
     reuseExistingServer: false,
-    env: { ...process.env, E2E_TEST: '1', PORT: String(e2ePort) },
+    env: {
+      ...process.env,
+      E2E_TEST: '1',
+      PORT: String(e2ePort),
+      // Pass Convex URL from .dev-ports so the E2E server connects to the
+      // correct local Convex instance (not another worktree's)
+      ...(devPorts.CONVEX_CLOUD_PORT && {
+        CONVEX_URL: `http://127.0.0.1:${devPorts.CONVEX_CLOUD_PORT}`,
+      }),
+    },
   },
 });

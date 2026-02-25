@@ -120,6 +120,8 @@ scripts/                   → Shared shell scripts (convex-local, dev-local, wo
 - `bun run dev:local` starts app server + local Convex from `.dev-ports`
 - `bun run convex:dev` (cloud) is still available for production deployment workflows
 - `.env.local` is managed by `convex dev` — scripts auto-reconfigure from cloud to local when needed
+- **Deployment isolation**: Each workspace gets a unique `CONVEX_DEPLOYMENT` name. `convex-local.sh` validates that `CONVEX_URL` ports match `.dev-ports` and auto-reconfigures on mismatch
+- See `docs/docs/local-development.md` for the full worktree guide and gotchas
 
 ## Frontend Patterns
 
@@ -217,3 +219,7 @@ Server configuration lives in environment variables with sensible defaults:
 - Pre-commit hooks configured via `.githooks/` — `prepare` script in package.json sets `core.hooksPath` on `bun install`
 - `bun run --watch` swallows subprocess stderr — run `bun src/server.ts` directly when debugging SDK session issues
 - No CI/CD or Docker configured
+- **`convex dev --local` silently connects to cloud** if `.dev-ports` is missing `CONVEX_TEAM`/`CONVEX_PROJECT` — always include both
+- **E2E tests require `convex:local` running** — Playwright starts the app server but not Convex
+- **`bunx @convex-dev/auth` needs a running backend** — start `convex:local` first, then run auth setup in another terminal
+- See `docs/docs/local-development.md` for the full worktree guide and troubleshooting

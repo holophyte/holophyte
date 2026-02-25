@@ -39,28 +39,52 @@ done
 
 # Check if .env.local already has a local deployment configured
 CURRENT_DEPLOYMENT=""
+ENV_CONVEX_URL=""
 if [ -f "$ENV_LOCAL" ]; then
   CURRENT_DEPLOYMENT=$(grep '^CONVEX_DEPLOYMENT=' "$ENV_LOCAL" | cut -d= -f2 | cut -d' ' -f1 | sed 's/^"\(.*\)"$/\1/' || true)
+  ENV_CONVEX_URL=$(grep '^CONVEX_URL=' "$ENV_LOCAL" | cut -d= -f2 | tr -d '"' || true)
 fi
 
-if [[ "$CURRENT_DEPLOYMENT" == local:* ]]; then
-  # Already configured for local — just run with --local
-  echo "Starting local Convex (cloud=$CONVEX_CLOUD_PORT, site=$CONVEX_SITE_PORT)..."
-  bunx convex dev --local \
-    --local-cloud-port "$CONVEX_CLOUD_PORT" \
-    --local-site-port "$CONVEX_SITE_PORT"
-else
-  # Cloud or unconfigured — reconfigure to local deployment
+EXPECTED_URL="http://127.0.0.1:$CONVEX_CLOUD_PORT"
+NEEDS_RECONFIGURE=false
+
+if [[ "$CURRENT_DEPLOYMENT" != local:* ]]; then
+  NEEDS_RECONFIGURE=true
+elif [ "$ENV_CONVEX_URL" != "$EXPECTED_URL" ]; then
+  # .env.local points to a different port than .dev-ports — stale from another
+  # worktree or copied from main repo. Must reconfigure.
+  echo "Detected stale deployment (CONVEX_URL=$ENV_CONVEX_URL, expected=$EXPECTED_URL)"
+  NEEDS_RECONFIGURE=true
+fi
+
+if [ "$NEEDS_RECONFIGURE" = true ]; then
   if [ -z "${CONVEX_TEAM:-}" ] || [ -z "${CONVEX_PROJECT:-}" ]; then
     echo "Error: .dev-ports is missing CONVEX_TEAM and CONVEX_PROJECT (needed to switch from cloud to local)"
     exit 1
   fi
 
-  echo "Switching to local Convex deployment (cloud=$CONVEX_CLOUD_PORT, site=$CONVEX_SITE_PORT)..."
+  # Save non-Convex vars — convex dev --configure existing overwrites .env.local
+  NON_CONVEX_VARS=""
+  if [ -f "$ENV_LOCAL" ]; then
+    NON_CONVEX_VARS=$(grep -vE '^(CONVEX_DEPLOYMENT|CONVEX_URL|CONVEX_SITE_URL|# Deployment used by|$)' \
+      "$ENV_LOCAL" || true)
+  fi
+
+  echo "Configuring local Convex deployment (cloud=$CONVEX_CLOUD_PORT, site=$CONVEX_SITE_PORT)..."
   bunx convex dev --configure existing \
     --team "$CONVEX_TEAM" \
     --project "$CONVEX_PROJECT" \
     --dev-deployment local \
+    --local-cloud-port "$CONVEX_CLOUD_PORT" \
+    --local-site-port "$CONVEX_SITE_PORT"
+
+  # Restore non-Convex vars (API keys, secrets) that Convex overwrote
+  if [ -n "$NON_CONVEX_VARS" ]; then
+    printf '\n%s\n' "$NON_CONVEX_VARS" >> "$ENV_LOCAL"
+  fi
+else
+  echo "Starting local Convex (cloud=$CONVEX_CLOUD_PORT, site=$CONVEX_SITE_PORT)..."
+  bunx convex dev --local \
     --local-cloud-port "$CONVEX_CLOUD_PORT" \
     --local-site-port "$CONVEX_SITE_PORT"
 fi
