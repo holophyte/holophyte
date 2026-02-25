@@ -1,0 +1,183 @@
+import { render, screen } from '@testing-library/react';
+import type { ReactNode } from 'react';
+import { describe, expect, it, vi } from 'vitest';
+import { SessionActionsContext } from './SessionActionsContext';
+
+// ---------------------------------------------------------------------------
+// Mocks
+// ---------------------------------------------------------------------------
+
+vi.mock('@assistant-ui/react', () => {
+  const ThreadPrimitive = {
+    Root: ({
+      children,
+      className,
+    }: {
+      children: ReactNode;
+      className?: string;
+    }) => (
+      <div data-testid="thread-root" className={className}>
+        {children}
+      </div>
+    ),
+    Viewport: ({
+      children,
+      className,
+    }: {
+      children: ReactNode;
+      className?: string;
+    }) => (
+      <div data-testid="thread-viewport" className={className}>
+        {children}
+      </div>
+    ),
+    Messages: ({
+      components,
+    }: {
+      components?: {
+        UserMessage?: React.ComponentType;
+        AssistantMessage?: React.ComponentType;
+      };
+    }) => (
+      <div data-testid="thread-messages">
+        {/* Render placeholders to verify custom components are wired */}
+        {components?.UserMessage && (
+          <span data-testid="custom-user-message-registered" />
+        )}
+        {components?.AssistantMessage && (
+          <span data-testid="custom-assistant-message-registered" />
+        )}
+      </div>
+    ),
+    ScrollToBottom: ({ className }: { className?: string }) => (
+      <button
+        data-testid="scroll-to-bottom"
+        className={className}
+        type="button"
+      >
+        Scroll to bottom
+      </button>
+    ),
+  };
+
+  return { ThreadPrimitive };
+});
+
+// Mock SessionComposer
+vi.mock('./SessionComposer', () => ({
+  default: () => <div data-testid="session-composer" />,
+}));
+
+// Mock CustomUserMessage and CustomAssistantMessage
+vi.mock('./CustomUserMessage', () => ({
+  default: () => <div data-testid="custom-user-message" />,
+}));
+
+vi.mock('./CustomAssistantMessage', () => ({
+  default: () => <div data-testid="custom-assistant-message" />,
+}));
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+function withSessionActions(
+  sessionStatus:
+    | 'running'
+    | 'waiting_input'
+    | 'idle'
+    | 'failed'
+    | null = 'idle',
+) {
+  return ({ children }: { children: ReactNode }) => (
+    <SessionActionsContext.Provider
+      value={{
+        approve: vi.fn(),
+        deny: vi.fn(),
+        pendingApprovals: [],
+        sessionStatus,
+      }}
+    >
+      {children}
+    </SessionActionsContext.Provider>
+  );
+}
+
+import SessionThread from './SessionThread';
+
+// ---------------------------------------------------------------------------
+// Tests
+// ---------------------------------------------------------------------------
+
+describe('SessionThread', () => {
+  describe('structure', () => {
+    it('renders ThreadPrimitive.Root', () => {
+      render(<SessionThread />, { wrapper: withSessionActions() });
+      expect(screen.getByTestId('thread-root')).toBeInTheDocument();
+    });
+
+    it('renders ThreadPrimitive.Viewport', () => {
+      render(<SessionThread />, { wrapper: withSessionActions() });
+      expect(screen.getByTestId('thread-viewport')).toBeInTheDocument();
+    });
+
+    it('renders ThreadPrimitive.Messages', () => {
+      render(<SessionThread />, { wrapper: withSessionActions() });
+      expect(screen.getByTestId('thread-messages')).toBeInTheDocument();
+    });
+
+    it('registers CustomUserMessage component', () => {
+      render(<SessionThread />, { wrapper: withSessionActions() });
+      expect(
+        screen.getByTestId('custom-user-message-registered'),
+      ).toBeInTheDocument();
+    });
+
+    it('registers CustomAssistantMessage component', () => {
+      render(<SessionThread />, { wrapper: withSessionActions() });
+      expect(
+        screen.getByTestId('custom-assistant-message-registered'),
+      ).toBeInTheDocument();
+    });
+
+    it('renders SessionComposer at the bottom', () => {
+      render(<SessionThread />, { wrapper: withSessionActions() });
+      expect(screen.getByTestId('session-composer')).toBeInTheDocument();
+    });
+
+    it('renders ScrollToBottom button', () => {
+      render(<SessionThread />, { wrapper: withSessionActions() });
+      expect(screen.getByTestId('scroll-to-bottom')).toBeInTheDocument();
+    });
+  });
+
+  describe('ThinkingIndicator', () => {
+    it('shows a thinking indicator when session is running', () => {
+      render(<SessionThread />, { wrapper: withSessionActions('running') });
+      // Look for "Thinking" text or a spinner element
+      const thinkingEl =
+        screen.queryByText(/thinking/i) ??
+        screen.queryByRole('status') ??
+        screen.queryByTestId('thinking-indicator');
+      expect(thinkingEl).toBeInTheDocument();
+    });
+
+    it('does not show thinking indicator when session is idle', () => {
+      render(<SessionThread />, { wrapper: withSessionActions('idle') });
+      expect(screen.queryByText(/thinking/i)).not.toBeInTheDocument();
+    });
+
+    it('does not show thinking indicator when session is failed', () => {
+      render(<SessionThread />, { wrapper: withSessionActions('failed') });
+      expect(screen.queryByText(/thinking/i)).not.toBeInTheDocument();
+    });
+  });
+
+  describe('smoke test', () => {
+    it('renders without crashing', () => {
+      expect(() =>
+        render(<SessionThread />, { wrapper: withSessionActions() }),
+      ).not.toThrow();
+    });
+  });
+});

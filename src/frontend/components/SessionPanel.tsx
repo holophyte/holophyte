@@ -2,7 +2,7 @@ import { api } from '@convex/_generated/api';
 import type { Id } from '@convex/_generated/dataModel';
 import { useMutation, useQuery } from 'convex/react';
 import { Square } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useSession } from '@/frontend/hooks/useSession';
 import { useAppStore } from '@/frontend/stores/app';
 import SessionDropdown from './SessionDropdown';
@@ -94,54 +94,12 @@ export default function SessionPanel({ taskId }: SessionPanelProps) {
     }
   };
 
-  /**
-   * Handle sending a message. Covers three cases:
-   * 1. No session — create a new one and start it with the given prompt.
-   * 2. Idle session — resume the existing session in-place.
-   * 3. Running session — forward the message via WebSocket (handled by SessionRuntimeProvider).
-   */
-  const handleNewSession = async (text: string) => {
-    // Case 1: No active session — create one and start it
-    if (!sessionId && task?.repo?.path) {
-      let newSessionId: Id<'sessions'> | undefined;
-      try {
-        newSessionId = await createSession({ taskId });
-        const res = await fetch('/api/sessions/start', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            sessionId: newSessionId,
-            repoPath: task.repo.path,
-            prompt: text,
-          }),
-        });
-        if (!res.ok) {
-          const data = (await res.json()) as { error?: string };
-          throw new Error(data.error ?? 'Failed to start session');
-        }
-        openSession(newSessionId);
-      } catch (err) {
-        if (newSessionId) {
-          await updateSessionStatus({ id: newSessionId, status: 'failed' });
-        }
-        throw err;
-      }
-      return;
-    }
-
-    // Case 2: Idle session — resume in-place
-    if (
-      sessionStatus === 'idle' &&
-      session?.taskId &&
-      sdkSessionId &&
-      task?.repo?.path
-    ) {
-      // Atomic guard: only one tab can transition idle → running
+  /** Resume an idle session by starting a new SDK turn. */
+  const resumeIdleSession = useCallback(
+    async (text: string) => {
+      if (!session?.taskId || !sdkSessionId || !task?.repo?.path) return;
       const result = await resumeSessionMutation({ id: session._id });
-      if (!result.ok) {
-        // Another tab already resumed this session — silently bail out.
-        return;
-      }
+      if (!result.ok) return; // Another tab already resumed
 
       try {
         const res = await fetch('/api/sessions/start', {
@@ -158,10 +116,8 @@ export default function SessionPanel({ taskId }: SessionPanelProps) {
           const data = (await res.json()) as { error?: string };
           throw new Error(data.error ?? 'Failed to resume session');
         }
-        // Reconnect the WebSocket so it picks up the new server-side session
         reconnectWs();
       } catch (err) {
-        // Revert the status so the session doesn't stay stuck as 'running'
         try {
           await updateSessionStatus({ id: session._id, status: 'idle' });
         } catch (cleanupErr) {
@@ -169,6 +125,60 @@ export default function SessionPanel({ taskId }: SessionPanelProps) {
         }
         throw err;
       }
+    },
+    [
+      session,
+      sdkSessionId,
+      task?.repo?.path,
+      resumeSessionMutation,
+      reconnectWs,
+      updateSessionStatus,
+    ],
+  );
+
+  /**
+   * Unified send handler passed to SessionRuntimeProvider. Covers:
+   * - Running session → forward via WebSocket
+   * - Idle session → resume the SDK session with the new prompt
+   */
+  const handleSendMessage = useCallback(
+    async (_sessionId: string, text: string) => {
+      if (sessionStatus === 'running') {
+        await sendMessage(_sessionId, text);
+        return;
+      }
+      if (sessionStatus === 'idle') {
+        await resumeIdleSession(text);
+      }
+    },
+    [sessionStatus, sendMessage, resumeIdleSession],
+  );
+
+  /** Create a brand-new session (used by NoSessionPlaceholder). */
+  const handleNewSession = async (text: string) => {
+    if (!task?.repo?.path) return;
+    let newSessionId: Id<'sessions'> | undefined;
+    try {
+      newSessionId = await createSession({ taskId });
+      const res = await fetch('/api/sessions/start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sessionId: newSessionId,
+          repoPath: task.repo.path,
+          prompt: text,
+        }),
+      });
+      if (!res.ok) {
+        const data = (await res.json()) as { error?: string };
+        throw new Error(data.error ?? 'Failed to start session');
+      }
+      openSession(newSessionId);
+    } catch (err) {
+      if (newSessionId) {
+        await updateSessionStatus({ id: newSessionId, status: 'failed' });
+      }
+      throw err;
     }
   };
 
@@ -199,7 +209,7 @@ export default function SessionPanel({ taskId }: SessionPanelProps) {
             sessionStatus={sessionStatus}
             approve={approve}
             deny={deny}
-            sendMessage={sendMessage}
+            sendMessage={handleSendMessage}
           >
             <BashToolUI />
             <ReadToolUI />
