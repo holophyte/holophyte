@@ -66,7 +66,6 @@ export default function SessionPanel({ taskId }: SessionPanelProps) {
     reconnectWs,
     approve,
     deny,
-    sendMessage,
   } = useSession(sessionId);
 
   const [stopping, setStopping] = useState(false);
@@ -97,9 +96,17 @@ export default function SessionPanel({ taskId }: SessionPanelProps) {
   /** Resume an idle session by starting a new SDK turn. */
   const resumeIdleSession = useCallback(
     async (text: string) => {
-      if (!session?.taskId || !sdkSessionId || !task?.repo?.path) return;
+      if (!session?.taskId) throw new Error('Session has no associated task');
+      if (!sdkSessionId)
+        throw new Error('Cannot resume: no SDK session ID available');
+      if (!task?.repo?.path)
+        throw new Error('Cannot resume: task has no repo path');
+
       const result = await resumeSessionMutation({ id: session._id });
-      if (!result.ok) return; // Another tab already resumed
+      if (!result.ok)
+        throw new Error(
+          'Session is no longer idle (resumed from another tab?)',
+        );
 
       try {
         const res = await fetch('/api/sessions/start', {
@@ -137,21 +144,24 @@ export default function SessionPanel({ taskId }: SessionPanelProps) {
   );
 
   /**
-   * Unified send handler passed to SessionRuntimeProvider. Covers:
-   * - Running session → forward via WebSocket
-   * - Idle session → resume the SDK session with the new prompt
+   * Unified send handler passed to SessionRuntimeProvider.
+   * The composer is only enabled during `idle` state, so this always triggers
+   * a resume. The running-state branch is a safety net in case the composer
+   * enable/disable timing races with a status change.
    */
   const handleSendMessage = useCallback(
     async (_sessionId: string, text: string) => {
-      if (sessionStatus === 'running') {
-        await sendMessage(_sessionId, text);
-        return;
-      }
       if (sessionStatus === 'idle') {
         await resumeIdleSession(text);
+        return;
       }
+      // Safety: composer should be disabled for non-idle states, but log if reached
+      console.error(
+        '[SessionPanel] handleSendMessage called in unexpected status:',
+        sessionStatus,
+      );
     },
-    [sessionStatus, sendMessage, resumeIdleSession],
+    [sessionStatus, resumeIdleSession],
   );
 
   /** Create a brand-new session (used by NoSessionPlaceholder). */
