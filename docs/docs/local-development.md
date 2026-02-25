@@ -40,7 +40,7 @@ This handles:
 2. Copying `.env` and non-Convex vars from `.env.local` (API keys, secrets)
 3. `bun install`
 4. Port allocation (scanning all existing `.dev-ports` files to avoid collisions)
-5. Local Convex provisioning with a unique deployment name
+5. Local Convex provisioning on the worktree's assigned ports
 
 ### Running a Worktree
 
@@ -76,7 +76,7 @@ The local Convex data persists in `~/.local/share/convex/` under the deployment 
 
 ## Convex Deployment Isolation
 
-Each workspace gets a **unique Convex deployment name** (e.g., `local-ko_vial-holophyte`, `local-ko_vial-holophyte-1`, `local-ko_vial-holophyte-2`). This is critical — the deployment name determines the data directory on disk.
+Isolation between worktrees is **port-based**. Each workspace binds its local Convex backend to unique `CONVEX_CLOUD_PORT`/`CONVEX_SITE_PORT` values from `.dev-ports`, so even if two workspaces share a deployment name, their data and connections are fully separate.
 
 The deployment identity is stored in `.env.local`:
 
@@ -86,9 +86,15 @@ CONVEX_URL=http://127.0.0.1:3212
 CONVEX_SITE_URL=http://127.0.0.1:3213
 ```
 
+### Deployment names are not unique per worktree
+
+Convex assigns deployment names incrementally (e.g., `local-ko_vial-holophyte`, `-1`, `-2`). These names are controlled by Convex — `convex dev --configure existing` picks the next available name for the project and there is no flag to specify a custom one. Two worktrees may end up with deployment names that look similar or share a suffix.
+
+**This is fine.** The deployment name determines the on-disk data directory (`~/.local/share/convex/<name>`), but each worktree's Convex instance binds to different ports. As long as ports are unique (guaranteed by the `.dev-ports` allocation), the worktrees are fully isolated.
+
 ### How Fresh Deployments Are Provisioned
 
-When `worktree-create.sh` copies `.env.local` from main, it **strips** `CONVEX_DEPLOYMENT`, `CONVEX_URL`, and `CONVEX_SITE_URL`. This forces `convex dev --configure existing` to provision a new deployment with a unique name rather than reusing the main repo's.
+`worktree-create.sh` does **not** copy `.env.local` from main. Instead, it lets `convex dev --configure existing` generate a fresh `.env.local` with a new deployment name and the worktree's assigned ports. Non-Convex vars (API keys, secrets) are saved beforehand and appended after provisioning.
 
 ### Stale Deployment Detection
 
