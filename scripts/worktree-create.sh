@@ -115,6 +115,18 @@ echo "Setting SITE_URL to app server (http://localhost:$DEV_PORT)..."
 cd "$WORKTREE_PATH" && bunx convex env set SITE_URL "http://localhost:$DEV_PORT"
 cd "$WORKTREE_PATH" && bunx convex env set ALLOW_ANONYMOUS_AUTH 1
 
+# Forward OAuth credentials from main repo's .dev-ports (if present)
+if [ -n "${AUTH_GITHUB_ID:-}" ] && [ -n "${AUTH_GITHUB_SECRET:-}" ]; then
+  echo "Setting GitHub OAuth credentials..."
+  cd "$WORKTREE_PATH" && bunx convex env set AUTH_GITHUB_ID "$AUTH_GITHUB_ID"
+  cd "$WORKTREE_PATH" && bunx convex env set AUTH_GITHUB_SECRET "$AUTH_GITHUB_SECRET"
+fi
+if [ -n "${AUTH_GOOGLE_ID:-}" ] && [ -n "${AUTH_GOOGLE_SECRET:-}" ]; then
+  echo "Setting Google OAuth credentials..."
+  cd "$WORKTREE_PATH" && bunx convex env set AUTH_GOOGLE_ID "$AUTH_GOOGLE_ID"
+  cd "$WORKTREE_PATH" && bunx convex env set AUTH_GOOGLE_SECRET "$AUTH_GOOGLE_SECRET"
+fi
+
 echo ""
 echo "Worktree created: ~/.holophyte-dev/$FEATURE_NAME"
 echo "Ports: dev=$DEV_PORT, convex=$CONVEX_CLOUD_PORT/$CONVEX_SITE_PORT"
