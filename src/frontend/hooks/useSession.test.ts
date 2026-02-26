@@ -8,14 +8,18 @@ import { useSession } from './useSession';
 
 // useQuery is mocked as a plain vi.fn() — the factory must not reference
 // outer variables (vi.mock is hoisted). Override behavior in beforeEach.
+const mockSendSessionMessage = vi.fn();
+
 vi.mock('convex/react', () => ({
   useQuery: vi.fn(),
+  useMutation: vi.fn(() => mockSendSessionMessage),
 }));
 
 vi.mock('@convex/_generated/api', () => ({
   api: {
     sessions: { get: 'sessions:get' },
     sessionEvents: { getBySession: 'sessionEvents:getBySession' },
+    sessionMessages: { send: 'sessionMessages:send' },
   },
 }));
 vi.mock('@convex/_generated/dataModel', () => ({}));
@@ -97,6 +101,7 @@ beforeEach(() => {
   lastWsInstance = null;
   vi.stubGlobal('WebSocket', MockWebSocket);
   resetUseQueryDefaults();
+  mockSendSessionMessage.mockReset();
 });
 
 afterEach(() => {
@@ -747,10 +752,8 @@ describe('useSession', () => {
   });
 
   describe('sendMessage()', () => {
-    it('POSTs to the correct endpoint', async () => {
-      const fetchSpy = vi
-        .spyOn(global, 'fetch')
-        .mockResolvedValue(new Response('{}'));
+    it('calls the Convex sessionMessages.send mutation', async () => {
+      mockSendSessionMessage.mockResolvedValue(undefined);
 
       const { result } = renderSession('session-abc');
 
@@ -758,18 +761,14 @@ describe('useSession', () => {
         await result.current.sendMessage('session-abc', 'Hello Claude');
       });
 
-      expect(fetchSpy).toHaveBeenCalledWith(
-        '/api/sessions/session-abc/respond',
-        expect.objectContaining({
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ type: 'message', text: 'Hello Claude' }),
-        }),
-      );
+      expect(mockSendSessionMessage).toHaveBeenCalledWith({
+        sessionId: 'session-abc',
+        text: 'Hello Claude',
+      });
     });
 
     it('sets messageQueued when session is running and message is sent', async () => {
-      vi.spyOn(global, 'fetch').mockResolvedValue(new Response('{}'));
+      mockSendSessionMessage.mockResolvedValue(undefined);
 
       const { result } = renderSession('session-running');
 
@@ -792,7 +791,7 @@ describe('useSession', () => {
     });
 
     it('does not set messageQueued when session is idle', async () => {
-      vi.spyOn(global, 'fetch').mockResolvedValue(new Response('{}'));
+      mockSendSessionMessage.mockResolvedValue(undefined);
 
       const { result } = renderSession('session-idle');
 
@@ -813,10 +812,8 @@ describe('useSession', () => {
       expect(result.current.messageQueued).toBe(false);
     });
 
-    it('throws when the server responds with an error', async () => {
-      vi.spyOn(global, 'fetch').mockResolvedValue(
-        new Response('Session not found', { status: 404 }),
-      );
+    it('throws when the mutation fails', async () => {
+      mockSendSessionMessage.mockRejectedValue(new Error('Session not found'));
 
       const { result } = renderSession('session-missing');
 

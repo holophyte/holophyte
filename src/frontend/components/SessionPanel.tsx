@@ -35,8 +35,8 @@ export default function SessionPanel({ taskId }: SessionPanelProps) {
   const sessionId = useAppStore((s) => s.activeSessionId);
   const closeSession = useAppStore((s) => s.closeSession);
   const openSession = useAppStore((s) => s.openSession);
-  const updateSessionStatus = useMutation(api.sessions.updateStatus);
-  const resumeSessionMutation = useMutation(api.sessions.resumeSession);
+  const requestStop = useMutation(api.sessions.requestStop);
+  const queueResume = useMutation(api.sessions.queueResume);
   const createSession = useMutation(api.sessions.create);
 
   // Load the session record so we can access sdkSessionId, etc.
@@ -58,15 +58,8 @@ export default function SessionPanel({ taskId }: SessionPanelProps) {
 
   // Single useSession call — state is passed down to SessionRuntimeProvider as props
   // to avoid duplicate WebSocket connections.
-  const {
-    events,
-    pendingApprovals,
-    sessionStatus,
-    sdkSessionId,
-    reconnectWs,
-    approve,
-    deny,
-  } = useSession(sessionId);
+  const { events, pendingApprovals, sessionStatus, approve, deny } =
+    useSession(sessionId);
 
   const [stopping, setStopping] = useState(false);
 
@@ -74,18 +67,7 @@ export default function SessionPanel({ taskId }: SessionPanelProps) {
     if (!sessionId) return;
     setStopping(true);
     try {
-      const res = await fetch(`/api/sessions/${sessionId}/stop`, {
-        method: 'POST',
-      });
-      if (!res.ok) {
-        const data = (await res.json()) as { error?: string };
-        console.error('Failed to stop session:', data.error);
-      }
-      // Fallback: ensure status is updated even if the exit event has no subscriber
-      await updateSessionStatus({
-        id: sessionId as Id<'sessions'>,
-        status: 'idle',
-      });
+      await requestStop({ id: sessionId as Id<'sessions'> });
     } catch (err) {
       console.error('Failed to stop session:', err);
     } finally {
@@ -93,54 +75,18 @@ export default function SessionPanel({ taskId }: SessionPanelProps) {
     }
   };
 
-  /** Resume an idle session by starting a new SDK turn. */
+  /** Resume an idle session by queuing it with a new prompt. */
   const resumeIdleSession = useCallback(
     async (text: string) => {
-      if (!session?.taskId) throw new Error('Session has no associated task');
-      if (!sdkSessionId)
-        throw new Error('Cannot resume: no SDK session ID available');
-      if (!task?.repo?.path)
-        throw new Error('Cannot resume: task has no repo path');
+      if (!session) throw new Error('No session to resume');
 
-      const result = await resumeSessionMutation({ id: session._id });
+      const result = await queueResume({ id: session._id, prompt: text });
       if (!result.ok)
         throw new Error(
           'Session is no longer idle (resumed from another tab?)',
         );
-
-      try {
-        const res = await fetch('/api/sessions/start', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            sessionId: session._id,
-            repoPath: task.repo.path,
-            prompt: text,
-            resumeSdkSessionId: sdkSessionId,
-          }),
-        });
-        if (!res.ok) {
-          const data = (await res.json()) as { error?: string };
-          throw new Error(data.error ?? 'Failed to resume session');
-        }
-        reconnectWs();
-      } catch (err) {
-        try {
-          await updateSessionStatus({ id: session._id, status: 'idle' });
-        } catch (cleanupErr) {
-          console.error('Failed to revert session status:', cleanupErr);
-        }
-        throw err;
-      }
     },
-    [
-      session,
-      sdkSessionId,
-      task?.repo?.path,
-      resumeSessionMutation,
-      reconnectWs,
-      updateSessionStatus,
-    ],
+    [session, queueResume],
   );
 
   /**
@@ -167,36 +113,19 @@ export default function SessionPanel({ taskId }: SessionPanelProps) {
   /** Create a brand-new session (used by NoSessionPlaceholder). */
   const handleNewSession = async (text: string) => {
     if (!task?.repo?.path) return;
-    let newSessionId: Id<'sessions'> | undefined;
-    try {
-      newSessionId = await createSession({ taskId });
-      const res = await fetch('/api/sessions/start', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          sessionId: newSessionId,
-          repoPath: task.repo.path,
-          prompt: text,
-        }),
-      });
-      if (!res.ok) {
-        const data = (await res.json()) as { error?: string };
-        throw new Error(data.error ?? 'Failed to start session');
-      }
-      openSession(newSessionId);
-    } catch (err) {
-      if (newSessionId) {
-        await updateSessionStatus({ id: newSessionId, status: 'failed' });
-      }
-      throw err;
-    }
+    // Create session in Convex with 'queued' status — the companion picks it up
+    const newSessionId = await createSession({
+      taskId,
+      prompt: text,
+    });
+    openSession(newSessionId);
   };
 
   return (
     <div className="flex h-full flex-col bg-background">
       <div className="flex shrink-0 items-center gap-2 border-b border-border/50 px-3 py-2">
         <SessionDropdown taskId={taskId} activeSessionId={sessionId} />
-        {sessionStatus === 'running' && (
+        {(sessionStatus === 'running' || sessionStatus === 'queued') && (
           <Button
             size="sm"
             variant="destructive"

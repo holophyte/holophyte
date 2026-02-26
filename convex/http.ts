@@ -153,6 +153,120 @@ http.route({
   }),
 });
 
+// ── Companion polling endpoints ───────────────────────────────────────
+
+http.route({
+  path: '/api/internal/sessions/listQueued',
+  method: 'POST',
+  handler: httpAction(async (ctx, request) => {
+    const authError = validateSecret(request);
+    if (authError) return authError;
+
+    try {
+      const sessions = await ctx.runQuery(internal.sessions.listQueued, {});
+      return new Response(JSON.stringify(sessions), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    } catch (err) {
+      console.error('listQueued failed:', err);
+      return jsonError('Query failed', 500);
+    }
+  }),
+});
+
+http.route({
+  path: '/api/internal/sessions/claimQueued',
+  method: 'POST',
+  handler: httpAction(async (ctx, request) => {
+    const authError = validateSecret(request);
+    if (authError) return authError;
+
+    const body = await parseBody(request);
+    if (body instanceof Response) return body;
+
+    try {
+      const { id } = body;
+      const result = await ctx.runMutation(internal.sessions.claimQueued, {
+        id,
+      });
+      return new Response(JSON.stringify(result), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    } catch (err) {
+      console.error('claimQueued failed:', err);
+      return jsonError('Mutation failed', 400);
+    }
+  }),
+});
+
+http.route({
+  path: '/api/internal/sessions/listStopped',
+  method: 'POST',
+  handler: httpAction(async (ctx, request) => {
+    const authError = validateSecret(request);
+    if (authError) return authError;
+
+    try {
+      const sessions = await ctx.runQuery(internal.sessions.listStopped, {});
+      return new Response(JSON.stringify(sessions), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    } catch (err) {
+      console.error('listStopped failed:', err);
+      return jsonError('Query failed', 500);
+    }
+  }),
+});
+
+http.route({
+  path: '/api/internal/sessionMessages/listPending',
+  method: 'POST',
+  handler: httpAction(async (ctx, request) => {
+    const authError = validateSecret(request);
+    if (authError) return authError;
+
+    try {
+      const messages = await ctx.runQuery(
+        internal.sessionMessages.listPending,
+        {},
+      );
+      return new Response(JSON.stringify(messages), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    } catch (err) {
+      console.error('listPending failed:', err);
+      return jsonError('Query failed', 500);
+    }
+  }),
+});
+
+http.route({
+  path: '/api/internal/sessionMessages/markConsumed',
+  method: 'POST',
+  handler: httpAction(async (ctx, request) => {
+    const authError = validateSecret(request);
+    if (authError) return authError;
+
+    const body = await parseBody(request);
+    if (body instanceof Response) return body;
+
+    try {
+      const { id } = body;
+      await ctx.runMutation(internal.sessionMessages.markConsumed, { id });
+      return jsonOk();
+    } catch (err) {
+      console.error('markConsumed failed:', err);
+      return jsonError('Mutation failed', 400);
+    }
+  }),
+});
+
+// ── Session event persistence ────────────────────────────────────────
+
 http.route({
   path: '/api/internal/sessionEvents/insertBatch',
   method: 'POST',

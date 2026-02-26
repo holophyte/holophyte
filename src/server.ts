@@ -1,4 +1,4 @@
-import type { WsServerMessage } from '@/claude/manager';
+import type { PermissionMode, WsServerMessage } from '@/claude/manager';
 import homepage from '../public/index.html';
 import {
   getSession,
@@ -7,6 +7,194 @@ import {
   stopSession,
   subscribe,
 } from './claude/manager';
+
+// ── Convex internal API helpers ──────────────────────────────────────
+
+function getConvexConfig() {
+  const baseUrl = process.env.CONVEX_SITE_URL;
+  if (!baseUrl) return null;
+  const secret = process.env.INTERNAL_API_SECRET;
+  if (!secret) return null;
+  return { baseUrl, secret };
+}
+
+async function callConvexInternal(
+  path: string,
+  body: Record<string, unknown>,
+): Promise<void> {
+  const config = getConvexConfig();
+  if (!config) return;
+
+  const res = await fetch(`${config.baseUrl}${path}`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${config.secret}`,
+    },
+    body: JSON.stringify(body),
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Convex HTTP action failed (${res.status}): ${text}`);
+  }
+}
+
+async function queryConvexInternal<T>(
+  path: string,
+  body: Record<string, unknown>,
+): Promise<T> {
+  const config = getConvexConfig();
+  if (!config)
+    throw new Error('CONVEX_SITE_URL or INTERNAL_API_SECRET not set');
+
+  const res = await fetch(`${config.baseUrl}${path}`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${config.secret}`,
+    },
+    body: JSON.stringify(body),
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Convex HTTP action failed (${res.status}): ${text}`);
+  }
+
+  return (await res.json()) as T;
+}
+
+// ── Companion polling ────────────────────────────────────────────────
+
+interface QueuedSession {
+  _id: string;
+  queuedPrompt?: string;
+  sdkSessionId?: string;
+  model?: string;
+  permissionMode?: string;
+  repoPath: string;
+}
+
+interface StoppedSession {
+  _id: string;
+}
+
+interface PendingMessage {
+  _id: string;
+  sessionId: string;
+  text: string;
+}
+
+const POLL_INTERVAL_MS = 2000;
+let pollTimer: ReturnType<typeof setInterval> | null = null;
+let polling = false;
+
+async function companionPoll() {
+  if (polling) return; // Skip if previous poll is still running
+  polling = true;
+
+  try {
+    // 1. Pick up queued sessions
+    const queued = await queryConvexInternal<QueuedSession[]>(
+      '/api/internal/sessions/listQueued',
+      {},
+    );
+    for (const session of queued) {
+      if (!session.queuedPrompt) continue;
+      // Skip if this session is already running locally
+      if (getSession(session._id)) continue;
+
+      try {
+        const claimed = await queryConvexInternal<{ ok: boolean }>(
+          '/api/internal/sessions/claimQueued',
+          { id: session._id },
+        );
+        if (!claimed.ok) continue;
+
+        await startSession({
+          sessionId: session._id,
+          repoPath: session.repoPath,
+          prompt: session.queuedPrompt,
+          model: session.model,
+          permissionMode: session.permissionMode as PermissionMode | undefined,
+          resumeSdkSessionId: session.sdkSessionId,
+        });
+      } catch (err) {
+        console.error(`Failed to pick up queued session ${session._id}:`, err);
+        // Mark as failed so it doesn't retry forever
+        try {
+          await callConvexInternal('/api/internal/sessions/updateStatus', {
+            id: session._id,
+            status: 'failed',
+          });
+        } catch {
+          // Best-effort
+        }
+      }
+    }
+
+    // 2. Check for stopped sessions (user requested stop via Convex)
+    const stopped = await queryConvexInternal<StoppedSession[]>(
+      '/api/internal/sessions/listStopped',
+      {},
+    );
+    for (const session of stopped) {
+      if (getSession(session._id)) {
+        stopSession(session._id);
+      } else {
+        // Session not running locally — transition to idle directly
+        try {
+          await callConvexInternal('/api/internal/sessions/updateStatus', {
+            id: session._id,
+            status: 'idle',
+          });
+        } catch {
+          // Best-effort
+        }
+      }
+    }
+
+    // 3. Deliver pending messages to running sessions
+    const messages = await queryConvexInternal<PendingMessage[]>(
+      '/api/internal/sessionMessages/listPending',
+      {},
+    );
+    for (const msg of messages) {
+      // Mark consumed immediately to prevent re-delivery
+      try {
+        await callConvexInternal('/api/internal/sessionMessages/markConsumed', {
+          id: msg._id,
+        });
+      } catch {}
+      // TODO: Inject message into running SDK session via session.sdkQuery
+      // The SDK Query type doesn't currently expose a sendMessage API.
+      // For now, messages are stored in Convex for future implementation.
+    }
+  } catch (err) {
+    // Don't log every poll failure (noisy when Convex is unavailable)
+    if (String(err).includes('not set')) return;
+    console.error('Companion poll error:', err);
+  } finally {
+    polling = false;
+  }
+}
+
+function startCompanionPolling() {
+  if (pollTimer) return;
+  pollTimer = setInterval(companionPoll, POLL_INTERVAL_MS);
+  // Run immediately on start
+  void companionPoll();
+}
+
+function stopCompanionPolling() {
+  if (pollTimer) {
+    clearInterval(pollTimer);
+    pollTimer = null;
+  }
+}
+
+// ── HTTP Server ──────────────────────────────────────────────────────
 
 interface WsData {
   sessionId: string;
@@ -18,117 +206,22 @@ const server = Bun.serve<WsData>({
   routes: {
     '/': homepage,
 
-    '/api/config': {
+    // Serves app config as a JS global, loaded by <script src="/config.js">
+    // in index.html. This replaces the old fetch('/api/config') call.
+    '/config.js': {
       GET() {
-        return Response.json({
+        const config = {
           convexUrl: process.env.CONVEX_URL ?? '',
           e2eTest:
             !!process.env.E2E_TEST && process.env.NODE_ENV !== 'production',
           allowAnonymousAuth:
             process.env.NODE_ENV !== 'production' &&
             !!process.env.ALLOW_ANONYMOUS_AUTH,
-        });
-      },
-    },
-
-    '/api/pick-directory': {
-      async POST() {
-        try {
-          const proc = Bun.spawn(
-            [
-              'osascript',
-              '-e',
-              'POSIX path of (choose folder with prompt "Select a git repository")',
-            ],
-            { stdout: 'pipe', stderr: 'pipe' },
-          );
-          const exitCode = await proc.exited;
-          if (exitCode !== 0) {
-            // User cancelled the dialog
-            return Response.json({ cancelled: true });
-          }
-          const raw = await new Response(proc.stdout).text();
-          // osascript returns path with trailing newline and slash
-          const dirPath = raw.trim().replace(/\/$/, '');
-          const { basename } = await import('node:path');
-
-          const gitHead = Bun.file(`${dirPath}/.git/HEAD`);
-          const isGitRepo = await gitHead.exists();
-
-          // Try to get the repo name from the git remote URL
-          let name = basename(dirPath);
-          if (isGitRepo) {
-            try {
-              const gitConfig = await Bun.file(`${dirPath}/.git/config`).text();
-              const remoteMatch = gitConfig.match(
-                /\[remote "origin"\][^[]*url\s*=\s*(.+)/,
-              );
-              if (remoteMatch?.[1]) {
-                const url = remoteMatch[1].trim();
-                // Handle git@host:org/repo.git or https://host/org/repo.git
-                const repoName = url
-                  .split('/')
-                  .pop()
-                  ?.replace(/\.git$/, '');
-                if (repoName) name = repoName;
-              }
-            } catch {
-              // fall back to folder name
-            }
-          }
-
-          return Response.json({
-            cancelled: false,
-            path: dirPath,
-            name,
-            isGitRepo,
-          });
-        } catch (err) {
-          console.error('Failed to open directory picker:', err);
-          return Response.json(
-            { error: 'Failed to open directory picker.' },
-            { status: 500 },
-          );
-        }
-      },
-    },
-
-    '/api/sessions/start': {
-      async POST(req: Request) {
-        try {
-          const {
-            sessionId,
-            repoPath,
-            prompt,
-            model,
-            permissionMode,
-            resumeSdkSessionId,
-          } = await req.json();
-          if (!sessionId || !repoPath || !prompt) {
-            return Response.json(
-              { error: 'sessionId, repoPath, and prompt are required' },
-              { status: 400 },
-            );
-          }
-          if (getSession(sessionId)) {
-            return Response.json(
-              { error: 'Session already active' },
-              { status: 409 },
-            );
-          }
-          const result = await startSession({
-            sessionId,
-            repoPath,
-            prompt,
-            model,
-            permissionMode,
-            resumeSdkSessionId,
-          });
-          return Response.json(result);
-        } catch (err) {
-          console.error('Failed to start session:', err);
-          return Response.json({ error: String(err) }, { status: 500 });
-        }
+        };
+        return new Response(
+          `window.__HOLOPHYTE_CONFIG__=${JSON.stringify(config)};`,
+          { headers: { 'Content-Type': 'application/javascript' } },
+        );
       },
     },
 
@@ -170,57 +263,6 @@ const server = Bun.serve<WsData>({
 
   async fetch(req, server) {
     const url = new URL(req.url);
-
-    // POST /api/sessions/:id/stop
-    const stopMatch = url.pathname.match(/^\/api\/sessions\/(.+)\/stop$/);
-    if (stopMatch && req.method === 'POST') {
-      const sessionId = stopMatch[1];
-      if (!sessionId) {
-        return Response.json({ error: 'Missing session ID' }, { status: 400 });
-      }
-      try {
-        stopSession(sessionId);
-        return Response.json({ ok: true });
-      } catch (err) {
-        console.error('Failed to stop session:', err);
-        return Response.json({ error: String(err) }, { status: 500 });
-      }
-    }
-
-    // POST /api/sessions/:id/respond — approve/deny a permission
-    const respondMatch = url.pathname.match(/^\/api\/sessions\/(.+)\/respond$/);
-    if (respondMatch && req.method === 'POST') {
-      const sessionId = respondMatch[1];
-      if (!sessionId) {
-        return Response.json({ error: 'Missing session ID' }, { status: 400 });
-      }
-      try {
-        const body = await req.json();
-        const { requestId, approved, message } = body;
-        if (!requestId || typeof approved !== 'boolean') {
-          return Response.json(
-            { error: 'requestId and approved (boolean) are required' },
-            { status: 400 },
-          );
-        }
-        const resolved = respondToApproval(
-          sessionId,
-          requestId,
-          approved,
-          message,
-        );
-        if (!resolved) {
-          return Response.json(
-            { error: 'No pending approval with that requestId' },
-            { status: 404 },
-          );
-        }
-        return Response.json({ ok: true });
-      } catch (err) {
-        console.error('Failed to respond to session:', err);
-        return Response.json({ error: String(err) }, { status: 500 });
-      }
-    }
 
     // WebSocket upgrade for /ws/session/:sessionId
     if (url.pathname.startsWith('/ws/session/')) {
@@ -292,40 +334,21 @@ const server = Bun.serve<WsData>({
 
 console.log(`Holophyte running at http://localhost:${server.port}`);
 
+// Start companion polling for queued/stopped sessions
+startCompanionPolling();
+
 // On startup, mark any sessions left as 'running' (from a prior crash/restart)
 // as 'idle' so users can resume them rather than seeing a broken state.
 (async () => {
-  const convexSiteUrl = process.env.CONVEX_SITE_URL;
-  const secret = process.env.INTERNAL_API_SECRET;
-  if (!convexSiteUrl || !secret) return;
   try {
-    const res = await fetch(
-      `${convexSiteUrl}/api/internal/sessions/markStaleRunning`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${secret}`,
-        },
-        body: JSON.stringify({}),
-      },
-    );
-    if (res.ok) {
-      const data = (await res.json()) as { count?: number };
-      if (data.count && data.count > 0) {
-        console.log(
-          `Marked ${data.count} stale running session(s) as idle on startup.`,
-        );
-      }
-    } else {
-      console.error('Failed to mark stale sessions on startup:', res.status);
-    }
-  } catch (err) {
-    console.error('Failed to mark stale sessions on startup:', err);
+    await callConvexInternal('/api/internal/sessions/markStaleRunning', {});
+  } catch {
+    // Non-critical — Convex may not be configured yet
   }
 })();
 
 process.on('SIGINT', () => {
+  stopCompanionPolling();
   server.stop();
   process.exit(0);
 });
