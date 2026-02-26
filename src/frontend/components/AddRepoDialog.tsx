@@ -1,6 +1,6 @@
 import { api } from '@convex/_generated/api';
 import { useMutation } from 'convex/react';
-import { FolderOpen, Loader2 } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import { useState } from 'react';
 import { useAppStore } from '@/frontend/stores/app';
 import Button from './ui/Button';
@@ -20,45 +20,26 @@ interface AddRepoDialogProps {
   onOpenChange: (open: boolean) => void;
 }
 
+/** Extract a display name from an absolute repo path. */
+function nameFromPath(path: string): string {
+  const segments = path.replace(/\/+$/, '').split('/');
+  return segments[segments.length - 1] ?? '';
+}
+
 export function AddRepoDialog({ open, onOpenChange }: AddRepoDialogProps) {
   const [name, setName] = useState('');
-  const [selectedPath, setSelectedPath] = useState<string | null>(null);
+  const [path, setPath] = useState('');
   const [error, setError] = useState<string | null>(null);
-  const [picking, setPicking] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const selectedOrgId = useAppStore((s) => s.selectedOrgId);
   const createRepo = useMutation(api.repos.create);
 
-  const handlePick = async () => {
-    setPicking(true);
-    setError(null);
-    try {
-      const res = await fetch('/api/pick-directory', { method: 'POST' });
-      const data = await res.json();
-
-      if (data.cancelled) {
-        setPicking(false);
-        return;
-      }
-
-      if (data.error) {
-        setError(data.error);
-        setPicking(false);
-        return;
-      }
-
-      if (!data.isGitRepo) {
-        setError('Selected folder is not a git repository.');
-        setPicking(false);
-        return;
-      }
-
-      setSelectedPath(data.path);
-      setName(data.name);
-    } catch {
-      setError('Failed to open directory picker.');
-    } finally {
-      setPicking(false);
+  const handlePathChange = (value: string) => {
+    setPath(value);
+    // Auto-fill name from the last path segment if name is empty or was auto-filled
+    const derived = nameFromPath(value);
+    if (!name || name === nameFromPath(path)) {
+      setName(derived);
     }
   };
 
@@ -66,8 +47,14 @@ export function AddRepoDialog({ open, onOpenChange }: AddRepoDialogProps) {
     e.preventDefault();
     setError(null);
 
-    if (!name.trim() || !selectedPath || !selectedOrgId) {
-      setError('Select a git repository and provide a name.');
+    const trimmedPath = path.trim().replace(/\/+$/, '');
+    if (!name.trim() || !trimmedPath || !selectedOrgId) {
+      setError('Enter a repository path and name.');
+      return;
+    }
+
+    if (!trimmedPath.startsWith('/')) {
+      setError('Path must be an absolute path (starting with /).');
       return;
     }
 
@@ -75,7 +62,7 @@ export function AddRepoDialog({ open, onOpenChange }: AddRepoDialogProps) {
     try {
       await createRepo({
         name: name.trim(),
-        path: selectedPath,
+        path: trimmedPath,
         orgId: selectedOrgId,
       });
       handleClose();
@@ -94,7 +81,7 @@ export function AddRepoDialog({ open, onOpenChange }: AddRepoDialogProps) {
 
   const handleClose = () => {
     setName('');
-    setSelectedPath(null);
+    setPath('');
     setError(null);
     onOpenChange(false);
   };
@@ -106,34 +93,19 @@ export function AddRepoDialog({ open, onOpenChange }: AddRepoDialogProps) {
           <DialogHeader>
             <DialogTitle>Add Repository</DialogTitle>
             <DialogDescription>
-              Select a local git repository to manage tasks for.
+              Enter the absolute path to a local git repository.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
-              <Label>Repository Folder</Label>
-              <Button
-                type="button"
-                variant="outline"
-                className="w-full justify-start gap-2 font-normal"
-                onClick={handlePick}
-                disabled={picking}
-              >
-                {picking ? (
-                  <Loader2 className="h-4 w-4 animate-spin shrink-0" />
-                ) : (
-                  <FolderOpen className="h-4 w-4 shrink-0" />
-                )}
-                {selectedPath ? (
-                  <span className="truncate font-mono text-xs">
-                    {selectedPath}
-                  </span>
-                ) : (
-                  <span className="text-muted-foreground">
-                    Choose a folder...
-                  </span>
-                )}
-              </Button>
+              <Label htmlFor="repo-path">Repository Path</Label>
+              <Input
+                id="repo-path"
+                placeholder="/Users/you/projects/my-repo"
+                value={path}
+                onChange={(e) => handlePathChange(e.target.value)}
+                className="font-mono text-xs"
+              />
             </div>
 
             <div className="space-y-2">
@@ -154,7 +126,7 @@ export function AddRepoDialog({ open, onOpenChange }: AddRepoDialogProps) {
             </Button>
             <Button
               type="submit"
-              disabled={!selectedPath || !name.trim() || submitting}
+              disabled={!path.trim() || !name.trim() || submitting}
             >
               {submitting ? (
                 <>

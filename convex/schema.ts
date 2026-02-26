@@ -23,8 +23,10 @@ export const taskStatusValidator = v.union(
 );
 
 export const sessionStatusValidator = v.union(
+  v.literal('queued'),
   v.literal('running'),
   v.literal('idle'),
+  v.literal('stopped'),
   v.literal('failed'),
 );
 
@@ -167,8 +169,10 @@ export default defineSchema({
   sessions: defineTable({
     taskId: v.id('tasks'),
     status: v.union(
+      v.literal('queued'),
       v.literal('running'),
       v.literal('idle'),
+      v.literal('stopped'),
       v.literal('failed'),
     ),
     startedAt: v.number(),
@@ -177,12 +181,21 @@ export default defineSchema({
     sdkSessionId: v.optional(v.string()),
     model: v.optional(v.string()),
     permissionMode: v.optional(v.string()),
+    // Stored when status='queued' so the companion can pick it up
+    queuedPrompt: v.optional(v.string()),
     // Kept optional for backwards compatibility with pre-rethink documents
     endedAt: v.optional(v.number()),
   })
     .index('by_task', ['taskId'])
     .index('by_status', ['status'])
     .index('by_task_activity', ['taskId', 'lastActivityAt']),
+
+  sessionMessages: defineTable({
+    sessionId: v.id('sessions'),
+    text: v.string(),
+    consumed: v.boolean(),
+    createdAt: v.number(),
+  }).index('by_session_pending', ['sessionId', 'consumed']),
 
   sessionEvents: defineTable({
     sessionId: v.id('sessions'),

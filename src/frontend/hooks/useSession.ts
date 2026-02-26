@@ -1,7 +1,7 @@
 import type { SDKMessage } from '@anthropic-ai/claude-agent-sdk';
 import { api } from '@convex/_generated/api';
 import type { Id } from '@convex/_generated/dataModel';
-import { useQuery } from 'convex/react';
+import { useMutation, useQuery } from 'convex/react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { WsServerMessage } from '@/claude/manager';
 
@@ -26,12 +26,18 @@ export interface PendingApproval {
 /**
  * Lifecycle status of a Claude Code session as seen by the frontend.
  *
+ * - `queued` — session created, waiting for companion to pick it up
  * - `running` — session is actively processing
  * - `waiting_input` — derived state: one or more tool-use approvals are pending
  * - `idle` — session turn completed; process has exited. Can be resumed.
  * - `failed` — session ended with an error
  */
-export type SessionStatus = 'running' | 'waiting_input' | 'idle' | 'failed';
+export type SessionStatus =
+  | 'queued'
+  | 'running'
+  | 'waiting_input'
+  | 'idle'
+  | 'failed';
 
 /**
  * Return value of {@link useSession}.
@@ -51,6 +57,8 @@ export interface UseSessionReturn {
   sessionStatus: SessionStatus | null;
   /** Whether the WebSocket connection is currently open. */
   isConnected: boolean;
+  /** Whether the companion server is reachable (WebSocket connected or session is queued). */
+  companionOnline: boolean;
   /**
    * `true` when a message has been sent while the session was in `running`
    * state and is queued for delivery once the current turn ends.
@@ -82,8 +90,8 @@ export interface UseSessionReturn {
    */
   deny: (requestId: string, message?: string) => void;
   /**
-   * Send a follow-up message to Claude mid-session. Posts to
-   * `POST /api/sessions/:id/respond` with `{ type: 'message', text }`.
+   * Send a follow-up message to Claude. Writes to the `sessionMessages` table
+   * in Convex for the companion to pick up and deliver to the SDK process.
    *
    * @param sessionId - The Convex session ID (same as used by the hook).
    * @param text - The message text to inject into the SDK conversation.
@@ -119,6 +127,11 @@ function tryParseWsMessage(data: string): WsServerMessage | null {
  * from prior flushes), then merged with live WebSocket events so late-connecting
  * clients see the complete history.
  *
+ * The WebSocket connection requires the companion server to be running locally.
+ * When the companion is offline, the hook degrades gracefully: sessions can
+ * still be created/resumed via Convex mutations, but real-time streaming and
+ * approvals are unavailable until the companion connects.
+ *
  * @param sessionId - The Convex session ID to connect to, or `null` to remain
  *   disconnected. Changing this value closes the old connection and opens a new one.
  * @returns State and action callbacks for the session. See {@link UseSessionReturn}.
@@ -145,6 +158,9 @@ export function useSession(sessionId: string | null): UseSessionReturn {
   const reconnectWs = useCallback(() => setWsConnectKey((k) => k + 1), []);
 
   const wsRef = useRef<WebSocket | null>(null);
+
+  // Convex mutation for sending follow-up messages
+  const sendSessionMessage = useMutation(api.sessionMessages.send);
 
   // Load the session record so we can access sdkSessionId for resume.
   const sessionRecord = useQuery(
@@ -211,20 +227,16 @@ export function useSession(sessionId: string | null): UseSessionReturn {
 
   const sendMessage = useCallback(
     async (sid: string, text: string) => {
-      const res = await fetch(`/api/sessions/${sid}/respond`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type: 'message', text }),
+      await sendSessionMessage({
+        sessionId: sid as Id<'sessions'>,
+        text,
       });
-      if (!res.ok) {
-        throw new Error(await res.text());
-      }
       // If the session was running, the message is queued — show an indicator
       if (sessionStatus === 'running') {
         setMessageQueued(true);
       }
     },
-    [sessionStatus],
+    [sessionStatus, sendSessionMessage],
   );
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: wsConnectKey is an intentional re-trigger dependency for reconnectWs()
@@ -239,9 +251,15 @@ export function useSession(sessionId: string | null): UseSessionReturn {
     setMessageQueued(false);
 
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const ws = new WebSocket(
-      `${protocol}//${window.location.host}/ws/session/${sessionId}`,
-    );
+    let ws: WebSocket;
+    try {
+      ws = new WebSocket(
+        `${protocol}//${window.location.host}/ws/session/${sessionId}`,
+      );
+    } catch {
+      // WebSocket constructor can throw if the URL is invalid or blocked
+      return;
+    }
 
     wsRef.current = ws;
 
@@ -286,6 +304,12 @@ export function useSession(sessionId: string | null): UseSessionReturn {
       }
     };
 
+    ws.onerror = () => {
+      // Companion offline — WebSocket failed to connect. Status will be
+      // derived from the Convex record instead.
+      setIsConnected(false);
+    };
+
     ws.onclose = () => {
       setIsConnected(false);
     };
@@ -299,25 +323,38 @@ export function useSession(sessionId: string | null): UseSessionReturn {
   // Fall back to the Convex record status when the WebSocket hasn't reported
   // a status yet (e.g. the WS connected before the server created the session,
   // got "Session not found", and closed — but Convex already shows "running").
+  // Also map 'queued' and 'stopped' Convex statuses to frontend equivalents.
+  const convexStatus = sessionRecord?.status;
+  const mappedConvexStatus: SessionStatus | null =
+    convexStatus === 'queued'
+      ? 'queued'
+      : convexStatus === 'stopped'
+        ? 'idle' // 'stopped' is transient — treat as idle for the UI
+        : ((convexStatus as SessionStatus | undefined) ?? null);
+
   const effectiveStatus: SessionStatus | null =
-    sessionStatus ??
-    (sessionRecord?.status as SessionStatus | undefined) ??
-    null;
+    sessionStatus ?? mappedConvexStatus;
 
   // Derive sessionStatus: if there are unresolved approvals, show waiting_input
   // (handles the case where a 'running' status arrives after a permission prompt)
   const derivedStatus: SessionStatus | null =
     pendingApprovals.some((a) => !a.resolved) &&
     effectiveStatus !== 'idle' &&
-    effectiveStatus !== 'failed'
+    effectiveStatus !== 'failed' &&
+    effectiveStatus !== 'queued'
       ? 'waiting_input'
       : effectiveStatus;
+
+  // Companion is online if WS is connected, or if the session hasn't started
+  // yet (queued) which doesn't need the WS.
+  const companionOnline = isConnected || derivedStatus === 'queued';
 
   return {
     events,
     pendingApprovals,
     sessionStatus: derivedStatus,
     isConnected,
+    companionOnline,
     messageQueued,
     sdkSessionId: sessionRecord?.sdkSessionId,
     reconnectWs,

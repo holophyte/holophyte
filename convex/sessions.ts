@@ -118,7 +118,11 @@ export const listByTask = query({
 });
 
 /**
- * Creates a new session record in `running` status and returns its ID.
+ * Creates a new session record in `queued` status and returns its ID.
+ *
+ * The companion server polls for queued sessions and picks them up to start
+ * the SDK process. Accepts optional model, permissionMode, and prompt so the
+ * companion has everything it needs to launch.
  *
  * Initialises both `startedAt` and `lastActivityAt` to the current timestamp.
  * Requires at least `member` role in the task's org.
@@ -126,6 +130,9 @@ export const listByTask = query({
 export const create = mutation({
   args: {
     taskId: v.id('tasks'),
+    prompt: v.optional(v.string()),
+    model: v.optional(v.string()),
+    permissionMode: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const task = await ctx.db.get(args.taskId);
@@ -137,9 +144,12 @@ export const create = mutation({
     const now = Date.now();
     return await ctx.db.insert('sessions', {
       taskId: args.taskId,
-      status: 'running',
+      status: 'queued',
       startedAt: now,
       lastActivityAt: now,
+      queuedPrompt: args.prompt,
+      model: args.model,
+      permissionMode: args.permissionMode,
     });
   },
 });
@@ -205,6 +215,78 @@ export const resumeSession = mutation({
 
     await ctx.db.patch(args.id, {
       status: 'running',
+      lastActivityAt: Date.now(),
+    });
+    return { ok: true };
+  },
+});
+
+/**
+ * Requests that the companion stop a running session.
+ *
+ * Sets the session status to `stopped` — a signal for the companion to abort
+ * the SDK process. The companion will then transition the session to `idle`
+ * (resumable) once cleanup completes. Requires at least `member` role.
+ */
+export const requestStop = mutation({
+  args: { id: v.id('sessions') },
+  handler: async (ctx, args) => {
+    const session = await ctx.db.get(args.id);
+    if (!session) throw new Error('Session not found');
+    const task = await ctx.db.get(session.taskId);
+    if (!task) throw new Error('Task not found');
+    const repo = await ctx.db.get(task.repoId);
+    if (!repo) throw new Error('Repo not found');
+    const { membership } = await requireOrgMembership(ctx, repo.orgId);
+    requireRole(membership, 'member');
+
+    // Only stop sessions that are running or queued
+    if (session.status !== 'running' && session.status !== 'queued') {
+      return;
+    }
+
+    await ctx.db.patch(args.id, {
+      status: 'stopped',
+      lastActivityAt: Date.now(),
+    });
+  },
+});
+
+/**
+ * Queues an idle session for resume by setting status to `queued` with a new
+ * prompt. The companion picks it up and starts the SDK with the existing
+ * `sdkSessionId` for conversation continuity.
+ *
+ * Guards against the race condition where two browser tabs attempt to resume
+ * the same session simultaneously.
+ *
+ * Requires at least `member` role in the session's parent org.
+ *
+ * @returns `{ ok: true }` if the transition succeeded, `{ ok: false }` if the
+ *   session was not in `idle` status.
+ */
+export const queueResume = mutation({
+  args: {
+    id: v.id('sessions'),
+    prompt: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const session = await ctx.db.get(args.id);
+    if (!session) throw new Error('Session not found');
+    const task = await ctx.db.get(session.taskId);
+    if (!task) throw new Error('Task not found');
+    const repo = await ctx.db.get(task.repoId);
+    if (!repo) throw new Error('Repo not found');
+    const { membership } = await requireOrgMembership(ctx, repo.orgId);
+    requireRole(membership, 'member');
+
+    if (session.status !== 'idle') {
+      return { ok: false };
+    }
+
+    await ctx.db.patch(args.id, {
+      status: 'queued',
+      queuedPrompt: args.prompt,
       lastActivityAt: Date.now(),
     });
     return { ok: true };
@@ -341,5 +423,68 @@ export const serverUpdateName = internalMutation({
     const session = await ctx.db.get(args.id);
     if (!session) throw new Error('Session not found');
     await ctx.db.patch(args.id, { name: args.name });
+  },
+});
+
+/**
+ * Returns all sessions with status `queued`, enriched with the repo path
+ * needed by the companion to launch the SDK process.
+ *
+ * Internal — called by the companion's polling loop.
+ */
+export const listQueued = internalQuery({
+  args: {},
+  handler: async (ctx) => {
+    const queued = await ctx.db
+      .query('sessions')
+      .withIndex('by_status', (q) => q.eq('status', 'queued'))
+      .collect();
+
+    const result = [];
+    for (const session of queued) {
+      const task = await ctx.db.get(session.taskId);
+      if (!task) continue;
+      const repo = await ctx.db.get(task.repoId);
+      if (!repo) continue;
+      result.push({ ...session, repoPath: repo.path });
+    }
+    return result;
+  },
+});
+
+/**
+ * Atomically transitions a queued session to `running`.
+ *
+ * Returns `{ ok: true }` if claimed successfully, `{ ok: false }` if the
+ * session was no longer in `queued` status (e.g. cancelled by user).
+ *
+ * Internal — called by the companion after finding a queued session.
+ */
+export const claimQueued = internalMutation({
+  args: { id: v.id('sessions') },
+  handler: async (ctx, args) => {
+    const session = await ctx.db.get(args.id);
+    if (!session || session.status !== 'queued') return { ok: false };
+    await ctx.db.patch(args.id, {
+      status: 'running',
+      lastActivityAt: Date.now(),
+    });
+    return { ok: true };
+  },
+});
+
+/**
+ * Returns all sessions with status `stopped`.
+ *
+ * The companion checks this to detect user-initiated stop requests and abort
+ * the corresponding SDK processes. Internal — not callable from the browser.
+ */
+export const listStopped = internalQuery({
+  args: {},
+  handler: async (ctx) => {
+    return await ctx.db
+      .query('sessions')
+      .withIndex('by_status', (q) => q.eq('status', 'stopped'))
+      .collect();
   },
 });

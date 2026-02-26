@@ -1,5 +1,5 @@
 import { api } from '@convex/_generated/api';
-import type { Doc, Id } from '@convex/_generated/dataModel';
+import type { Doc } from '@convex/_generated/dataModel';
 import { useMatch, useNavigate } from '@tanstack/react-router';
 import { useMutation, useQuery } from 'convex/react';
 import { Loader2, Play, Square } from 'lucide-react';
@@ -20,7 +20,7 @@ export function ClaudeButton({ task }: ClaudeButtonProps) {
     task._id,
   );
   const createSession = useMutation(api.sessions.create);
-  const updateSessionStatus = useMutation(api.sessions.updateStatus);
+  const requestStop = useMutation(api.sessions.requestStop);
   const openSession = useAppStore((s) => s.openSession);
   const navigate = useNavigate();
   const taskPageMatch = useMatch({
@@ -42,28 +42,13 @@ export function ClaudeButton({ task }: ClaudeButtonProps) {
     if (!task.prompt || !task.repo) return;
     setLoading(true);
     setError(null);
-    let sessionId: Id<'sessions'> | undefined;
     try {
-      // Create session in Convex first (frontend has auth context)
-      sessionId = await createSession({ taskId: task._id });
-
-      // Then start the SDK session on the server
-      const res = await fetch('/api/sessions/start', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          sessionId,
-          repoPath: task.repo.path,
-          prompt: task.prompt,
-          model,
-        }),
+      // Create session in Convex with 'queued' status — the companion picks it up
+      const sessionId = await createSession({
+        taskId: task._id,
+        prompt: task.prompt,
+        model,
       });
-      if (!res.ok) {
-        const data = await res.json();
-        await updateSessionStatus({ id: sessionId, status: 'failed' });
-        setError(data.error ?? 'Failed to launch session');
-        return;
-      }
       openSession(sessionId);
       // Navigate to task page after launching, unless already there
       if (!taskPageMatch) {
@@ -74,9 +59,6 @@ export function ClaudeButton({ task }: ClaudeButtonProps) {
       }
     } catch (err) {
       setError(String(err));
-      if (sessionId) {
-        await updateSessionStatus({ id: sessionId, status: 'failed' });
-      }
     } finally {
       setLoading(false);
     }
@@ -87,16 +69,7 @@ export function ClaudeButton({ task }: ClaudeButtonProps) {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`/api/sessions/${session._id}/stop`, {
-        method: 'POST',
-      });
-      if (!res.ok) {
-        const data = await res.json();
-        setError(data.error ?? 'Failed to stop session');
-      }
-      // Fallback: if session panel is closed, the exit event has no subscriber.
-      // Safe to call unconditionally — the mutation is idempotent.
-      await updateSessionStatus({ id: session._id, status: 'idle' });
+      await requestStop({ id: session._id });
     } catch (err) {
       setError(String(err));
     } finally {
@@ -119,7 +92,7 @@ export function ClaudeButton({ task }: ClaudeButtonProps) {
     );
   }
 
-  if (session?.status === 'running') {
+  if (session?.status === 'running' || session?.status === 'queued') {
     return (
       <>
         <div className="flex gap-2">
@@ -130,7 +103,7 @@ export function ClaudeButton({ task }: ClaudeButtonProps) {
             onClick={handleResume}
           >
             <Play className="h-4 w-4 mr-1" />
-            View Session
+            {session.status === 'queued' ? 'Queued…' : 'View Session'}
           </Button>
           <Button size="sm" variant="destructive" onClick={handleStop}>
             <Square className="h-4 w-4" />

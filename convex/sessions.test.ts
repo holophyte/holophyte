@@ -32,7 +32,7 @@ async function setupTaskEnv(t: ReturnType<typeof convexTest>) {
 }
 
 describe('sessions.create', () => {
-  it('creates a session with running status and lastActivityAt', async () => {
+  it('creates a session with queued status and lastActivityAt', async () => {
     const t = convexTest(schema);
     const { authed, taskId } = await setupTaskEnv(t);
 
@@ -42,7 +42,7 @@ describe('sessions.create', () => {
 
     const session = await authed.query(api.sessions.get, { id: sessionId });
     expect(session).not.toBeNull();
-    expect(session?.status).toBe('running');
+    expect(session?.status).toBe('queued');
     expect(session?.taskId).toBe(taskId);
     expect(session?.lastActivityAt).toBeGreaterThanOrEqual(before);
     expect(session?.lastActivityAt).toBeLessThanOrEqual(after);
@@ -149,8 +149,10 @@ describe('sessions.listActive', () => {
     const runningId = await authed.mutation(api.sessions.create, { taskId });
     const idleId = await authed.mutation(api.sessions.create, { taskId });
 
-    // Mark second session as idle via server mutation
+    // create() now sets 'queued' — transition first session to 'running'
+    // and second to 'idle' to test the listActive filter.
     await t.run(async (ctx) => {
+      await ctx.db.patch(runningId, { status: 'running' });
       await ctx.db.patch(idleId, { status: 'idle' });
     });
 
