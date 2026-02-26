@@ -25,10 +25,18 @@ function resolveE2ePort(devPorts: Record<string, string>): number {
 const devPorts = parseDevPorts();
 const e2ePort = resolveE2ePort(devPorts);
 
+// Ephemeral Convex ports — set by scripts/test-e2e.sh via e2e-convex.sh.
+// Falls back to .dev-ports for running `bunx playwright test` directly.
+const convexCloudPort =
+  process.env.E2E_CONVEX_CLOUD_PORT ?? devPorts.CONVEX_CLOUD_PORT;
+const convexSitePort =
+  process.env.E2E_CONVEX_SITE_PORT ?? devPorts.CONVEX_SITE_PORT;
+
 export default defineConfig({
   testDir: './e2e',
   testMatch: '**/*.spec.ts',
   globalSetup: './e2e/global-setup.ts',
+  globalTeardown: './e2e/global-teardown.ts',
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
@@ -55,10 +63,12 @@ export default defineConfig({
       ...process.env,
       E2E_TEST: '1',
       PORT: String(e2ePort),
-      // Pass Convex URL from .dev-ports so the E2E server connects to the
-      // correct local Convex instance (not another worktree's)
-      ...(devPorts.CONVEX_CLOUD_PORT && {
-        CONVEX_URL: `http://127.0.0.1:${devPorts.CONVEX_CLOUD_PORT}`,
+      // Point at the ephemeral Convex instance (or dev fallback)
+      ...(convexCloudPort && {
+        CONVEX_URL: `http://127.0.0.1:${convexCloudPort}`,
+      }),
+      ...(convexSitePort && {
+        CONVEX_SITE_URL: `http://127.0.0.1:${convexSitePort}`,
       }),
     },
   },

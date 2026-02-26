@@ -33,6 +33,11 @@ playwright-report
 e2e/.auth/
 .playwright-mcp/
 
+# E2E ephemeral Convex
+.env.local.dev-backup
+.e2e-convex.pid
+.e2e-convex-ports
+
 # storybook
 storybook-static
 

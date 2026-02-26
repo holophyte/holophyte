@@ -23,11 +23,12 @@ For automated regression testing, see the formal E2E suite in `e2e/app.spec.ts`.
 
 The Playwright MCP server is configured in the project. Claude Code can use it directly — no manual install needed. The MCP server controls a Chrome instance; if Chrome is not installed, Playwright will download a managed Chromium binary.
 
-**Start the dev server before testing:**
+**Prerequisites:**
 
-```bash
-bun run dev:local   # or bun run dev:all for cloud Convex
-```
+1. Start local Convex: `bun run convex:local`
+2. Set anonymous auth (once per Convex instance): `bunx convex env set ALLOW_ANONYMOUS_AUTH 1`
+3. Start the dev server: `bun run dev:local`
+4. Navigate to `http://localhost:<port>?auth` — the `?auth` query param triggers anonymous auth
 
 ## Testing Flow
 
@@ -111,9 +112,23 @@ If a test run crashes or is killed, Chromium processes may linger. Symptoms: sub
 pkill -f "chromium.*--headless"
 ```
 
-### E2E tests need `convex:local` running
+### Stop `convex:local` before running E2E tests
 
-Playwright starts the app server automatically but does **not** start Convex. Make sure `bun run convex:local` is running in the worktree before running `bun run test:e2e`.
+`bun run test:e2e` spins up its own ephemeral Convex backend automatically. The Convex CLI refuses to provision when another local backend is active, so stop `convex:local` first (Ctrl+C in that terminal).
+
+### Anonymous auth not set up (manual testing)
+
+Manual testing requires `ALLOW_ANONYMOUS_AUTH=1` on the Convex environment. Without it, auth never completes and the app appears stuck. Run once per Convex instance:
+
+```bash
+bunx convex env set ALLOW_ANONYMOUS_AUTH 1
+```
+
+> **Note:** `bun run worktree:create` sets this automatically for new worktrees. E2E tests (`bun run test:e2e`) handle this automatically via the ephemeral backend.
+
+### Missing `?auth` query param
+
+For manual testing (outside the E2E infrastructure), you must include `?auth` in the URL: `http://localhost:<port>?auth`. Without it, anonymous auth never triggers and you get a blank/stuck state with no error message. The E2E test suite handles this internally via `E2E_TEST=1`.
 
 ### Sessions completing too fast
 
@@ -125,8 +140,8 @@ If `browser_snapshot` shows loading spinners or empty lists right after navigati
 
 ## Reference
 
-- Formal E2E tests: `e2e/app.spec.ts`
+- Formal E2E tests: `e2e/*.spec.ts`
 - Playwright config: `playwright.config.ts`
-- Global setup: `e2e/global-setup.ts` — seeds auth state and test repo
-- `waitForApp` helper: defined at the top of `e2e/app.spec.ts` — waits for the sidebar header before asserting
+- Global setup/teardown: `e2e/global-setup.ts`, `e2e/global-teardown.ts`
+- `waitForApp` helper: defined at the top of each spec — waits for the sidebar header before asserting
 - [Local Development & Worktrees](/local-development) — port allocation, Convex isolation, troubleshooting

@@ -11,7 +11,7 @@
     "dev:local": "scripts/dev-local.sh",
     "test": "vitest",
     "test:ui": "vitest --ui",
-    "test:e2e": "playwright test",
+    "test:e2e": "scripts/test-e2e.sh",
     "lint": "biome check .",
     "lint:fix": "biome check --fix .",
     "check": "bun run lint && bunx tsc --noEmit && bun run test",

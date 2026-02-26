@@ -134,10 +134,34 @@ fi
 
 # Auth keys are configured on first `bun run dev:local` (needs a running backend)
 
+# `convex dev --once` exits after deploying, but `convex env set` needs a
+# running backend. Start one in the background, set env vars, then stop it.
+echo "Setting environment variables on local Convex..."
+cd "$WORKTREE_PATH" && bunx convex dev --local \
+  --local-cloud-port "$CONVEX_CLOUD_PORT" \
+  --local-site-port "$CONVEX_SITE_PORT" &
+CONVEX_BG_PID=$!
+
+# Wait for the backend to be ready
+for i in $(seq 1 30); do
+  if ! kill -0 "$CONVEX_BG_PID" 2>/dev/null; then
+    echo "Warning: Convex backend crashed — env vars may not be set"
+    break
+  fi
+  if curl -sf "http://127.0.0.1:$CONVEX_CLOUD_PORT" >/dev/null 2>&1; then
+    break
+  fi
+  if [ "$i" -eq 30 ]; then
+    echo "Warning: Timed out waiting for Convex backend — env vars may not be set"
+    kill "$CONVEX_BG_PID" 2>/dev/null || true
+    break
+  fi
+  sleep 1
+done
+
 # Override SITE_URL to point at the app server port. The app server proxies
 # /api/auth/* to the Convex site port so OAuth callbacks work through a single
 # origin (matches what's configured in GitHub/Google OAuth apps).
-echo "Setting SITE_URL to app server (http://localhost:$DEV_PORT)..."
 cd "$WORKTREE_PATH" && bunx convex env set SITE_URL "http://localhost:$DEV_PORT"
 cd "$WORKTREE_PATH" && bunx convex env set ALLOW_ANONYMOUS_AUTH 1
 
@@ -152,6 +176,10 @@ if [ -n "${AUTH_GOOGLE_ID:-}" ] && [ -n "${AUTH_GOOGLE_SECRET:-}" ]; then
   cd "$WORKTREE_PATH" && bunx convex env set AUTH_GOOGLE_ID "$AUTH_GOOGLE_ID"
   cd "$WORKTREE_PATH" && bunx convex env set AUTH_GOOGLE_SECRET "$AUTH_GOOGLE_SECRET"
 fi
+
+# Stop the background Convex backend
+kill "$CONVEX_BG_PID" 2>/dev/null || true
+wait "$CONVEX_BG_PID" 2>/dev/null || true
 
 echo ""
 echo "Worktree created: ~/.holophyte-dev/$FEATURE_NAME"
