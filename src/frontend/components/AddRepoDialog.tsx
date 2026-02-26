@@ -28,13 +28,13 @@ interface AddRepoDialogProps {
 }
 
 /** Extract a display name from an absolute repo path. */
-function nameFromPath(path: string): string {
+export function nameFromPath(path: string): string {
   const segments = path.replace(/\/+$/, '').split('/');
   return segments[segments.length - 1] ?? '';
 }
 
 /** Expand leading `~` or `~/` to the server's home directory. */
-function expandTilde(path: string): string {
+export function expandTilde(path: string): string {
   if (!homeDir) return path;
   if (path === '~') return homeDir;
   if (path.startsWith('~/')) return homeDir + path.slice(1);
