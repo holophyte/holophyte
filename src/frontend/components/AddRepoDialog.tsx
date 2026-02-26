@@ -68,10 +68,6 @@ export function AddRepoDialog({ open, onOpenChange }: AddRepoDialogProps) {
       if (data.cancelled) {
         return;
       }
-      if (data.error) {
-        setError(data.error);
-        return;
-      }
       setPath(data.path);
       setName(data.name);
       if (!data.isGitRepo) {
