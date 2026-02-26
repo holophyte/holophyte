@@ -235,5 +235,19 @@ describe('AddRepoDialog', () => {
         ).toBeInTheDocument();
       });
     });
+
+    it('shows error when server returns non-2xx', async () => {
+      fetchSpy.mockResolvedValueOnce(
+        new Response('Internal Server Error', { status: 500 }),
+      );
+      const { user } = renderDialog();
+      await user.click(screen.getByTitle('Browse...'));
+
+      await waitFor(() => {
+        expect(
+          screen.getByText('Failed to open directory picker.'),
+        ).toBeInTheDocument();
+      });
+    });
   });
 });

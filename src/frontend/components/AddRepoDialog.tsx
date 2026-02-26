@@ -63,14 +63,13 @@ export function AddRepoDialog({ open, onOpenChange }: AddRepoDialogProps) {
     setError(null);
     try {
       const res = await fetch('/api/pick-directory', { method: 'POST' });
+      if (!res.ok) throw new Error('Failed to open directory picker.');
       const data = await res.json();
       if (data.cancelled) {
-        setPicking(false);
         return;
       }
       if (data.error) {
         setError(data.error);
-        setPicking(false);
         return;
       }
       setPath(data.path);
@@ -96,7 +95,12 @@ export function AddRepoDialog({ open, onOpenChange }: AddRepoDialogProps) {
     }
 
     if (!trimmedPath.startsWith('/')) {
-      setError('Path must be absolute (start with / or ~/).');
+      const isTilde = path.trim().startsWith('~');
+      setError(
+        isTilde && !homeDir
+          ? 'Could not resolve ~ — enter the full absolute path instead.'
+          : 'Path must be absolute (start with / or ~/).',
+      );
       return;
     }
 
