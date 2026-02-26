@@ -92,6 +92,8 @@ scripts/                   → Shared shell scripts (convex-local, dev-local, wo
 4. SDK events → `consumeIterator()` → WebSocket → SessionPanel conversation UI in browser
 5. User approvals → WebSocket → `respondToApproval()` → SDK resumes
 
+**Frontend ↔ backend communication:** Frontend communicates with the backend through Convex mutations/queries — no direct fetch() calls to localhost. The companion process polls Convex for work via internal HTTP endpoints. When adding new features that need backend interaction, create a Convex mutation and call it from the frontend with useMutation/useAction. The exception is operations that require local machine access (directory picker, filesystem operations, etc.) — those go through the companion's local API.
+
 **Path aliases:** `@/*` → `./src/*`, `@convex/*` → `./convex/*`
 
 ## Convex (Real-time Database)
@@ -210,6 +212,7 @@ Server configuration lives in environment variables with sensible defaults:
 - Pre-commit hooks are mandatory for AI agents. Never use `--no-verify` or `--no-gpg-sign` to skip hooks.
 - Run `bun run lint:fix` to auto-fix lint issues before committing
 - Use conventional commit prefixes: `feat:`, `fix:`, `refactor:`, `test:`, `chore:`, `docs:`
+- Commits should be atomic — one logical change per commit (e.g. don't mix a feature with a docs update or lint fix)
 - Commit frequently with descriptive messages — incremental changes over large batches
 - Stage specific files rather than `git add .`
 

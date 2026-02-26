@@ -12,7 +12,7 @@
     "test": "vitest",
     "test:ui": "vitest --ui",
     "test:e2e": "scripts/test-e2e.sh",
-    "lint": "biome check .",
+    "lint": "biome check --error-on-warnings .",
     "lint:fix": "biome check --fix .",
     "check": "bun run lint && bunx tsc --noEmit && bun run test",
     "convex:dev": "convex dev",
