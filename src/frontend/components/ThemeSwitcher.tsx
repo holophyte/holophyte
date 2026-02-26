@@ -96,6 +96,7 @@ export function ThemeSwitcher() {
         {THEMES.map((t) => {
           const isActive = theme === t.name;
           return (
+            // biome-ignore lint/a11y/useSemanticElements: styled radio group using buttons
             <button
               key={t.name}
               type="button"
