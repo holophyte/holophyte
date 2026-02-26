@@ -5,7 +5,7 @@ set -euo pipefail
 # Usage:
 #   bun run pr-comments                      # show all comments (auto-detect PR)
 #   bun run pr-comments -- 42                # show comments on PR #42
-#   bun run pr-comments -- --poll            # poll for new comments (checks at 5m, 7.5m, 10m)
+#   bun run pr-comments -- --poll            # wait for Greptile review, then show new comments
 #   bun run pr-comments -- --poll 42         # poll specific PR
 #   bun run pr-comments -- --resolve         # resolve all Greptile threads
 #   bun run pr-comments -- --resolve 42      # resolve threads on specific PR
@@ -126,39 +126,34 @@ if [ "$POLL" = false ]; then
   exit 0
 fi
 
-# Poll mode: record existing comment IDs, then check at fixed intervals
-echo "Recording existing Greptile comments..."
-SEEN_IDS=$(gh api "repos/$OWNER_REPO/pulls/$PR_NUMBER/comments" \
-  --jq '[.[] | select(.user.login == "greptile-apps[bot]") | .id]')
+# Poll mode: record existing comment IDs, wait for all checks to pass, then show new comments
+SEEN_IDS=$(fetch_greptile_comments | jq -s '[.[].id]')
+if [ -z "$SEEN_IDS" ]; then
+  SEEN_IDS="[]"
+fi
 
-# Greptile typically takes 5-10 minutes to review — check at 5m, 7.5m, 10m
-POLL_DELAYS=(300 150 150)  # seconds to sleep before each check (5m, +2.5m, +2.5m)
-POLL_LABELS=("5m" "7.5m" "10m")
+echo "Waiting for all PR checks to complete (including Greptile)..."
+gh pr checks "$PR_NUMBER" --watch
 
-echo "Waiting for Greptile review (checks at 5m, 7.5m, 10m)..."
+echo ""
+echo "All checks complete. Fetching Greptile comments..."
 
-for i in "${!POLL_DELAYS[@]}"; do
-  sleep "${POLL_DELAYS[$i]}"
-  echo "  Checking at ${POLL_LABELS[$i]}..."
+ALL_COMMENTS=$(fetch_greptile_comments)
+if [ -z "$ALL_COMMENTS" ]; then
+  echo "No Greptile comments on PR #$PR_NUMBER"
+  exit 0
+fi
 
-  ALL_COMMENTS=$(fetch_greptile_comments)
-  if [ -z "$ALL_COMMENTS" ]; then
-    continue
-  fi
+# Filter to only new comments (IDs not in SEEN_IDS)
+NEW_COMMENTS=$(echo "$ALL_COMMENTS" | jq -c --argjson seen "$SEEN_IDS" '
+  select(.id as $id | $seen | index($id) | not)
+')
 
-  # Filter to only new comments (IDs not in SEEN_IDS)
-  NEW_COMMENTS=$(echo "$ALL_COMMENTS" | jq -c --argjson seen "$SEEN_IDS" '
-    select(.id as $id | $seen | index($id) | not)
-  ')
-
-  if [ -n "$NEW_COMMENTS" ]; then
-    echo ""
-    echo "New Greptile comments found:"
-    echo ""
-    format_comments "$NEW_COMMENTS"
-    exit 0
-  fi
-done
-
-echo "No new Greptile comments after 10 minutes"
-exit 0
+if [ -n "$NEW_COMMENTS" ]; then
+  echo ""
+  echo "New Greptile comments:"
+  echo ""
+  format_comments "$NEW_COMMENTS"
+else
+  echo "No new Greptile comments on PR #$PR_NUMBER"
+fi
