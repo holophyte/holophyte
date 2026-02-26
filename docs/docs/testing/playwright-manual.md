@@ -25,10 +25,9 @@ The Playwright MCP server is configured in the project. Claude Code can use it d
 
 **Prerequisites:**
 
-1. Start local Convex: `bun run convex:local`
-2. Set anonymous auth (once per Convex instance): `bunx convex env set ALLOW_ANONYMOUS_AUTH 1`
-3. Start the dev server: `bun run dev:local`
-4. Navigate to `http://localhost:<port>?auth` — the `?auth` query param triggers anonymous auth
+1. Start the dev server: `bun run dev:local` (auto-enables `ALLOW_ANONYMOUS_AUTH` for the Bun server)
+2. Ensure Convex has anonymous auth: `bunx convex env set ALLOW_ANONYMOUS_AUTH 1` (auto-set by `worktree:create`)
+3. Navigate to `http://localhost:<port>?auth` — the `?auth` query param triggers anonymous auth
 
 ## Testing Flow
 
@@ -118,13 +117,12 @@ pkill -f "chromium.*--headless"
 
 ### Anonymous auth not set up (manual testing)
 
-Manual testing requires `ALLOW_ANONYMOUS_AUTH=1` on the Convex environment. Without it, auth never completes and the app appears stuck. Run once per Convex instance:
+Manual testing requires `ALLOW_ANONYMOUS_AUTH=1` in two places:
 
-```bash
-bunx convex env set ALLOW_ANONYMOUS_AUTH 1
-```
+1. **Bun server process** — `bun run dev:local` sets this automatically. If running the server directly (`bun src/server.ts`), prefix with `ALLOW_ANONYMOUS_AUTH=1`.
+2. **Convex environment** — `bunx convex env set ALLOW_ANONYMOUS_AUTH 1`. Auto-set by `bun run worktree:create` for new worktrees.
 
-> **Note:** `bun run worktree:create` sets this automatically for new worktrees. E2E tests (`bun run test:e2e`) handle this automatically via the ephemeral backend.
+Without both, auth never completes and the app appears stuck. E2E tests (`bun run test:e2e`) handle both automatically via the ephemeral backend.
 
 ### Missing `?auth` query param
 
