@@ -217,6 +217,7 @@ const server = Bun.serve<WsData>({
           allowAnonymousAuth:
             process.env.NODE_ENV !== 'production' &&
             !!process.env.ALLOW_ANONYMOUS_AUTH,
+          homeDir: process.env.HOME ?? '',
         };
         return new Response(
           `window.__HOLOPHYTE_CONFIG__=${JSON.stringify(config)};`,
@@ -252,6 +253,44 @@ const server = Bun.serve<WsData>({
         console.error('Auth proxy error:', err);
         return Response.json({ error: 'Auth proxy failed' }, { status: 502 });
       }
+    },
+
+    '/api/pick-directory': {
+      async POST() {
+        try {
+          const proc = Bun.spawn(
+            [
+              'osascript',
+              '-e',
+              `POSIX path of (choose folder with prompt "Select a git repository" default location "${process.env.HOME ?? '/'}")`,
+            ],
+            { stdout: 'pipe', stderr: 'pipe' },
+          );
+          const exitCode = await proc.exited;
+          if (exitCode !== 0) {
+            return Response.json({ cancelled: true });
+          }
+          const raw = await new Response(proc.stdout).text();
+          const dirPath = raw.trim().replace(/\/$/, '');
+          const { basename } = await import('node:path');
+
+          const gitHead = Bun.file(`${dirPath}/.git/HEAD`);
+          const isGitRepo = await gitHead.exists();
+
+          return Response.json({
+            cancelled: false,
+            path: dirPath,
+            name: basename(dirPath),
+            isGitRepo,
+          });
+        } catch (err) {
+          console.error('Failed to open directory picker:', err);
+          return Response.json(
+            { error: 'Failed to open directory picker.' },
+            { status: 500 },
+          );
+        }
+      },
     },
 
     // SPA catch-all: serve the bundled app HTML for all unmatched GET routes.

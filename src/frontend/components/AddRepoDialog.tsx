@@ -1,7 +1,8 @@
 import { api } from '@convex/_generated/api';
 import { useMutation } from 'convex/react';
-import { Loader2 } from 'lucide-react';
+import { FolderOpen, Info, Loader2 } from 'lucide-react';
 import { useState } from 'react';
+import { homeDir } from '@/frontend/lib/config';
 import { useAppStore } from '@/frontend/stores/app';
 import Button from './ui/Button';
 import {
@@ -14,6 +15,12 @@ import {
 } from './ui/Dialog';
 import Input from './ui/Input';
 import Label from './ui/Label';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from './ui/Tooltip';
 
 interface AddRepoDialogProps {
   open: boolean;
@@ -26,20 +33,55 @@ function nameFromPath(path: string): string {
   return segments[segments.length - 1] ?? '';
 }
 
+/** Expand leading `~` or `~/` to the server's home directory. */
+function expandTilde(path: string): string {
+  if (!homeDir) return path;
+  if (path === '~') return homeDir;
+  if (path.startsWith('~/')) return homeDir + path.slice(1);
+  return path;
+}
+
 export function AddRepoDialog({ open, onOpenChange }: AddRepoDialogProps) {
   const [name, setName] = useState('');
   const [path, setPath] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [picking, setPicking] = useState(false);
   const selectedOrgId = useAppStore((s) => s.selectedOrgId);
   const createRepo = useMutation(api.repos.create);
 
   const handlePathChange = (value: string) => {
     setPath(value);
-    // Auto-fill name from the last path segment if name is empty or was auto-filled
     const derived = nameFromPath(value);
     if (!name || name === nameFromPath(path)) {
       setName(derived);
+    }
+  };
+
+  const handlePickDirectory = async () => {
+    setPicking(true);
+    setError(null);
+    try {
+      const res = await fetch('/api/pick-directory', { method: 'POST' });
+      const data = await res.json();
+      if (data.cancelled) {
+        setPicking(false);
+        return;
+      }
+      if (data.error) {
+        setError(data.error);
+        setPicking(false);
+        return;
+      }
+      setPath(data.path);
+      setName(data.name);
+      if (!data.isGitRepo) {
+        setError('Selected folder is not a git repository.');
+      }
+    } catch {
+      setError('Failed to open directory picker.');
+    } finally {
+      setPicking(false);
     }
   };
 
@@ -47,14 +89,14 @@ export function AddRepoDialog({ open, onOpenChange }: AddRepoDialogProps) {
     e.preventDefault();
     setError(null);
 
-    const trimmedPath = path.trim().replace(/\/+$/, '');
+    const trimmedPath = expandTilde(path.trim()).replace(/\/+$/, '');
     if (!name.trim() || !trimmedPath || !selectedOrgId) {
       setError('Enter a repository path and name.');
       return;
     }
 
     if (!trimmedPath.startsWith('/')) {
-      setError('Path must be an absolute path (starting with /).');
+      setError('Path must be absolute (start with / or ~/).');
       return;
     }
 
@@ -93,19 +135,50 @@ export function AddRepoDialog({ open, onOpenChange }: AddRepoDialogProps) {
           <DialogHeader>
             <DialogTitle>Add Repository</DialogTitle>
             <DialogDescription>
-              Enter the absolute path to a local git repository.
+              Choose a local git repository to add.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
-              <Label htmlFor="repo-path">Repository Path</Label>
-              <Input
-                id="repo-path"
-                placeholder="/Users/you/projects/my-repo"
-                value={path}
-                onChange={(e) => handlePathChange(e.target.value)}
-                className="font-mono text-xs"
-              />
+              <div className="flex items-center gap-1.5">
+                <Label htmlFor="repo-path">Repository Path</Label>
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Info className="h-3.5 w-3.5 text-muted-foreground cursor-help" />
+                    </TooltipTrigger>
+                    <TooltipContent side="right">
+                      Absolute path to a git repo. Use ~ for home directory
+                      (e.g. ~/projects/my-repo) or a full path (e.g.
+                      /Users/you/projects/my-repo).
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              </div>
+              <div className="flex gap-2">
+                <Input
+                  id="repo-path"
+                  placeholder="~/projects/my-repo"
+                  value={path}
+                  onChange={(e) => handlePathChange(e.target.value)}
+                  className="font-mono text-xs"
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  className="shrink-0"
+                  onClick={handlePickDirectory}
+                  disabled={picking}
+                  title="Browse..."
+                >
+                  {picking ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <FolderOpen className="h-4 w-4" />
+                  )}
+                </Button>
+              </div>
             </div>
 
             <div className="space-y-2">
