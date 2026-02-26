@@ -3,6 +3,7 @@
 // - companion.ts (polling loop + start/stop)
 // Keep routes inline in server.ts — they're tightly coupled to Bun.serve().
 
+import { basename } from 'node:path';
 import type { PermissionMode, WsServerMessage } from '@/claude/manager';
 import homepage from '../public/index.html';
 import {
@@ -273,7 +274,7 @@ const server = Bun.serve<WsData>({
             [
               'osascript',
               '-e',
-              `POSIX path of (choose folder with prompt "Select a git repository" default location "${process.env.HOME ?? '/'}")`,
+              `POSIX path of (choose folder with prompt "Select a git repository" default location "${(process.env.HOME ?? '/').replace(/"/g, '\\"')}")`,
             ],
             { stdout: 'pipe', stderr: 'pipe' },
           );
@@ -283,7 +284,6 @@ const server = Bun.serve<WsData>({
           }
           const raw = await new Response(proc.stdout).text();
           const dirPath = raw.trim().replace(/\/$/, '');
-          const { basename } = await import('node:path');
 
           const gitDir = Bun.file(`${dirPath}/.git`);
           const isGitRepo = await gitDir.exists();
