@@ -46,7 +46,7 @@ export default function RootLayout() {
   return (
     <>
       {(e2eTest ||
-        (allowAnonymousAuth && window.location.search.includes('anon'))) && (
+        (allowAnonymousAuth && window.location.search.includes('auth'))) && (
         <AutoAnonymousAuth />
       )}
       <AuthLoading>{spinner}</AuthLoading>
