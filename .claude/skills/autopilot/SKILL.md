@@ -72,6 +72,31 @@ For each new file:
 
 Skip Storybook/test generation if no new files were added (only modifications to existing files).
 
+#### E2E Tests for New User-Facing Features
+
+If the changes add or modify user-facing behavior (new UI flows, new pages, new dialogs, changed interactions), write E2E tests using the `test-writer` subagent:
+
+> Write Playwright E2E tests for the new/changed user-facing features on this branch.
+> Tests go in `e2e/` directory with pattern `*.spec.ts`.
+> Follow the existing E2E patterns in `e2e/app.spec.ts` and `e2e/all-tasks-create.spec.ts`:
+> - Import `{ expect, test }` from `@playwright/test`
+> - Use `waitForApp(page)` helper: `page.goto('/')` + `page.waitForSelector('text=Holophyte', { timeout: 30000 })`
+> - Global setup creates an e2e repo (name matches `/e2e-/`) and saves auth state — tests reuse this via `storageState`
+> - Use generous timeouts for visibility checks (5-10s) — Convex queries are async
+> - Scope dialog assertions to `[role="dialog"]` to avoid strict mode collisions
+> - Use `{ exact: true }` for ambiguous text matches
+> - Each test run gets a fresh Convex database — no cleanup needed, but use unique names (e.g. `Date.now()`) to avoid collisions within a run
+> - Do NOT start Convex or the dev server — `bun run test:e2e` handles the full lifecycle
+> Review existing specs in `e2e/` for reference patterns.
+
+Run E2E tests to verify:
+
+```bash
+bun run test:e2e
+```
+
+Skip E2E test generation for non-UI changes (backend-only, config, tests, docs).
+
 #### Docusaurus Documentation Evaluation
 
 Evaluate whether the changes warrant updating Docusaurus docs. The changes are **doc-worthy** if ANY of these are true:
@@ -97,6 +122,7 @@ After generating stories, tests, and docs, verify:
 
 ```bash
 bunx vitest run
+bun run test:e2e
 timeout 60000 bun run build-storybook
 cd docs && bunx docusaurus build
 ```
@@ -124,15 +150,15 @@ gh pr list --head $(git branch --show-current) --json number --jq '.[0].number'
 
 ### 6. Poll for Greptile Review
 
-Wait for Greptile to post review comments using the polling script:
+Wait for all PR checks (including Greptile) to complete, then fetch new comments:
 
 ```bash
 bun run pr-comments -- --poll <PR_NUMBER>
 ```
 
-This records existing comment IDs, then checks at 5m, 7.5m, and 10m for new comments.
+This uses `gh pr checks --watch` to block until all checks finish, then shows any new Greptile comments.
 
-- If timeout with no new comments, exit successfully — Greptile found nothing new
+- If no new comments after checks complete, exit successfully — Greptile found nothing to flag
 
 ### 7. Triage Comments
 

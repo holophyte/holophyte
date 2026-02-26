@@ -41,7 +41,7 @@ Before spawning teammates, break `$ARGUMENTS` into discrete tasks:
 
 ### 3. Spawn the Team
 
-Spawn three teammates with specific roles:
+Spawn teammates with specific roles:
 
 **Implementer** (use Sonnet):
 > You are the implementer for the Holophyte project. Your job is to write feature
@@ -58,12 +58,32 @@ Spawn three teammates with specific roles:
 > Only flag real problems, not style nitpicks already covered by Biome.
 
 **Tester** (use Sonnet):
-> You are the test writer for the Holophyte project. Watch for completed
+> You are the unit test writer for the Holophyte project. Watch for completed
 > implementation tasks. Write unit tests for new functionality using Vitest
 > (globals enabled, no imports needed for describe/it/expect). Co-locate tests
 > with source files (e.g., `foo.ts` → `foo.test.ts`). Run tests with
 > `bunx vitest run <file>`. If tests fail, message the implementer with details
 > so they can fix the implementation. Do not modify implementation code yourself.
+
+**E2E Tester** (use Sonnet):
+> You are the E2E test writer for the Holophyte project. Watch for completed
+> implementation tasks that add or change user-facing behavior. Write Playwright
+> E2E tests in the `e2e/` directory with pattern `*.spec.ts`.
+>
+> Follow the existing patterns in `e2e/app.spec.ts` and `e2e/all-tasks-create.spec.ts`:
+> - Import `{ expect, test }` from `@playwright/test`
+> - Use `waitForApp(page)` helper: `page.goto('/')` + `page.waitForSelector('text=Holophyte', { timeout: 30000 })`
+> - Global setup creates an e2e repo (name matches `/e2e-/`) and saves auth state — tests reuse this via `storageState`
+> - Use generous timeouts for visibility checks (5-10s) — Convex queries are async
+> - Scope dialog assertions to `[role="dialog"]` to avoid strict mode collisions
+> - Use `{ exact: true }` for ambiguous text matches
+> - Each test run gets a fresh Convex database — no cleanup needed, but use unique names (e.g. `Date.now()`) to avoid collisions within a run
+>
+> Run tests with `bun run test:e2e`. This spins up an ephemeral Convex backend
+> automatically — do NOT start Convex or the dev server yourself.
+> If tests fail, message the implementer with details so they can fix the
+> implementation. Do not modify implementation code yourself.
+> Skip E2E tests for non-UI changes (backend-only, config, tests, docs).
 
 **Documenter** (use Sonnet):
 > You are the documentation specialist for the Holophyte project. Watch for
@@ -109,6 +129,7 @@ After all teammates finish:
 bun run lint:fix
 bunx tsc --noEmit
 bun run test
+bun run test:e2e
 timeout 60000 bun run build-storybook
 cd docs && bunx docusaurus build
 ```
@@ -133,12 +154,13 @@ Use a conventional prefix in the title (`feat:`, `fix:`, `refactor:`, etc.).
 
 ### 8. Greptile Review Loop
 
-Poll for Greptile review comments and iterate until resolved:
+Wait for all PR checks (including Greptile) to complete, then iterate on comments:
 
-1. **Poll for new comments:**
+1. **Wait for checks and fetch new comments:**
    ```bash
    bun run pr-comments -- --poll <PR_NUMBER>
    ```
+   This uses `gh pr checks --watch` to block until all checks finish, then shows any new Greptile comments.
 2. **Triage new comments** as:
    - **Actionable** (bugs, security, clear quality issues) — fix the code, reply with explanation
    - **Dismissable** (style conflicts, false positives, over-engineering) — reply explaining why
@@ -156,6 +178,7 @@ Poll for Greptile review comments and iterate until resolved:
 When exiting, display:
 - Teammates spawned and their roles
 - Tasks completed by each teammate
+- E2E tests written by E2E Tester
 - Stories and docs created by Documenter
 - Review iterations with Greptile
 - Comments addressed vs dismissed
