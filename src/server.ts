@@ -263,6 +263,12 @@ const server = Bun.serve<WsData>({
     '/api/pick-directory': {
       async POST() {
         try {
+          if (process.platform !== 'darwin') {
+            return Response.json(
+              { error: 'Directory picker only supported on macOS' },
+              { status: 501 },
+            );
+          }
           const proc = Bun.spawn(
             [
               'osascript',
@@ -279,8 +285,8 @@ const server = Bun.serve<WsData>({
           const dirPath = raw.trim().replace(/\/$/, '');
           const { basename } = await import('node:path');
 
-          const gitHead = Bun.file(`${dirPath}/.git/HEAD`);
-          const isGitRepo = await gitHead.exists();
+          const gitDir = Bun.file(`${dirPath}/.git`);
+          const isGitRepo = await gitDir.exists();
 
           return Response.json({
             cancelled: false,

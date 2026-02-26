@@ -145,7 +145,9 @@ export function AddRepoDialog({ open, onOpenChange }: AddRepoDialogProps) {
                 <TooltipProvider>
                   <Tooltip>
                     <TooltipTrigger asChild>
-                      <Info className="h-3.5 w-3.5 text-muted-foreground cursor-help" />
+                      <button type="button" className="inline-flex">
+                        <Info className="h-3.5 w-3.5 text-muted-foreground cursor-help" />
+                      </button>
                     </TooltipTrigger>
                     <TooltipContent side="right">
                       Absolute path to a git repo. Use ~ for home directory
