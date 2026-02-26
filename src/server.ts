@@ -1,3 +1,8 @@
+// TODO: When this file crosses ~500 lines, split into src/server/ modules:
+// - convex-client.ts (callConvexInternal, queryConvexInternal)
+// - companion.ts (polling loop + start/stop)
+// Keep routes inline in server.ts — they're tightly coupled to Bun.serve().
+
 import type { PermissionMode, WsServerMessage } from '@/claude/manager';
 import homepage from '../public/index.html';
 import {
