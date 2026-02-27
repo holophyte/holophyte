@@ -17,6 +17,7 @@ interface SessionStatusDotProps {
  * |--------|-------|-----------|
  * | `queued` | yellow | pulsing |
  * | `running` | green | pulsing |
+ * | `stopped` | gray | none |
  * | `idle` | gray | none |
  * | `failed` | red | none |
  *
@@ -42,7 +43,7 @@ export default function SessionStatusDot({
         'h-2 w-2 shrink-0 rounded-full',
         status === 'queued' && 'bg-yellow-400 animate-pulse',
         status === 'running' && 'bg-green-500 animate-pulse',
-        status === 'idle' && 'bg-gray-400',
+        (status === 'stopped' || status === 'idle') && 'bg-gray-400',
         status === 'failed' && 'bg-red-500',
         className,
       )}
