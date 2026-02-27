@@ -636,6 +636,47 @@ describe('sessions.reapStaleSessions', () => {
     const session = await t.run(async (ctx) => ctx.db.get(sessionId));
     expect(session?.status).toBe('queued');
   });
+
+  it('marks stopped sessions older than 10 minutes as idle', async () => {
+    const t = convexTest(schema);
+    const { taskId } = await setupTaskEnv(t);
+
+    const staleTime = Date.now() - TEN_MINUTES_MS - 1000;
+    const staleStoppedId = await t.run(async (ctx) => {
+      return await ctx.db.insert('sessions', {
+        taskId,
+        status: 'stopped',
+        startedAt: staleTime,
+        lastActivityAt: staleTime,
+      });
+    });
+
+    const result = await t.mutation(internal.sessions.reapStaleSessions, {});
+    expect(result.count).toBe(1);
+
+    const session = await t.run(async (ctx) => ctx.db.get(staleStoppedId));
+    expect(session?.status).toBe('idle');
+  });
+
+  it('does NOT reap stopped sessions within the timeout window', async () => {
+    const t = convexTest(schema);
+    const { taskId } = await setupTaskEnv(t);
+
+    const recentStoppedId = await t.run(async (ctx) => {
+      return await ctx.db.insert('sessions', {
+        taskId,
+        status: 'stopped',
+        startedAt: Date.now(),
+        lastActivityAt: Date.now(),
+      });
+    });
+
+    const result = await t.mutation(internal.sessions.reapStaleSessions, {});
+    expect(result.count).toBe(0);
+
+    const session = await t.run(async (ctx) => ctx.db.get(recentStoppedId));
+    expect(session?.status).toBe('stopped');
+  });
 });
 
 describe('sessions.serverMarkStoppedAsIdle', () => {
