@@ -2,7 +2,8 @@ import { api } from '@convex/_generated/api';
 import type { Id } from '@convex/_generated/dataModel';
 import { useMutation, useQuery } from 'convex/react';
 import { Square } from 'lucide-react';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { QUEUED_WARNING_THRESHOLD_MS } from '@/constants';
 import { useSession } from '@/frontend/hooks/useSession';
 import { useAppStore } from '@/frontend/stores/app';
 import SessionDropdown from './SessionDropdown';
@@ -68,6 +69,25 @@ export default function SessionPanel({ taskId }: SessionPanelProps) {
   } = useSession(sessionId);
 
   const [stopping, setStopping] = useState(false);
+  const [now, setNow] = useState(() => Date.now());
+
+  // Tick every second while the session is queued to keep the warning fresh.
+  useEffect(() => {
+    if (sessionStatus !== 'queued') return;
+    setNow(Date.now());
+    const id = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(id);
+  }, [sessionStatus]);
+
+  // Show a warning after the session has been queued longer than the threshold.
+  const queuedWarning = useMemo(() => {
+    if (sessionStatus !== 'queued' || !session) return null;
+    const queuedSince = session.lastActivityAt ?? session.startedAt;
+    if (now - queuedSince >= QUEUED_WARNING_THRESHOLD_MS) {
+      return 'Session is waiting for the companion to come online. Start the Holophyte server to pick it up.';
+    }
+    return null;
+  }, [sessionStatus, session, now]);
 
   const handleStop = async () => {
     if (!sessionId) return;
@@ -148,6 +168,12 @@ export default function SessionPanel({ taskId }: SessionPanelProps) {
       {persistenceWarning && (
         <div className="shrink-0 border-b border-amber-500/30 bg-amber-500/10 px-3 py-1.5 text-xs text-amber-400">
           {persistenceWarning}
+        </div>
+      )}
+
+      {queuedWarning && (
+        <div className="shrink-0 border-b border-yellow-500/30 bg-yellow-500/10 px-3 py-1.5 text-xs text-yellow-400">
+          {queuedWarning}
         </div>
       )}
 

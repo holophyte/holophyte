@@ -381,6 +381,33 @@ export const serverUpdateActivity = internalMutation({
 });
 
 /**
+ * Marks all sessions that are still in `stopped` status as `idle`.
+ *
+ * Called once on server startup to clean up stop requests that were never
+ * processed (e.g. the companion was offline when the user clicked Stop).
+ * There is no active SDK process to abort, so transitioning directly to `idle`
+ * is correct. Internal — not callable from the browser.
+ *
+ * @returns `{ count }` — number of sessions transitioned.
+ */
+export const serverMarkStoppedAsIdle = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    const stoppedSessions = await ctx.db
+      .query('sessions')
+      .withIndex('by_status', (q) => q.eq('status', 'stopped'))
+      .collect();
+    for (const session of stoppedSessions) {
+      await ctx.db.patch(session._id, {
+        status: 'idle',
+        lastActivityAt: Date.now(),
+      });
+    }
+    return { count: stoppedSessions.length };
+  },
+});
+
+/**
  * Marks all sessions that are still in `running` status as `idle`.
  *
  * Called once on server startup to recover from a crash or restart where the
@@ -470,6 +497,63 @@ export const claimQueued = internalMutation({
       lastActivityAt: Date.now(),
     });
     return { ok: true };
+  },
+});
+
+/**
+ * Reaps sessions stuck in `queued` or `stopped` status beyond the timeout.
+ *
+ * - `queued` → `failed`: the companion never came online to pick them up.
+ * - `stopped` → `idle`: the user clicked Stop but the companion never processed
+ *   it, so there is no active SDK process to abort. Transitioning to `idle`
+ *   (rather than `failed`) preserves the resumable history.
+ *
+ * Threshold: 10 minutes (matches `QUEUED_SESSION_TIMEOUT_MS` in
+ * `src/constants.ts` — keep in sync). Called by the Convex cron in
+ * `convex/crons.ts` every minute. Internal — not callable from the browser.
+ *
+ * @returns `{ count }` — total number of sessions transitioned.
+ */
+export const reapStaleSessions = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    // 10 minutes — must match QUEUED_SESSION_TIMEOUT_MS in src/constants.ts
+    const QUEUED_TIMEOUT_MS = 10 * 60 * 1000;
+    const cutoff = Date.now() - QUEUED_TIMEOUT_MS;
+    const now = Date.now();
+    let count = 0;
+
+    // Stale queued sessions → failed (companion was never available)
+    const queued = await ctx.db
+      .query('sessions')
+      .withIndex('by_status', (q) => q.eq('status', 'queued'))
+      .collect();
+    for (const session of queued) {
+      if ((session.lastActivityAt ?? session.startedAt) < cutoff) {
+        await ctx.db.patch(session._id, {
+          status: 'failed',
+          lastActivityAt: now,
+        });
+        count++;
+      }
+    }
+
+    // Stale stopped sessions → idle (stop was never processed; no process to kill)
+    const stopped = await ctx.db
+      .query('sessions')
+      .withIndex('by_status', (q) => q.eq('status', 'stopped'))
+      .collect();
+    for (const session of stopped) {
+      if ((session.lastActivityAt ?? session.startedAt) < cutoff) {
+        await ctx.db.patch(session._id, {
+          status: 'idle',
+          lastActivityAt: now,
+        });
+        count++;
+      }
+    }
+
+    return { count };
   },
 });
 

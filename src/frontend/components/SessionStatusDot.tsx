@@ -15,6 +15,7 @@ interface SessionStatusDotProps {
  *
  * | Status | Color | Animation |
  * |--------|-------|-----------|
+ * | `queued` | yellow | pulsing |
  * | `running` | green | pulsing |
  * | `idle` | gray | none |
  * | `failed` | red | none |
@@ -25,6 +26,7 @@ interface SessionStatusDotProps {
  *
  * @example
  * ```tsx
+ * <SessionStatusDot status="queued" />
  * <SessionStatusDot status="running" />
  * <SessionStatusDot status="idle" />
  * ```
@@ -38,6 +40,7 @@ export default function SessionStatusDot({
       aria-hidden="true"
       className={cn(
         'h-2 w-2 shrink-0 rounded-full',
+        status === 'queued' && 'bg-yellow-400 animate-pulse',
         status === 'running' && 'bg-green-500 animate-pulse',
         status === 'idle' && 'bg-gray-400',
         status === 'failed' && 'bg-red-500',
