@@ -853,5 +853,43 @@ describe('claude/manager (SDK-based)', () => {
       expect(warnings).toHaveLength(1);
       expect(warnings[0]).toMatch(/persist/i);
     });
+
+    it('broadcasts warning when config is missing (callConvexInternal returns false)', async () => {
+      // Do NOT set CONVEX_SITE_URL / INTERNAL_API_SECRET — getConvexConfig returns null,
+      // callConvexInternal returns false, and the `!persisted` branch should trigger.
+      delete process.env.CONVEX_SITE_URL;
+      delete process.env.INTERNAL_API_SECRET;
+
+      const mockIter = createMockIterator([
+        {
+          type: 'result',
+          subtype: 'success',
+          is_error: false,
+          result: 'Done',
+          session_id: 'sdk-no-config',
+        },
+      ]);
+      vi.mocked(mockSdkQuery).mockReturnValue(mockIter as never);
+
+      const { startSession, subscribe } = await import('./manager');
+
+      const warnings: string[] = [];
+
+      await startSession({
+        sessionId: 'warn-no-config-test',
+        repoPath: '/tmp',
+        prompt: 'test',
+      });
+
+      subscribe('warn-no-config-test', (msg) => {
+        if (msg.type === 'warning') warnings.push(msg.message);
+      });
+
+      await new Promise((r) => setTimeout(r, 200));
+
+      // Warning should fire via the !persisted check (not the catch block)
+      expect(warnings).toHaveLength(1);
+      expect(warnings[0]).toMatch(/persist/i);
+    });
   });
 });

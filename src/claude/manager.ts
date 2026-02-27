@@ -190,6 +190,10 @@ function broadcast(session: Session, msg: WsServerMessage): void {
 /** Send a persistence warning to subscribers — at most once per session. */
 function warnPersistence(session: Session, sessionId: string): void {
   if (session.persistenceWarned) return;
+  // Only mark as warned if there are subscribers to receive the message —
+  // otherwise the flag would be set before any client connects, and later
+  // failures (when clients ARE connected) would silently skip the warning.
+  if (session.subscribers.size === 0) return;
   session.persistenceWarned = true;
   broadcast(session, {
     type: 'warning',
@@ -235,11 +239,18 @@ async function flushEvents(session: Session): Promise<void> {
   const batchIndex = session.batchIndex++;
 
   try {
-    await callConvexInternal('/api/internal/sessionEvents/insertBatch', {
-      sessionId: session.convexSessionId,
-      events,
-      batchIndex,
-    });
+    const persisted = await callConvexInternal(
+      '/api/internal/sessionEvents/insertBatch',
+      {
+        sessionId: session.convexSessionId,
+        events,
+        batchIndex,
+      },
+    );
+    if (!persisted) {
+      session.eventBuffer.unshift(...events);
+      warnPersistence(session, session.convexSessionId);
+    }
   } catch (err) {
     console.error('Failed to flush events to Convex:', err);
     // Re-add events to buffer on failure so they're not lost
@@ -380,10 +391,16 @@ export async function startSession(opts: {
   const sessionName =
     opts.prompt.slice(0, 30).trim() + (opts.prompt.length > 30 ? '…' : '');
   try {
-    await callConvexInternal('/api/internal/sessions/updateName', {
-      id: sessionId,
-      name: sessionName,
-    });
+    const persisted = await callConvexInternal(
+      '/api/internal/sessions/updateName',
+      {
+        id: sessionId,
+        name: sessionName,
+      },
+    );
+    if (!persisted) {
+      warnPersistence(session, sessionId);
+    }
   } catch (err) {
     console.error('Failed to set session name:', err);
     warnPersistence(session, sessionId);
@@ -498,7 +515,7 @@ async function consumeIterator(
         );
 
         try {
-          await callConvexInternal(
+          const persisted = await callConvexInternal(
             '/api/internal/sessions/updateSdkSessionId',
             {
               id: session.convexSessionId,
@@ -507,6 +524,9 @@ async function consumeIterator(
               permissionMode: session.permissionMode,
             },
           );
+          if (!persisted) {
+            warnPersistence(session, sessionId);
+          }
         } catch (err) {
           console.error('Failed to persist SDK session ID:', err);
           warnPersistence(session, sessionId);
@@ -532,10 +552,16 @@ async function consumeIterator(
       if (event.type === 'result' || event.type === 'assistant') {
         callConvexInternal('/api/internal/sessions/updateActivity', {
           id: session.convexSessionId,
-        }).catch((err) => {
-          console.error('Failed to update session activity:', err);
-          warnPersistence(session, sessionId);
-        });
+        })
+          .then((persisted) => {
+            if (!persisted) {
+              warnPersistence(session, sessionId);
+            }
+          })
+          .catch((err) => {
+            console.error('Failed to update session activity:', err);
+            warnPersistence(session, sessionId);
+          });
       }
     }
   } catch (err) {
@@ -567,10 +593,16 @@ async function consumeIterator(
 
     // Update session status in Convex
     try {
-      await callConvexInternal('/api/internal/sessions/updateStatus', {
-        id: session.convexSessionId,
-        status: finalStatus,
-      });
+      const persisted = await callConvexInternal(
+        '/api/internal/sessions/updateStatus',
+        {
+          id: session.convexSessionId,
+          status: finalStatus,
+        },
+      );
+      if (!persisted) {
+        warnPersistence(session, sessionId);
+      }
     } catch (err) {
       console.error('Failed to update session status in Convex:', err);
       warnPersistence(session, sessionId);

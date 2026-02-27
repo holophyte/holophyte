@@ -172,7 +172,7 @@ echo "INTERNAL_API_SECRET=$INTERNAL_API_SECRET" >> "$WORKTREE_PATH/.env"
 
 # Generate JWT keys for Convex Auth (anonymous + OAuth login)
 echo "Setting up Convex Auth keys..."
-cd "$WORKTREE_PATH" && bunx @convex-dev/auth 2>&1 | grep -E '(Successfully set|already)'
+cd "$WORKTREE_PATH" && bunx @convex-dev/auth
 
 # Forward OAuth credentials from main repo's .dev-ports (if present)
 if [ -n "${AUTH_GITHUB_ID:-}" ] && [ -n "${AUTH_GITHUB_SECRET:-}" ]; then
