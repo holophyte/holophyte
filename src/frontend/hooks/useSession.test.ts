@@ -751,6 +751,67 @@ describe('useSession', () => {
     });
   });
 
+  describe('persistenceWarning', () => {
+    it('sets persistenceWarning when a warning message is received', () => {
+      const { result } = renderSession('session-1');
+      act(() =>
+        ws()._simulateMessage({
+          type: 'warning',
+          sessionId: 'session-1',
+          message:
+            'Failed to persist session data to database — events may be lost on refresh',
+        }),
+      );
+      expect(result.current.persistenceWarning).toBe(
+        'Failed to persist session data to database — events may be lost on refresh',
+      );
+    });
+
+    it('starts as null before any warning is received', () => {
+      const { result } = renderSession('session-1');
+      expect(result.current.persistenceWarning).toBeNull();
+    });
+
+    it('resets persistenceWarning to null when sessionId changes', () => {
+      let id = 'session-a';
+      const { result, rerender } = renderHook(() => useSession(id));
+
+      act(() =>
+        ws()._simulateMessage({
+          type: 'warning',
+          sessionId: 'session-a',
+          message: 'Something failed',
+        }),
+      );
+      expect(result.current.persistenceWarning).toBe('Something failed');
+
+      id = 'session-b';
+      rerender();
+      expect(result.current.persistenceWarning).toBeNull();
+    });
+
+    it('updates persistenceWarning with the latest warning message', () => {
+      const { result } = renderSession('session-1');
+      act(() =>
+        ws()._simulateMessage({
+          type: 'warning',
+          sessionId: 'session-1',
+          message: 'First warning',
+        }),
+      );
+      expect(result.current.persistenceWarning).toBe('First warning');
+
+      act(() =>
+        ws()._simulateMessage({
+          type: 'warning',
+          sessionId: 'session-1',
+          message: 'Second warning',
+        }),
+      );
+      expect(result.current.persistenceWarning).toBe('Second warning');
+    });
+  });
+
   describe('sendMessage()', () => {
     it('calls the Convex sessionMessages.send mutation', async () => {
       mockSendSessionMessage.mockResolvedValue(undefined);

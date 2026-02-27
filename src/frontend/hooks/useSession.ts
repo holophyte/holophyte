@@ -65,6 +65,11 @@ export interface UseSessionReturn {
    */
   messageQueued: boolean;
   /**
+   * Non-null when the server reports that session data could not be persisted
+   * to the database. Displayed as a warning banner in the UI.
+   */
+  persistenceWarning: string | null;
+  /**
    * The SDK session ID from Convex, used to resume idle sessions.
    * Available once the session has been initialized by the SDK.
    */
@@ -152,6 +157,9 @@ export function useSession(sessionId: string | null): UseSessionReturn {
   );
   const [isConnected, setIsConnected] = useState(false);
   const [messageQueued, setMessageQueued] = useState(false);
+  const [persistenceWarning, setPersistenceWarning] = useState<string | null>(
+    null,
+  );
 
   // Bumping this forces the WS effect to reconnect (used after resume).
   const [wsConnectKey, setWsConnectKey] = useState(0);
@@ -249,6 +257,7 @@ export function useSession(sessionId: string | null): UseSessionReturn {
     setSessionStatus(null);
     setIsConnected(false);
     setMessageQueued(false);
+    setPersistenceWarning(null);
 
     let disposed = false;
     let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
@@ -300,6 +309,8 @@ export function useSession(sessionId: string | null): UseSessionReturn {
           if (msg.status !== 'running') {
             setMessageQueued(false);
           }
+        } else if (msg.type === 'warning') {
+          setPersistenceWarning(msg.message);
         } else if (msg.type === 'error') {
           // If the server says "Session not found", the session process died
           // before it could update Convex (e.g. server restart). In that case
@@ -378,6 +389,7 @@ export function useSession(sessionId: string | null): UseSessionReturn {
     isConnected,
     companionOnline,
     messageQueued,
+    persistenceWarning,
     sdkSessionId: sessionRecord?.sdkSessionId,
     reconnectWs,
     approve,

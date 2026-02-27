@@ -7,6 +7,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 DEV_PORTS="$REPO_ROOT/.dev-ports"
 ENV_LOCAL="$REPO_ROOT/.env.local"
+ENV_FILE="$REPO_ROOT/.env"
 
 if [ ! -f "$DEV_PORTS" ]; then
   echo "Error: .dev-ports file not found at $DEV_PORTS"
@@ -56,6 +57,37 @@ elif [ "$ENV_CONVEX_URL" != "$EXPECTED_URL" ]; then
   echo "Detected stale deployment (CONVEX_URL=$ENV_CONVEX_URL, expected=$EXPECTED_URL)"
   NEEDS_RECONFIGURE=true
 fi
+
+# ── Ensure INTERNAL_API_SECRET is in .env (for the Bun server) ──────
+if [ -f "$ENV_FILE" ]; then
+  EXISTING_SECRET=$(grep '^INTERNAL_API_SECRET=' "$ENV_FILE" | cut -d= -f2 || true)
+fi
+if [ -z "${EXISTING_SECRET:-}" ]; then
+  INTERNAL_API_SECRET=$(openssl rand -hex 32)
+  echo "INTERNAL_API_SECRET=$INTERNAL_API_SECRET" >> "$ENV_FILE"
+  echo "Generated INTERNAL_API_SECRET and added to .env"
+else
+  INTERNAL_API_SECRET="$EXISTING_SECRET"
+fi
+
+# After the Convex backend is up, set INTERNAL_API_SECRET on it in the background.
+# This runs concurrently with `convex dev --local` (which blocks in the foreground).
+set_convex_secret() {
+  for i in $(seq 1 30); do
+    if curl -sf "http://127.0.0.1:$CONVEX_CLOUD_PORT" >/dev/null 2>&1; then
+      # Check if already set on Convex
+      CONVEX_SECRET=$(cd "$REPO_ROOT" && bunx convex env get INTERNAL_API_SECRET 2>/dev/null || true)
+      if [ -z "$CONVEX_SECRET" ]; then
+        cd "$REPO_ROOT" && bunx convex env set INTERNAL_API_SECRET "$INTERNAL_API_SECRET"
+        echo "Set INTERNAL_API_SECRET on local Convex deployment"
+      fi
+      return
+    fi
+    sleep 1
+  done
+  echo "Warning: Timed out waiting for Convex backend — INTERNAL_API_SECRET not set on deployment"
+}
+set_convex_secret &
 
 if [ "$NEEDS_RECONFIGURE" = true ]; then
   if [ -z "${CONVEX_TEAM:-}" ] || [ -z "${CONVEX_PROJECT:-}" ]; then

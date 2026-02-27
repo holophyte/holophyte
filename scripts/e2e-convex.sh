@@ -152,10 +152,15 @@ start_e2e_convex() {
   # Set anonymous auth for E2E
   cd "$REPO_ROOT" && bunx convex env set ALLOW_ANONYMOUS_AUTH 1
 
+  # Generate and set INTERNAL_API_SECRET for companion ↔ Convex communication
+  E2E_INTERNAL_API_SECRET=$(openssl rand -hex 32)
+  cd "$REPO_ROOT" && bunx convex env set INTERNAL_API_SECRET "$E2E_INTERNAL_API_SECRET"
+
   # Write port config for test-e2e.sh / playwright.config.ts
   cat > "$E2E_PORTS_FILE" <<EOF
 E2E_CONVEX_CLOUD_PORT=$cloud_port
 E2E_CONVEX_SITE_PORT=$site_port
+E2E_INTERNAL_API_SECRET=$E2E_INTERNAL_API_SECRET
 EOF
 
   echo "Ephemeral Convex ready (cloud=$cloud_port, site=$site_port, PID=$bg_pid)"

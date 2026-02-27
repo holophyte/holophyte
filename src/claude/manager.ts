@@ -22,7 +22,8 @@ export type WsServerMessage =
       input: Record<string, unknown>;
     }
   | { type: 'status'; sessionId: string; status: SessionStatus }
-  | { type: 'error'; sessionId: string; message: string };
+  | { type: 'error'; sessionId: string; message: string }
+  | { type: 'warning'; sessionId: string; message: string };
 
 export type SessionStatus = 'running' | 'waiting_input' | 'idle' | 'failed';
 
@@ -70,6 +71,8 @@ interface Session {
   model?: string;
   /** The live SDK query object — used to inject follow-up messages. */
   sdkQuery?: Query;
+  /** Whether a persistence warning has already been sent to subscribers. */
+  persistenceWarned?: boolean;
 }
 
 const sessions = new Map<string, Session>();
@@ -169,6 +172,18 @@ function broadcast(session: Session, msg: WsServerMessage): void {
   }
 }
 
+/** Send a persistence warning to subscribers — at most once per session. */
+function warnPersistence(session: Session, sessionId: string): void {
+  if (session.persistenceWarned) return;
+  session.persistenceWarned = true;
+  broadcast(session, {
+    type: 'warning',
+    sessionId,
+    message:
+      'Failed to persist session data to database — events may be lost on refresh',
+  });
+}
+
 function shouldAutoApprove(
   session: Session,
   toolName: string,
@@ -215,6 +230,7 @@ async function flushEvents(session: Session): Promise<void> {
     // Re-add events to buffer on failure so they're not lost
     // Don't decrement batchIndex to avoid duplicate batch indices
     session.eventBuffer.unshift(...events);
+    warnPersistence(session, session.convexSessionId);
   } finally {
     session.flushing = false;
   }
@@ -476,6 +492,7 @@ async function consumeIterator(
           );
         } catch (err) {
           console.error('Failed to persist SDK session ID:', err);
+          warnPersistence(session, sessionId);
         }
       }
 
@@ -538,6 +555,7 @@ async function consumeIterator(
       });
     } catch (err) {
       console.error('Failed to update session status in Convex:', err);
+      warnPersistence(session, sessionId);
     }
 
     // Notify subscribers of final status

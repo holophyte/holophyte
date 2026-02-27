@@ -688,4 +688,153 @@ describe('claude/manager (SDK-based)', () => {
       expect(pendingResult?.message).toMatch(/session/i);
     });
   });
+
+  // ---------------------------------------------------------------------------
+  // warnPersistence / persistenceWarned
+  // ---------------------------------------------------------------------------
+
+  describe('warnPersistence (via flushEvents failure)', () => {
+    it('broadcasts a warning message when flushEvents fails', async () => {
+      // Make callConvexInternal throw for the event flush but succeed for
+      // other internal calls (updateName, updateStatus) by targeting the path.
+      const fetchSpy = vi
+        .spyOn(globalThis, 'fetch')
+        .mockImplementation(async (input: RequestInfo | URL) => {
+          const url = typeof input === 'string' ? input : input.toString();
+          if (url.includes('sessionEvents/insertBatch')) {
+            throw new Error('Network error');
+          }
+          // Other internal calls succeed
+          return new Response('{}', { status: 200 });
+        });
+
+      // Provide a mock iterator that yields one event so the buffer is non-empty
+      // when flushEvents is called in the finally block.
+      const mockIter = createMockIterator([
+        {
+          type: 'result',
+          subtype: 'success',
+          is_error: false,
+          result: 'Done',
+          session_id: 'sdk-flush-warn',
+        },
+      ]);
+      vi.mocked(mockSdkQuery).mockReturnValue(mockIter as never);
+
+      const { startSession, subscribe } = await import('./manager');
+
+      const warnings: Array<{ type: string; message: string }> = [];
+
+      await startSession({
+        sessionId: 'warn-flush-test',
+        repoPath: '/tmp',
+        prompt: 'test',
+      });
+
+      // Subscribe immediately — session is in memory, consumeIterator is still running
+      subscribe('warn-flush-test', (msg) => {
+        if (msg.type === 'warning') {
+          warnings.push({ type: msg.type, message: msg.message });
+        }
+      });
+
+      // Wait for consumeIterator to complete and the final flushEvents to fire
+      await new Promise((r) => setTimeout(r, 200));
+
+      fetchSpy.mockRestore();
+
+      expect(warnings).toHaveLength(1);
+      expect(warnings[0]?.message).toMatch(/persist/i);
+    });
+
+    it('sends the warning only once per session even if multiple flushes fail', async () => {
+      // Fail every insertBatch call
+      const fetchSpy = vi
+        .spyOn(globalThis, 'fetch')
+        .mockImplementation(async (input: RequestInfo | URL) => {
+          const url = typeof input === 'string' ? input : input.toString();
+          if (url.includes('sessionEvents/insertBatch')) {
+            throw new Error('Network error');
+          }
+          return new Response('{}', { status: 200 });
+        });
+
+      // Use a large enough event stream to trigger multiple buffer flushes.
+      // We do this by providing many events so the buffer fills up.
+      const manyEvents = Array.from({ length: 5 }, (_, i) => ({
+        type: 'text',
+        text: `Message ${i}`,
+      }));
+
+      const mockIter = createMockIterator(manyEvents);
+      vi.mocked(mockSdkQuery).mockReturnValue(mockIter as never);
+
+      const { startSession, subscribe } = await import('./manager');
+
+      const warnings: string[] = [];
+
+      await startSession({
+        sessionId: 'warn-once-test',
+        repoPath: '/tmp',
+        prompt: 'test',
+      });
+
+      subscribe('warn-once-test', (msg) => {
+        if (msg.type === 'warning') warnings.push(msg.message);
+      });
+
+      await new Promise((r) => setTimeout(r, 150));
+
+      fetchSpy.mockRestore();
+
+      // Regardless of how many flushes failed, only one warning should be sent
+      expect(warnings).toHaveLength(1);
+    });
+
+    it('broadcasts warning when updateStatus Convex call fails', async () => {
+      // Fail only the updateStatus call so we test that specific code path
+      const fetchSpy = vi
+        .spyOn(globalThis, 'fetch')
+        .mockImplementation(async (input: RequestInfo | URL) => {
+          const url = typeof input === 'string' ? input : input.toString();
+          if (url.includes('sessions/updateStatus')) {
+            throw new Error('Status update failed');
+          }
+          // insertBatch and updateName succeed — no prior warning should have fired
+          return new Response('{}', { status: 200 });
+        });
+
+      const mockIter = createMockIterator([
+        {
+          type: 'result',
+          subtype: 'success',
+          is_error: false,
+          result: 'Done',
+          session_id: 'sdk-status-warn',
+        },
+      ]);
+      vi.mocked(mockSdkQuery).mockReturnValue(mockIter as never);
+
+      const { startSession, subscribe } = await import('./manager');
+
+      const warnings: string[] = [];
+
+      await startSession({
+        sessionId: 'warn-status-test',
+        repoPath: '/tmp',
+        prompt: 'test',
+      });
+
+      subscribe('warn-status-test', (msg) => {
+        if (msg.type === 'warning') warnings.push(msg.message);
+      });
+
+      await new Promise((r) => setTimeout(r, 150));
+
+      fetchSpy.mockRestore();
+
+      expect(warnings).toHaveLength(1);
+      expect(warnings[0]).toMatch(/persist/i);
+    });
+  });
 });
