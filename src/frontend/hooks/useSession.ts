@@ -250,72 +250,94 @@ export function useSession(sessionId: string | null): UseSessionReturn {
     setIsConnected(false);
     setMessageQueued(false);
 
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    let ws: WebSocket;
-    try {
-      ws = new WebSocket(
-        `${protocol}//${window.location.host}/ws/session/${sessionId}`,
-      );
-    } catch {
-      // WebSocket constructor can throw if the URL is invalid or blocked
-      return;
-    }
+    let disposed = false;
+    let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+    const RECONNECT_DELAY_MS = 2000;
+    const MAX_RECONNECT_ATTEMPTS = 15;
+    let reconnectAttempts = 0;
 
-    wsRef.current = ws;
+    function connect() {
+      if (disposed) return;
 
-    ws.onopen = () => {
-      setIsConnected(true);
-    };
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      let ws: WebSocket;
+      try {
+        ws = new WebSocket(
+          `${protocol}//${window.location.host}/ws/session/${sessionId}`,
+        );
+      } catch {
+        // WebSocket constructor can throw if the URL is invalid or blocked
+        return;
+      }
 
-    ws.onmessage = (rawEvent) => {
-      const msg = tryParseWsMessage(rawEvent.data as string);
-      if (!msg) return;
+      wsRef.current = ws;
 
-      if (msg.type === 'event') {
-        setWsEvents((prev) => [...prev, msg.event]);
-      } else if (msg.type === 'permission') {
-        setPendingApprovals((prev) => {
-          // Avoid duplicates on reconnect replay
-          if (prev.some((a) => a.requestId === msg.requestId)) return prev;
-          return [
-            ...prev,
-            { requestId: msg.requestId, tool: msg.tool, input: msg.input },
-          ];
-        });
-        // No direct setSessionStatus here — derivedStatus computes waiting_input
-        // from unresolved pendingApprovals automatically.
-      } else if (msg.type === 'status') {
-        setSessionStatus(msg.status as SessionStatus);
-        // Clear queued indicator once the session moves past running
-        if (msg.status !== 'running') {
+      ws.onopen = () => {
+        setIsConnected(true);
+        reconnectAttempts = 0; // Reset on successful connection
+      };
+
+      ws.onmessage = (rawEvent) => {
+        const msg = tryParseWsMessage(rawEvent.data as string);
+        if (!msg) return;
+
+        if (msg.type === 'event') {
+          setWsEvents((prev) => [...prev, msg.event]);
+        } else if (msg.type === 'permission') {
+          setPendingApprovals((prev) => {
+            // Avoid duplicates on reconnect replay
+            if (prev.some((a) => a.requestId === msg.requestId)) return prev;
+            return [
+              ...prev,
+              { requestId: msg.requestId, tool: msg.tool, input: msg.input },
+            ];
+          });
+          // No direct setSessionStatus here — derivedStatus computes waiting_input
+          // from unresolved pendingApprovals automatically.
+        } else if (msg.type === 'status') {
+          setSessionStatus(msg.status as SessionStatus);
+          // Clear queued indicator once the session moves past running
+          if (msg.status !== 'running') {
+            setMessageQueued(false);
+          }
+        } else if (msg.type === 'error') {
+          // If the server says "Session not found", the session process died
+          // before it could update Convex (e.g. server restart). In that case
+          // the session is stale-running rather than truly failed — treat it as
+          // idle so the user can resume it. For all other errors, mark failed.
+          if (msg.message === 'Session not found') {
+            setSessionStatus('idle');
+          } else {
+            setSessionStatus('failed');
+          }
           setMessageQueued(false);
         }
-      } else if (msg.type === 'error') {
-        // If the server says "Session not found", the session process died
-        // before it could update Convex (e.g. server restart). In that case
-        // the session is stale-running rather than truly failed — treat it as
-        // idle so the user can resume it. For all other errors, mark failed.
-        if (msg.message === 'Session not found') {
-          setSessionStatus('idle');
-        } else {
-          setSessionStatus('failed');
+      };
+
+      ws.onerror = () => {
+        // Companion offline — WebSocket failed to connect. Status will be
+        // derived from the Convex record instead.
+        setIsConnected(false);
+      };
+
+      ws.onclose = () => {
+        setIsConnected(false);
+        wsRef.current = null;
+
+        // Auto-reconnect unless we've been disposed or hit the limit
+        if (!disposed && reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
+          reconnectAttempts++;
+          reconnectTimer = setTimeout(connect, RECONNECT_DELAY_MS);
         }
-        setMessageQueued(false);
-      }
-    };
+      };
+    }
 
-    ws.onerror = () => {
-      // Companion offline — WebSocket failed to connect. Status will be
-      // derived from the Convex record instead.
-      setIsConnected(false);
-    };
-
-    ws.onclose = () => {
-      setIsConnected(false);
-    };
+    connect();
 
     return () => {
-      ws.close();
+      disposed = true;
+      if (reconnectTimer) clearTimeout(reconnectTimer);
+      wsRef.current?.close();
       wsRef.current = null;
     };
   }, [sessionId, wsConnectKey]);
