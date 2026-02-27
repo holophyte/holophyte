@@ -112,21 +112,33 @@ const SAFE_TOOLS = new Set([
 ]);
 
 /** Call a Convex HTTP action endpoint with Bearer auth. */
-function getConvexConfig() {
+let managerConfigWarningLogged = false;
+function getConvexConfig(): { baseUrl: string; secret: string } | null {
   const baseUrl = process.env.CONVEX_SITE_URL;
-  if (!baseUrl)
-    throw new Error('CONVEX_SITE_URL environment variable is not set');
   const secret = process.env.INTERNAL_API_SECRET;
-  if (!secret)
-    throw new Error('INTERNAL_API_SECRET environment variable is not set');
+  if (!baseUrl || !secret) {
+    if (!managerConfigWarningLogged) {
+      const missing = [
+        !baseUrl && 'CONVEX_SITE_URL',
+        !secret && 'INTERNAL_API_SECRET',
+      ].filter(Boolean);
+      console.error(
+        `WARNING: ${missing.join(', ')} not set — session data will not be persisted to Convex`,
+      );
+      managerConfigWarningLogged = true;
+    }
+    return null;
+  }
   return { baseUrl, secret };
 }
 
 async function callConvexInternal(
   path: string,
   body: Record<string, unknown>,
-): Promise<void> {
-  const { baseUrl, secret } = getConvexConfig();
+): Promise<boolean> {
+  const config = getConvexConfig();
+  if (!config) return false;
+  const { baseUrl, secret } = config;
 
   const res = await fetch(`${baseUrl}${path}`, {
     method: 'POST',
@@ -141,13 +153,16 @@ async function callConvexInternal(
     const text = await res.text();
     throw new Error(`Convex HTTP action failed (${res.status}): ${text}`);
   }
+  return true;
 }
 
 async function queryConvexInternal<T>(
   path: string,
   body: Record<string, unknown>,
-): Promise<T> {
-  const { baseUrl, secret } = getConvexConfig();
+): Promise<T | null> {
+  const config = getConvexConfig();
+  if (!config) return null;
+  const { baseUrl, secret } = config;
 
   const res = await fetch(`${baseUrl}${path}`, {
     method: 'POST',
@@ -335,10 +350,11 @@ export async function startSession(opts: {
   let initialBatchIndex = 0;
   if (opts.resumeSdkSessionId) {
     try {
-      const { nextBatchIndex } = await queryConvexInternal<{
+      const result = await queryConvexInternal<{
         nextBatchIndex: number;
       }>('/api/internal/sessionEvents/getNextBatchIndex', { sessionId });
-      initialBatchIndex = nextBatchIndex;
+      if (!result) throw new Error('Convex not configured');
+      initialBatchIndex = result.nextBatchIndex;
     } catch (err) {
       console.error('Failed to fetch next batch index:', err);
       throw new Error('Cannot resume session: failed to determine batch index');
@@ -370,6 +386,7 @@ export async function startSession(opts: {
     });
   } catch (err) {
     console.error('Failed to set session name:', err);
+    warnPersistence(session, sessionId);
   }
 
   // Periodic event flush to Convex
@@ -517,6 +534,7 @@ async function consumeIterator(
           id: session.convexSessionId,
         }).catch((err) => {
           console.error('Failed to update session activity:', err);
+          warnPersistence(session, sessionId);
         });
       }
     }

@@ -695,6 +695,11 @@ describe('claude/manager (SDK-based)', () => {
 
   describe('warnPersistence (via flushEvents failure)', () => {
     it('broadcasts a warning message when flushEvents fails', async () => {
+      // Set env vars so getConvexConfig() returns config (not null),
+      // allowing fetch to be called and our mock to intercept it.
+      process.env.CONVEX_SITE_URL = 'http://localhost:3211';
+      process.env.INTERNAL_API_SECRET = 'test-secret';
+
       // Make callConvexInternal throw for the event flush but succeed for
       // other internal calls (updateName, updateStatus) by targeting the path.
       const fetchSpy = vi
@@ -742,12 +747,17 @@ describe('claude/manager (SDK-based)', () => {
       await new Promise((r) => setTimeout(r, 200));
 
       fetchSpy.mockRestore();
+      delete process.env.CONVEX_SITE_URL;
+      delete process.env.INTERNAL_API_SECRET;
 
       expect(warnings).toHaveLength(1);
       expect(warnings[0]?.message).toMatch(/persist/i);
     });
 
     it('sends the warning only once per session even if multiple flushes fail', async () => {
+      process.env.CONVEX_SITE_URL = 'http://localhost:3211';
+      process.env.INTERNAL_API_SECRET = 'test-secret';
+
       // Fail every insertBatch call
       const fetchSpy = vi
         .spyOn(globalThis, 'fetch')
@@ -786,12 +796,17 @@ describe('claude/manager (SDK-based)', () => {
       await new Promise((r) => setTimeout(r, 150));
 
       fetchSpy.mockRestore();
+      delete process.env.CONVEX_SITE_URL;
+      delete process.env.INTERNAL_API_SECRET;
 
       // Regardless of how many flushes failed, only one warning should be sent
       expect(warnings).toHaveLength(1);
     });
 
     it('broadcasts warning when updateStatus Convex call fails', async () => {
+      process.env.CONVEX_SITE_URL = 'http://localhost:3211';
+      process.env.INTERNAL_API_SECRET = 'test-secret';
+
       // Fail only the updateStatus call so we test that specific code path
       const fetchSpy = vi
         .spyOn(globalThis, 'fetch')
@@ -832,6 +847,8 @@ describe('claude/manager (SDK-based)', () => {
       await new Promise((r) => setTimeout(r, 150));
 
       fetchSpy.mockRestore();
+      delete process.env.CONVEX_SITE_URL;
+      delete process.env.INTERNAL_API_SECRET;
 
       expect(warnings).toHaveLength(1);
       expect(warnings[0]).toMatch(/persist/i);

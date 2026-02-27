@@ -59,6 +59,7 @@ elif [ "$ENV_CONVEX_URL" != "$EXPECTED_URL" ]; then
 fi
 
 # ── Ensure INTERNAL_API_SECRET is in .env (for the Bun server) ──────
+EXISTING_SECRET=""
 if [ -f "$ENV_FILE" ]; then
   EXISTING_SECRET=$(grep '^INTERNAL_API_SECRET=' "$ENV_FILE" | cut -d= -f2 || true)
 fi
