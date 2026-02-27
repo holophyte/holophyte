@@ -22,7 +22,8 @@ export type WsServerMessage =
       input: Record<string, unknown>;
     }
   | { type: 'status'; sessionId: string; status: SessionStatus }
-  | { type: 'error'; sessionId: string; message: string };
+  | { type: 'error'; sessionId: string; message: string }
+  | { type: 'warning'; sessionId: string; message: string };
 
 export type SessionStatus = 'running' | 'waiting_input' | 'idle' | 'failed';
 
@@ -70,6 +71,8 @@ interface Session {
   model?: string;
   /** The live SDK query object — used to inject follow-up messages. */
   sdkQuery?: Query;
+  /** Whether a persistence warning has already been sent to subscribers. */
+  persistenceWarned?: boolean;
 }
 
 const sessions = new Map<string, Session>();
@@ -109,21 +112,33 @@ const SAFE_TOOLS = new Set([
 ]);
 
 /** Call a Convex HTTP action endpoint with Bearer auth. */
-function getConvexConfig() {
+let managerConfigWarningLogged = false;
+function getConvexConfig(): { baseUrl: string; secret: string } | null {
   const baseUrl = process.env.CONVEX_SITE_URL;
-  if (!baseUrl)
-    throw new Error('CONVEX_SITE_URL environment variable is not set');
   const secret = process.env.INTERNAL_API_SECRET;
-  if (!secret)
-    throw new Error('INTERNAL_API_SECRET environment variable is not set');
+  if (!baseUrl || !secret) {
+    if (!managerConfigWarningLogged) {
+      const missing = [
+        !baseUrl && 'CONVEX_SITE_URL',
+        !secret && 'INTERNAL_API_SECRET',
+      ].filter(Boolean);
+      console.error(
+        `WARNING: ${missing.join(', ')} not set — session data will not be persisted to Convex`,
+      );
+      managerConfigWarningLogged = true;
+    }
+    return null;
+  }
   return { baseUrl, secret };
 }
 
 async function callConvexInternal(
   path: string,
   body: Record<string, unknown>,
-): Promise<void> {
-  const { baseUrl, secret } = getConvexConfig();
+): Promise<boolean> {
+  const config = getConvexConfig();
+  if (!config) return false;
+  const { baseUrl, secret } = config;
 
   const res = await fetch(`${baseUrl}${path}`, {
     method: 'POST',
@@ -138,13 +153,16 @@ async function callConvexInternal(
     const text = await res.text();
     throw new Error(`Convex HTTP action failed (${res.status}): ${text}`);
   }
+  return true;
 }
 
 async function queryConvexInternal<T>(
   path: string,
   body: Record<string, unknown>,
-): Promise<T> {
-  const { baseUrl, secret } = getConvexConfig();
+): Promise<T | null> {
+  const config = getConvexConfig();
+  if (!config) return null;
+  const { baseUrl, secret } = config;
 
   const res = await fetch(`${baseUrl}${path}`, {
     method: 'POST',
@@ -167,6 +185,22 @@ function broadcast(session: Session, msg: WsServerMessage): void {
   for (const cb of session.subscribers) {
     cb(msg);
   }
+}
+
+/** Send a persistence warning to subscribers — at most once per session. */
+function warnPersistence(session: Session, sessionId: string): void {
+  if (session.persistenceWarned) return;
+  // Only mark as warned if there are subscribers to receive the message —
+  // otherwise the flag would be set before any client connects, and later
+  // failures (when clients ARE connected) would silently skip the warning.
+  if (session.subscribers.size === 0) return;
+  session.persistenceWarned = true;
+  broadcast(session, {
+    type: 'warning',
+    sessionId,
+    message:
+      'Failed to persist session data to database — events may be lost on refresh',
+  });
 }
 
 function shouldAutoApprove(
@@ -205,16 +239,24 @@ async function flushEvents(session: Session): Promise<void> {
   const batchIndex = session.batchIndex++;
 
   try {
-    await callConvexInternal('/api/internal/sessionEvents/insertBatch', {
-      sessionId: session.convexSessionId,
-      events,
-      batchIndex,
-    });
+    const persisted = await callConvexInternal(
+      '/api/internal/sessionEvents/insertBatch',
+      {
+        sessionId: session.convexSessionId,
+        events,
+        batchIndex,
+      },
+    );
+    if (!persisted) {
+      session.eventBuffer.unshift(...events);
+      warnPersistence(session, session.convexSessionId);
+    }
   } catch (err) {
     console.error('Failed to flush events to Convex:', err);
     // Re-add events to buffer on failure so they're not lost
     // Don't decrement batchIndex to avoid duplicate batch indices
     session.eventBuffer.unshift(...events);
+    warnPersistence(session, session.convexSessionId);
   } finally {
     session.flushing = false;
   }
@@ -319,10 +361,11 @@ export async function startSession(opts: {
   let initialBatchIndex = 0;
   if (opts.resumeSdkSessionId) {
     try {
-      const { nextBatchIndex } = await queryConvexInternal<{
+      const result = await queryConvexInternal<{
         nextBatchIndex: number;
       }>('/api/internal/sessionEvents/getNextBatchIndex', { sessionId });
-      initialBatchIndex = nextBatchIndex;
+      if (!result) throw new Error('Convex not configured');
+      initialBatchIndex = result.nextBatchIndex;
     } catch (err) {
       console.error('Failed to fetch next batch index:', err);
       throw new Error('Cannot resume session: failed to determine batch index');
@@ -348,12 +391,19 @@ export async function startSession(opts: {
   const sessionName =
     opts.prompt.slice(0, 30).trim() + (opts.prompt.length > 30 ? '…' : '');
   try {
-    await callConvexInternal('/api/internal/sessions/updateName', {
-      id: sessionId,
-      name: sessionName,
-    });
+    const persisted = await callConvexInternal(
+      '/api/internal/sessions/updateName',
+      {
+        id: sessionId,
+        name: sessionName,
+      },
+    );
+    if (!persisted) {
+      warnPersistence(session, sessionId);
+    }
   } catch (err) {
     console.error('Failed to set session name:', err);
+    warnPersistence(session, sessionId);
   }
 
   // Periodic event flush to Convex
@@ -465,7 +515,7 @@ async function consumeIterator(
         );
 
         try {
-          await callConvexInternal(
+          const persisted = await callConvexInternal(
             '/api/internal/sessions/updateSdkSessionId',
             {
               id: session.convexSessionId,
@@ -474,8 +524,12 @@ async function consumeIterator(
               permissionMode: session.permissionMode,
             },
           );
+          if (!persisted) {
+            warnPersistence(session, sessionId);
+          }
         } catch (err) {
           console.error('Failed to persist SDK session ID:', err);
+          warnPersistence(session, sessionId);
         }
       }
 
@@ -498,9 +552,16 @@ async function consumeIterator(
       if (event.type === 'result' || event.type === 'assistant') {
         callConvexInternal('/api/internal/sessions/updateActivity', {
           id: session.convexSessionId,
-        }).catch((err) => {
-          console.error('Failed to update session activity:', err);
-        });
+        })
+          .then((persisted) => {
+            if (!persisted) {
+              warnPersistence(session, sessionId);
+            }
+          })
+          .catch((err) => {
+            console.error('Failed to update session activity:', err);
+            warnPersistence(session, sessionId);
+          });
       }
     }
   } catch (err) {
@@ -532,12 +593,19 @@ async function consumeIterator(
 
     // Update session status in Convex
     try {
-      await callConvexInternal('/api/internal/sessions/updateStatus', {
-        id: session.convexSessionId,
-        status: finalStatus,
-      });
+      const persisted = await callConvexInternal(
+        '/api/internal/sessions/updateStatus',
+        {
+          id: session.convexSessionId,
+          status: finalStatus,
+        },
+      );
+      if (!persisted) {
+        warnPersistence(session, sessionId);
+      }
     } catch (err) {
       console.error('Failed to update session status in Convex:', err);
+      warnPersistence(session, sessionId);
     }
 
     // Notify subscribers of final status

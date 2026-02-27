@@ -70,6 +70,9 @@ export default defineConfig({
       ...(convexSitePort && {
         CONVEX_SITE_URL: `http://127.0.0.1:${convexSitePort}`,
       }),
+      ...(process.env.E2E_INTERNAL_API_SECRET && {
+        INTERNAL_API_SECRET: process.env.E2E_INTERNAL_API_SECRET,
+      }),
     },
   },
 });

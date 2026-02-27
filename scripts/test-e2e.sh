@@ -24,6 +24,7 @@ source "$REPO_ROOT/.e2e-convex-ports"
 # Export for playwright.config.ts to pick up
 export E2E_CONVEX_CLOUD_PORT
 export E2E_CONVEX_SITE_PORT
+export E2E_INTERNAL_API_SECRET
 
 # Run Playwright
 cd "$REPO_ROOT" && bunx playwright test "$@"

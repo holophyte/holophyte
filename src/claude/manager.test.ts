@@ -688,4 +688,208 @@ describe('claude/manager (SDK-based)', () => {
       expect(pendingResult?.message).toMatch(/session/i);
     });
   });
+
+  // ---------------------------------------------------------------------------
+  // warnPersistence / persistenceWarned
+  // ---------------------------------------------------------------------------
+
+  describe('warnPersistence (via flushEvents failure)', () => {
+    it('broadcasts a warning message when flushEvents fails', async () => {
+      // Set env vars so getConvexConfig() returns config (not null),
+      // allowing fetch to be called and our mock to intercept it.
+      process.env.CONVEX_SITE_URL = 'http://localhost:3211';
+      process.env.INTERNAL_API_SECRET = 'test-secret';
+
+      // Make callConvexInternal throw for the event flush but succeed for
+      // other internal calls (updateName, updateStatus) by targeting the path.
+      const fetchSpy = vi
+        .spyOn(globalThis, 'fetch')
+        .mockImplementation(async (input: RequestInfo | URL) => {
+          const url = typeof input === 'string' ? input : input.toString();
+          if (url.includes('sessionEvents/insertBatch')) {
+            throw new Error('Network error');
+          }
+          // Other internal calls succeed
+          return new Response('{}', { status: 200 });
+        });
+
+      // Provide a mock iterator that yields one event so the buffer is non-empty
+      // when flushEvents is called in the finally block.
+      const mockIter = createMockIterator([
+        {
+          type: 'result',
+          subtype: 'success',
+          is_error: false,
+          result: 'Done',
+          session_id: 'sdk-flush-warn',
+        },
+      ]);
+      vi.mocked(mockSdkQuery).mockReturnValue(mockIter as never);
+
+      const { startSession, subscribe } = await import('./manager');
+
+      const warnings: Array<{ type: string; message: string }> = [];
+
+      await startSession({
+        sessionId: 'warn-flush-test',
+        repoPath: '/tmp',
+        prompt: 'test',
+      });
+
+      // Subscribe immediately — session is in memory, consumeIterator is still running
+      subscribe('warn-flush-test', (msg) => {
+        if (msg.type === 'warning') {
+          warnings.push({ type: msg.type, message: msg.message });
+        }
+      });
+
+      // Wait for consumeIterator to complete and the final flushEvents to fire
+      await new Promise((r) => setTimeout(r, 200));
+
+      fetchSpy.mockRestore();
+      delete process.env.CONVEX_SITE_URL;
+      delete process.env.INTERNAL_API_SECRET;
+
+      expect(warnings).toHaveLength(1);
+      expect(warnings[0]?.message).toMatch(/persist/i);
+    });
+
+    it('sends the warning only once per session even if multiple flushes fail', async () => {
+      process.env.CONVEX_SITE_URL = 'http://localhost:3211';
+      process.env.INTERNAL_API_SECRET = 'test-secret';
+
+      // Fail every insertBatch call
+      const fetchSpy = vi
+        .spyOn(globalThis, 'fetch')
+        .mockImplementation(async (input: RequestInfo | URL) => {
+          const url = typeof input === 'string' ? input : input.toString();
+          if (url.includes('sessionEvents/insertBatch')) {
+            throw new Error('Network error');
+          }
+          return new Response('{}', { status: 200 });
+        });
+
+      // Use a large enough event stream to trigger multiple buffer flushes.
+      // We do this by providing many events so the buffer fills up.
+      const manyEvents = Array.from({ length: 5 }, (_, i) => ({
+        type: 'text',
+        text: `Message ${i}`,
+      }));
+
+      const mockIter = createMockIterator(manyEvents);
+      vi.mocked(mockSdkQuery).mockReturnValue(mockIter as never);
+
+      const { startSession, subscribe } = await import('./manager');
+
+      const warnings: string[] = [];
+
+      await startSession({
+        sessionId: 'warn-once-test',
+        repoPath: '/tmp',
+        prompt: 'test',
+      });
+
+      subscribe('warn-once-test', (msg) => {
+        if (msg.type === 'warning') warnings.push(msg.message);
+      });
+
+      await new Promise((r) => setTimeout(r, 150));
+
+      fetchSpy.mockRestore();
+      delete process.env.CONVEX_SITE_URL;
+      delete process.env.INTERNAL_API_SECRET;
+
+      // Regardless of how many flushes failed, only one warning should be sent
+      expect(warnings).toHaveLength(1);
+    });
+
+    it('broadcasts warning when updateStatus Convex call fails', async () => {
+      process.env.CONVEX_SITE_URL = 'http://localhost:3211';
+      process.env.INTERNAL_API_SECRET = 'test-secret';
+
+      // Fail only the updateStatus call so we test that specific code path
+      const fetchSpy = vi
+        .spyOn(globalThis, 'fetch')
+        .mockImplementation(async (input: RequestInfo | URL) => {
+          const url = typeof input === 'string' ? input : input.toString();
+          if (url.includes('sessions/updateStatus')) {
+            throw new Error('Status update failed');
+          }
+          // insertBatch and updateName succeed — no prior warning should have fired
+          return new Response('{}', { status: 200 });
+        });
+
+      const mockIter = createMockIterator([
+        {
+          type: 'result',
+          subtype: 'success',
+          is_error: false,
+          result: 'Done',
+          session_id: 'sdk-status-warn',
+        },
+      ]);
+      vi.mocked(mockSdkQuery).mockReturnValue(mockIter as never);
+
+      const { startSession, subscribe } = await import('./manager');
+
+      const warnings: string[] = [];
+
+      await startSession({
+        sessionId: 'warn-status-test',
+        repoPath: '/tmp',
+        prompt: 'test',
+      });
+
+      subscribe('warn-status-test', (msg) => {
+        if (msg.type === 'warning') warnings.push(msg.message);
+      });
+
+      await new Promise((r) => setTimeout(r, 150));
+
+      fetchSpy.mockRestore();
+      delete process.env.CONVEX_SITE_URL;
+      delete process.env.INTERNAL_API_SECRET;
+
+      expect(warnings).toHaveLength(1);
+      expect(warnings[0]).toMatch(/persist/i);
+    });
+
+    it('broadcasts warning when config is missing (callConvexInternal returns false)', async () => {
+      // Do NOT set CONVEX_SITE_URL / INTERNAL_API_SECRET — getConvexConfig returns null,
+      // callConvexInternal returns false, and the `!persisted` branch should trigger.
+      delete process.env.CONVEX_SITE_URL;
+      delete process.env.INTERNAL_API_SECRET;
+
+      const mockIter = createMockIterator([
+        {
+          type: 'result',
+          subtype: 'success',
+          is_error: false,
+          result: 'Done',
+          session_id: 'sdk-no-config',
+        },
+      ]);
+      vi.mocked(mockSdkQuery).mockReturnValue(mockIter as never);
+
+      const { startSession, subscribe } = await import('./manager');
+
+      const warnings: string[] = [];
+
+      await startSession({
+        sessionId: 'warn-no-config-test',
+        repoPath: '/tmp',
+        prompt: 'test',
+      });
+
+      subscribe('warn-no-config-test', (msg) => {
+        if (msg.type === 'warning') warnings.push(msg.message);
+      });
+
+      await new Promise((r) => setTimeout(r, 200));
+
+      // Warning should fire via the !persisted check (not the catch block)
+      expect(warnings).toHaveLength(1);
+      expect(warnings[0]).toMatch(/persist/i);
+    });
+  });
 });

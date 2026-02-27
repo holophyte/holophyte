@@ -58,8 +58,14 @@ export default function SessionPanel({ taskId }: SessionPanelProps) {
 
   // Single useSession call — state is passed down to SessionRuntimeProvider as props
   // to avoid duplicate WebSocket connections.
-  const { events, pendingApprovals, sessionStatus, approve, deny } =
-    useSession(sessionId);
+  const {
+    events,
+    pendingApprovals,
+    sessionStatus,
+    persistenceWarning,
+    approve,
+    deny,
+  } = useSession(sessionId);
 
   const [stopping, setStopping] = useState(false);
 
@@ -138,6 +144,12 @@ export default function SessionPanel({ taskId }: SessionPanelProps) {
           </Button>
         )}
       </div>
+
+      {persistenceWarning && (
+        <div className="shrink-0 border-b border-amber-500/30 bg-amber-500/10 px-3 py-1.5 text-xs text-amber-400">
+          {persistenceWarning}
+        </div>
+      )}
 
       <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
         {sessionId ? (
