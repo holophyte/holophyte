@@ -126,6 +126,80 @@ What it does:
 
 Your main repo's `.env.local` is never modified and your dev Convex keeps running throughout.
 
+## First-Time Setup
+
+If you're setting up a fresh clone, run:
+
+```bash
+bun run setup:local
+```
+
+This interactive script creates `.dev-ports`, provisions a local Convex backend, generates auth keys, and sets all required environment variables. You can re-run it at any time to fix a broken configuration.
+
+For worktrees, use `bun run worktree:create <name>` instead — it handles setup automatically.
+
+## Environment Variable Reference
+
+### `.dev-ports` (per-workspace, gitignored)
+
+Every workspace (main repo or worktree) needs this file. Created automatically by `bun run setup:local` or `bun run worktree:create`.
+
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `DEV_PORT` | Yes | `8080` | Bun app server port |
+| `CONVEX_CLOUD_PORT` | Yes | `3210` | Local Convex cloud port |
+| `CONVEX_SITE_PORT` | Yes | `3211` | Local Convex site / HTTP actions port |
+| `CONVEX_TEAM` | Yes | — | Convex team slug (prevents [silent cloud connection](#convex-dev---local-silently-connects-to-cloud)) |
+| `CONVEX_PROJECT` | Yes | — | Convex project name |
+
+### `.env.local` (managed by `convex dev`, do not edit manually)
+
+| Variable | Set By | Description |
+|----------|--------|-------------|
+| `CONVEX_DEPLOYMENT` | `convex dev` | Local deployment identity (e.g. `local:local-ko_vial-holophyte-1`) |
+| `CONVEX_URL` | `convex dev` | Convex cloud URL (e.g. `http://127.0.0.1:3210`) |
+| `CONVEX_SITE_URL` | `convex dev` | Convex site URL (e.g. `http://127.0.0.1:3211`) |
+
+Non-Convex vars (API keys, secrets) are preserved across reconfiguration — `convex-local.sh` and `worktree-create.sh` both save and restore them when `convex dev` overwrites this file.
+
+### `.env` (shared config, gitignored)
+
+| Variable | Set By | Description |
+|----------|--------|-------------|
+| `INTERNAL_API_SECRET` | `setup:local`, `convex-local.sh`, `worktree-create.sh` | Shared secret for companion server to Convex internal HTTP auth |
+
+### Convex Deployment Environment Variables
+
+These are set on the Convex deployment itself (via `bunx convex env set`), not in local files.
+
+| Variable | Set By | Description |
+|----------|--------|-------------|
+| `ALLOW_ANONYMOUS_AUTH` | `setup:local`, `dev-local.sh` (process env), `worktree-create.sh` (Convex env) | Enables anonymous auth for local dev / manual testing via `?auth` |
+| `INTERNAL_API_SECRET` | `setup:local`, `convex-local.sh`, `worktree-create.sh` | Must match the value in `.env` — used to authenticate companion HTTP calls |
+| `SITE_URL` | `setup:local`, `worktree-create.sh` | OAuth redirect base URL (e.g. `http://localhost:8082`) |
+| `JWT_PRIVATE_KEY` | `bunx @convex-dev/auth` | Auth token signing key |
+| `JWKS` | `bunx @convex-dev/auth` | JSON Web Key Set for token verification |
+
+### Optional: OAuth Credentials (Convex deployment env)
+
+Only needed if you're testing OAuth login locally. Set these in `.dev-ports` to have `setup:local` or `worktree-create.sh` forward them automatically, or set them manually with `bunx convex env set`.
+
+| Variable | Description |
+|----------|-------------|
+| `AUTH_GITHUB_ID` | GitHub OAuth app client ID |
+| `AUTH_GITHUB_SECRET` | GitHub OAuth app client secret |
+| `AUTH_GOOGLE_ID` | Google OAuth app client ID |
+| `AUTH_GOOGLE_SECRET` | Google OAuth app client secret |
+
+### Which Scripts Set What
+
+| Script | What it configures |
+|--------|-------------------|
+| `setup:local` | `.dev-ports`, local Convex provisioning, `INTERNAL_API_SECRET`, auth keys, `ALLOW_ANONYMOUS_AUTH`, `SITE_URL`, OAuth credentials |
+| `convex-local.sh` | `INTERNAL_API_SECRET` (in `.env` + Convex env), stale deployment detection/reconfiguration |
+| `dev-local.sh` | `ALLOW_ANONYMOUS_AUTH` (process env), starts app server + Convex via `convex-local.sh` |
+| `worktree-create.sh` | `.dev-ports` (port allocation), Convex provisioning, `INTERNAL_API_SECRET`, `SITE_URL`, `ALLOW_ANONYMOUS_AUTH`, auth keys, OAuth credentials |
+
 ## Troubleshooting
 
 ### `convex dev --local` silently connects to cloud
