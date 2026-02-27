@@ -47,6 +47,15 @@ export PORT="$DEV_PORT"
 # Auto-enable anonymous auth for local dev (manual testing via ?auth query param)
 export ALLOW_ANONYMOUS_AUTH="${ALLOW_ANONYMOUS_AUTH:-1}"
 
+# Pre-export the local Convex URLs so the Bun server gets the correct values
+# immediately, even if convex-local.sh hasn't reconfigured .env.local yet.
+# Without this, the server reads the stale cloud URL from .env.local because
+# concurrently starts both processes at the same time, and bun --watch doesn't
+# re-read env files after startup. Shell env vars take priority over .env files
+# in Bun's env loading, so this guarantees the right URL from the first request.
+export CONVEX_URL="http://127.0.0.1:$CONVEX_CLOUD_PORT"
+export CONVEX_SITE_URL="http://127.0.0.1:$CONVEX_SITE_PORT"
+
 # Kill any lingering processes on dev ports (prevents Bun/Convex from auto-incrementing)
 for PORT_NUM in "$DEV_PORT" "$CONVEX_CLOUD_PORT" "$CONVEX_SITE_PORT"; do
   if lsof -ti :"$PORT_NUM" >/dev/null 2>&1; then
