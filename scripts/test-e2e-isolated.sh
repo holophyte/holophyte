@@ -28,7 +28,7 @@ if [ -z "${CONVEX_TEAM:-}" ] || [ -z "${CONVEX_PROJECT:-}" ]; then
 fi
 
 # Create temp worktree (detached HEAD — no branch needed)
-WORKTREE_NAME="e2e-$(date +%s)"
+WORKTREE_NAME="e2e-$(date +%s)-$$"
 WORKTREE_DIR="$HOME/.holophyte-dev"
 WORKTREE_PATH="$WORKTREE_DIR/$WORKTREE_NAME"
 
