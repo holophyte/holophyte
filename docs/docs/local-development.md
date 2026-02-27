@@ -155,11 +155,11 @@ lsof -iTCP -sTCP:LISTEN | grep -E '(8080|3210)'
 
 Run `bun src/server.ts` directly (without `--watch`) when debugging.
 
-### E2E tests require `convex:local` running
+### E2E tests conflict with `convex:local`
 
-Playwright's `webServer` config starts the app server but not Convex. You must have `bun run convex:local` running in the same workspace before running `bun run test:e2e`.
+`bun run test:e2e` spins up its own ephemeral Convex, so `convex:local` must **not** be running — the Convex CLI refuses to provision when another local backend is active.
 
-If you want to skip this requirement entirely, use `bun run test:e2e:isolated` from the main repo — it handles Convex setup and teardown in an isolated worktree without touching your dev environment. See [Running E2E without stopping dev Convex](#running-e2e-without-stopping-dev-convex-teste2eisolated) above.
+To run E2E without stopping dev Convex, use `bun run test:e2e:isolated` from the main repo — it runs in an isolated worktree without touching your dev environment. See [Running E2E without stopping dev Convex](#running-e2e-without-stopping-dev-convex-teste2eisolated) above.
 
 ### `bunx @convex-dev/auth` needs a running backend
 
