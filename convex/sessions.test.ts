@@ -1,7 +1,7 @@
 // @vitest-environment edge-runtime
 import { convexTest } from 'convex-test';
 import { describe, expect, it } from 'vitest';
-import { api } from './_generated/api';
+import { api, internal } from './_generated/api';
 import schema from './schema';
 
 /** Create a user and return an authenticated test client + userId. */
@@ -213,5 +213,295 @@ describe('sessions.updateLastActivity', () => {
 
     const updated = await authed.query(api.sessions.get, { id: sessionId });
     expect(updated?.lastActivityAt).toBeGreaterThan(originalActivity ?? 0);
+  });
+});
+
+describe('sessions.requestStop', () => {
+  it('stops a running session', async () => {
+    const t = convexTest(schema);
+    const { authed, taskId } = await setupTaskEnv(t);
+
+    const sessionId = await authed.mutation(api.sessions.create, { taskId });
+    await t.run(async (ctx) => {
+      await ctx.db.patch(sessionId, { status: 'running' });
+    });
+
+    await authed.mutation(api.sessions.requestStop, { id: sessionId });
+
+    const session = await authed.query(api.sessions.get, { id: sessionId });
+    expect(session?.status).toBe('stopped');
+  });
+
+  it('stops a queued session', async () => {
+    const t = convexTest(schema);
+    const { authed, taskId } = await setupTaskEnv(t);
+
+    const sessionId = await authed.mutation(api.sessions.create, { taskId });
+    // create() already sets 'queued', no patch needed
+
+    await authed.mutation(api.sessions.requestStop, { id: sessionId });
+
+    const session = await authed.query(api.sessions.get, { id: sessionId });
+    expect(session?.status).toBe('stopped');
+  });
+
+  it('no-ops when session is idle', async () => {
+    const t = convexTest(schema);
+    const { authed, taskId } = await setupTaskEnv(t);
+
+    const sessionId = await authed.mutation(api.sessions.create, { taskId });
+    await t.run(async (ctx) => {
+      await ctx.db.patch(sessionId, { status: 'idle' });
+    });
+
+    await authed.mutation(api.sessions.requestStop, { id: sessionId });
+
+    const session = await authed.query(api.sessions.get, { id: sessionId });
+    expect(session?.status).toBe('idle');
+  });
+
+  it('no-ops when session is already stopped', async () => {
+    const t = convexTest(schema);
+    const { authed, taskId } = await setupTaskEnv(t);
+
+    const sessionId = await authed.mutation(api.sessions.create, { taskId });
+    await t.run(async (ctx) => {
+      await ctx.db.patch(sessionId, { status: 'stopped' });
+    });
+
+    await authed.mutation(api.sessions.requestStop, { id: sessionId });
+
+    const session = await authed.query(api.sessions.get, { id: sessionId });
+    expect(session?.status).toBe('stopped');
+  });
+
+  it('no-ops when session is failed', async () => {
+    const t = convexTest(schema);
+    const { authed, taskId } = await setupTaskEnv(t);
+
+    const sessionId = await authed.mutation(api.sessions.create, { taskId });
+    await t.run(async (ctx) => {
+      await ctx.db.patch(sessionId, { status: 'failed' });
+    });
+
+    await authed.mutation(api.sessions.requestStop, { id: sessionId });
+
+    const session = await authed.query(api.sessions.get, { id: sessionId });
+    expect(session?.status).toBe('failed');
+  });
+
+  it('requires member role', async () => {
+    const t = convexTest(schema);
+    const { authed: ownerAuthed, orgId, taskId } = await setupTaskEnv(t);
+
+    const sessionId = await ownerAuthed.mutation(api.sessions.create, {
+      taskId,
+    });
+    await t.run(async (ctx) => {
+      await ctx.db.patch(sessionId, { status: 'running' });
+    });
+
+    // Create a viewer
+    const viewerUserId = await t.run(async (ctx) => {
+      return await ctx.db.insert('users', { name: 'Viewer' });
+    });
+    const viewerAuthed = t.withIdentity({ subject: `${viewerUserId}|s2` });
+    await ownerAuthed.mutation(api.memberships.invite, {
+      orgId,
+      userId: viewerUserId,
+      role: 'viewer',
+    });
+
+    await expect(
+      viewerAuthed.mutation(api.sessions.requestStop, { id: sessionId }),
+    ).rejects.toThrow();
+  });
+});
+
+describe('sessions.queueResume', () => {
+  it('resumes an idle session → queued with queuedPrompt set', async () => {
+    const t = convexTest(schema);
+    const { authed, taskId } = await setupTaskEnv(t);
+
+    const sessionId = await authed.mutation(api.sessions.create, { taskId });
+    await t.run(async (ctx) => {
+      await ctx.db.patch(sessionId, { status: 'idle' });
+    });
+
+    const result = await authed.mutation(api.sessions.queueResume, {
+      id: sessionId,
+      prompt: 'Continue the task',
+    });
+    expect(result).toEqual({ ok: true });
+
+    const session = await authed.query(api.sessions.get, { id: sessionId });
+    expect(session?.status).toBe('queued');
+    expect(session?.queuedPrompt).toBe('Continue the task');
+  });
+
+  it('returns { ok: false } when session is not idle', async () => {
+    const t = convexTest(schema);
+    const { authed, taskId } = await setupTaskEnv(t);
+
+    const sessionId = await authed.mutation(api.sessions.create, { taskId });
+    await t.run(async (ctx) => {
+      await ctx.db.patch(sessionId, { status: 'running' });
+    });
+
+    const result = await authed.mutation(api.sessions.queueResume, {
+      id: sessionId,
+      prompt: 'Continue',
+    });
+    expect(result).toEqual({ ok: false });
+
+    const session = await authed.query(api.sessions.get, { id: sessionId });
+    expect(session?.status).toBe('running');
+  });
+
+  it('requires member role', async () => {
+    const t = convexTest(schema);
+    const { authed: ownerAuthed, orgId, taskId } = await setupTaskEnv(t);
+
+    const sessionId = await ownerAuthed.mutation(api.sessions.create, {
+      taskId,
+    });
+    await t.run(async (ctx) => {
+      await ctx.db.patch(sessionId, { status: 'idle' });
+    });
+
+    // Create a viewer
+    const viewerUserId = await t.run(async (ctx) => {
+      return await ctx.db.insert('users', { name: 'Viewer' });
+    });
+    const viewerAuthed = t.withIdentity({ subject: `${viewerUserId}|s2` });
+    await ownerAuthed.mutation(api.memberships.invite, {
+      orgId,
+      userId: viewerUserId,
+      role: 'viewer',
+    });
+
+    await expect(
+      viewerAuthed.mutation(api.sessions.queueResume, {
+        id: sessionId,
+        prompt: 'Continue',
+      }),
+    ).rejects.toThrow();
+  });
+});
+
+describe('sessions.listQueued', () => {
+  it('returns queued sessions with repoPath enriched', async () => {
+    const t = convexTest(schema);
+    const { authed, taskId } = await setupTaskEnv(t);
+
+    const sessionId = await authed.mutation(api.sessions.create, { taskId });
+    // create() sets status to 'queued' — no patch needed
+
+    const queued = await t.query(internal.sessions.listQueued, {});
+    expect(queued).toHaveLength(1);
+    expect(queued[0]?._id).toBe(sessionId);
+    expect(queued[0]?.repoPath).toBe('/tmp/test-repo');
+  });
+
+  it('excludes non-queued sessions', async () => {
+    const t = convexTest(schema);
+    const { authed, taskId } = await setupTaskEnv(t);
+
+    const sessionId = await authed.mutation(api.sessions.create, { taskId });
+    await t.run(async (ctx) => {
+      await ctx.db.patch(sessionId, { status: 'running' });
+    });
+
+    const queued = await t.query(internal.sessions.listQueued, {});
+    expect(queued).toHaveLength(0);
+  });
+
+  it('skips orphaned sessions (missing task/repo)', async () => {
+    const t = convexTest(schema);
+    const { authed, taskId } = await setupTaskEnv(t);
+
+    const sessionId = await authed.mutation(api.sessions.create, { taskId });
+
+    // Delete the task to orphan the session
+    await t.run(async (ctx) => {
+      await ctx.db.delete(taskId);
+    });
+
+    const queued = await t.query(internal.sessions.listQueued, {});
+    // The session is queued but its task is gone — should be skipped
+    expect(queued.every((s) => s._id !== sessionId)).toBe(true);
+  });
+});
+
+describe('sessions.claimQueued', () => {
+  it('claims a queued session → running', async () => {
+    const t = convexTest(schema);
+    const { authed, taskId } = await setupTaskEnv(t);
+
+    const sessionId = await authed.mutation(api.sessions.create, { taskId });
+
+    const result = await t.mutation(internal.sessions.claimQueued, {
+      id: sessionId,
+    });
+    expect(result).toEqual({ ok: true });
+
+    const session = await authed.query(api.sessions.get, { id: sessionId });
+    expect(session?.status).toBe('running');
+  });
+
+  it('returns { ok: false } if session is no longer queued', async () => {
+    const t = convexTest(schema);
+    const { authed, taskId } = await setupTaskEnv(t);
+
+    const sessionId = await authed.mutation(api.sessions.create, { taskId });
+    await t.run(async (ctx) => {
+      await ctx.db.patch(sessionId, { status: 'running' });
+    });
+
+    const result = await t.mutation(internal.sessions.claimQueued, {
+      id: sessionId,
+    });
+    expect(result).toEqual({ ok: false });
+  });
+
+  it('returns { ok: false } for nonexistent session', async () => {
+    const t = convexTest(schema);
+    const { authed, taskId } = await setupTaskEnv(t);
+
+    // Create a session just to get a valid-format ID, then delete it
+    const sessionId = await authed.mutation(api.sessions.create, { taskId });
+    await t.run(async (ctx) => {
+      await ctx.db.delete(sessionId);
+    });
+
+    const result = await t.mutation(internal.sessions.claimQueued, {
+      id: sessionId,
+    });
+    expect(result).toEqual({ ok: false });
+  });
+});
+
+describe('sessions.listStopped', () => {
+  it('returns only stopped sessions', async () => {
+    const t = convexTest(schema);
+    const { authed, taskId } = await setupTaskEnv(t);
+
+    const stoppedId = await authed.mutation(api.sessions.create, { taskId });
+    const runningId = await authed.mutation(api.sessions.create, { taskId });
+    await t.run(async (ctx) => {
+      await ctx.db.patch(stoppedId, { status: 'stopped' });
+      await ctx.db.patch(runningId, { status: 'running' });
+    });
+
+    const stopped = await t.query(internal.sessions.listStopped, {});
+    expect(stopped).toHaveLength(1);
+    expect(stopped[0]?._id).toBe(stoppedId);
+  });
+
+  it('returns empty array when none exist', async () => {
+    const t = convexTest(schema);
+
+    const stopped = await t.query(internal.sessions.listStopped, {});
+    expect(stopped).toEqual([]);
   });
 });
