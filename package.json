@@ -18,6 +18,7 @@
     "check": "bun run lint && bunx tsc --noEmit && bun run test",
     "convex:dev": "convex dev",
     "convex:local": "scripts/convex-local.sh",
+    "setup:local": "scripts/setup-local.sh",
     "convex:deploy": "convex deploy",
     "worktree:create": "scripts/worktree-create.sh",
     "pr-comments": "scripts/pr-comments.sh",
