@@ -163,4 +163,4 @@ To run E2E without stopping dev Convex, use `bun run test:e2e:isolated` from the
 
 ### `bunx @convex-dev/auth` needs a running backend
 
-If you need to manually configure auth keys (e.g., after a fresh worktree), start `bun run convex:local` in one terminal first, then run `bunx @convex-dev/auth` in another. It won't work standalone because it talks to the Convex backend over HTTP.
+`bunx @convex-dev/auth` sets JWT keys on the Convex deployment over HTTP, so it requires a running backend. Fresh worktrees handle this automatically (`worktree-create.sh` starts a temporary backend, runs the command, then stops it). If you ever need to re-run it manually, start `bun run convex:local` in one terminal first, then run `bunx @convex-dev/auth` in another.
