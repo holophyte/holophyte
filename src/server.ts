@@ -404,6 +404,8 @@ const server = Bun.serve<WsData>({
 });
 
 console.log(`Holophyte running at http://localhost:${server.port}`);
+console.log(`  Convex URL: ${process.env.CONVEX_URL || '(not set)'}`);
+console.log(`  Convex Site: ${process.env.CONVEX_SITE_URL || '(not set)'}`);
 
 // Start companion polling for queued/stopped sessions
 startCompanionPolling();
