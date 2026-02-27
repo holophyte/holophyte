@@ -108,6 +108,24 @@ Playwright E2E tests (`bun run test:e2e`) work in worktrees with some considerat
 - `playwright.config.ts` passes `CONVEX_URL` derived from `.dev-ports` to the E2E web server, ensuring it connects to the correct local Convex instance
 - You must have `bun run convex:local` running in the worktree before running E2E tests
 
+### Running E2E without stopping dev Convex (`test:e2e:isolated`)
+
+If stopping `convex:local` is inconvenient, use the isolated E2E command from the **main repo** (not a worktree):
+
+```bash
+bun run test:e2e:isolated [playwright args...]
+```
+
+What it does:
+
+1. Creates a detached-HEAD worktree at `~/.holophyte-dev/e2e-<timestamp>`
+2. Copies `.env` and writes a `.dev-ports` with `CONVEX_TEAM`/`CONVEX_PROJECT` from the main repo and high dummy ports — so `e2e-convex.sh`'s "is dev Convex running?" check passes without conflicting with your real dev backend
+3. Runs `bun install --frozen-lockfile` in the worktree
+4. Delegates to `scripts/test-e2e.sh` inside the worktree, which provisions its own ephemeral Convex backend on different ports
+5. Removes the worktree unconditionally on exit — even on Ctrl+C or test failure
+
+Your main repo's `.env.local` is never modified and your dev Convex keeps running throughout.
+
 ## Troubleshooting
 
 ### `convex dev --local` silently connects to cloud
@@ -140,6 +158,8 @@ Run `bun src/server.ts` directly (without `--watch`) when debugging.
 ### E2E tests require `convex:local` running
 
 Playwright's `webServer` config starts the app server but not Convex. You must have `bun run convex:local` running in the same workspace before running `bun run test:e2e`.
+
+If you want to skip this requirement entirely, use `bun run test:e2e:isolated` from the main repo — it handles Convex setup and teardown in an isolated worktree without touching your dev environment. See [Running E2E without stopping dev Convex](#running-e2e-without-stopping-dev-convex-teste2eisolated) above.
 
 ### `bunx @convex-dev/auth` needs a running backend
 

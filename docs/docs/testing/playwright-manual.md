@@ -115,6 +115,18 @@ pkill -f "chromium.*--headless"
 
 `bun run test:e2e` spins up its own ephemeral Convex backend automatically. The Convex CLI refuses to provision when another local backend is active, so stop `convex:local` first (Ctrl+C in that terminal).
 
+If stopping your dev Convex is inconvenient, use the isolated variant instead:
+
+```bash
+bun run test:e2e:isolated
+```
+
+This creates a temporary detached-HEAD worktree under `~/.holophyte-dev/e2e-<timestamp>`, runs the full E2E suite there (with its own ephemeral Convex instance), and deletes the worktree on exit — even on Ctrl+C or test failure. Your main repo's `.env.local` and running dev Convex are never touched. Pass any Playwright arguments after the command:
+
+```bash
+bun run test:e2e:isolated --grep "create task"
+```
+
 ### Anonymous auth not set up (manual testing)
 
 Manual testing requires `ALLOW_ANONYMOUS_AUTH=1` in two places:
