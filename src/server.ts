@@ -408,11 +408,18 @@ console.log(`Holophyte running at http://localhost:${server.port}`);
 // Start companion polling for queued/stopped sessions
 startCompanionPolling();
 
-// On startup, mark any sessions left as 'running' (from a prior crash/restart)
-// as 'idle' so users can resume them rather than seeing a broken state.
+// On startup, clean up sessions left in inconsistent states from a prior crash
+// or companion outage:
+//   - 'running' → 'idle': process died without finalising the turn
+//   - 'stopped' → 'idle': stop request was never processed (companion was offline)
 (async () => {
   try {
     await callConvexInternal('/api/internal/sessions/markStaleRunning', {});
+  } catch {
+    // Non-critical — Convex may not be configured yet
+  }
+  try {
+    await callConvexInternal('/api/internal/sessions/markStoppedAsIdle', {});
   } catch {
     // Non-critical — Convex may not be configured yet
   }

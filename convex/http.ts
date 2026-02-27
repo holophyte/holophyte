@@ -62,6 +62,29 @@ http.route({
 });
 
 http.route({
+  path: '/api/internal/sessions/markStoppedAsIdle',
+  method: 'POST',
+  handler: httpAction(async (ctx, request) => {
+    const authError = validateSecret(request);
+    if (authError) return authError;
+
+    try {
+      const result = await ctx.runMutation(
+        internal.sessions.serverMarkStoppedAsIdle,
+        {},
+      );
+      return new Response(JSON.stringify({ ok: true, ...result }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    } catch (err) {
+      console.error('serverMarkStoppedAsIdle failed:', err);
+      return jsonError('Mutation failed', 500);
+    }
+  }),
+});
+
+http.route({
   path: '/api/internal/sessions/updateSdkSessionId',
   method: 'POST',
   handler: httpAction(async (ctx, request) => {
