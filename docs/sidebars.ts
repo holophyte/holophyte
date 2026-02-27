@@ -8,7 +8,7 @@ const sidebars: SidebarsConfig = {
     {
       type: 'category',
       label: 'Testing',
-      items: ['testing/session-rethink', 'testing/playwright-manual'],
+      items: ['testing/playwright-manual'],
     },
   ],
 };

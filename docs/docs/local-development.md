@@ -106,7 +106,25 @@ Playwright E2E tests (`bun run test:e2e`) work in worktrees with some considerat
 
 - The E2E server runs on `DEV_PORT + 1` (read from `.dev-ports`)
 - `playwright.config.ts` passes `CONVEX_URL` derived from `.dev-ports` to the E2E web server, ensuring it connects to the correct local Convex instance
-- You must have `bun run convex:local` running in the worktree before running E2E tests
+- E2E tests spin up their own ephemeral Convex — `convex:local` must **not** be running (or use `test:e2e:isolated` below)
+
+### Running E2E without stopping dev Convex (`test:e2e:isolated`)
+
+If stopping `convex:local` is inconvenient, use the isolated E2E command from the **main repo** (not a worktree):
+
+```bash
+bun run test:e2e:isolated [playwright args...]
+```
+
+What it does:
+
+1. Creates a detached-HEAD worktree at `~/.holophyte-dev/e2e-<timestamp>`
+2. Copies `.env` and writes a `.dev-ports` with `CONVEX_TEAM`/`CONVEX_PROJECT` from the main repo and high dummy ports — so `e2e-convex.sh`'s "is dev Convex running?" check passes without conflicting with your real dev backend
+3. Runs `bun install --frozen-lockfile` in the worktree
+4. Delegates to `scripts/test-e2e.sh` inside the worktree, which provisions its own ephemeral Convex backend on different ports
+5. Removes the worktree unconditionally on exit — even on Ctrl+C or test failure
+
+Your main repo's `.env.local` is never modified and your dev Convex keeps running throughout.
 
 ## Troubleshooting
 
@@ -137,10 +155,12 @@ lsof -iTCP -sTCP:LISTEN | grep -E '(8080|3210)'
 
 Run `bun src/server.ts` directly (without `--watch`) when debugging.
 
-### E2E tests require `convex:local` running
+### E2E tests conflict with `convex:local`
 
-Playwright's `webServer` config starts the app server but not Convex. You must have `bun run convex:local` running in the same workspace before running `bun run test:e2e`.
+`bun run test:e2e` spins up its own ephemeral Convex, so `convex:local` must **not** be running — the Convex CLI refuses to provision when another local backend is active.
+
+To run E2E without stopping dev Convex, use `bun run test:e2e:isolated` from the main repo — it runs in an isolated worktree without touching your dev environment. See [Running E2E without stopping dev Convex](#running-e2e-without-stopping-dev-convex-teste2eisolated) above.
 
 ### `bunx @convex-dev/auth` needs a running backend
 
-If you need to manually configure auth keys (e.g., after a fresh worktree), start `bun run convex:local` in one terminal first, then run `bunx @convex-dev/auth` in another. It won't work standalone because it talks to the Convex backend over HTTP.
+`bunx @convex-dev/auth` sets JWT keys on the Convex deployment over HTTP, so it requires a running backend. Fresh worktrees handle this automatically (`worktree-create.sh` starts a temporary backend, runs the command, then stops it). If you ever need to re-run it manually, start `bun run convex:local` in one terminal first, then run `bunx @convex-dev/auth` in another.
