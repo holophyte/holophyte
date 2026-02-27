@@ -106,7 +106,7 @@ Playwright E2E tests (`bun run test:e2e`) work in worktrees with some considerat
 
 - The E2E server runs on `DEV_PORT + 1` (read from `.dev-ports`)
 - `playwright.config.ts` passes `CONVEX_URL` derived from `.dev-ports` to the E2E web server, ensuring it connects to the correct local Convex instance
-- You must have `bun run convex:local` running in the worktree before running E2E tests
+- E2E tests spin up their own ephemeral Convex — `convex:local` must **not** be running (or use `test:e2e:isolated` below)
 
 ### Running E2E without stopping dev Convex (`test:e2e:isolated`)
 
