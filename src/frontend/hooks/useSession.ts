@@ -322,7 +322,7 @@ export function useSession(sessionId: string | null): UseSessionReturn {
 
       ws.onclose = () => {
         setIsConnected(false);
-        wsRef.current = null;
+        if (wsRef.current === ws) wsRef.current = null;
 
         // Auto-reconnect unless we've been disposed or hit the limit
         if (!disposed && reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
