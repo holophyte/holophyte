@@ -23,6 +23,7 @@ bun run convex:local     # Start local Convex backend (reads .dev-ports)
 bun run test             # Run unit tests (vitest)
 bun run test:ui          # Vitest UI dashboard
 bun run test:e2e         # Playwright E2E tests (ephemeral Convex, fully self-contained)
+bun run test:e2e:isolated # E2E in a temp worktree (doesn't touch dev .env.local)
 bun run lint             # Biome check
 bun run lint:fix         # Biome auto-fix
 bun run check            # lint + typecheck + test (all-in-one)
@@ -156,7 +157,7 @@ scripts/                   → Shared shell scripts (convex-local, dev-local, wo
 - Chromium only, base URL `http://localhost:<DEV_PORT+1>` (resolved from `.dev-ports`)
 - **Fully self-contained**: `bun run test:e2e` spins up an ephemeral Convex backend on ports 13210+, deploys functions, runs tests, and tears down automatically — no manual `convex:local` needed
 - Each run gets a fresh database — no test data pollution
-- Dev Convex (`bun run convex:local`) must NOT be running when you run E2E tests — the Convex CLI refuses to provision when another local backend is active
+- Dev Convex (`bun run convex:local`) must NOT be running when you run `bun run test:e2e` — the Convex CLI refuses to provision when another local backend is active. Use `bun run test:e2e:isolated` to run E2E without stopping dev Convex
 - Use `waitForApp(page)` helper to wait for hydration before assertions
 - **Manual testing**: Navigate to `http://localhost:<port>?auth` — the `?auth` param triggers anonymous auth
 - See `docs/docs/testing/playwright-manual.md` for the full E2E and manual testing guide
@@ -227,7 +228,7 @@ Server configuration lives in environment variables with sensible defaults:
 - `bun run --watch` swallows subprocess stderr — run `bun src/server.ts` directly when debugging SDK session issues
 - No CI/CD or Docker configured
 - **`convex dev --local` silently connects to cloud** if `.dev-ports` is missing `CONVEX_TEAM`/`CONVEX_PROJECT` — always include both
-- **Stop `convex:local` before running E2E tests** — `bun run test:e2e` spins up its own ephemeral Convex; the CLI refuses to provision if another local backend is active
+- **Stop `convex:local` before running E2E tests** — `bun run test:e2e` spins up its own ephemeral Convex; the CLI refuses to provision if another local backend is active. Alternatively, use `bun run test:e2e:isolated` which runs in a temp worktree and doesn't touch the main repo's `.env.local`
 - **Manual testing requires `ALLOW_ANONYMOUS_AUTH=1`** on Convex env — `bunx convex env set ALLOW_ANONYMOUS_AUTH 1` (auto-set by `worktree:create` for new worktrees)
 - **Manual testing requires `?auth` in URL** — `http://localhost:<port>?auth` triggers anonymous auth; without it the app silently stalls
 - **`bunx @convex-dev/auth` needs a running backend** — start `convex:local` first, then run auth setup in another terminal
