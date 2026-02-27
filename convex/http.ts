@@ -308,7 +308,7 @@ http.route({
         internal.sessionEvents.getNextBatchIndex,
         { sessionId },
       );
-      return new Response(JSON.stringify({ nextBatchIndex }), {
+      return new Response(JSON.stringify(nextBatchIndex), {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
       });
