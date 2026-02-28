@@ -3,13 +3,77 @@
 All notable changes to this project will be documented in this file.
 Grouped by date, following [Keep a Changelog](https://keepachangelog.com/) categories.
 
+## 2026-02-27
+
+### Added
+- Add timeout/cleanup for queued sessions when companion is offline (#109)
+- Add isolated E2E test command via temp worktree (#107)
+
+### Fixed
+- Resolve race condition in dev:local startup serving stale CONVEX_URL (#114)
+- Resolve React setState-during-render warning in OrgSwitcher (#108)
+- Auto-configure INTERNAL_API_SECRET and warn on persistence failures (#106)
+- Session chat exchange bugs (batchIndex + WS reconnect) (#105)
+
+### Tests
+- Add coverage for session/sessionMessages Convex mutations (#110)
+
+### Chores
+- Add setup:local script and env var reference docs (#113)
+
+## 2026-02-26
+
+### Added
+- Restore native directory picker for adding repos (#100)
+
+### Fixed
+- dev:all fails when .env.local has a local Convex deployment (#99)
+
+### Refactored
+- Replace all frontend fetch() calls with Convex mutations (#95)
+
+### Chores
+- Enable code-simplifier plugin (#101)
+
+## 2026-02-25
+
+### Added
+- Add assistant-ui runtime + thread swap (Phase 2) (#80)
+- Add task creation from All Tasks view with repo picker (#76)
+
+### Fixed
+- Align manual testing auth query param and auto-enable ALLOW_ANONYMOUS_AUTH (#91)
+- Reduce E2E and manual testing friction (#90)
+- Isolate local Convex deployments across worktrees (#79)
+
+### Refactored
+- Remove old components replaced by assistant-ui (#94)
+- Update pr-comments polling and add E2E tester to autopilot skills (#93)
+
+### Chores
+- Upgrade all packages to latest (#92)
+
 ## 2026-02-24
 
 ### Added
 - Persistent session model with resume, dropdown UI, and kanban indicators (#52)
+- Add assistant-ui adapter layer and foundation (Phase 1) (#57)
+
+### Fixed
+- Disable UserInput during running state and clean up biome suppressions (#53, #56) (#75)
+- Guard against race condition on simultaneous session resume (#68) (#74)
+- Log SDK error results in consumeIterator (#64) (#72)
+
+### Refactored
+- Remove unnecessary useEffects in OrgSwitcher and SeedBoard (#78)
 
 ### Chores
+- Add CHANGELOG.md and update /changelog skill (#71)
 - Add .playwright-mcp to .gitignore (#70)
+- Remove outdated phase plan docs (#77)
+
+### Docs
+- Document Bun --watch stderr swallowing gotcha (#63) (#73)
 
 ## 2026-02-23
 
