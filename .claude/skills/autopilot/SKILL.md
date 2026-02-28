@@ -36,24 +36,37 @@ Before writing any code, use the `Explore` subagent to understand the relevant p
 > - Existing patterns and conventions relevant to this change
 > - Files that will need to be modified or serve as reference implementations
 > - Related components, hooks, utilities, or Convex functions
+> - Schema/data model implications
 > - Any prior art or similar features already built
+> - Potential pitfalls, edge cases, or gotchas
 >
-> Report back with: relevant file paths, patterns to follow, potential pitfalls, and dependencies.
+> Write your findings to `.autopilot/research.md` with sections: Overview, Relevant Files,
+> Patterns to Follow (with code snippets from the existing codebase), Risks & Gotchas,
+> and Dependencies.
 
 ### 3. Plan the Implementation
 
-Based on the research findings, create a brief implementation plan before writing code:
+Based on the research, write an implementation plan to `.autopilot/plan.md`:
 
 - List the files to create or modify (in order)
-- Note which existing patterns to follow (reference specific files)
+- For each file, describe the approach and include **code snippet examples** showing how it should look — reference existing patterns from the research (e.g., "follow the same pattern as `SessionDropdown.tsx` lines 20-35")
+- Be **descriptive** — explain the _why_ and show the _shape_ of the code, not a line-by-line prescription. The implementer (you) should understand the intent and adapt.
+- Use prescriptive step-by-step instructions only for mechanical/boilerplate changes (schema migrations, config edits, etc.)
 - Identify risks or edge cases
 - If the plan has multiple valid approaches, pick the simplest one (KISS)
 
-Do NOT use EnterPlanMode — just outline the plan in your reasoning, then proceed.
+Do NOT use EnterPlanMode — write the plan file, then proceed.
+
+**Note:** `.autopilot/` is gitignored — do not commit research or plan files unless
+the feature spans multiple PRs and you need to preserve context across sessions.
 
 ### 4. Implement the Feature
 
-Implement the feature described in `$ARGUMENTS`, following the plan from step 3.
+Implement the feature described in `$ARGUMENTS`, following `.autopilot/plan.md`.
+
+**Commit atomically** — each commit should be one logical change (e.g., schema
+change, then backend handler, then frontend component). Don't batch unrelated
+changes into a single commit.
 
 - Follow all patterns and conventions in CLAUDE.md
 - Run quality checks when implementation is complete:

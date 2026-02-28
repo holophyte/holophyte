@@ -213,8 +213,8 @@ Server configuration lives in environment variables with sensible defaults:
 - Pre-commit hooks are mandatory for AI agents. Never use `--no-verify` or `--no-gpg-sign` to skip hooks.
 - Run `bun run lint:fix` to auto-fix lint issues before committing
 - Use conventional commit prefixes: `feat:`, `fix:`, `refactor:`, `test:`, `chore:`, `docs:`
-- Commits should be atomic — one logical change per commit (e.g. don't mix a feature with a docs update or lint fix)
-- Commit frequently with descriptive messages — incremental changes over large batches
+- **Commits MUST be atomic** — one logical change per commit. Each commit should be independently understandable and revertable. Examples of good atomic commits: a schema change, then its backend handler, then its frontend component. Bad: bundling a feature + docs update + lint fix into one commit.
+- Commit frequently with descriptive messages — incremental changes over large batches. Don't save all changes for one big commit at the end.
 - Stage specific files rather than `git add .`
 
 ## Key Gotchas
