@@ -1,4 +1,8 @@
-import type { Query, SDKMessage } from '@anthropic-ai/claude-agent-sdk';
+import type {
+  Query,
+  SDKMessage,
+  SDKUserMessage,
+} from '@anthropic-ai/claude-agent-sdk';
 import { query as sdkQuery } from '@anthropic-ai/claude-agent-sdk';
 import { DEFAULT_MODEL } from '@/constants';
 
@@ -71,6 +75,8 @@ interface Session {
   model?: string;
   /** The live SDK query object — used to inject follow-up messages. */
   sdkQuery?: Query;
+  /** Channel for pushing follow-up messages into the running SDK process. */
+  messageChannel: SdkMessageChannel;
   /** Whether a persistence warning has already been sent to subscribers. */
   persistenceWarned?: boolean;
 }
@@ -110,6 +116,68 @@ const SAFE_TOOLS = new Set([
   'WebSearch',
   'TodoRead',
 ]);
+
+/**
+ * Push-based async iterable for injecting follow-up messages into a running
+ * SDK session via {@link Query.streamInput}.
+ *
+ * Supports a single consumer only — creating a second iterator throws.
+ *
+ * Call {@link push} to enqueue a message; the SDK pulls from the iterable
+ * on its own schedule. Call {@link close} when the session ends.
+ */
+class SdkMessageChannel implements AsyncIterable<SDKUserMessage> {
+  private queue: SDKUserMessage[] = [];
+  private waiting: ((result: IteratorResult<SDKUserMessage>) => void) | null =
+    null;
+  private done = false;
+  private iteratorCreated = false;
+
+  push(msg: SDKUserMessage): void {
+    if (this.done) return;
+    if (this.waiting) {
+      const resolve = this.waiting;
+      this.waiting = null;
+      resolve({ value: msg, done: false });
+    } else {
+      this.queue.push(msg);
+    }
+  }
+
+  close(): void {
+    this.done = true;
+    if (this.waiting) {
+      const resolve = this.waiting;
+      this.waiting = null;
+      resolve({ value: undefined as unknown as SDKUserMessage, done: true });
+    }
+  }
+
+  [Symbol.asyncIterator](): AsyncIterator<SDKUserMessage> {
+    if (this.iteratorCreated) {
+      throw new Error('SdkMessageChannel supports only a single consumer');
+    }
+    this.iteratorCreated = true;
+
+    return {
+      next: (): Promise<IteratorResult<SDKUserMessage>> => {
+        if (this.queue.length > 0) {
+          // biome-ignore lint/style/noNonNullAssertion: length check guarantees element exists
+          return Promise.resolve({ value: this.queue.shift()!, done: false });
+        }
+        if (this.done) {
+          return Promise.resolve({
+            value: undefined as unknown as SDKUserMessage,
+            done: true,
+          });
+        }
+        return new Promise((resolve) => {
+          this.waiting = resolve;
+        });
+      },
+    };
+  }
+}
 
 /** Call a Convex HTTP action endpoint with Bearer auth. */
 let managerConfigWarningLogged = false;
@@ -383,6 +451,7 @@ export async function startSession(opts: {
     convexSessionId: sessionId,
     permissionMode: mode,
     model: opts.model ?? DEFAULT_MODEL,
+    messageChannel: new SdkMessageChannel(),
   };
 
   sessions.set(sessionId, session);
@@ -491,6 +560,12 @@ async function consumeIterator(
     const iterator = sdkQuery({ prompt, options });
     session.sdkQuery = iterator;
 
+    // Connect the message channel so follow-up messages can be injected.
+    // Fire-and-forget — the promise stays pending until the channel closes.
+    iterator.streamInput(session.messageChannel).catch((err) => {
+      console.error(`[session ${sessionId}] streamInput error:`, err);
+    });
+
     broadcast(session, { type: 'status', sessionId, status: 'running' });
 
     // Show the initial prompt as the first user message in the conversation
@@ -577,6 +652,9 @@ async function consumeIterator(
       });
     }
   } finally {
+    // Close the message channel so streamInput() resolves
+    session.messageChannel.close();
+
     // Stop the periodic flush timer first to prevent races
     if (session.flushTimer) {
       clearInterval(session.flushTimer);
@@ -702,4 +780,39 @@ export function subscribe(
   return () => {
     session.subscribers.delete(callback);
   };
+}
+
+/**
+ * Injects a follow-up message into a running SDK session.
+ *
+ * Pushes the message to the session's {@link MessageChannel}, which is
+ * connected to the SDK via {@link Query.streamInput}. Also broadcasts the
+ * user message to WebSocket subscribers and buffers it for Convex persistence.
+ *
+ * @param sessionId - The Convex session ID.
+ * @param text - The message text to inject.
+ * @returns `true` if the message was delivered, `false` if the session is not
+ *   running or not yet initialized.
+ */
+export function sendMessageToSession(sessionId: string, text: string): boolean {
+  const session = sessions.get(sessionId);
+  // sdkSessionId is set from the system/init event — if not yet available,
+  // return false so the message stays unconsumed and retries on the next poll.
+  if (!session?.sdkQuery || !session.sdkSessionId) return false;
+
+  const userMsg: SDKUserMessage = {
+    type: 'user',
+    message: { role: 'user', content: text },
+    parent_tool_use_id: null,
+    uuid: crypto.randomUUID(),
+    session_id: session.sdkSessionId,
+  };
+
+  session.messageChannel.push(userMsg);
+
+  // Show the message in the conversation UI and persist to Convex
+  broadcast(session, { type: 'event', sessionId, event: userMsg });
+  bufferEvent(session, userMsg);
+
+  return true;
 }

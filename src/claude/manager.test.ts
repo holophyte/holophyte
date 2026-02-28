@@ -40,6 +40,7 @@ function createMockIterator(events: Array<Record<string, unknown>>) {
     next: vi.fn(),
     return: vi.fn(),
     throw: vi.fn(),
+    streamInput: vi.fn().mockResolvedValue(undefined),
   };
 }
 
@@ -144,6 +145,7 @@ describe('claude/manager (SDK-based)', () => {
             abortReject = reject;
           });
         },
+        streamInput: vi.fn().mockResolvedValue(undefined),
       };
       vi.mocked(mockSdkQuery).mockReturnValue(mockIter as never);
 
@@ -254,6 +256,7 @@ describe('claude/manager (SDK-based)', () => {
               session_id: 'sdk-approval',
             };
           },
+          streamInput: vi.fn().mockResolvedValue(undefined),
         } as never;
       });
 
@@ -470,6 +473,7 @@ describe('claude/manager (SDK-based)', () => {
               ),
             ]);
           },
+          streamInput: vi.fn().mockResolvedValue(undefined),
         } as never;
       });
 
@@ -572,6 +576,7 @@ describe('claude/manager (SDK-based)', () => {
               ),
             );
           },
+          streamInput: vi.fn().mockResolvedValue(undefined),
         } as never;
       });
 
@@ -612,6 +617,7 @@ describe('claude/manager (SDK-based)', () => {
               ),
             ]);
           },
+          streamInput: vi.fn().mockResolvedValue(undefined),
         } as never;
       });
 
@@ -666,6 +672,7 @@ describe('claude/manager (SDK-based)', () => {
               },
             );
           },
+          streamInput: vi.fn().mockResolvedValue(undefined),
         } as never;
       });
 
@@ -890,6 +897,129 @@ describe('claude/manager (SDK-based)', () => {
       // Warning should fire via the !persisted check (not the catch block)
       expect(warnings).toHaveLength(1);
       expect(warnings[0]).toMatch(/persist/i);
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // sendMessageToSession
+  // ---------------------------------------------------------------------------
+
+  describe('sendMessageToSession', () => {
+    it('pushes message to channel and broadcasts to subscribers', async () => {
+      const mockIter = createMockIterator([
+        {
+          type: 'system',
+          subtype: 'init',
+          session_id: 'sdk-msg-test',
+          tools: [],
+          model: 'claude-sonnet-4-6',
+        },
+      ]);
+      // Make the iterator block so the session stays active
+      let resolveBlock: (() => void) | undefined;
+      const blockPromise = new Promise<void>((r) => {
+        resolveBlock = r;
+      });
+      const blockingIter = {
+        async *[Symbol.asyncIterator]() {
+          yield {
+            type: 'system',
+            subtype: 'init',
+            session_id: 'sdk-msg-test',
+            tools: [],
+            model: 'claude-sonnet-4-6',
+          };
+          await blockPromise;
+        },
+        streamInput: mockIter.streamInput,
+      };
+      vi.mocked(mockSdkQuery).mockReturnValue(blockingIter as never);
+
+      const { startSession, subscribe, sendMessageToSession } = await import(
+        './manager'
+      );
+
+      await startSession({
+        sessionId: 'msg-delivery-test',
+        repoPath: '/tmp/test',
+        prompt: 'test',
+      });
+
+      // Wait for init event to be processed (sets sdkSessionId)
+      await new Promise((r) => setTimeout(r, 50));
+
+      const capturedEvents: Array<Record<string, unknown>> = [];
+      subscribe('msg-delivery-test', (msg) => {
+        capturedEvents.push(msg as Record<string, unknown>);
+      });
+
+      const result = sendMessageToSession(
+        'msg-delivery-test',
+        'follow-up message',
+      );
+      expect(result).toBe(true);
+
+      // Should have broadcast the follow-up user message (subscribe also
+      // replays the initial prompt from the event buffer, so filter by content)
+      const userEvents = capturedEvents.filter(
+        (e) =>
+          e.type === 'event' &&
+          (e.event as Record<string, unknown>).type === 'user',
+      );
+      const followUp = userEvents.find((e) => {
+        const msg = (e as { event: { message: { content: string } } }).event
+          .message;
+        return msg.content === 'follow-up message';
+      });
+      expect(followUp).toBeDefined();
+      const event = (followUp as { event: Record<string, unknown> }).event;
+      expect(event.type).toBe('user');
+      expect((event.message as { content: string }).content).toBe(
+        'follow-up message',
+      );
+      expect(event.session_id).toBe('sdk-msg-test');
+      expect(event.uuid).toBeDefined();
+
+      // Cleanup
+      resolveBlock?.();
+      await new Promise((r) => setTimeout(r, 100));
+    });
+
+    it('returns false when session does not exist', async () => {
+      const { sendMessageToSession } = await import('./manager');
+      expect(sendMessageToSession('nonexistent', 'hello')).toBe(false);
+    });
+
+    it('returns false when sdkSessionId is not yet set', async () => {
+      // Use an iterator that never yields an init event
+      let resolveBlock: (() => void) | undefined;
+      const blockPromise = new Promise<void>((r) => {
+        resolveBlock = r;
+      });
+      const blockingIter = {
+        // biome-ignore lint/correctness/useYield: blocking mock — stalls without yielding init
+        async *[Symbol.asyncIterator]() {
+          await blockPromise;
+        },
+        streamInput: vi.fn().mockResolvedValue(undefined),
+      };
+      vi.mocked(mockSdkQuery).mockReturnValue(blockingIter as never);
+
+      const { startSession, sendMessageToSession } = await import('./manager');
+
+      await startSession({
+        sessionId: 'no-init-test',
+        repoPath: '/tmp/test',
+        prompt: 'test',
+      });
+
+      // sdkSessionId not set yet (no init event)
+      await new Promise((r) => setTimeout(r, 20));
+      expect(sendMessageToSession('no-init-test', 'hello')).toBe(false);
+
+      // Cleanup
+      resolveBlock?.();
+      await new Promise((r) => setTimeout(r, 100));
     });
   });
 });

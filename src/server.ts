@@ -9,6 +9,7 @@ import homepage from '../public/index.html';
 import {
   getSession,
   respondToApproval,
+  sendMessageToSession,
   startSession,
   stopSession,
   subscribe,
@@ -188,15 +189,19 @@ async function companionPoll() {
       {},
     );
     for (const msg of messages) {
-      // Mark consumed immediately to prevent re-delivery
-      try {
-        await callConvexInternal('/api/internal/sessionMessages/markConsumed', {
-          id: msg._id,
-        });
-      } catch {}
-      // TODO: Inject message into running SDK session via session.sdkQuery
-      // The SDK Query type doesn't currently expose a sendMessage API.
-      // For now, messages are stored in Convex for future implementation.
+      const delivered = sendMessageToSession(msg.sessionId, msg.text);
+      // Mark consumed only on successful delivery — if the session isn't
+      // running locally, leave the message unconsumed for retry.
+      if (delivered) {
+        try {
+          await callConvexInternal(
+            '/api/internal/sessionMessages/markConsumed',
+            { id: msg._id },
+          );
+        } catch (err) {
+          console.error(`Failed to mark message ${msg._id} as consumed:`, err);
+        }
+      }
     }
   } catch (err) {
     // Don't log every poll failure (noisy when Convex is unavailable)
