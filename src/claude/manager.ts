@@ -133,8 +133,8 @@ class SdkMessageChannel implements AsyncIterable<SDKUserMessage> {
   private done = false;
   private iteratorCreated = false;
 
-  push(msg: SDKUserMessage): void {
-    if (this.done) return;
+  push(msg: SDKUserMessage): boolean {
+    if (this.done) return false;
     if (this.waiting) {
       const resolve = this.waiting;
       this.waiting = null;
@@ -142,6 +142,7 @@ class SdkMessageChannel implements AsyncIterable<SDKUserMessage> {
     } else {
       this.queue.push(msg);
     }
+    return true;
   }
 
   close(): void {
@@ -808,7 +809,8 @@ export function sendMessageToSession(sessionId: string, text: string): boolean {
     session_id: session.sdkSessionId,
   };
 
-  session.messageChannel.push(userMsg);
+  const pushed = session.messageChannel.push(userMsg);
+  if (!pushed) return false;
 
   // Show the message in the conversation UI and persist to Convex
   broadcast(session, { type: 'event', sessionId, event: userMsg });
