@@ -40,13 +40,14 @@ Before writing any code, use the `Explore` subagent to understand the relevant p
 > - Any prior art or similar features already built
 > - Potential pitfalls, edge cases, or gotchas
 >
-> Write your findings to `.autopilot/research.md` with sections: Overview, Relevant Files,
+> Determine the branch name with `git branch --show-current` and use it as a suffix.
+> Write your findings to `.autopilot/research-<branch>.md` with sections: Overview, Relevant Files,
 > Patterns to Follow (with code snippets from the existing codebase), Risks & Gotchas,
 > and Dependencies.
 
 ### 3. Plan the Implementation
 
-Based on the research, write an implementation plan to `.autopilot/plan.md`:
+Based on the research, write an implementation plan to `.autopilot/plan-<branch>.md` (same branch suffix as the research file):
 
 - List the files to create or modify (in order)
 - For each file, describe the approach and include **code snippet examples** showing how it should look — reference existing patterns from the research (e.g., "follow the same pattern as `SessionDropdown.tsx` lines 20-35")
@@ -62,7 +63,7 @@ the feature spans multiple PRs and you need to preserve context across sessions.
 
 ### 4. Implement the Feature
 
-Implement the feature described in `$ARGUMENTS`, following `.autopilot/plan.md`.
+Implement the feature described in `$ARGUMENTS`, following `.autopilot/plan-<branch>.md`.
 
 **Commit atomically** — each commit should be one logical change (e.g., schema
 change, then backend handler, then frontend component). Don't batch unrelated

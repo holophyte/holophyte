@@ -46,8 +46,9 @@ Spawn a researcher to explore the codebase before planning:
 > - Any prior art or similar features already built
 > - Potential pitfalls, edge cases, or gotchas
 >
-> Read CLAUDE.md first for project conventions. Write your findings to
-> `.autopilot/research.md` with sections: **Overview**, **Relevant Files** (with
+> Read CLAUDE.md first for project conventions. Determine the branch name with
+> `git branch --show-current` and use it as a suffix. Write your findings to
+> `.autopilot/research-<branch>.md` with sections: **Overview**, **Relevant Files** (with
 > paths and line ranges), **Patterns to Follow** (with code snippets from the
 > existing codebase), **Risks & Gotchas**, and **Dependencies**.
 > Do NOT write any code — research only.
@@ -60,8 +61,8 @@ Spawn a planner to design the implementation based on research findings:
 
 **Planner** (use Sonnet):
 > You are the implementation planner for the Holophyte project. Read the
-> researcher's findings from `.autopilot/research.md`, then write an
-> implementation plan to `.autopilot/plan.md`.
+> researcher's findings from `.autopilot/research-<branch>.md`, then write an
+> implementation plan to `.autopilot/plan-<branch>.md` (same branch suffix).
 >
 > The plan should include:
 >
@@ -88,14 +89,14 @@ Spawn a planner to design the implementation based on research findings:
 > Create tasks in the task list with clear descriptions and file ownership.
 > Do NOT write any code — planning only.
 
-Wait for the planner to finish. Review `.autopilot/plan.md` and the tasks — adjust if needed before spawning the team.
+Wait for the planner to finish. Review `.autopilot/plan-<branch>.md` and the tasks — adjust if needed before spawning the team.
 
 **Note:** `.autopilot/` is gitignored — do not commit research or plan files unless
 the feature spans multiple PRs and you need to preserve context across sessions.
 
 ### 4. Spawn the Team
 
-Based on the planner's recommendation in `.autopilot/plan.md`, choose which
+Based on the planner's recommendation in `.autopilot/plan-<branch>.md`, choose which
 implementers and support agents to spawn. **Not every role is needed every time** —
 spawn only what the feature requires.
 
@@ -103,7 +104,7 @@ spawn only what the feature requires.
 
 **Frontend Implementer** — spawn when tasks touch `src/frontend/`:
 > You are the frontend implementer for the Holophyte project. Read the plan at
-> `.autopilot/plan.md` and claim frontend tasks from the task list. Your domain:
+> `.autopilot/plan-<branch>.md` and claim frontend tasks from the task list. Your domain:
 > React components, hooks, Zustand stores, Tailwind styles, and assistant-ui
 > integration. Follow patterns in CLAUDE.md — use `cn()` for classNames, Radix UI
 > for primitives, `useQuery`/`useMutation` for Convex data, inline Zustand
@@ -112,7 +113,7 @@ spawn only what the feature requires.
 
 **Backend Implementer** — spawn when tasks touch `src/server.ts` or `src/claude/`:
 > You are the backend implementer for the Holophyte project. Read the plan at
-> `.autopilot/plan.md` and claim backend tasks from the task list. Your domain:
+> `.autopilot/plan-<branch>.md` and claim backend tasks from the task list. Your domain:
 > Bun.serve() routes, WebSocket handlers, Claude Agent SDK session management
 > (`src/claude/manager.ts`), and companion polling logic. Follow patterns in
 > CLAUDE.md — use `Bun.serve()` for HTTP, structured JSON responses, `console.error`
@@ -121,7 +122,7 @@ spawn only what the feature requires.
 
 **Convex Implementer** — spawn when tasks touch `convex/`:
 > You are the Convex implementer for the Holophyte project. Read the plan at
-> `.autopilot/plan.md` and claim Convex tasks from the task list. Your domain:
+> `.autopilot/plan-<branch>.md` and claim Convex tasks from the task list. Your domain:
 > schema changes, queries, mutations, actions, and HTTP endpoints in `convex/`.
 > Follow patterns in CLAUDE.md — use `v` validators for all args, object-style
 > function definitions, descriptive index names, `Date.now()` for timestamps.
@@ -129,7 +130,7 @@ spawn only what the feature requires.
 
 **DevOps Implementer** — spawn when tasks touch infra, CI/CD, scripts, or config:
 > You are the devops implementer for the Holophyte project. Read the plan at
-> `.autopilot/plan.md` and claim infrastructure tasks from the task list. Your
+> `.autopilot/plan-<branch>.md` and claim infrastructure tasks from the task list. Your
 > domain: shell scripts in `scripts/`, GitHub Actions workflows, deployment config,
 > `package.json` scripts, `.dev-ports`, worktree tooling, and Convex deployment.
 > Follow patterns in CLAUDE.md — use Bun for everything, respect `.dev-ports` for
@@ -138,7 +139,7 @@ spawn only what the feature requires.
 
 **General Implementer** — spawn for simple features or when one agent can handle it all:
 > You are the implementer for the Holophyte project. Read the plan at
-> `.autopilot/plan.md` and claim implementation tasks from the task list. When done
+> `.autopilot/plan-<branch>.md` and claim implementation tasks from the task list. When done
 > with a task, mark it complete and claim the next one. Follow patterns in CLAUDE.md.
 > Coordinate with the reviewer — if they flag issues, fix them before moving on.
 > Do not write tests — the tester handles that.
@@ -146,7 +147,7 @@ spawn only what the feature requires.
 #### Support Agents (always spawn reviewer; others as needed)
 
 **Reviewer** (always spawn):
-> You are the code reviewer for the Holophyte project. Read `.autopilot/plan.md`
+> You are the code reviewer for the Holophyte project. Read `.autopilot/plan-<branch>.md`
 > for context. Monitor implementers' work by watching for completed tasks. Review
 > each changed file for correctness, conventions, and security. Message the
 > implementer directly with any issues — organized as critical (must fix), warnings
