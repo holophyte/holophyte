@@ -22,13 +22,13 @@ Add `/** */` JSDoc/TSDoc to exported functions, interfaces, and types that lack 
 
 ```typescript
 /**
- * Manages PTY processes for Claude Code sessions.
+ * Starts a Claude Code session via the Agent SDK.
  *
  * @param taskId - The Convex task ID to associate with the session
  * @param prompt - The initial prompt to send to Claude Code
- * @returns The spawned session with its process handle
+ * @returns The session ID and WebSocket endpoint for real-time event streaming
  */
-export function spawnSession(taskId: string, prompt: string): Session { ... }
+export function startSession(taskId: string, prompt: string): Session { ... }
 ```
 
 **Rules:**

@@ -126,7 +126,7 @@ Parse conventional commit prefixes and group:
 - Fix WebSocket reconnection on timeout (b7c8d9e)
 
 ### Refactoring
-- Refactor PTY manager for multi-session support (f0a1b2c)
+- Refactor session manager for multi-session support (f0a1b2c)
 
 ### Chores
 - Update dependencies (c3d4e5f)

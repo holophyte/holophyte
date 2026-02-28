@@ -62,7 +62,7 @@ Use a conventional commit prefix followed by a concise description. Choose the p
 Examples:
 - `feat: add terminal resize support`
 - `fix: WebSocket reconnection on session timeout`
-- `refactor: extract PTY manager into separate module`
+- `refactor: extract session manager into separate module`
 
 ### Description Guidelines
 
