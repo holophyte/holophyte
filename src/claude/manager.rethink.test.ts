@@ -48,6 +48,7 @@ function createMockIterator(events: Array<Record<string, unknown>>) {
     next: vi.fn(),
     return: vi.fn(),
     throw: vi.fn(),
+    streamInput: vi.fn().mockResolvedValue(undefined),
   };
 }
 
@@ -75,6 +76,7 @@ function createBlockingIterator() {
         result: 'Done',
       };
     },
+    streamInput: vi.fn().mockResolvedValue(undefined),
   };
 
   return { iter, resolveBlock: () => resolveBlock?.(), used: false };
@@ -146,6 +148,7 @@ describe('session-rethink: idle status replaces completed/stopped', () => {
           abortReject = reject;
         });
       },
+      streamInput: vi.fn().mockResolvedValue(undefined),
     };
     vi.mocked(mockSdkQuery).mockReturnValue(mockIter as never);
 
