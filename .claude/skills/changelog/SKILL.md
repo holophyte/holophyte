@@ -119,7 +119,7 @@ Parse conventional commit prefixes and group:
 **Range**: `v1.0..HEAD` (12 commits)
 
 ### Features
-- Add terminal resize support (a1b2c3d)
+- Add session resume support (a1b2c3d)
 - Add repo deletion with cascade (d4e5f6a)
 
 ### Bug Fixes

@@ -60,7 +60,7 @@ Use a conventional commit prefix followed by a concise description. Choose the p
 - `docs:` — documentation only
 
 Examples:
-- `feat: add terminal resize support`
+- `feat: add session resume support`
 - `fix: WebSocket reconnection on session timeout`
 - `refactor: extract session manager into separate module`
 
