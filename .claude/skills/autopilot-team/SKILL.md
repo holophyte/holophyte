@@ -30,25 +30,59 @@ bun run worktree:create <feature-name>
 
 Work from the new worktree directory after creation.
 
-### 2. Plan the Work
+### 2. Research
 
-Before spawning teammates, break `$ARGUMENTS` into discrete tasks:
+Spawn a researcher to explore the codebase before planning:
 
-- Identify which files/modules need changes
-- Split work so each teammate owns different files (avoid conflicts)
-- Aim for 3-6 tasks total across teammates
-- Create tasks using the task list so teammates can self-claim
+**Researcher** (use Sonnet):
+> You are the researcher for the Holophyte project. Your job is to explore the
+> codebase and gather context before implementation begins. For the feature
+> described in the task list, find:
+>
+> - Existing patterns and conventions relevant to this change
+> - Files that will need to be modified or serve as reference implementations
+> - Related components, hooks, utilities, or Convex functions
+> - Schema/data model implications
+> - Any prior art or similar features already built
+> - Potential pitfalls, edge cases, or gotchas
+>
+> Read CLAUDE.md first for project conventions. Report your findings as a
+> structured summary: relevant files, patterns to follow, risks, and
+> dependencies. Do NOT write any code — research only.
 
-### 3. Spawn the Team
+Wait for the researcher to finish before proceeding to step 3.
+
+### 3. Plan the Work
+
+Spawn a planner to design the implementation based on research findings:
+
+**Planner** (use Sonnet):
+> You are the implementation planner for the Holophyte project. Based on the
+> researcher's findings (shared via the task list or message), create a concrete
+> implementation plan:
+>
+> - Break the feature into discrete, parallelizable tasks (aim for 3-6)
+> - Assign each task to specific files/modules to avoid merge conflicts
+> - Note which existing patterns each task should follow (reference specific files)
+> - Identify task dependencies — what must be done first vs. what can parallelize
+> - Flag risks or architectural decisions that need the team lead's input
+>
+> Create tasks in the task list with clear descriptions and file ownership.
+> Do NOT write any code — planning only.
+
+Wait for the planner to finish. Review the plan and tasks — adjust if needed before spawning implementers.
+
+### 4. Spawn the Team
 
 Spawn teammates with specific roles:
 
 **Implementer** (use Sonnet):
 > You are the implementer for the Holophyte project. Your job is to write feature
-> code following the patterns in CLAUDE.md. Claim implementation tasks from the
-> task list. When done with a task, mark it complete and claim the next one.
-> Coordinate with the reviewer — if they flag issues, fix them before moving on.
-> Do not write tests — the tester handles that.
+> code following the patterns in CLAUDE.md and the implementation plan from the
+> planner. Claim implementation tasks from the task list. When done with a task,
+> mark it complete and claim the next one. Coordinate with the reviewer — if they
+> flag issues, fix them before moving on. Do not write tests — the tester handles
+> that.
 
 **Reviewer** (use Sonnet):
 > You are the code reviewer for the Holophyte project. Monitor the implementer's
@@ -111,7 +145,7 @@ Spawn teammates with specific roles:
 > Do not modify implementation logic. Coordinate with the tester to avoid file
 > conflicts.
 
-### 4. Coordinate
+### 5. Coordinate
 
 As team lead:
 
@@ -119,9 +153,9 @@ As team lead:
 - Redirect teammates if they go off-track
 - Resolve conflicts if teammates disagree
 - When all tasks are complete, ask the reviewer for a final review
-- When the reviewer approves, proceed to step 5
+- When the reviewer approves, proceed to step 6
 
-### 5. Quality Checks
+### 6. Quality Checks
 
 After all teammates finish:
 
@@ -136,7 +170,7 @@ cd docs && bunx docusaurus build
 
 Fix any remaining issues. Use the `test-fixer` subagent if tests fail.
 
-### 6. Commit and Push
+### 7. Commit and Push
 
 ```bash
 git add <relevant files>
@@ -144,7 +178,7 @@ git commit -m "<conventional commit message>"
 git push -u origin $(git branch --show-current)
 ```
 
-### 7. Create PR
+### 8. Create PR
 
 ```bash
 gh pr create --title "<type>: <description>" --body "<summary of changes>"
@@ -152,7 +186,7 @@ gh pr create --title "<type>: <description>" --body "<summary of changes>"
 
 Use a conventional prefix in the title (`feat:`, `fix:`, `refactor:`, etc.).
 
-### 8. Greptile Review Loop
+### 9. Greptile Review Loop
 
 Wait for all PR checks (including Greptile) to complete, then iterate on comments:
 
@@ -173,7 +207,7 @@ Wait for all PR checks (including Greptile) to complete, then iterate on comment
 5. **Repeat** from step 1 (max 3 iterations)
 6. **Exit** when no new comments appear or max iterations reached
 
-### 9. Summary
+### 10. Summary
 
 When exiting, display:
 - Teammates spawned and their roles
