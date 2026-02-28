@@ -2,13 +2,13 @@
 
 **Project management app for running parallel Claude Code sessions.**
 
-Holophyte is a kanban board application that lets you create tasks with prompts, launch Claude Code in PTY terminals per task, and stream terminal output to your browser via WebSocket in real-time.
+Holophyte is a kanban board application that lets you create tasks with prompts, launch Claude Code sessions via the Agent SDK per task, and stream structured events to your browser via WebSocket in real-time.
 
 ## Features
 
 - **Kanban Board UI** — Organize tasks across customizable workflow states
-- **Terminal Per Task** — Each task spawns its own Claude Code PTY session
-- **Real-time Streaming** — WebSocket-powered terminal I/O in the browser using xterm.js
+- **Session Per Task** — Each task spawns its own Claude Code session via the Agent SDK
+- **Real-time Streaming** — WebSocket-powered structured SDK events rendered in an assistant-ui conversation UI
 - **Real-time Database** — Convex provides instant synchronization across all clients
 - **Parallel Development** — Git worktrees for isolated feature branches with per-workspace local Convex backends
 
@@ -18,14 +18,14 @@ Holophyte is a kanban board application that lets you create tasks with prompts,
 - **Frontend:** [React 19](https://react.dev/) + [Zustand](https://zustand.docs.pmnd.rs/) (state management)
 - **Backend:** Bun.serve() with routes + WebSocket handler
 - **Database:** [Convex](https://convex.dev/) — Real-time database with automatic synchronization
-- **Terminal:** Bun native PTY ([`Bun.spawn`](https://bun.sh/docs/api/spawn#spawn-a-process)) + [xterm.js](https://xtermjs.org/)
+- **Sessions:** [Claude Agent SDK](https://github.com/anthropics/claude-agent-sdk) (`@anthropic-ai/claude-agent-sdk`) + [assistant-ui](https://www.assistant-ui.com/)
 - **Styling:** [Tailwind CSS v4](https://tailwindcss.com/) (CSS-first config)
 - **UI Components:** [Radix UI](https://www.radix-ui.com/)
 - **Icons:** [Lucide React](https://lucide.dev/)
 
 ## Prerequisites
 
-- [Bun](https://bun.sh/) v1.3.5+ (for native PTY support)
+- [Bun](https://bun.sh/) v1.3.5+
 - [Convex CLI](https://docs.convex.dev/cli) (`bunx convex`)
 - Git
 
@@ -101,13 +101,13 @@ bun run docs:dev         # Start Docusaurus docs server
 ├── src/
 │   ├── server.ts              # Bun.serve() with routes + WebSocket handler
 │   ├── claude/
-│   │   └── manager.ts         # PTY process management (spawn/stop/resize)
+│   │   └── manager.ts         # Claude Agent SDK session management (spawn/stop/approve)
 │   └── frontend/
 │       ├── index.tsx          # React entry, Convex client setup
-│       ├── App.tsx            # Main layout: Sidebar | Board | Terminal
+│       ├── App.tsx            # Main layout: Sidebar | KanbanBoard + SessionPanel | TaskDetailPanel
 │       ├── stores/app.ts      # Zustand store (UI state)
-│       ├── hooks/             # Custom React hooks (useTerminal, etc.)
-│       ├── components/        # UI components (Kanban, Task, Terminal, etc.)
+│       ├── hooks/             # Custom React hooks (useSession, etc.)
+│       ├── components/        # UI components (Kanban*, Task*, Session*, Sidebar, etc.)
 │       └── components/ui/     # Radix UI primitives
 ├── convex/
 │   ├── schema.ts              # Data model: repos, tasks, sessions
@@ -118,13 +118,13 @@ bun run docs:dev         # Start Docusaurus docs server
 
 ## Architecture
 
-### Data Flow for Terminal Sessions
+### Data Flow for SDK Sessions
 
-1. Frontend POSTs to `/api/sessions/start` with `taskId` + `prompt`
-2. Server spawns Claude Code via Bun native PTY (`Bun.spawn` with `terminal` option)
-3. Frontend opens WebSocket to `/ws/terminal/:sessionId`
-4. PTY output → `data` callback → WebSocket → xterm.js in browser
-5. User terminal input → WebSocket → `proc.terminal.write()` → PTY
+1. Frontend POSTs to `/api/sessions/start` with `taskId` + `prompt` + `model`
+2. Server spawns Claude Code via Claude Agent SDK (`@anthropic-ai/claude-agent-sdk`)
+3. Frontend opens WebSocket to `/ws/session/:sessionId`
+4. SDK events → `consumeIterator()` → WebSocket → SessionPanel conversation UI in browser
+5. User approvals → WebSocket → `respondToApproval()` → SDK resumes
 
 ### Database Schema
 
@@ -182,7 +182,7 @@ Server configuration uses environment variables with sensible defaults:
 
 - `PORT` (default: `8080`) — server port
 - `CONVEX_URL` — Convex deployment URL (served to frontend via `/api/config`)
-- `SHELL` (default: `/bin/zsh`) — login shell for PTY env resolution
+- `SHELL` (default: `/bin/zsh`) — login shell for environment resolution
 - `CONVEX_DEPLOYMENT` — managed by `convex dev` in `.env.local`
 
 ## Contributing
@@ -203,7 +203,7 @@ Pre-commit hooks will automatically run to ensure code quality.
 
 - Built with [Bun](https://bun.sh/)
 - Real-time database by [Convex](https://convex.dev/)
-- Terminal emulation by [xterm.js](https://xtermjs.org/)
+- Conversation UI by [assistant-ui](https://www.assistant-ui.com/)
 - UI components by [Radix UI](https://www.radix-ui.com/)
 
 ---
