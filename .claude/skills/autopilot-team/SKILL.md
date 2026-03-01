@@ -102,6 +102,9 @@ spawn only what the feature requires.
 
 #### Implementer Specialists (pick based on plan)
 
+Each sub-agent should determine the current branch with `git branch --show-current`
+to resolve the `<branch>` placeholder in file paths below.
+
 **Frontend Implementer** — spawn when tasks touch `src/frontend/`:
 > You are the frontend implementer for the Holophyte project. Read the plan at
 > `.autopilot/plan-<branch>.md` and claim frontend tasks from the task list. Your domain:
