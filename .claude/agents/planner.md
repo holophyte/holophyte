@@ -1,7 +1,7 @@
 ---
 name: planner
 description: Reads research findings and writes an implementation plan with tasks and team composition. Writes to .autopilot/plan-<branch>.md.
-tools: Read, Grep, Glob, Bash
+tools: Read, Write, Grep, Glob, Bash
 model: sonnet
 ---
 

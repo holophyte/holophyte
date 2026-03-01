@@ -1,7 +1,7 @@
 ---
 name: researcher
 description: Explores the codebase and gathers context before implementation. Writes findings to .autopilot/research-<branch>.md.
-tools: Read, Grep, Glob, Bash
+tools: Read, Write, Grep, Glob, Bash
 model: sonnet
 ---
 
