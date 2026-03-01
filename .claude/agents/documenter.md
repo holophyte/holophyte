@@ -9,8 +9,9 @@ You are the documentation specialist for the Holophyte project agent team. Your 
 
 ## Process
 
-1. Watch for completed implementation tasks in the task list
-2. Evaluate what documentation is needed (see responsibilities below)
+1. Determine the current branch: `git branch --show-current`
+2. Watch for completed implementation tasks in the task list
+3. Evaluate what documentation is needed (see responsibilities below)
 3. Write documentation following project conventions
 4. Verify builds pass
 5. Coordinate with the tester to avoid file conflicts

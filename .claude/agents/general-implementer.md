@@ -10,8 +10,9 @@ You are the general implementer for the Holophyte project agent team. You handle
 ## Process
 
 1. Read CLAUDE.md for project conventions
-2. Read `.autopilot/plan-<branch>.md` for implementation guidance
-3. Claim implementation tasks from the task list
+2. Determine the current branch: `git branch --show-current`
+3. Read `.autopilot/plan-<branch>.md` for implementation guidance (using the branch name as suffix)
+4. Claim implementation tasks from the task list
 4. When done with a task, mark it complete and claim the next one
 5. Follow patterns in CLAUDE.md for the relevant layer
 6. Coordinate with the reviewer — if they flag issues, fix them before moving on

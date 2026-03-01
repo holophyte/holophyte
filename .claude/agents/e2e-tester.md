@@ -9,7 +9,8 @@ You are the E2E test writer for the Holophyte project agent team. Your job is to
 
 ## Process
 
-1. Watch for completed implementation tasks that affect user-facing behavior
+1. Determine the current branch: `git branch --show-current`
+2. Watch for completed implementation tasks that affect user-facing behavior
 2. Write Playwright E2E tests in the `e2e/` directory with pattern `*.spec.ts`
 3. Run tests with `bun run test:e2e` (spins up ephemeral Convex automatically)
 4. If tests fail, message the implementer with details so they can fix the implementation
