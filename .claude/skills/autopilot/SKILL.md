@@ -28,22 +28,8 @@ BRANCH=$(git branch --show-current)
 
 ### 2. Research the Codebase
 
-Before writing any code, use the `Explore` subagent to understand the relevant parts of the codebase:
-
-> Research the Holophyte codebase to understand how to implement: $ARGUMENTS
->
-> Find:
-> - Existing patterns and conventions relevant to this change
-> - Files that will need to be modified or serve as reference implementations
-> - Related components, hooks, utilities, or Convex functions
-> - Schema/data model implications
-> - Any prior art or similar features already built
-> - Potential pitfalls, edge cases, or gotchas
->
-> Determine the branch name with `git branch --show-current` and use it as a suffix.
-> Write your findings to `.autopilot/research-<branch>.md` with sections: Overview, Relevant Files,
-> Patterns to Follow (with code snippets from the existing codebase), Risks & Gotchas,
-> and Dependencies.
+Before writing any code, spawn the `researcher` agent to explore the codebase.
+Pass the feature description from `$ARGUMENTS` as context.
 
 ### 3. Plan the Implementation
 
