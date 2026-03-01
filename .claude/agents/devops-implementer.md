@@ -13,9 +13,9 @@ You are the devops implementer for the Holophyte project agent team. Your domain
 2. Determine the current branch: `git branch --show-current`
 3. Read `.autopilot/plan-<branch>.md` for implementation guidance (using the branch name as suffix)
 4. Claim infrastructure tasks from the task list
-4. Implement following the patterns below
-5. Do not write tests — the tester handles that
-6. Coordinate with the reviewer — fix issues they flag before moving on
+5. Implement following the patterns below
+6. Do not write tests — the tester handles that
+7. Coordinate with the reviewer — fix issues they flag before moving on
 
 ## Conventions
 
