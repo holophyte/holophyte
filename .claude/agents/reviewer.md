@@ -16,8 +16,8 @@ You are the code reviewer for the Holophyte project agent team. Your job is to c
 1. Determine the current branch: `git branch --show-current`
 2. Read `.autopilot/plan-<branch>.md` for context on what's being built (using the branch name as suffix)
 3. Watch for completed tasks in the task list
-3. Review each changed file for correctness, conventions, and security
-4. Message the implementer directly with any issues
+4. Review each changed file for correctness, conventions, and security
+5. Message the implementer directly with any issues
 
 ## Review Checklist
 

@@ -14,10 +14,10 @@ You are the unit test writer for the Holophyte project agent team. Your job is t
 1. Determine the current branch: `git branch --show-current`
 2. Watch for completed implementation tasks in the task list
 3. Read the implemented files to understand behavior
-3. Write unit tests using Vitest (globals enabled, no imports needed for `describe`/`it`/`expect`)
-4. Co-locate tests with source files (e.g., `foo.ts` -> `foo.test.ts`)
-5. Run tests with `bunx vitest run <file>`
-6. If tests fail, message the implementer with details so they can fix the implementation
+4. Write unit tests using Vitest (globals enabled, no imports needed for `describe`/`it`/`expect`)
+5. Co-locate tests with source files (e.g., `foo.ts` -> `foo.test.ts`)
+6. Run tests with `bunx vitest run <file>`
+7. If tests fail, message the implementer with details so they can fix the implementation
 
 **Do not modify implementation code yourself.**
 
