@@ -901,6 +901,120 @@ describe('claude/manager (SDK-based)', () => {
   });
 
   // ---------------------------------------------------------------------------
+  // resumed session flush behavior
+  // ---------------------------------------------------------------------------
+
+  describe('resumed session flush behavior', () => {
+    it('calls flushEvents for every event when resumeSdkSessionId is provided', async () => {
+      process.env.CONVEX_SITE_URL = 'http://localhost:3211';
+      process.env.INTERNAL_API_SECRET = 'test-secret';
+
+      let insertBatchCallCount = 0;
+      const fetchSpy = vi
+        .spyOn(globalThis, 'fetch')
+        .mockImplementation(async (input: RequestInfo | URL) => {
+          const url = typeof input === 'string' ? input : input.toString();
+          if (url.includes('sessionEvents/insertBatch')) {
+            insertBatchCallCount++;
+          }
+          // getNextBatchIndex returns nextBatchIndex = 0
+          if (url.includes('sessionEvents/getNextBatchIndex')) {
+            return new Response(JSON.stringify({ nextBatchIndex: 5 }), {
+              status: 200,
+            });
+          }
+          return new Response('{}', { status: 200 });
+        });
+
+      // Three events from the iterator; plus one synthetic prompt event = 4 total
+      const mockEvents = [
+        { type: 'assistant', text: 'Hello' },
+        { type: 'assistant', text: 'World' },
+        {
+          type: 'result',
+          subtype: 'success',
+          is_error: false,
+          result: 'Done',
+          session_id: 'sdk-resume-flush',
+        },
+      ];
+      const mockIter = createMockIterator(mockEvents);
+      vi.mocked(mockSdkQuery).mockReturnValue(mockIter as never);
+
+      const { startSession } = await import('./manager');
+
+      await startSession({
+        sessionId: 'resume-flush-test',
+        repoPath: '/tmp',
+        prompt: 'continue the work',
+        resumeSdkSessionId: 'sdk-resume-flush',
+      });
+
+      // Wait for the iterator to complete and all flushes to settle
+      await new Promise((r) => setTimeout(r, 200));
+
+      fetchSpy.mockRestore();
+      delete process.env.CONVEX_SITE_URL;
+      delete process.env.INTERNAL_API_SECRET;
+
+      // Each event triggers an immediate flush (per-event). The prompt synthetic
+      // event + 3 iterator events = 4 total inserts (flushing is idempotent so
+      // empty flushes are no-ops). Allow for at least 4 insertBatch calls.
+      expect(insertBatchCallCount).toBeGreaterThanOrEqual(4);
+    });
+
+    it('does NOT flush per-event for non-resumed sessions (uses 5s timer)', async () => {
+      process.env.CONVEX_SITE_URL = 'http://localhost:3211';
+      process.env.INTERNAL_API_SECRET = 'test-secret';
+
+      let insertBatchCallCount = 0;
+      const fetchSpy = vi
+        .spyOn(globalThis, 'fetch')
+        .mockImplementation(async (input: RequestInfo | URL) => {
+          const url = typeof input === 'string' ? input : input.toString();
+          if (url.includes('sessionEvents/insertBatch')) {
+            insertBatchCallCount++;
+          }
+          return new Response('{}', { status: 200 });
+        });
+
+      const mockEvents = [
+        { type: 'assistant', text: 'Hello' },
+        { type: 'assistant', text: 'World' },
+        {
+          type: 'result',
+          subtype: 'success',
+          is_error: false,
+          result: 'Done',
+          session_id: 'sdk-no-resume',
+        },
+      ];
+      const mockIter = createMockIterator(mockEvents);
+      vi.mocked(mockSdkQuery).mockReturnValue(mockIter as never);
+
+      const { startSession } = await import('./manager');
+
+      await startSession({
+        sessionId: 'no-resume-flush-test',
+        repoPath: '/tmp',
+        prompt: 'fresh session',
+        // No resumeSdkSessionId — non-resumed session
+      });
+
+      // Wait for the iterator to complete (but NOT the 5s flush timer)
+      await new Promise((r) => setTimeout(r, 150));
+
+      fetchSpy.mockRestore();
+      delete process.env.CONVEX_SITE_URL;
+      delete process.env.INTERNAL_API_SECRET;
+
+      // Non-resumed sessions only flush in the finally block (once) — not per-event.
+      // The MAX_BUFFER_SIZE (200) is not reached by 4 events, so only 1 flush occurs.
+      expect(insertBatchCallCount).toBe(1);
+    });
+  });
+
+  // ---------------------------------------------------------------------------
   // sendMessageToSession
   // ---------------------------------------------------------------------------
 

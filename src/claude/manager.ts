@@ -79,6 +79,8 @@ interface Session {
   messageChannel: SdkMessageChannel;
   /** Whether a persistence warning has already been sent to subscribers. */
   persistenceWarned?: boolean;
+  /** True when this session was started via resume — triggers per-event Convex flush. */
+  isResume: boolean;
 }
 
 const sessions = new Map<string, Session>();
@@ -338,7 +340,7 @@ function bufferEvent(session: Session, event: SDKMessage): void {
     timestamp: Date.now(),
   });
 
-  if (session.eventBuffer.length >= MAX_BUFFER_SIZE) {
+  if (session.isResume || session.eventBuffer.length >= MAX_BUFFER_SIZE) {
     void flushEvents(session);
   }
 }
@@ -453,6 +455,7 @@ export async function startSession(opts: {
     permissionMode: mode,
     model: opts.model ?? DEFAULT_MODEL,
     messageChannel: new SdkMessageChannel(),
+    isResume: !!opts.resumeSdkSessionId,
   };
 
   sessions.set(sessionId, session);
@@ -541,6 +544,11 @@ export async function startSession(opts: {
     sdkOptions.resume = opts.resumeSdkSessionId;
   }
 
+  // Synchronously broadcast running status before launching the background iterator.
+  // This prevents a timing race where a WS subscriber connects after startSession()
+  // returns but before consumeIterator() reaches its first broadcast.
+  broadcast(session, { type: 'status', sessionId, status: 'running' });
+
   // Consume the SDK iterator in the background (non-blocking)
   consumeIterator(session, sessionId, opts.prompt, sdkOptions).catch((err) => {
     console.error('Unhandled error in session iterator:', err);
@@ -566,8 +574,6 @@ async function consumeIterator(
     iterator.streamInput(session.messageChannel).catch((err) => {
       console.error(`[session ${sessionId}] streamInput error:`, err);
     });
-
-    broadcast(session, { type: 'status', sessionId, status: 'running' });
 
     // Show the initial prompt as the first user message in the conversation
     const promptEvent = {
