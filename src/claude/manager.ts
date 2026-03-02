@@ -544,6 +544,11 @@ export async function startSession(opts: {
     sdkOptions.resume = opts.resumeSdkSessionId;
   }
 
+  // Synchronously broadcast running status before launching the background iterator.
+  // This prevents a timing race where a WS subscriber connects after startSession()
+  // returns but before consumeIterator() reaches its first broadcast.
+  broadcast(session, { type: 'status', sessionId, status: 'running' });
+
   // Consume the SDK iterator in the background (non-blocking)
   consumeIterator(session, sessionId, opts.prompt, sdkOptions).catch((err) => {
     console.error('Unhandled error in session iterator:', err);
@@ -569,8 +574,6 @@ async function consumeIterator(
     iterator.streamInput(session.messageChannel).catch((err) => {
       console.error(`[session ${sessionId}] streamInput error:`, err);
     });
-
-    broadcast(session, { type: 'status', sessionId, status: 'running' });
 
     // Show the initial prompt as the first user message in the conversation
     const promptEvent = {
