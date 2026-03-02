@@ -79,6 +79,8 @@ interface Session {
   messageChannel: SdkMessageChannel;
   /** Whether a persistence warning has already been sent to subscribers. */
   persistenceWarned?: boolean;
+  /** True when this session was started via resume — triggers per-event Convex flush. */
+  isResume: boolean;
 }
 
 const sessions = new Map<string, Session>();
@@ -338,7 +340,7 @@ function bufferEvent(session: Session, event: SDKMessage): void {
     timestamp: Date.now(),
   });
 
-  if (session.eventBuffer.length >= MAX_BUFFER_SIZE) {
+  if (session.isResume || session.eventBuffer.length >= MAX_BUFFER_SIZE) {
     void flushEvents(session);
   }
 }
@@ -453,6 +455,7 @@ export async function startSession(opts: {
     permissionMode: mode,
     model: opts.model ?? DEFAULT_MODEL,
     messageChannel: new SdkMessageChannel(),
+    isResume: !!opts.resumeSdkSessionId,
   };
 
   sessions.set(sessionId, session);

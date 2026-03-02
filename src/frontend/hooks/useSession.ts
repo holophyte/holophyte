@@ -166,6 +166,10 @@ export function useSession(sessionId: string | null): UseSessionReturn {
   const reconnectWs = useCallback(() => setWsConnectKey((k) => k + 1), []);
 
   const wsRef = useRef<WebSocket | null>(null);
+  // Track the last sessionId for which WS-side state was reset.
+  // Used to distinguish a session switch (reset everything) from a same-session
+  // WS reconnect (preserve wsEvents so live events aren't lost during the gap).
+  const lastResetSessionIdRef = useRef<string | null>(null);
 
   // Convex mutation for sending follow-up messages
   const sendSessionMessage = useMutation(api.sessionMessages.send);
@@ -251,13 +255,19 @@ export function useSession(sessionId: string | null): UseSessionReturn {
   useEffect(() => {
     if (!sessionId) return;
 
-    // Reset WS-side state on new session (persisted events reset via useQuery)
-    setWsEvents([]);
-    setPendingApprovals([]);
-    setSessionStatus(null);
+    // Reset WS-side state only when switching to a different session.
+    // On reconnect (wsConnectKey bump) within the same session, preserve
+    // wsEvents so events received before the reconnect are not lost.
+    if (sessionId !== lastResetSessionIdRef.current) {
+      lastResetSessionIdRef.current = sessionId;
+      setWsEvents([]);
+      setPendingApprovals([]);
+      setSessionStatus(null);
+      setMessageQueued(false);
+      setPersistenceWarning(null);
+    }
+    // Always reset isConnected — the WS is genuinely disconnected during a reconnect cycle.
     setIsConnected(false);
-    setMessageQueued(false);
-    setPersistenceWarning(null);
 
     let disposed = false;
     let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
