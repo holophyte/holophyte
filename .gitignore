@@ -57,5 +57,8 @@ docs/build
 .dev-ports
 .dev-local.pid
 
+# autopilot working files
+.autopilot/
+
 # Finder (MacOS) folder config
 .DS_Store

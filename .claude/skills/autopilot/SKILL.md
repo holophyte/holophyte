@@ -26,9 +26,34 @@ BRANCH=$(git branch --show-current)
 - If on `main`: derive a short feature name from `$ARGUMENTS` (e.g., "add drag reordering" becomes `drag-reordering`), then run `bun run worktree:create <feature-name>` and work from the new worktree directory
 - If already on a `feat/` branch: continue in the current directory
 
-### 2. Implement the Feature
+### 2. Research the Codebase
 
-Implement the feature described in `$ARGUMENTS`.
+Before writing any code, spawn the `researcher` agent to explore the codebase.
+Pass the feature description from `$ARGUMENTS` as context.
+
+### 3. Plan the Implementation
+
+Based on the research, write an implementation plan to `.autopilot/plan-<branch>.md` (same branch suffix as the research file):
+
+- List the files to create or modify (in order)
+- For each file, describe the approach and include **code snippet examples** showing how it should look — reference existing patterns from the research (e.g., "follow the same pattern as `SessionDropdown.tsx` lines 20-35")
+- Be **descriptive** — explain the _why_ and show the _shape_ of the code, not a line-by-line prescription. The implementer (you) should understand the intent and adapt.
+- Use prescriptive step-by-step instructions only for mechanical/boilerplate changes (schema migrations, config edits, etc.)
+- Identify risks or edge cases
+- If the plan has multiple valid approaches, pick the simplest one (KISS)
+
+Do NOT use EnterPlanMode — write the plan file, then proceed.
+
+**Note:** `.autopilot/` is gitignored — do not commit research or plan files unless
+the feature spans multiple PRs and you need to preserve context across sessions.
+
+### 4. Implement the Feature
+
+Implement the feature described in `$ARGUMENTS`, following `.autopilot/plan-<branch>.md`.
+
+**Commit atomically** — each commit should be one logical change (e.g., schema
+change, then backend handler, then frontend component). Don't batch unrelated
+changes into a single commit.
 
 - Follow all patterns and conventions in CLAUDE.md
 - Run quality checks when implementation is complete:
@@ -42,7 +67,7 @@ bun run test
 - If tests fail, use the `test-fixer` subagent to analyze and fix failures
 - Fix lint/type errors directly
 
-### 3. Self-Review with Subagents
+### 5. Self-Review with Subagents
 
 Before committing, run reviewers in parallel:
 
@@ -55,7 +80,7 @@ Before committing, run reviewers in parallel:
 - **Suggestions** are optional — skip unless clearly beneficial
 - Run quality checks again if changes were made
 
-### 3.5. Documentation, Testing, and Accessibility for New Code
+### 5.5. Documentation, Testing, and Accessibility for New Code
 
 Check for new and changed files on the branch:
 
@@ -129,7 +154,7 @@ cd docs && bunx docusaurus build
 
 Fix any failures before proceeding.
 
-### 4. Commit and Push
+### 6. Commit and Push
 
 ```bash
 git add <relevant files>
@@ -137,7 +162,7 @@ git commit -m "<conventional commit message>"
 git push -u origin $(git branch --show-current)
 ```
 
-### 5. Create or Update PR
+### 7. Create or Update PR
 
 Check if a PR already exists for this branch:
 
@@ -148,7 +173,7 @@ gh pr list --head $(git branch --show-current) --json number --jq '.[0].number'
 - If no PR exists, create one with `gh pr create` — use a conventional prefix in the title (e.g., `feat: add drag reordering to kanban columns`)
 - If PR exists, it's already updated by the push
 
-### 6. Poll for Greptile Review
+### 8. Poll for Greptile Review
 
 Wait for all PR checks (including Greptile) to complete, then fetch new comments:
 
@@ -160,7 +185,7 @@ This uses `gh pr checks --watch` to block until all checks finish, then shows an
 
 - If no new comments after checks complete, exit successfully — Greptile found nothing to flag
 
-### 7. Triage Comments
+### 9. Triage Comments
 
 Read the output from the polling script. Categorize each new comment:
 
@@ -174,7 +199,7 @@ Read the output from the polling script. Categorize each new comment:
 - False positives or misunderstandings of intent
 - Suggestions that would over-engineer the solution
 
-### 8. Address Comments
+### 10. Address Comments
 
 For each actionable comment:
 1. Read the file at the referenced line
@@ -191,7 +216,7 @@ gh api repos/{owner}/{repo}/pulls/<PR>/comments/<COMMENT_ID>/replies \
   -f body="<reply>"
 ```
 
-### 9. Push and Loop
+### 11. Push and Loop
 
 After addressing all comments:
 
@@ -209,9 +234,9 @@ git commit -m "fix: address greptile review feedback"
 git push
 ```
 
-Return to **Step 6** for the next round.
+Return to **Step 8** for the next round.
 
-### 10. Exit Conditions
+### 12. Exit Conditions
 
 Stop the loop when any of these are true:
 
@@ -219,7 +244,7 @@ Stop the loop when any of these are true:
 - **Max 3 iterations** — report remaining unresolved comments to the user
 - **Quality checks fail after 2 retries** — stop and report the errors
 
-### 11. Summary
+### 13. Summary
 
 When exiting, display:
 - Total iterations completed

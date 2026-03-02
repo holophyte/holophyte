@@ -136,11 +136,11 @@ Either way: install Playwright browsers via `bunx playwright install --with-deps
 
 **Trigger:** Pull requests that touch `src/claude/**`
 
-- Spin up a sandboxed environment and verify that the PTY manager can:
-  - Spawn a mock process using `Bun.spawn` with the `terminal` option
-  - Write to stdin and read from the data callback
-  - Handle resize signals
-  - Clean up processes on stop
+- Spin up a sandboxed environment and verify that the session manager can:
+  - Initialize a Claude Agent SDK session via `query()`
+  - Stream structured events through `startSession()` → `consumeIterator()` (internal)
+  - Handle tool approval flows via `canUseTool` callback
+  - Clean up sessions on stop via AbortController
 - This is essentially running `manager.test.ts` but could be extended to a heavier integration test with a real (or mocked) Claude Code binary
 
 ---

@@ -27,7 +27,7 @@ You are a test specialist for the Holophyte project. Your job is to write compre
 
 **E2E test when:**
 - Tests a user flow across multiple pages/components
-- Depends on WebSocket, xterm.js, or real server responses
+- Depends on WebSocket, SDK event streaming, or real server responses
 - Tests drag-drop, real-time updates, or cross-component interactions
 
 ## Unit Test Patterns
@@ -109,9 +109,9 @@ test('user can create a task', async ({ page }) => {
 });
 ```
 
-- Chromium only, base URL `http://localhost:8080`
+- Chromium only, base URL resolved from `.dev-ports`
 - Use `waitForApp(page)` helper to wait for hydration
-- Requires `bun run convex:dev` running separately
+- Run via `bun run test:e2e` (ephemeral Convex, fully self-contained) or `bun run test:e2e:isolated` (temp worktree)
 
 ## Unit Test File Convention
 
