@@ -159,9 +159,9 @@ for i in $(seq 1 30); do
   sleep 1
 done
 
-# Override SITE_URL to point at the app server port. The app server proxies
-# /api/auth/* to the Convex site port so OAuth callbacks work through a single
-# origin (matches what's configured in GitHub/Google OAuth apps).
+# Override SITE_URL (a Convex Auth env var) to point at the app server port.
+# The app server proxies /api/auth/* to the Convex site port so OAuth callbacks
+# work through a single origin (matches what's configured in GitHub/Google OAuth apps).
 cd "$WORKTREE_PATH" && bunx convex env set SITE_URL "http://localhost:$DEV_PORT"
 cd "$WORKTREE_PATH" && bunx convex env set ALLOW_ANONYMOUS_AUTH 1
 

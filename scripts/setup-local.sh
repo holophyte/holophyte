@@ -162,7 +162,7 @@ cleanup() {
 }
 trap cleanup EXIT
 
-# Set SITE_URL (app server port for OAuth callback proxying)
+# Set SITE_URL — required by Convex Auth (@convex-dev/auth) for OAuth callback routing.
 cd "$REPO_ROOT" && bunx convex env set SITE_URL "http://localhost:$DEV_PORT"
 info "Set SITE_URL=http://localhost:$DEV_PORT"
 
