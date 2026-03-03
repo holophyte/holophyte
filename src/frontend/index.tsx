@@ -7,11 +7,11 @@ import { convexUrl } from '@/frontend/lib/config';
 import { router } from './router';
 import './styles.css';
 
-// Config is injected synchronously by <script src="/config.js"> in index.html.
-// No async fetch needed — values are available immediately via lib/config.
+// Config is sourced from environment variables, inlined at build time by
+// Bun.build() (static) or substituted at serve-time by Bun.serve() (dev).
 
 if (!convexUrl) {
-  console.error('CONVEX_URL not configured — check /config.js');
+  console.error('CONVEX_URL not configured — check environment variables');
 } else {
   const convex = new ConvexReactClient(convexUrl);
 
