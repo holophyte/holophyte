@@ -238,26 +238,6 @@ const server = Bun.serve<WsData>({
   routes: {
     '/': homepage,
 
-    // Serves app config as a JS global, loaded by <script src="/config.js">
-    // in index.html. This replaces the old fetch('/api/config') call.
-    '/config.js': {
-      GET() {
-        const config = {
-          convexUrl: process.env.CONVEX_URL ?? '',
-          e2eTest:
-            !!process.env.E2E_TEST && process.env.NODE_ENV !== 'production',
-          allowAnonymousAuth:
-            process.env.NODE_ENV !== 'production' &&
-            !!process.env.ALLOW_ANONYMOUS_AUTH,
-          homeDir: process.env.HOME ?? '',
-        };
-        return new Response(
-          `window.__HOLOPHYTE_CONFIG__=${JSON.stringify(config)};`,
-          { headers: { 'Content-Type': 'application/javascript' } },
-        );
-      },
-    },
-
     // Proxy /api/auth/* to the Convex site URL so OAuth callbacks work through
     // the app port. GitHub/Google redirect back to SITE_URL (the app port) and
     // we forward the request to Convex's HTTP actions to complete the flow.
