@@ -159,16 +159,22 @@ for i in $(seq 1 30); do
   sleep 1
 done
 
-# Override SITE_URL to point at the app server port. The app server proxies
-# /api/auth/* to the Convex site port so OAuth callbacks work through a single
-# origin (matches what's configured in GitHub/Google OAuth apps).
+# Override SITE_URL (a Convex Auth env var) to point at the app server port.
+# The app server proxies /api/auth/* to the Convex site port so OAuth callbacks
+# work through a single origin (matches what's configured in GitHub/Google OAuth apps).
 cd "$WORKTREE_PATH" && bunx convex env set SITE_URL "http://localhost:$DEV_PORT"
 cd "$WORKTREE_PATH" && bunx convex env set ALLOW_ANONYMOUS_AUTH 1
 
 # Generate and set INTERNAL_API_SECRET for companion ↔ Convex communication
 INTERNAL_API_SECRET=$(openssl rand -hex 32)
 cd "$WORKTREE_PATH" && bunx convex env set INTERNAL_API_SECRET "$INTERNAL_API_SECRET"
-echo "INTERNAL_API_SECRET=$INTERNAL_API_SECRET" >> "$WORKTREE_PATH/.env"
+# Replace or append (never duplicate) the secret in .env
+ENV_FILE="$WORKTREE_PATH/.env"
+if [ -f "$ENV_FILE" ] && grep -q '^INTERNAL_API_SECRET=' "$ENV_FILE"; then
+  sed -i '' "s|^INTERNAL_API_SECRET=.*|INTERNAL_API_SECRET=$INTERNAL_API_SECRET|" "$ENV_FILE"
+else
+  echo "INTERNAL_API_SECRET=$INTERNAL_API_SECRET" >> "$ENV_FILE"
+fi
 
 # Generate JWT keys for Convex Auth (anonymous + OAuth login)
 echo "Setting up Convex Auth keys..."

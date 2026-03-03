@@ -6,6 +6,7 @@
   "private": true,
   "scripts": {
     "prepare": "git config core.hooksPath .githooks",
+    "build": "bun run scripts/build.ts",
     "dev": "scripts/dev.sh",
     "dev:all": "scripts/dev-all.sh",
     "dev:local": "scripts/dev-local.sh",
