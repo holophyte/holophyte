@@ -10,10 +10,12 @@
 export const convexUrl: string = process.env.CONVEX_URL ?? '';
 
 /** E2E test mode — skips auth gates when true. */
-export const e2eTest: boolean = !!process.env.E2E_TEST;
+export const e2eTest: boolean =
+  !!process.env.E2E_TEST && process.env.NODE_ENV !== 'production';
 
 /** Anonymous auth available — auto sign-in when `?auth` param is present. */
-export const allowAnonymousAuth: boolean = !!process.env.ALLOW_ANONYMOUS_AUTH;
+export const allowAnonymousAuth: boolean =
+  process.env.NODE_ENV !== 'production' && !!process.env.ALLOW_ANONYMOUS_AUTH;
 
 /** Server's home directory — used to expand `~` in paths. */
 export const homeDir: string = process.env.HOME ?? '';
