@@ -58,14 +58,25 @@ elif [ "$ENV_CONVEX_URL" != "$EXPECTED_URL" ]; then
   NEEDS_RECONFIGURE=true
 fi
 
+# ── Helpers ───────────────────────────────────────────────────────────
+# Replace or append a KEY=VALUE in a file (prevents duplicate entries).
+set_env_var() {
+  local file="$1" key="$2" value="$3"
+  if [ -f "$file" ] && grep -q "^${key}=" "$file"; then
+    sed -i '' "s|^${key}=.*|${key}=${value}|" "$file"
+  else
+    echo "${key}=${value}" >> "$file"
+  fi
+}
+
 # ── Ensure INTERNAL_API_SECRET is in .env (for the Bun server) ──────
 EXISTING_SECRET=""
 if [ -f "$ENV_FILE" ]; then
-  EXISTING_SECRET=$(grep '^INTERNAL_API_SECRET=' "$ENV_FILE" | cut -d= -f2 || true)
+  EXISTING_SECRET=$(grep '^INTERNAL_API_SECRET=' "$ENV_FILE" | head -1 | cut -d= -f2 || true)
 fi
 if [ -z "${EXISTING_SECRET:-}" ]; then
   INTERNAL_API_SECRET=$(openssl rand -hex 32)
-  echo "INTERNAL_API_SECRET=$INTERNAL_API_SECRET" >> "$ENV_FILE"
+  set_env_var "$ENV_FILE" "INTERNAL_API_SECRET" "$INTERNAL_API_SECRET"
   echo "Generated INTERNAL_API_SECRET and added to .env"
 else
   INTERNAL_API_SECRET="$EXISTING_SECRET"

@@ -172,7 +172,7 @@ info "Set ALLOW_ANONYMOUS_AUTH=1"
 
 # Generate and set INTERNAL_API_SECRET
 if [ "$INTERNAL_SECRET_EXISTS" = true ]; then
-  INTERNAL_API_SECRET=$(grep '^INTERNAL_API_SECRET=' "$ENV_FILE" | cut -d= -f2)
+  INTERNAL_API_SECRET=$(grep '^INTERNAL_API_SECRET=' "$ENV_FILE" | head -1 | cut -d= -f2)
   info "INTERNAL_API_SECRET already exists in .env"
 else
   INTERNAL_API_SECRET=$(openssl rand -hex 32)
