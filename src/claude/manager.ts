@@ -15,27 +15,7 @@ const VALID_PERMISSION_MODES = new Set<PermissionMode>([
   'bypass',
 ]);
 
-/** JSON messages sent to WebSocket subscribers. */
-export type WsServerMessage =
-  | { type: 'event'; sessionId: string; event: SDKMessage }
-  | {
-      type: 'permission';
-      sessionId: string;
-      requestId: string;
-      tool: string;
-      input: Record<string, unknown>;
-    }
-  | { type: 'status'; sessionId: string; status: SessionStatus }
-  | { type: 'error'; sessionId: string; message: string }
-  | { type: 'warning'; sessionId: string; message: string };
-
 export type SessionStatus = 'running' | 'waiting_input' | 'idle' | 'failed';
-
-interface PendingApproval {
-  resolve: (result: PermissionResult) => void;
-  toolName: string;
-  input: Record<string, unknown>;
-}
 
 type PermissionResult =
   | {
@@ -63,30 +43,20 @@ const WARN_ACTIVE_SESSIONS = 5;
 interface Session {
   controller: AbortController;
   stoppedByUser: boolean;
-  subscribers: Set<(msg: WsServerMessage) => void>;
-  approvalQueue: Map<string, PendingApproval>;
   eventBuffer: BufferedEvent[];
   batchIndex: number;
   flushing: boolean;
   sdkSessionId?: string;
   convexSessionId: string;
-  flushTimer?: ReturnType<typeof setInterval>;
   permissionMode: PermissionMode;
   model?: string;
   /** The live SDK query object — used to inject follow-up messages. */
   sdkQuery?: Query;
   /** Channel for pushing follow-up messages into the running SDK process. */
   messageChannel: SdkMessageChannel;
-  /** Whether a persistence warning has already been sent to subscribers. */
-  persistenceWarned?: boolean;
-  /** True when this session was started via resume — triggers per-event Convex flush. */
-  isResume: boolean;
 }
 
 const sessions = new Map<string, Session>();
-
-const FLUSH_INTERVAL_MS = 5000;
-const MAX_BUFFER_SIZE = 200;
 
 /** Bash command patterns considered safe for auto-approval in safe-auto mode. */
 const SAFE_BASH_PATTERNS = [
@@ -252,28 +222,6 @@ async function queryConvexInternal<T>(
   return (await res.json()) as T;
 }
 
-function broadcast(session: Session, msg: WsServerMessage): void {
-  for (const cb of session.subscribers) {
-    cb(msg);
-  }
-}
-
-/** Send a persistence warning to subscribers — at most once per session. */
-function warnPersistence(session: Session, sessionId: string): void {
-  if (session.persistenceWarned) return;
-  // Only mark as warned if there are subscribers to receive the message —
-  // otherwise the flag would be set before any client connects, and later
-  // failures (when clients ARE connected) would silently skip the warning.
-  if (session.subscribers.size === 0) return;
-  session.persistenceWarned = true;
-  broadcast(session, {
-    type: 'warning',
-    sessionId,
-    message:
-      'Failed to persist session data to database — events may be lost on refresh',
-  });
-}
-
 function shouldAutoApprove(
   session: Session,
   toolName: string,
@@ -320,14 +268,12 @@ async function flushEvents(session: Session): Promise<void> {
     );
     if (!persisted) {
       session.eventBuffer.unshift(...events);
-      warnPersistence(session, session.convexSessionId);
     }
   } catch (err) {
     console.error('Failed to flush events to Convex:', err);
     // Re-add events to buffer on failure so they're not lost
     // Don't decrement batchIndex to avoid duplicate batch indices
     session.eventBuffer.unshift(...events);
-    warnPersistence(session, session.convexSessionId);
   } finally {
     session.flushing = false;
   }
@@ -339,10 +285,7 @@ function bufferEvent(session: Session, event: SDKMessage): void {
     data: JSON.stringify(event),
     timestamp: Date.now(),
   });
-
-  if (session.isResume || session.eventBuffer.length >= MAX_BUFFER_SIZE) {
-    void flushEvents(session);
-  }
+  void flushEvents(session);
 }
 
 /**
@@ -380,7 +323,7 @@ export function isApproachingSessionLimit(): boolean {
 
 /**
  * Spawns a Claude Code SDK process for the given session and begins streaming
- * events to any WebSocket subscribers.
+ * events to Convex.
  *
  * **New session** — omit `resumeSdkSessionId`. A fresh conversation starts with
  * `prompt` as the first user message.
@@ -389,7 +332,7 @@ export function isApproachingSessionLimit(): boolean {
  * picks up the conversation context and treats `prompt` as a follow-up message.
  *
  * The function returns as soon as the background iterator is launched. Actual
- * SDK events arrive asynchronously via {@link subscribe}.
+ * SDK events are persisted to Convex for the frontend to subscribe to.
  *
  * @throws If the global active session cap (`MAX_ACTIVE_SESSIONS = 10`) is reached.
  * @throws If `permissionMode` is not one of `'default' | 'safe-auto' | 'bypass'`.
@@ -446,8 +389,6 @@ export async function startSession(opts: {
   const session: Session = {
     controller,
     stoppedByUser: false,
-    subscribers: new Set(),
-    approvalQueue: new Map(),
     eventBuffer: [],
     batchIndex: initialBatchIndex,
     flushing: false,
@@ -455,7 +396,6 @@ export async function startSession(opts: {
     permissionMode: mode,
     model: opts.model ?? DEFAULT_MODEL,
     messageChannel: new SdkMessageChannel(),
-    isResume: !!opts.resumeSdkSessionId,
   };
 
   sessions.set(sessionId, session);
@@ -464,25 +404,13 @@ export async function startSession(opts: {
   const sessionName =
     opts.prompt.slice(0, 30).trim() + (opts.prompt.length > 30 ? '…' : '');
   try {
-    const persisted = await callConvexInternal(
-      '/api/internal/sessions/updateName',
-      {
-        id: sessionId,
-        name: sessionName,
-      },
-    );
-    if (!persisted) {
-      warnPersistence(session, sessionId);
-    }
+    await callConvexInternal('/api/internal/sessions/updateName', {
+      id: sessionId,
+      name: sessionName,
+    });
   } catch (err) {
     console.error('Failed to set session name:', err);
-    warnPersistence(session, sessionId);
   }
-
-  // Periodic event flush to Convex
-  session.flushTimer = setInterval(() => {
-    flushEvents(session);
-  }, FLUSH_INTERVAL_MS);
 
   // Build SDK options.
   // Strip CLAUDECODE env var — if the Holophyte server is itself launched from
@@ -506,31 +434,60 @@ export async function startSession(opts: {
         return { behavior: 'deny', message: 'Missing tool use ID' };
       }
 
-      // Broadcast permission request to all WS subscribers
-      broadcast(session, {
-        type: 'permission',
-        sessionId,
+      // Write approval request to Convex
+      await callConvexInternal('/api/internal/pendingApprovals/create', {
+        sessionId: session.convexSessionId,
         requestId,
         tool: toolName,
-        input,
+        input: JSON.stringify(input),
       });
 
-      // Park in the approval queue — resolved when user responds
+      // Poll Convex for resolution
       return new Promise<PermissionResult>((resolve) => {
-        session.approvalQueue.set(requestId, { resolve, toolName, input });
+        const intervalId = setInterval(async () => {
+          try {
+            const resolved = await queryConvexInternal<
+              Array<{ _id: string; requestId: string; approved: boolean }>
+            >('/api/internal/pendingApprovals/listResolvedUnconsumed', {
+              sessionId: session.convexSessionId,
+            });
+
+            const match = resolved?.find((r) => r.requestId === requestId);
+            if (match) {
+              clearInterval(intervalId);
+              try {
+                await callConvexInternal(
+                  '/api/internal/pendingApprovals/markConsumed',
+                  { id: match._id },
+                );
+              } catch (err) {
+                console.error('Failed to mark approval consumed:', err);
+              }
+              if (match.approved) {
+                resolve({ behavior: 'allow', toolUseID: toolOpts.toolUseID });
+              } else {
+                resolve({
+                  behavior: 'deny',
+                  message: 'User denied the tool call',
+                  toolUseID: toolOpts.toolUseID,
+                });
+              }
+            }
+          } catch (err) {
+            console.error('Failed to poll pending approvals:', err);
+          }
+        }, 500);
 
         // Auto-deny on abort so we don't leak promises
         toolOpts.signal.addEventListener(
           'abort',
           () => {
-            if (session.approvalQueue.has(requestId)) {
-              session.approvalQueue.delete(requestId);
-              resolve({
-                behavior: 'deny',
-                message: 'Session aborted',
-                toolUseID: toolOpts.toolUseID,
-              });
-            }
+            clearInterval(intervalId);
+            resolve({
+              behavior: 'deny',
+              message: 'Session aborted',
+              toolUseID: toolOpts.toolUseID,
+            });
           },
           { once: true },
         );
@@ -543,11 +500,6 @@ export async function startSession(opts: {
   if (opts.resumeSdkSessionId) {
     sdkOptions.resume = opts.resumeSdkSessionId;
   }
-
-  // Synchronously broadcast running status before launching the background iterator.
-  // This prevents a timing race where a WS subscriber connects after startSession()
-  // returns but before consumeIterator() reaches its first broadcast.
-  broadcast(session, { type: 'status', sessionId, status: 'running' });
 
   // Consume the SDK iterator in the background (non-blocking)
   consumeIterator(session, sessionId, opts.prompt, sdkOptions).catch((err) => {
@@ -581,7 +533,6 @@ async function consumeIterator(
       uuid: crypto.randomUUID(),
       message: { role: 'user', content: prompt },
     } as SDKMessage;
-    broadcast(session, { type: 'event', sessionId, event: promptEvent });
     bufferEvent(session, promptEvent);
 
     for await (const event of iterator) {
@@ -597,7 +548,7 @@ async function consumeIterator(
         );
 
         try {
-          const persisted = await callConvexInternal(
+          await callConvexInternal(
             '/api/internal/sessions/updateSdkSessionId',
             {
               id: session.convexSessionId,
@@ -606,12 +557,8 @@ async function consumeIterator(
               permissionMode: session.permissionMode,
             },
           );
-          if (!persisted) {
-            warnPersistence(session, sessionId);
-          }
         } catch (err) {
           console.error('Failed to persist SDK session ID:', err);
-          warnPersistence(session, sessionId);
         }
       }
 
@@ -627,74 +574,45 @@ async function consumeIterator(
       // Buffer for Convex persistence
       bufferEvent(session, event);
 
-      // Broadcast to all WebSocket subscribers
-      broadcast(session, { type: 'event', sessionId, event });
-
       // Update lastActivityAt on significant events
       if (event.type === 'result' || event.type === 'assistant') {
         callConvexInternal('/api/internal/sessions/updateActivity', {
           id: session.convexSessionId,
-        })
-          .then((persisted) => {
-            if (!persisted) {
-              warnPersistence(session, sessionId);
-            }
-          })
-          .catch((err) => {
-            console.error('Failed to update session activity:', err);
-            warnPersistence(session, sessionId);
-          });
+        }).catch((err) => {
+          console.error('Failed to update session activity:', err);
+        });
       }
     }
   } catch (err) {
     console.error(`[session ${sessionId}] SDK error:`, err);
-    if (session.stoppedByUser) {
-      finalStatus = 'idle';
-    } else {
+    if (!session.stoppedByUser) {
       finalStatus = 'failed';
-      broadcast(session, {
-        type: 'error',
-        sessionId,
-        message: String(err),
-      });
     }
   } finally {
     // Close the message channel so streamInput() resolves
     session.messageChannel.close();
 
-    // Stop the periodic flush timer first to prevent races
-    if (session.flushTimer) {
-      clearInterval(session.flushTimer);
-    }
-
     // Flush remaining buffered events
     await flushEvents(session);
 
-    // Reject any pending approvals
-    for (const [, pending] of session.approvalQueue) {
-      pending.resolve({ behavior: 'deny', message: 'Session ended' });
+    // Deny all pending Convex approvals
+    try {
+      await callConvexInternal('/api/internal/pendingApprovals/denyAll', {
+        sessionId: session.convexSessionId,
+      });
+    } catch (err) {
+      console.error('Failed to deny remaining approvals:', err);
     }
-    session.approvalQueue.clear();
 
     // Update session status in Convex
     try {
-      const persisted = await callConvexInternal(
-        '/api/internal/sessions/updateStatus',
-        {
-          id: session.convexSessionId,
-          status: finalStatus,
-        },
-      );
-      if (!persisted) {
-        warnPersistence(session, sessionId);
-      }
+      await callConvexInternal('/api/internal/sessions/updateStatus', {
+        id: session.convexSessionId,
+        status: finalStatus,
+      });
     } catch (err) {
       console.error('Failed to update session status in Convex:', err);
-      warnPersistence(session, sessionId);
     }
-
-    // Notify subscribers of final status
-    broadcast(session, { type: 'status', sessionId, status: finalStatus });
 
     sessions.delete(sessionId);
   }
@@ -716,85 +634,12 @@ export function stopSession(sessionId: string): void {
   session.controller.abort();
 }
 
-/** Resolve a pending permission prompt (approve or deny a tool call). */
-export function respondToApproval(
-  sessionId: string,
-  requestId: string,
-  approved: boolean,
-  message?: string,
-): boolean {
-  const session = sessions.get(sessionId);
-  if (!session) return false;
-
-  const pending = session.approvalQueue.get(requestId);
-  if (!pending) return false;
-
-  session.approvalQueue.delete(requestId);
-
-  if (approved) {
-    pending.resolve({ behavior: 'allow', toolUseID: requestId });
-  } else {
-    pending.resolve({
-      behavior: 'deny',
-      message: message ?? 'User denied the tool call',
-    });
-  }
-
-  return true;
-}
-
-/**
- * Subscribes to WebSocket messages for an active session.
- *
- * Immediately replays any buffered events (un-flushed SDK messages still in
- * memory) and any pending permission prompts so late-connecting clients see the
- * complete in-progress state. Subsequent events are delivered in real-time via
- * `callback`.
- *
- * @param sessionId - The Convex session ID of the active session.
- * @param callback - Invoked for each {@link WsServerMessage} (event, permission,
- *   status, or error).
- * @returns An unsubscribe function. Call it in the WebSocket `close` handler.
- */
-export function subscribe(
-  sessionId: string,
-  callback: (msg: WsServerMessage) => void,
-): () => void {
-  const session = sessions.get(sessionId);
-  if (!session) return () => {};
-  session.subscribers.add(callback);
-
-  // Replay buffered events so late-connecting clients see the full history
-  for (const buffered of session.eventBuffer) {
-    callback({
-      type: 'event',
-      sessionId,
-      event: JSON.parse(buffered.data) as SDKMessage,
-    });
-  }
-
-  // Replay any pending approvals so late-connecting clients don't miss them
-  for (const [requestId, { toolName, input }] of session.approvalQueue) {
-    callback({
-      type: 'permission',
-      sessionId,
-      requestId,
-      tool: toolName,
-      input,
-    });
-  }
-
-  return () => {
-    session.subscribers.delete(callback);
-  };
-}
-
 /**
  * Injects a follow-up message into a running SDK session.
  *
- * Pushes the message to the session's {@link MessageChannel}, which is
- * connected to the SDK via {@link Query.streamInput}. Also broadcasts the
- * user message to WebSocket subscribers and buffers it for Convex persistence.
+ * Pushes the message to the session's {@link SdkMessageChannel}, which is
+ * connected to the SDK via {@link Query.streamInput}. Also buffers it for
+ * Convex persistence.
  *
  * @param sessionId - The Convex session ID.
  * @param text - The message text to inject.
@@ -818,8 +663,7 @@ export function sendMessageToSession(sessionId: string, text: string): boolean {
   const pushed = session.messageChannel.push(userMsg);
   if (!pushed) return false;
 
-  // Show the message in the conversation UI and persist to Convex
-  broadcast(session, { type: 'event', sessionId, event: userMsg });
+  // Persist to Convex
   bufferEvent(session, userMsg);
 
   return true;

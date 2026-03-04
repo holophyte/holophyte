@@ -4,15 +4,14 @@
 // Keep routes inline in server.ts — they're tightly coupled to Bun.serve().
 
 import { basename } from 'node:path';
-import type { PermissionMode, WsServerMessage } from '@/claude/manager';
+import type { PermissionMode } from '@/claude/manager';
 import homepage from '../public/index.html';
 import {
+  getActiveSessions,
   getSession,
-  respondToApproval,
   sendMessageToSession,
   startSession,
   stopSession,
-  subscribe,
 } from './claude/manager';
 
 // ── Convex internal API helpers ──────────────────────────────────────
@@ -203,6 +202,17 @@ async function companionPoll() {
         }
       }
     }
+    // 4. Send heartbeat for all active sessions
+    const activeIds = getActiveSessions();
+    if (activeIds.length > 0) {
+      try {
+        await callConvexInternal('/api/internal/sessions/batchHeartbeat', {
+          sessionIds: activeIds,
+        });
+      } catch (err) {
+        console.error('Failed to send batch heartbeat:', err);
+      }
+    }
   } catch (err) {
     // Don't log every poll failure (noisy when Convex is unavailable)
     if (String(err).includes('not set')) return;
@@ -228,12 +238,7 @@ function stopCompanionPolling() {
 
 // ── HTTP Server ──────────────────────────────────────────────────────
 
-interface WsData {
-  sessionId: string;
-  cleanups: (() => void)[];
-}
-
-const server = Bun.serve<WsData>({
+const server = Bun.serve({
   port: Number(process.env.PORT) || 8080,
   routes: {
     '/': homepage,
@@ -313,73 +318,11 @@ const server = Bun.serve<WsData>({
     // SPA catch-all: serve the bundled app HTML for all unmatched GET routes.
     // Must be in `routes` (not `fetch`) so Bun serves the HTML *bundle* with
     // compiled asset paths (/_bun/...) rather than the raw source file.
-    // Only match GET — POST/etc. must fall through to `fetch` for dynamic API routes.
-    '/*': { GET: homepage },
+    '/*': homepage,
   },
 
-  async fetch(req, server) {
-    const url = new URL(req.url);
-
-    // WebSocket upgrade for /ws/session/:sessionId
-    if (url.pathname.startsWith('/ws/session/')) {
-      const sessionId = url.pathname.slice('/ws/session/'.length);
-      const upgraded = server.upgrade(req, {
-        data: { sessionId, cleanups: [] },
-      });
-      if (upgraded) return undefined;
-      return new Response('WebSocket upgrade failed', { status: 400 });
-    }
-
+  fetch(_req: Request) {
     return new Response('Not Found', { status: 404 });
-  },
-
-  websocket: {
-    open(ws) {
-      const { sessionId } = ws.data;
-      const session = getSession(sessionId);
-      if (!session) {
-        ws.send(
-          JSON.stringify({
-            type: 'error',
-            sessionId,
-            message: 'Session not found',
-          }),
-        );
-        ws.close();
-        return;
-      }
-
-      const unsub = subscribe(sessionId, (msg: WsServerMessage) => {
-        ws.send(JSON.stringify(msg));
-      });
-
-      ws.data.cleanups = [unsub];
-    },
-
-    message(ws, rawMessage) {
-      // Handle client JSON messages (approve/deny via WebSocket)
-      try {
-        const msg = JSON.parse(String(rawMessage));
-        if (msg.type === 'approve' && msg.requestId) {
-          respondToApproval(ws.data.sessionId, msg.requestId, true);
-        } else if (msg.type === 'deny' && msg.requestId) {
-          respondToApproval(
-            ws.data.sessionId,
-            msg.requestId,
-            false,
-            msg.message,
-          );
-        }
-      } catch {
-        // Ignore non-JSON messages
-      }
-    },
-
-    close(ws) {
-      for (const cleanup of ws.data.cleanups) {
-        cleanup();
-      }
-    },
   },
 
   development: {

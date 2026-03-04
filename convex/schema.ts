@@ -185,6 +185,8 @@ export default defineSchema({
     queuedPrompt: v.optional(v.string()),
     // Kept optional for backwards compatibility with pre-rethink documents
     endedAt: v.optional(v.number()),
+    // Companion heartbeat — updated every poll cycle for active sessions
+    lastHeartbeat: v.optional(v.number()),
   })
     .index('by_task', ['taskId'])
     .index('by_status', ['status'])
@@ -196,6 +198,19 @@ export default defineSchema({
     consumed: v.boolean(),
     createdAt: v.number(),
   }).index('by_session_pending', ['sessionId', 'consumed']),
+
+  pendingApprovals: defineTable({
+    sessionId: v.id('sessions'),
+    requestId: v.string(),
+    tool: v.string(),
+    input: v.string(),
+    resolved: v.boolean(),
+    approved: v.optional(v.boolean()),
+    denyMessage: v.optional(v.string()),
+    consumed: v.boolean(),
+  })
+    .index('by_session', ['sessionId'])
+    .index('by_session_unresolved', ['sessionId', 'resolved']),
 
   sessionEvents: defineTable({
     sessionId: v.id('sessions'),
