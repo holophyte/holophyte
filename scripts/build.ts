@@ -35,7 +35,7 @@ const config = {
   convexUrl,
   e2eTest: false,
   allowAnonymousAuth: false,
-  homeDir: '',
+  homeDir: '', // Legacy — not meaningful on Vercel. See #130.
 };
 
 await Bun.write(
