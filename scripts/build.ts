@@ -21,4 +21,24 @@ if (!result.success) {
   process.exit(1);
 }
 
-console.log(`Build complete. ${result.outputs.length} output files written to dist/`);
+// Generate config.js with build-time environment variables
+const convexUrl = process.env.CONVEX_URL;
+if (!convexUrl) {
+  console.error('CONVEX_URL environment variable is required for production builds');
+  process.exit(1);
+}
+
+const config = {
+  convexUrl,
+  e2eTest: false,
+  allowAnonymousAuth: false,
+  homeDir: '',
+};
+
+await Bun.write(
+  './dist/config.js',
+  `window.__HOLOPHYTE_CONFIG__=${JSON.stringify(config)};`,
+);
+console.log('Generated dist/config.js');
+
+console.log(`Build complete. ${result.outputs.length + 1} output files written to dist/`);
