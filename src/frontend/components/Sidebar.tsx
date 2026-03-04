@@ -16,6 +16,7 @@ import { useState } from 'react';
 import { cn } from '@/frontend/lib/utils';
 import { useAppStore } from '@/frontend/stores/app';
 import { AddRepoDialog } from './AddRepoDialog';
+import CompanionStatus from './CompanionStatus';
 import OrgSwitcher from './OrgSwitcher';
 import UserMenu from './UserMenu';
 import Button from './ui/Button';
@@ -218,6 +219,8 @@ export function Sidebar() {
           Command palette
         </span>
       </div>
+      <Separator />
+      <CompanionStatus />
       <Separator />
       <div className="p-2">
         <UserMenu />
