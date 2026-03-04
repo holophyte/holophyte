@@ -130,11 +130,12 @@ export function ClaudeButton({ task }: ClaudeButtonProps) {
         </Button>
         <ModelPicker value={model} onChange={setModel} />
       </div>
-      {companionState === 'offline' && (
+      {(companionState === 'offline' || companionState === 'stale') && (
         <p className="text-xs text-yellow-600 mt-1 flex items-center gap-1">
           <AlertTriangle className="h-3 w-3 shrink-0" />
-          Companion offline — task will queue but won't start until it
-          reconnects.
+          {companionState === 'offline'
+            ? "Companion offline \u2014 task will queue but won't start until it reconnects."
+            : 'Companion connection is stale \u2014 task may be delayed.'}
         </p>
       )}
       {error && <p className="text-xs text-red-600 mt-1">{error}</p>}

@@ -28,7 +28,9 @@ export default function CompanionStatus() {
     <TooltipProvider>
       <Tooltip>
         <TooltipTrigger asChild>
-          <output
+          {/* biome-ignore lint/a11y/useSemanticElements: status indicator, not a form output */}
+          <div
+            role="status"
             className="flex items-center gap-2 px-2 py-1.5 rounded-md text-xs text-muted-foreground"
             aria-label={`Companion ${labels[state]}`}
           >
@@ -38,7 +40,7 @@ export default function CompanionStatus() {
               className={cn('h-2 w-2 shrink-0 rounded-full', dotStyles[state])}
             />
             <span>{labels[state]}</span>
-          </output>
+          </div>
         </TooltipTrigger>
         <TooltipContent side="right">
           <div className="space-y-1">

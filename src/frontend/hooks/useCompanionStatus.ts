@@ -8,9 +8,12 @@ const TICK_INTERVAL_MS = 5_000;
 
 export type CompanionState = 'connected' | 'stale' | 'offline';
 
-function deriveState(lastSeen: number | undefined | null): CompanionState {
+function deriveState(
+  lastSeen: number | undefined | null,
+  now: number,
+): CompanionState {
   if (lastSeen == null) return 'offline';
-  const age = Date.now() - lastSeen;
+  const age = now - lastSeen;
   if (age < STALE_THRESHOLD_MS) return 'connected';
   if (age < OFFLINE_THRESHOLD_MS) return 'stale';
   return 'offline';
@@ -26,10 +29,7 @@ export function useCompanionStatus() {
     return () => clearInterval(id);
   }, []);
 
-  // `now` drives re-render for deriveState
-  void now;
-
-  const state = deriveState(status?.lastSeen);
+  const state = deriveState(status?.lastSeen, now);
 
   return { state, status };
 }
