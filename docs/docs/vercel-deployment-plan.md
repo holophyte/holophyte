@@ -20,11 +20,11 @@ Split Holophyte into a static React SPA on Vercel + a local companion process, c
 └─────────────────────────┘
 ```
 
-| Environment | Frontend | Convex | Companion |
-|---|---|---|---|
-| Local dev | `localhost:8080` | Local Convex (3210/3211) | Same Bun process |
-| E2E tests | Ephemeral server | Ephemeral Convex (13210+) | Same process |
-| Production | Vercel (static) | Convex Cloud | `bun run companion` on your machine |
+| Environment | Frontend         | Convex                    | Companion                           |
+| ----------- | ---------------- | ------------------------- | ----------------------------------- |
+| Local dev   | `localhost:8080` | Local Convex (3210/3211)  | Same Bun process                    |
+| E2E tests   | Ephemeral server | Ephemeral Convex (13210+) | Same process                        |
+| Production  | Vercel (static)  | Convex Cloud              | `bun run companion` on your machine |
 
 ---
 
@@ -60,112 +60,28 @@ Completed in commits `2a8c061`–`9a0f6c7` on main.
 - [x] **E2E fixes** — fixed global-setup selectors (Browse button, input value assertion), added JWT key generation for fresh isolated worktrees (`@convex-dev/auth --skip-git-check`), copied `convex/_generated/` to worktrees, fixed count badge test for parallel worker stability.
 - [x] **Tests updated** — manager.test.ts rewritten (approval tests mock Convex HTTP, concurrent limit + session naming tests preserved), useSession.test.ts rewritten (42 tests for Convex-based flows), deleted stale `manager.rethink.test.ts`. All 364 unit tests + 34 E2E tests pass.
 
-### Agent Team Prompt
-
-```
-/autopilot-team
-
-Migrate session event streaming from WebSocket to Convex subscriptions.
-
-Context: Holophyte streams Claude Agent SDK events from the Bun server to the browser via WebSocket (ws://localhost/ws/session/:sessionId). For Vercel deployment, the frontend can't connect directly to the companion — all communication must go through Convex.
-
-The current flow:
-- src/claude/manager.ts runs the SDK iterator, calls broadcast() to push events to WS subscribers, and bufferEvent() batches events for Convex persistence every 5s
-- src/frontend/hooks/useSession.ts opens a WebSocket, handles reconnection, deduplicates events between WS and Convex
-- Approvals go over WebSocket: frontend sends {type: 'approve', requestId}, server calls respondToApproval()
-
-The new flow:
-- Companion writes each SDK event to Convex immediately (no batching)
-- Frontend reads events via useQuery(api.sessionEvents.getBySession) — Convex subscriptions are already real-time
-- Approvals go through a Convex table: frontend writes a mutation, companion subscribes and picks up the resolution
-- Session status written to the sessions table in Convex, frontend reads via useQuery
-
-What needs to change:
-
-1. In src/claude/manager.ts:
-   - Change bufferEvent() to flush immediately (per-event, not batched). The isResume path on line 343 already does this — make it the default.
-   - Remove broadcast(), subscribe(), WsServerMessage type, and the subscribers Set from Session interface.
-   - For canUseTool: instead of broadcasting a permission message to WS subscribers, write the pending approval to Convex (new table or field). Then poll/subscribe Convex for the resolution instead of using an in-memory Promise queue.
-   - Write status changes (running/idle/failed) to the Convex session record directly.
-
-2. In convex/:
-   - Add approval storage — either a new pendingApprovals table or add approvals field to sessions. Needs: requestId, tool, input, resolved (boolean), approved (boolean), denyMessage (optional).
-   - Add mutations: createApproval, resolveApproval
-   - Add query: getPendingApprovals (by sessionId)
-   - Consider switching sessionEvents from batch-based storage to individual event documents for better Convex reactivity (each useQuery re-fires when a new document is inserted)
-
-3. In src/frontend/hooks/useSession.ts:
-   - Remove all WebSocket code: wsRef, connect(), reconnection timer, onmessage handler, isConnected state, wsEvents state
-   - Events come purely from useQuery(api.sessionEvents.getBySession) — already wired up as persistedEvents
-   - Pending approvals come from useQuery(api.pendingApprovals.getBySession) or similar
-   - approve() and deny() become useMutation calls instead of ws.send()
-   - Session status comes from useQuery(api.sessions.get) — already partially there as sessionRecord
-   - companionOnline derived from a heartbeat field on the session or a separate companion status record
-
-4. In src/server.ts:
-   - Remove the WebSocket upgrade handler for /ws/session/:sessionId
-   - Remove the Bun.serve() websocket config object
-
-5. Verify existing tests still pass (bun run test). Update src/claude/manager.test.ts if needed.
-
-Important constraints:
-- The companion (src/claude/manager.ts) communicates with Convex via HTTP endpoints (callConvexInternal pattern already exists)
-- Follow existing patterns: use callConvexInternal for companion→Convex, useQuery/useMutation for frontend→Convex
-- Do NOT break bun run dev:local — local development should still work
-- sendMessage (follow-up messages) already goes through Convex via sessionMessages table — use that as a reference pattern
-- Run bun run lint:fix before committing
-```
-
 ---
 
-## Phase 2: Decouple Companion
+## Phase 2: Decouple Companion ✅
 
-Strip frontend-serving code from the Bun server so it becomes a pure companion process.
+Completed in [#122](https://github.com/holophyte/holophyte/pull/122).
 
-### Tasks
+### What was done
 
-- [ ] Remove frontend routes from `Bun.serve()` — strip `/`, `/*` catch-all routes and `/config.js` route from `src/server.ts`
-- [ ] Keep companion-only routes — `/api/pick-directory`, `/api/auth/*` proxy
-- [ ] Add `bun run companion` script to `package.json`
-- [ ] ~Add companion heartbeat~ — ✅ partially done in Phase 1: `lastHeartbeat` field on sessions table, `batchHeartbeat` endpoint called every poll cycle. Remaining: consider a separate companion-level heartbeat (not per-session) for dashboard online/offline status when no sessions are active
-- [ ] Verify — `bun run companion` starts cleanly, responds to session start requests, heartbeat visible in Convex
+- [x] **Separate companion entry point** — created `src/companion.ts` as a headless `Bun.serve()` with only `/api/pick-directory` and `/api/auth/*` routes. No HTML import, no HMR, no `/config.js`. `src/server.ts` stays unchanged for `bun run dev:local`.
+- [x] **Shared module extraction** — split `src/server.ts` into reusable modules under `src/server/`: `convex-client.ts` (Convex internal API helpers), `polling.ts` (companion polling loop), `routes.ts` (pick-directory and auth proxy handlers). Both entry points import from these.
+- [x] **Companion heartbeat** — new `companion` table in Convex schema (`lastSeen`, `activeSessionCount`, `machineId`), `convex/companion.ts` with `upsertHeartbeat` (internal mutation) and `getStatus` (auth-gated query), HTTP endpoint at `/api/internal/companion/heartbeat`. Heartbeat fires every poll cycle even with zero active sessions.
+- [x] **Graceful shutdown** — both `src/server.ts` and `src/companion.ts` handle `SIGTERM` alongside `SIGINT` for production environments.
+- [x] **Machine identification** — `machineId` populated from `MACHINE_ID` env var or `os.hostname()` in heartbeat calls.
+- [x] **`bun run companion`** — new script in `package.json`. Existing `dev`, `dev:local`, `dev:all` scripts unchanged.
+- [x] **Bonus fix** — `serverListResolvedUnconsumed` in `convex/pendingApprovals.ts` now uses the `by_session_unresolved` index to pre-filter `resolved=true` at the database level instead of fetching all approvals and filtering in JS.
+- [x] **Tests pass** — 364 unit tests + 34 E2E tests pass. Lint and typecheck clean.
 
-### Agent Team Prompt
+### Open issues
 
-```
-/autopilot-team
-
-Decouple the Bun server into a headless companion process.
-
-Context: After Phase 0 (static build) and Phase 1 (WS→Convex migration), src/server.ts still serves the frontend and handles routes that only the companion needs. Strip it down to a pure companion process.
-
-What needs to change:
-
-1. In src/server.ts:
-   - Remove the "/" route that serves public/index.html
-   - Remove the "/*" catch-all route for SPA routing
-   - Remove the "/config.js" route (restored in Phase 1 for dev server — not needed by companion)
-   - Keep: /api/pick-directory, /api/auth/* proxy
-   - Note: /api/sessions/* routes were already removed in Phase 1 (companion uses Convex polling now)
-   - The server should start with a clear log: "Holophyte companion running on port {PORT}"
-
-2. In package.json:
-   - Add "companion" script: "bun run src/server.ts" (or a new entry point like src/companion.ts if cleaner)
-   - Keep "dev" and "dev:local" working for local development (these should run both the build watcher AND companion)
-
-3. Companion heartbeat (partially done):
-   - Phase 1 added per-session heartbeat: `lastHeartbeat` field on sessions, `batchHeartbeat` endpoint, companion polls every 2s
-   - Frontend already derives `companionOnline` from heartbeat recency (10s stale threshold)
-   - Remaining: consider a companion-level heartbeat for when no sessions are active (currently companionOnline is only meaningful when a session exists)
-   - If needed, add convex/companion.ts with a singleton heartbeat record
-
-4. Verify: `bun run companion` starts cleanly without serving any frontend assets
-
-Important constraints:
-- Do NOT break bun run dev:local — for local dev, the companion should still work alongside the frontend dev server
-- Use Bun APIs only, existing callConvexInternal pattern for Convex communication
-- Run bun run lint:fix before committing
-```
+- [#123](https://github.com/holophyte/holophyte/issues/123) — Use `companion.getStatus` query for `companionOnline` when no active sessions (Phase 3 work)
+- [#125](https://github.com/holophyte/holophyte/issues/125) — Detect and reject duplicate companion instances on startup
+- [#126](https://github.com/holophyte/holophyte/issues/126) — Migrate companion from polling to Convex subscriptions
 
 ---
 
@@ -175,39 +91,44 @@ Connect the repo to Vercel and verify the full loop works.
 
 ### Tasks
 
-- [ ] Connect GitHub repo to Vercel — set framework to "Other", build command `bun run build`, output dir `dist`
-- [ ] Set Vercel env vars — `CONVEX_URL` pointing to Convex Cloud deployment
+- [x] Connect GitHub repo to Vercel — framework "Other", build command `bun run build`, output dir `dist` ✅ done manually
+- [x] Set Vercel env vars — `CONVEX_URL` pointing to Convex Cloud deployment ✅ done manually
+- [x] Deploy Convex to production — `bun run convex:deploy` ✅ done manually
+- [ ] Fix static build config — generate `dist/config.js` at build time in `scripts/build.ts` so the existing `window.__HOLOPHYTE_CONFIG__` pattern works on Vercel without a server
 - [ ] Deploy and verify — dashboard loads at Vercel URL, shows data from Convex Cloud
-- [ ] Add companion status indicator — green/yellow/gray badge in the dashboard header based on heartbeat recency
+- [ ] Add companion status indicator — green/yellow/gray badge in the dashboard header using `api.companion.getStatus` query ([#123](https://github.com/holophyte/holophyte/issues/123))
 - [ ] Test full loop — create task on Vercel dashboard → companion picks it up → agent runs → approve from browser → see results
-- [ ] Deploy Convex to production — `bun run convex:deploy` to push functions to Convex Cloud
 
 ### Agent Team Prompt
 
 ```
 /autopilot-team
 
-Add companion status indicator to the dashboard and prepare for Vercel deployment.
+Fix static build config and add companion status indicator to the dashboard.
 
-Context: The frontend is now a static SPA (Phase 0), session streaming goes through Convex (Phase 1), and the companion is a standalone process (Phase 2). Add a visible companion status indicator, fix static build config, and verify everything works together.
+Context: The frontend is now a static SPA (Phase 0), session streaming goes through Convex (Phase 1), and the companion is a standalone process (Phase 2). Vercel is connected and Convex is deployed to production, but the Vercel build fails because there's no server to generate /config.js. Fix the static build and add a companion status indicator.
 
 What needs to happen:
 
-1. Fix static build config:
-   - Phase 1 reverted config.ts to window.__HOLOPHYTE_CONFIG__ (process.env doesn't work in Bun browser bundles)
-   - For Vercel static builds, scripts/build.ts needs a config strategy. Options:
-     a) Generate a config.js file at build time with CONVEX_URL baked in
-     b) Restore the `define` block in Bun.build() to inline process.env.* at build time (config.ts would need to support both window global for dev and process.env for static)
-     c) Fetch config at runtime from a Convex HTTP endpoint
-   - e2eTest, allowAnonymousAuth, homeDir should all be falsy/empty in production builds
+1. Fix static build config — generate config.js at build time:
+   - The frontend reads config from window.__HOLOPHYTE_CONFIG__ injected via <script src="/config.js"> in public/index.html. In dev, the Bun server generates this route dynamically. On Vercel, there's no server.
+   - In scripts/build.ts, AFTER Bun.build() completes, generate a dist/config.js file that writes window.__HOLOPHYTE_CONFIG__ with values from build-time env vars:
+     - convexUrl: read from process.env.CONVEX_URL (required — fail the build if missing)
+     - e2eTest: false (always false in production)
+     - allowAnonymousAuth: false (always false in production)
+     - homeDir: '' (not applicable on Vercel — no local filesystem)
+   - The existing public/index.html already has <script src="/config.js"> so it will load the generated file from dist/. No changes needed to index.html or config.ts.
+   - Do NOT modify src/frontend/lib/config.ts — the window.__HOLOPHYTE_CONFIG__ pattern stays as-is.
+   - Do NOT modify the /config.js route in src/server.ts — that's still used for local dev.
+   - Verify: `CONVEX_URL=https://example.convex.cloud bun run build` should produce dist/config.js containing window.__HOLOPHYTE_CONFIG__={convexUrl:"https://example.convex.cloud",...}
 
 2. Add a CompanionStatus component:
    - Location: src/frontend/components/CompanionStatus.tsx
-   - Reads companion heartbeat — either from the per-session lastHeartbeat (already exists from Phase 1) or a companion-level heartbeat record (if added in Phase 2)
+   - Reads companion heartbeat from useQuery(api.companion.getStatus) — added in Phase 2 (convex/companion.ts). Returns { lastSeen, activeSessionCount, machineId } or null.
    - Shows a small status badge in the app header (src/frontend/App.tsx):
-     - Green dot + "Connected" — heartbeat within last 30s
-     - Yellow dot + "Stale" — heartbeat 30s–5min ago
-     - Gray dot + "Offline" — no heartbeat for 5+ min
+     - Green dot + "Connected" — lastSeen within last 30s
+     - Yellow dot + "Stale" — lastSeen 30s–5min ago
+     - Gray dot + "Offline" — no heartbeat for 5+ min, or getStatus returns null
    - Tooltip or hover showing last seen time and active session count
    - Use existing UI patterns: cn() for classNames, Tailwind for styling, lucide-react for icons
 
@@ -219,7 +140,10 @@ Important constraints:
 - Follow existing component patterns (default export, interface ComponentNameProps, cn() helper)
 - Use Radix UI primitives from src/frontend/components/ui/ where appropriate
 - Tailwind v4 with CSS variables (no theme() function — use var())
+- Do NOT break bun run dev:local — the /config.js server route still handles local dev
 - Run bun run lint:fix before committing
+- Make sure to test as much as possible manually before sending the PR or when iterating on PR comments
+- Do not merge the PR until I've reviewed it manually
 ```
 
 ---
