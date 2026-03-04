@@ -47,3 +47,18 @@ console.log('Generated dist/config.js');
 console.log(
   `Build complete. ${result.outputs.length + 1} output files written to dist/`,
 );
+
+// Deploy Convex functions in production so frontend and backend stay in sync.
+// VERCEL_ENV is set automatically by Vercel: 'production', 'preview', or 'development'.
+if (process.env.VERCEL_ENV === 'production') {
+  console.log('Production environment detected — deploying Convex functions...');
+  const deploy = Bun.spawnSync(['bunx', 'convex', 'deploy'], {
+    stdout: 'inherit',
+    stderr: 'inherit',
+  });
+  if (deploy.exitCode !== 0) {
+    console.error('Convex deploy failed');
+    process.exit(1);
+  }
+  console.log('Convex functions deployed.');
+}
