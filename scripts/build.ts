@@ -2,6 +2,15 @@ import tailwindPlugin from 'bun-plugin-tailwind';
 
 console.log('Building Holophyte SPA...');
 
+// Generate Convex types so imports like '@convex/_generated/api' resolve
+console.log('Running convex codegen...');
+const codegen = Bun.spawnSync(['bunx', 'convex', 'codegen']);
+if (codegen.exitCode !== 0) {
+  console.error('convex codegen failed:', codegen.stderr.toString());
+  process.exit(1);
+}
+console.log('Convex codegen complete.');
+
 // Clean stale output from previous builds
 const { rmSync } = await import('node:fs');
 rmSync('./dist', { recursive: true, force: true });
