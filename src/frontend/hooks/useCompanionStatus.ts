@@ -1,6 +1,6 @@
 import { api } from '@convex/_generated/api';
 import { useQuery } from 'convex/react';
-import { useEffect, useState } from 'react';
+import { useSyncExternalStore } from 'react';
 
 const STALE_THRESHOLD_MS = 30_000;
 const OFFLINE_THRESHOLD_MS = 5 * 60_000;
@@ -19,19 +19,41 @@ function deriveState(
   return 'offline';
 }
 
+// Shared 5-second clock — a single interval serves all useCompanionStatus consumers.
+let now = Date.now();
+let intervalId: ReturnType<typeof setInterval> | null = null;
+const listeners = new Set<() => void>();
+
+function subscribe(cb: () => void) {
+  if (listeners.size === 0) {
+    intervalId = setInterval(() => {
+      now = Date.now();
+      for (const fn of listeners) fn();
+    }, TICK_INTERVAL_MS);
+  }
+  listeners.add(cb);
+  return () => {
+    listeners.delete(cb);
+    if (listeners.size === 0 && intervalId !== null) {
+      clearInterval(intervalId);
+      intervalId = null;
+    }
+  };
+}
+
+function getSnapshot() {
+  return now;
+}
+
 export function useCompanionStatus() {
   const status = useQuery(api.companion.getStatus);
-  const [now, setNow] = useState(Date.now());
-
-  // Tick every 5s to re-evaluate staleness
-  useEffect(() => {
-    const id = setInterval(() => setNow(Date.now()), TICK_INTERVAL_MS);
-    return () => clearInterval(id);
-  }, []);
+  const currentTime = useSyncExternalStore(subscribe, getSnapshot);
 
   // status === undefined means the query hasn't resolved yet
   const state: CompanionState =
-    status === undefined ? 'loading' : deriveState(status?.lastSeen, now);
+    status === undefined
+      ? 'loading'
+      : deriveState(status?.lastSeen, currentTime);
 
   return { state, status };
 }
