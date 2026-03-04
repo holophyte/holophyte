@@ -27,10 +27,6 @@ jobs:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
       - run: bun install --frozen-lockfile
-      - run: bunx convex codegen
-        env:
-          CONVEX_DEPLOYMENT: ${{ vars.CONVEX_DEPLOYMENT }}
-          CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY }}
       - run: bunx tsc --noEmit
 
   test:
@@ -40,8 +36,4 @@ jobs:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
       - run: bun install --frozen-lockfile
-      - run: bunx convex codegen
-        env:
-          CONVEX_DEPLOYMENT: ${{ vars.CONVEX_DEPLOYMENT }}
-          CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY }}
       - run: bun run test --run
