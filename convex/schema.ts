@@ -223,4 +223,10 @@ export default defineSchema({
     ),
     batchIndex: v.number(),
   }).index('by_session_batch', ['sessionId', 'batchIndex']),
+
+  companion: defineTable({
+    lastSeen: v.number(),
+    activeSessionCount: v.number(),
+    machineId: v.optional(v.string()),
+  }),
 });

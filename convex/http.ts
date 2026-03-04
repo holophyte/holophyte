@@ -468,4 +468,30 @@ http.route({
   }),
 });
 
+// ── Companion heartbeat ───────────────────────────────────────────────
+
+http.route({
+  path: '/api/internal/companion/heartbeat',
+  method: 'POST',
+  handler: httpAction(async (ctx, request) => {
+    const authError = validateSecret(request);
+    if (authError) return authError;
+
+    const body = await parseBody(request);
+    if (body instanceof Response) return body;
+
+    try {
+      const { activeSessionCount, machineId } = body;
+      await ctx.runMutation(internal.companion.upsertHeartbeat, {
+        activeSessionCount,
+        machineId,
+      });
+      return jsonOk();
+    } catch (err) {
+      console.error('companion.upsertHeartbeat failed:', err);
+      return jsonError('Mutation failed', 400);
+    }
+  }),
+});
+
 export default http;
