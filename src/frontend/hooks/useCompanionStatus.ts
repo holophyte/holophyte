@@ -26,6 +26,7 @@ const listeners = new Set<() => void>();
 
 function subscribe(cb: () => void) {
   if (listeners.size === 0) {
+    now = Date.now();
     intervalId = setInterval(() => {
       now = Date.now();
       for (const fn of listeners) fn();
