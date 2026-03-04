@@ -1,5 +1,6 @@
 // ── Companion polling ────────────────────────────────────────────────
 
+import { hostname } from 'node:os';
 import type { PermissionMode } from '@/claude/manager';
 import {
   getActiveSessions,
@@ -29,6 +30,7 @@ export interface PendingMessage {
   text: string;
 }
 
+const MACHINE_ID = process.env.MACHINE_ID ?? hostname();
 export const POLL_INTERVAL_MS = 2000;
 let pollTimer: ReturnType<typeof setInterval> | null = null;
 let polling = false;
@@ -134,6 +136,7 @@ export async function companionPoll() {
     try {
       await callConvexInternal('/api/internal/companion/heartbeat', {
         activeSessionCount: activeIds.length,
+        machineId: MACHINE_ID,
       });
     } catch {
       // Best-effort — don't log every failure

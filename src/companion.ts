@@ -48,8 +48,11 @@ startCompanionPolling();
   }
 })();
 
-process.on('SIGINT', () => {
+function shutdown() {
   stopCompanionPolling();
   server.stop();
   process.exit(0);
-});
+}
+
+process.on('SIGINT', shutdown);
+process.on('SIGTERM', shutdown);
