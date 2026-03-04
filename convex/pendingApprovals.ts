@@ -45,9 +45,11 @@ export const serverListResolvedUnconsumed = internalQuery({
   handler: async (ctx, args) => {
     const approvals = await ctx.db
       .query('pendingApprovals')
-      .withIndex('by_session', (q) => q.eq('sessionId', args.sessionId))
+      .withIndex('by_session_unresolved', (q) =>
+        q.eq('sessionId', args.sessionId).eq('resolved', true),
+      )
       .collect();
-    return approvals.filter((a) => a.resolved && !a.consumed);
+    return approvals.filter((a) => !a.consumed);
   },
 });
 
