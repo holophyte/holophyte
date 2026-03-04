@@ -65,10 +65,11 @@ export default function CompanionStatus() {
             ) : (
               <p>No heartbeat received</p>
             )}
-            {state === 'offline' && (
+            {(state === 'offline' || state === 'stale') && (
               <p className="text-yellow-300">
-                Tasks will queue but won't execute until the companion
-                reconnects.
+                {state === 'offline'
+                  ? "Tasks will queue but won't execute until the companion reconnects."
+                  : 'Companion connection is stale \u2014 tasks may be delayed.'}
               </p>
             )}
           </div>
