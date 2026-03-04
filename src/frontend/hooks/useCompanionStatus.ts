@@ -6,7 +6,7 @@ const STALE_THRESHOLD_MS = 30_000;
 const OFFLINE_THRESHOLD_MS = 5 * 60_000;
 const TICK_INTERVAL_MS = 5_000;
 
-export type CompanionState = 'connected' | 'stale' | 'offline';
+export type CompanionState = 'loading' | 'connected' | 'stale' | 'offline';
 
 function deriveState(
   lastSeen: number | undefined | null,
@@ -29,7 +29,9 @@ export function useCompanionStatus() {
     return () => clearInterval(id);
   }, []);
 
-  const state = deriveState(status?.lastSeen, now);
+  // status === undefined means the query hasn't resolved yet
+  const state: CompanionState =
+    status === undefined ? 'loading' : deriveState(status?.lastSeen, now);
 
   return { state, status };
 }

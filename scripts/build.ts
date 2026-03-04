@@ -2,7 +2,17 @@ import tailwindPlugin from 'bun-plugin-tailwind';
 
 console.log('Building Holophyte SPA...');
 
-// Generate Convex types so imports like '@convex/_generated/api' resolve
+// Fail fast if CONVEX_URL is missing
+const convexUrl = process.env.CONVEX_URL;
+if (!convexUrl) {
+  console.error(
+    'CONVEX_URL environment variable is required for production builds',
+  );
+  process.exit(1);
+}
+
+// Generate Convex types so imports like '@convex/_generated/api' resolve.
+// On Vercel, CONVEX_DEPLOY_KEY must be set for codegen to authenticate.
 console.log('Running convex codegen...');
 const codegen = Bun.spawnSync(['bunx', 'convex', 'codegen']);
 if (codegen.exitCode !== 0) {
@@ -31,12 +41,6 @@ if (!result.success) {
 }
 
 // Generate config.js with build-time environment variables
-const convexUrl = process.env.CONVEX_URL;
-if (!convexUrl) {
-  console.error('CONVEX_URL environment variable is required for production builds');
-  process.exit(1);
-}
-
 const config = {
   convexUrl,
   e2eTest: false,
@@ -50,4 +54,6 @@ await Bun.write(
 );
 console.log('Generated dist/config.js');
 
-console.log(`Build complete. ${result.outputs.length + 1} output files written to dist/`);
+console.log(
+  `Build complete. ${result.outputs.length + 1} output files written to dist/`,
+);
