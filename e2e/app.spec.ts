@@ -121,12 +121,12 @@ test('kanban columns show column headers with task counts', async ({
   await waitForApp(page);
   // Each visible column should have a count badge (showing 0)
   for (const label of ['To Do', 'In Progress', 'Review', 'Done']) {
-    const column = page.locator('[role="group"]', {
-      hasText: label,
+    const column = page.locator('[role="group"]').filter({
+      has: page.locator('h2', { hasText: label }),
     });
     await expect(column).toBeVisible();
-    // Count badge shows 0
-    await expect(column.locator('text=0')).toBeVisible();
+    // Count badge shows a number (parallel tests may create tasks)
+    await expect(column.getByText(/^\d+$/)).toBeVisible();
   }
 });
 

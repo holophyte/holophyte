@@ -10,6 +10,10 @@
       try{var v=['neon','flora','infrared','verdant','rosewood','paper','dune','arctic'];var s=JSON.parse(localStorage.getItem('holophyte-app')||'{}');var t=s.state&&s.state.theme;document.documentElement.setAttribute('data-theme',v.indexOf(t)>-1?t:'neon')}catch(e){document.documentElement.setAttribute('data-theme','neon')}
     </script>
     <link rel="stylesheet" href="../src/frontend/styles.css" />
+    <script>
+      // Bypass Bun bundler resolution — document.write injects synchronously at parse time.
+      document.write('<scr'+'ipt src="/config.js"></scr'+'ipt>');
+    </script>
   </head>
   <body>
     <div id="root"></div>

@@ -6,106 +6,67 @@ import { useSession } from './useSession';
 // Convex mocks
 // ---------------------------------------------------------------------------
 
-// useQuery is mocked as a plain vi.fn() — the factory must not reference
-// outer variables (vi.mock is hoisted). Override behavior in beforeEach.
+// vi.mock is hoisted, so factory functions must not reference outer variables.
+// Mutation mocks are created separately and shared via module-level refs.
+const mockResolveApproval = vi.fn();
 const mockSendSessionMessage = vi.fn();
 
 vi.mock('convex/react', () => ({
   useQuery: vi.fn(),
-  useMutation: vi.fn(() => mockSendSessionMessage),
+  useMutation: vi.fn(),
 }));
 
 vi.mock('@convex/_generated/api', () => ({
   api: {
     sessions: { get: 'sessions:get' },
     sessionEvents: { getBySession: 'sessionEvents:getBySession' },
+    pendingApprovals: {
+      getBySession: 'pendingApprovals:getBySession',
+      resolve: 'pendingApprovals:resolve',
+    },
     sessionMessages: { send: 'sessionMessages:send' },
   },
 }));
+
 vi.mock('@convex/_generated/dataModel', () => ({}));
 
-import { useQuery } from 'convex/react';
+import { useMutation, useQuery } from 'convex/react';
 
-// Typed helper: Convex's useQuery overload signature conflicts with simple
-// mock implementations. This wrapper casts once so call sites stay clean.
 // biome-ignore lint/suspicious/noExplicitAny: necessary for mock compatibility
 const mockedUseQuery = vi.mocked(useQuery) as any as {
   mockImplementation: (fn: (query: unknown) => unknown) => void;
 };
 
-// Default: no session record, no persisted batches
-function resetUseQueryDefaults() {
+// biome-ignore lint/suspicious/noExplicitAny: necessary for mock compatibility
+const mockedUseMutation = vi.mocked(useMutation) as any as {
+  mockImplementation: (fn: (mutation: unknown) => unknown) => void;
+};
+
+// Default session record — no session, no events, no approvals
+function resetMocks() {
   mockedUseQuery.mockImplementation((query: unknown) => {
     if (query === 'sessions:get') return null;
     if (query === 'sessionEvents:getBySession') return [];
+    if (query === 'pendingApprovals:getBySession') return [];
     return null;
+  });
+
+  mockedUseMutation.mockImplementation((mutation: unknown) => {
+    if (mutation === 'pendingApprovals:resolve') return mockResolveApproval;
+    if (mutation === 'sessionMessages:send') return mockSendSessionMessage;
+    return vi.fn();
   });
 }
 
-// ---------------------------------------------------------------------------
-// WebSocket mock
-// ---------------------------------------------------------------------------
-
-type WsHandler = (event: MessageEvent | Event | CloseEvent) => void;
-
-interface MockWebSocketInstance {
-  readyState: number;
-  send: ReturnType<typeof vi.fn>;
-  close: ReturnType<typeof vi.fn>;
-  onopen: WsHandler | null;
-  onmessage: WsHandler | null;
-  onclose: WsHandler | null;
-  onerror: WsHandler | null;
-  // Test helpers
-  _simulateOpen: () => void;
-  _simulateMessage: (data: unknown) => void;
-  _simulateClose: () => void;
-}
-
-let lastWsInstance: MockWebSocketInstance | null = null;
-
-class MockWebSocket {
-  static OPEN = 1;
-  static CLOSING = 2;
-  static CLOSED = 3;
-  readyState = 1; // OPEN by default
-  send = vi.fn();
-  close = vi.fn();
-  onopen: WsHandler | null = null;
-  onmessage: WsHandler | null = null;
-  onclose: WsHandler | null = null;
-  onerror: WsHandler | null = null;
-
-  constructor(_url: string) {
-    lastWsInstance = this as unknown as MockWebSocketInstance;
-  }
-
-  _simulateOpen() {
-    this.onopen?.(new Event('open'));
-  }
-
-  _simulateMessage(data: unknown) {
-    const event = new MessageEvent('message', {
-      data: JSON.stringify(data),
-    });
-    this.onmessage?.(event);
-  }
-
-  _simulateClose() {
-    this.readyState = 3; // CLOSED
-    this.onclose?.(new CloseEvent('close'));
-  }
-}
-
 beforeEach(() => {
-  lastWsInstance = null;
-  vi.stubGlobal('WebSocket', MockWebSocket);
-  resetUseQueryDefaults();
+  vi.useFakeTimers();
+  resetMocks();
+  mockResolveApproval.mockReset();
   mockSendSessionMessage.mockReset();
 });
 
 afterEach(() => {
-  vi.unstubAllGlobals();
+  vi.useRealTimers();
   vi.restoreAllMocks();
 });
 
@@ -113,13 +74,42 @@ afterEach(() => {
 // Helpers
 // ---------------------------------------------------------------------------
 
-function ws(): MockWebSocketInstance {
-  if (!lastWsInstance) throw new Error('No WebSocket instance created');
-  return lastWsInstance;
-}
-
 function renderSession(sessionId: string | null) {
   return renderHook(() => useSession(sessionId));
+}
+
+// Build a minimal Convex session record
+function makeSessionRecord(overrides: Record<string, unknown> = {}) {
+  return {
+    status: 'running',
+    ...overrides,
+  };
+}
+
+// Build a Convex pendingApproval record
+function makeConvexApproval(overrides: Record<string, unknown> = {}) {
+  return {
+    requestId: 'req-1',
+    tool: 'Bash',
+    input: JSON.stringify({ command: 'ls' }),
+    resolved: false,
+    approved: undefined,
+    ...overrides,
+  };
+}
+
+// Build a Convex event batch
+function makeBatch(
+  events: Array<{ data: string; timestamp?: number }>,
+  batchIndex = 0,
+) {
+  return {
+    batchIndex,
+    events: events.map((e) => ({
+      data: e.data,
+      timestamp: e.timestamp ?? Date.now(),
+    })),
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -133,45 +123,20 @@ describe('useSession', () => {
       expect(result.current.events).toEqual([]);
       expect(result.current.pendingApprovals).toEqual([]);
       expect(result.current.sessionStatus).toBeNull();
-      expect(result.current.isConnected).toBe(false);
+      expect(result.current.companionOnline).toBe(false);
+      expect(result.current.messageQueued).toBe(false);
       expect(result.current.sdkSessionId).toBeUndefined();
-    });
-
-    it('opens a WebSocket when sessionId is provided', () => {
-      renderSession('session-1');
-      expect(lastWsInstance).not.toBeNull();
-    });
-
-    it('uses wss: when page is served over https', () => {
-      vi.spyOn(window, 'location', 'get').mockReturnValue({
-        ...window.location,
-        protocol: 'https:',
-        host: 'app.example.com',
-      } as Location);
-
-      const constructorSpy = vi.fn();
-      vi.stubGlobal(
-        'WebSocket',
-        class extends MockWebSocket {
-          constructor(url: string) {
-            super(url);
-            constructorSpy(url);
-          }
-        },
-      );
-
-      renderSession('session-ssl');
-      expect(constructorSpy).toHaveBeenCalledWith(
-        expect.stringMatching(/^wss:/),
-      );
     });
 
     it('exposes sdkSessionId from Convex session record', () => {
       mockedUseQuery.mockImplementation((query: unknown) => {
-        if (query === 'sessions:get')
-          return { sdkSessionId: 'sdk-abc-123', status: 'idle' };
-        if (query === 'sessionEvents:getBySession') return [];
-        return null;
+        if (query === 'sessions:get') {
+          return makeSessionRecord({
+            sdkSessionId: 'sdk-abc-123',
+            status: 'idle',
+          });
+        }
+        return [];
       });
 
       const { result } = renderSession('session-1');
@@ -180,264 +145,143 @@ describe('useSession', () => {
 
     it('sdkSessionId is undefined when session record has no sdkSessionId yet', () => {
       mockedUseQuery.mockImplementation((query: unknown) => {
-        if (query === 'sessions:get') return { status: 'running' };
-        if (query === 'sessionEvents:getBySession') return [];
-        return null;
+        if (query === 'sessions:get')
+          return makeSessionRecord({ status: 'running' });
+        return [];
       });
 
       const { result } = renderSession('session-1');
       expect(result.current.sdkSessionId).toBeUndefined();
     });
-  });
 
-  describe('connection lifecycle', () => {
-    it('sets isConnected to true on open', async () => {
-      const { result } = renderSession('session-1');
-      act(() => ws()._simulateOpen());
-      expect(result.current.isConnected).toBe(true);
-    });
-
-    it('sets isConnected to false on close', async () => {
-      const { result } = renderSession('session-1');
-      act(() => ws()._simulateOpen());
-      expect(result.current.isConnected).toBe(true);
-      act(() => ws()._simulateClose());
-      expect(result.current.isConnected).toBe(false);
-    });
-
-    it('closes WebSocket on unmount', () => {
-      const { unmount } = renderSession('session-1');
-      const instance = ws();
-      unmount();
-      expect(instance.close).toHaveBeenCalled();
-    });
-
-    it('resets state and reopens WebSocket when sessionId changes', () => {
-      const { rerender } = renderHook(
-        ({ id }: { id: string }) => useSession(id),
-        { initialProps: { id: 'session-a' } },
-      );
-      const firstWs = ws();
-      rerender({ id: 'session-b' });
-      expect(ws()).not.toBe(firstWs);
-    });
-
-    it('resets events and pendingApprovals on new session', () => {
-      let id = 'session-a';
-      const { result, rerender } = renderHook(() => useSession(id));
-
-      // Simulate some events on the first session
-      act(() => {
-        ws()._simulateMessage({
-          type: 'event',
-          sessionId: 'session-a',
-          event: { type: 'text', text: 'hello' },
-        });
-      });
-      expect(result.current.events).toHaveLength(1);
-
-      // Switch session
-      id = 'session-b';
-      rerender();
-      expect(result.current.events).toHaveLength(0);
-      expect(result.current.pendingApprovals).toHaveLength(0);
-    });
-
-    it('resets messageQueued on new session', () => {
-      let id = 'session-a';
-      const { result, rerender } = renderHook(() => useSession(id));
-
-      // Mark messageQueued by simulating a running status then send
-      act(() => {
-        ws()._simulateMessage({
-          type: 'status',
-          sessionId: 'session-a',
-          status: 'running',
-        });
+    it('sdkSessionId updates reactively when Convex session record changes', () => {
+      let sessionRecord = makeSessionRecord({ status: 'running' });
+      mockedUseQuery.mockImplementation((query: unknown) => {
+        if (query === 'sessions:get') return sessionRecord;
+        return [];
       });
 
-      // Switch session — messageQueued should be cleared
-      id = 'session-b';
+      const { result, rerender } = renderSession('session-live');
+      expect(result.current.sdkSessionId).toBeUndefined();
+
+      sessionRecord = makeSessionRecord({
+        sdkSessionId: 'sdk-newly-set',
+        status: 'idle',
+      });
       rerender();
-      expect(result.current.messageQueued).toBe(false);
+
+      expect(result.current.sdkSessionId).toBe('sdk-newly-set');
     });
   });
 
-  describe('event message parsing', () => {
-    it('appends SDK events to the events array', () => {
+  describe('events from Convex', () => {
+    it('returns empty events when no batches exist', () => {
+      mockedUseQuery.mockImplementation((query: unknown) => {
+        if (query === 'sessionEvents:getBySession') return [];
+        return null;
+      });
       const { result } = renderSession('session-1');
-      act(() =>
-        ws()._simulateMessage({
-          type: 'event',
-          sessionId: 'session-1',
-          event: { type: 'text', text: 'Hello from Claude' },
-        }),
-      );
+      expect(result.current.events).toEqual([]);
+    });
+
+    it('flattens a single batch into the events array', () => {
+      mockedUseQuery.mockImplementation((query: unknown) => {
+        if (query === 'sessionEvents:getBySession') {
+          return [
+            makeBatch([
+              {
+                data: JSON.stringify({
+                  type: 'text',
+                  text: 'Hello from Claude',
+                }),
+              },
+            ]),
+          ];
+        }
+        if (query === 'sessions:get') return makeSessionRecord();
+        return [];
+      });
+
+      const { result } = renderSession('session-1');
       expect(result.current.events).toHaveLength(1);
-      expect(result.current.events[0]).toEqual({
+      expect(result.current.events[0]).toMatchObject({
         type: 'text',
         text: 'Hello from Claude',
       });
     });
 
-    it('accumulates multiple events in order', () => {
-      const { result } = renderSession('session-1');
-      act(() => {
-        ws()._simulateMessage({
-          type: 'event',
-          sessionId: 'session-1',
-          event: { type: 'text', text: 'First' },
-        });
-        ws()._simulateMessage({
-          type: 'event',
-          sessionId: 'session-1',
-          event: { type: 'text', text: 'Second' },
-        });
-      });
-      expect(result.current.events).toHaveLength(2);
-      expect(result.current.events[1]).toMatchObject({ text: 'Second' });
-    });
-
-    it('ignores messages with invalid JSON', () => {
-      const { result } = renderSession('session-1');
-      const onmessage = ws().onmessage;
-      act(() => {
-        onmessage?.(new MessageEvent('message', { data: 'not-valid-json{{' }));
-      });
-      expect(result.current.events).toHaveLength(0);
-    });
-
-    it('deduplicates events by uuid when they appear in both persisted and WS', () => {
-      // Simulate persisted events with uuids
+    it('flattens multiple batches into a single ordered array', () => {
       mockedUseQuery.mockImplementation((query: unknown) => {
-        if (query === 'sessions:get') return null;
         if (query === 'sessionEvents:getBySession') {
           return [
-            {
-              batchIndex: 0,
-              events: [
-                {
-                  data: JSON.stringify({
-                    type: 'text',
-                    uuid: 'uuid-1',
-                    text: 'From Convex',
-                  }),
-                  timestamp: Date.now(),
-                },
+            makeBatch(
+              [{ data: JSON.stringify({ type: 'text', text: 'First' }) }],
+              0,
+            ),
+            makeBatch(
+              [
+                { data: JSON.stringify({ type: 'text', text: 'Second' }) },
+                { data: JSON.stringify({ type: 'text', text: 'Third' }) },
               ],
-            },
+              1,
+            ),
           ];
         }
-        return null;
+        if (query === 'sessions:get') return makeSessionRecord();
+        return [];
       });
 
       const { result } = renderSession('session-1');
+      expect(result.current.events).toHaveLength(3);
+      expect(result.current.events[0]).toMatchObject({ text: 'First' });
+      expect(result.current.events[1]).toMatchObject({ text: 'Second' });
+      expect(result.current.events[2]).toMatchObject({ text: 'Third' });
+    });
 
-      // WS also delivers the same event (with same uuid) — should be deduplicated
-      act(() =>
-        ws()._simulateMessage({
-          type: 'event',
-          sessionId: 'session-1',
-          event: { type: 'text', uuid: 'uuid-1', text: 'From Convex' },
-        }),
-      );
+    it('parses event data as JSON (SDKMessage)', () => {
+      const event = {
+        type: 'assistant',
+        message: { role: 'assistant', content: [] },
+      };
+      mockedUseQuery.mockImplementation((query: unknown) => {
+        if (query === 'sessionEvents:getBySession') {
+          return [makeBatch([{ data: JSON.stringify(event) }])];
+        }
+        return [];
+      });
 
-      // Should only appear once despite coming from both sources
-      const matching = result.current.events.filter(
-        (e) => (e as { uuid?: string }).uuid === 'uuid-1',
-      );
-      expect(matching).toHaveLength(1);
+      const { result } = renderSession('session-1');
+      expect(result.current.events[0]).toEqual(event);
     });
   });
 
-  describe('status messages', () => {
-    it('updates sessionStatus from status messages', () => {
+  describe('pending approvals from Convex', () => {
+    it('returns empty approvals when none exist', () => {
       const { result } = renderSession('session-1');
-      act(() =>
-        ws()._simulateMessage({
-          type: 'status',
-          sessionId: 'session-1',
-          status: 'running',
-        }),
-      );
-      expect(result.current.sessionStatus).toBe('running');
+      expect(result.current.pendingApprovals).toEqual([]);
     });
 
-    it('sets sessionStatus to failed on error messages', () => {
+    it('maps Convex approval records to PendingApproval shape', () => {
+      mockedUseQuery.mockImplementation((query: unknown) => {
+        if (query === 'pendingApprovals:getBySession') {
+          return [
+            makeConvexApproval({
+              requestId: 'req-1',
+              tool: 'Write',
+              input: JSON.stringify({
+                file_path: '/tmp/test.ts',
+                content: 'hello',
+              }),
+              resolved: false,
+            }),
+          ];
+        }
+        return [];
+      });
+
       const { result } = renderSession('session-1');
-      act(() =>
-        ws()._simulateMessage({
-          type: 'error',
-          sessionId: 'session-1',
-          message: 'Something exploded',
-        }),
-      );
-      expect(result.current.sessionStatus).toBe('failed');
-    });
-
-    it('tracks idle status (replaces completed/stopped)', () => {
-      const { result } = renderSession('session-1');
-      act(() =>
-        ws()._simulateMessage({
-          type: 'status',
-          sessionId: 'session-1',
-          status: 'idle',
-        }),
-      );
-      expect(result.current.sessionStatus).toBe('idle');
-    });
-
-    it('clears messageQueued when status moves past running', () => {
-      const { result } = renderSession('session-1');
-
-      // Start running
-      act(() =>
-        ws()._simulateMessage({
-          type: 'status',
-          sessionId: 'session-1',
-          status: 'running',
-        }),
-      );
-      // messageQueued is false unless sendMessage was called
-      expect(result.current.messageQueued).toBe(false);
-
-      // Transition to idle — messageQueued (if set) should clear
-      act(() =>
-        ws()._simulateMessage({
-          type: 'status',
-          sessionId: 'session-1',
-          status: 'idle',
-        }),
-      );
-      expect(result.current.messageQueued).toBe(false);
-    });
-
-    it('clears messageQueued on error', () => {
-      const { result } = renderSession('session-1');
-      act(() =>
-        ws()._simulateMessage({
-          type: 'error',
-          sessionId: 'session-1',
-          message: 'boom',
-        }),
-      );
-      expect(result.current.messageQueued).toBe(false);
-    });
-  });
-
-  describe('permission (approval) messages', () => {
-    it('adds a pending approval on permission message', () => {
-      const { result } = renderSession('session-1');
-      act(() =>
-        ws()._simulateMessage({
-          type: 'permission',
-          sessionId: 'session-1',
-          requestId: 'req-1',
-          tool: 'Write',
-          input: { file_path: '/tmp/test.ts', content: 'hello' },
-        }),
-      );
       expect(result.current.pendingApprovals).toHaveLength(1);
+
       const approval = result.current.pendingApprovals[0];
       expect(approval?.requestId).toBe('req-1');
       expect(approval?.tool).toBe('Write');
@@ -445,375 +289,320 @@ describe('useSession', () => {
         file_path: '/tmp/test.ts',
         content: 'hello',
       });
+      expect(approval?.resolved).toBeUndefined();
     });
 
-    it('sets sessionStatus to waiting_input on permission message', () => {
-      const { result } = renderSession('session-1');
-      act(() =>
-        ws()._simulateMessage({
-          type: 'permission',
-          sessionId: 'session-1',
-          requestId: 'req-1',
-          tool: 'Bash',
-          input: { command: 'rm -rf /' },
-        }),
-      );
-      expect(result.current.sessionStatus).toBe('waiting_input');
-    });
-
-    it('does not add duplicate approvals on reconnect replay', () => {
-      const { result } = renderSession('session-1');
-      const permMsg = {
-        type: 'permission',
-        sessionId: 'session-1',
-        requestId: 'req-dup',
-        tool: 'Edit',
-        input: { file_path: '/tmp/x.ts' },
-      };
-      act(() => {
-        ws()._simulateMessage(permMsg);
-        ws()._simulateMessage(permMsg); // second replay
+    it('maps resolved approval with approved: true', () => {
+      mockedUseQuery.mockImplementation((query: unknown) => {
+        if (query === 'pendingApprovals:getBySession') {
+          return [
+            makeConvexApproval({
+              requestId: 'req-approved',
+              resolved: true,
+              approved: true,
+            }),
+          ];
+        }
+        return [];
       });
-      expect(result.current.pendingApprovals).toHaveLength(1);
+
+      const { result } = renderSession('session-1');
+      const approval = result.current.pendingApprovals[0];
+      expect(approval?.resolved).toEqual({ approved: true });
     });
 
-    it('stacks multiple pending approvals', () => {
-      const { result } = renderSession('session-1');
-      act(() => {
-        ws()._simulateMessage({
-          type: 'permission',
-          sessionId: 'session-1',
-          requestId: 'req-1',
-          tool: 'Write',
-          input: {},
-        });
-        ws()._simulateMessage({
-          type: 'permission',
-          sessionId: 'session-1',
-          requestId: 'req-2',
-          tool: 'Bash',
-          input: { command: 'rm -rf /' },
-        });
+    it('maps resolved approval with approved: false', () => {
+      mockedUseQuery.mockImplementation((query: unknown) => {
+        if (query === 'pendingApprovals:getBySession') {
+          return [
+            makeConvexApproval({
+              requestId: 'req-denied',
+              resolved: true,
+              approved: false,
+            }),
+          ];
+        }
+        return [];
       });
+
+      const { result } = renderSession('session-1');
+      const approval = result.current.pendingApprovals[0];
+      expect(approval?.resolved).toEqual({ approved: false });
+    });
+
+    it('returns both unresolved and resolved approvals', () => {
+      mockedUseQuery.mockImplementation((query: unknown) => {
+        if (query === 'pendingApprovals:getBySession') {
+          return [
+            makeConvexApproval({ requestId: 'req-pending', resolved: false }),
+            makeConvexApproval({
+              requestId: 'req-done',
+              resolved: true,
+              approved: true,
+            }),
+          ];
+        }
+        return [];
+      });
+
+      const { result } = renderSession('session-1');
       expect(result.current.pendingApprovals).toHaveLength(2);
     });
   });
 
-  describe('approve()', () => {
-    it('sends approve message over WebSocket', () => {
+  describe('status derivation', () => {
+    it('returns null status when no session record exists', () => {
       const { result } = renderSession('session-1');
-      act(() =>
-        ws()._simulateMessage({
-          type: 'permission',
-          sessionId: 'session-1',
-          requestId: 'req-1',
-          tool: 'Write',
-          input: {},
-        }),
-      );
-
-      act(() => result.current.approve('req-1'));
-
-      expect(ws().send).toHaveBeenCalledWith(
-        JSON.stringify({ type: 'approve', requestId: 'req-1' }),
-      );
+      expect(result.current.sessionStatus).toBeNull();
     });
 
-    it('marks the approval as resolved: approved', () => {
+    it('maps queued → queued', () => {
+      mockedUseQuery.mockImplementation((query: unknown) => {
+        if (query === 'sessions:get')
+          return makeSessionRecord({ status: 'queued' });
+        return [];
+      });
       const { result } = renderSession('session-1');
-      act(() =>
-        ws()._simulateMessage({
-          type: 'permission',
-          sessionId: 'session-1',
-          requestId: 'req-1',
-          tool: 'Write',
-          input: {},
-        }),
-      );
-
-      act(() => result.current.approve('req-1'));
-
-      const approval = result.current.pendingApprovals.find(
-        (a) => a.requestId === 'req-1',
-      );
-      expect(approval?.resolved).toEqual({ approved: true });
-    });
-  });
-
-  describe('deny()', () => {
-    it('sends deny message over WebSocket', () => {
-      const { result } = renderSession('session-1');
-      act(() =>
-        ws()._simulateMessage({
-          type: 'permission',
-          sessionId: 'session-1',
-          requestId: 'req-2',
-          tool: 'Bash',
-          input: { command: 'rm -rf /' },
-        }),
-      );
-
-      act(() => result.current.deny('req-2', 'Too dangerous'));
-
-      expect(ws().send).toHaveBeenCalledWith(
-        JSON.stringify({
-          type: 'deny',
-          requestId: 'req-2',
-          message: 'Too dangerous',
-        }),
-      );
+      expect(result.current.sessionStatus).toBe('queued');
     });
 
-    it('marks the approval as resolved: denied', () => {
+    it('maps stopped → idle', () => {
+      mockedUseQuery.mockImplementation((query: unknown) => {
+        if (query === 'sessions:get')
+          return makeSessionRecord({ status: 'stopped' });
+        return [];
+      });
       const { result } = renderSession('session-1');
-      act(() =>
-        ws()._simulateMessage({
-          type: 'permission',
-          sessionId: 'session-1',
-          requestId: 'req-2',
-          tool: 'Edit',
-          input: {},
-        }),
-      );
-
-      act(() => result.current.deny('req-2'));
-
-      const approval = result.current.pendingApprovals.find(
-        (a) => a.requestId === 'req-2',
-      );
-      expect(approval?.resolved).toEqual({ approved: false });
-    });
-
-    it('sends deny without message field when message is omitted', () => {
-      const { result } = renderSession('session-1');
-      act(() =>
-        ws()._simulateMessage({
-          type: 'permission',
-          sessionId: 'session-1',
-          requestId: 'req-3',
-          tool: 'Write',
-          input: {},
-        }),
-      );
-
-      act(() => result.current.deny('req-3'));
-
-      expect(ws().send).toHaveBeenCalledWith(
-        JSON.stringify({
-          type: 'deny',
-          requestId: 'req-3',
-          message: undefined,
-        }),
-      );
-    });
-  });
-
-  describe('derived sessionStatus (waiting_input)', () => {
-    it('keeps waiting_input even when a running status arrives while approval is pending', () => {
-      const { result } = renderSession('session-1');
-
-      // Permission comes first → waiting_input
-      act(() =>
-        ws()._simulateMessage({
-          type: 'permission',
-          sessionId: 'session-1',
-          requestId: 'req-1',
-          tool: 'Write',
-          input: {},
-        }),
-      );
-      expect(result.current.sessionStatus).toBe('waiting_input');
-
-      // Backend sends running status (e.g. spurious update) — should stay waiting_input
-      act(() =>
-        ws()._simulateMessage({
-          type: 'status',
-          sessionId: 'session-1',
-          status: 'running',
-        }),
-      );
-      expect(result.current.sessionStatus).toBe('waiting_input');
-    });
-
-    it('reverts to running after all approvals are resolved', () => {
-      const { result } = renderSession('session-1');
-
-      act(() =>
-        ws()._simulateMessage({
-          type: 'permission',
-          sessionId: 'session-1',
-          requestId: 'req-1',
-          tool: 'Write',
-          input: {},
-        }),
-      );
-      act(() =>
-        ws()._simulateMessage({
-          type: 'status',
-          sessionId: 'session-1',
-          status: 'running',
-        }),
-      );
-      expect(result.current.sessionStatus).toBe('waiting_input');
-
-      // Resolve the approval
-      act(() => result.current.approve('req-1'));
-      // Status should now reflect running since no pending approvals remain
-      expect(result.current.sessionStatus).toBe('running');
-    });
-
-    it('does not show waiting_input when session is idle', () => {
-      const { result } = renderSession('session-1');
-
-      // Permission arrives
-      act(() =>
-        ws()._simulateMessage({
-          type: 'permission',
-          sessionId: 'session-1',
-          requestId: 'req-1',
-          tool: 'Write',
-          input: {},
-        }),
-      );
-
-      // Session goes idle without resolving the approval
-      act(() =>
-        ws()._simulateMessage({
-          type: 'status',
-          sessionId: 'session-1',
-          status: 'idle',
-        }),
-      );
-
-      // idle takes priority over waiting_input
       expect(result.current.sessionStatus).toBe('idle');
     });
 
-    it('does not show waiting_input when session has failed', () => {
+    it('maps running → running when no unresolved approvals', () => {
+      mockedUseQuery.mockImplementation((query: unknown) => {
+        if (query === 'sessions:get')
+          return makeSessionRecord({ status: 'running' });
+        return [];
+      });
       const { result } = renderSession('session-1');
+      expect(result.current.sessionStatus).toBe('running');
+    });
 
-      // Permission arrives
-      act(() =>
-        ws()._simulateMessage({
-          type: 'permission',
-          sessionId: 'session-1',
-          requestId: 'req-1',
-          tool: 'Write',
-          input: {},
-        }),
-      );
+    it('maps running + unresolved approvals → waiting_input', () => {
+      mockedUseQuery.mockImplementation((query: unknown) => {
+        if (query === 'sessions:get')
+          return makeSessionRecord({ status: 'running' });
+        if (query === 'pendingApprovals:getBySession') {
+          return [makeConvexApproval({ resolved: false })];
+        }
+        return [];
+      });
+      const { result } = renderSession('session-1');
+      expect(result.current.sessionStatus).toBe('waiting_input');
+    });
 
-      // Session fails without resolving the approval
-      act(() =>
-        ws()._simulateMessage({
-          type: 'status',
-          sessionId: 'session-1',
-          status: 'failed',
-        }),
-      );
+    it('maps running + all approvals resolved → running (not waiting_input)', () => {
+      mockedUseQuery.mockImplementation((query: unknown) => {
+        if (query === 'sessions:get')
+          return makeSessionRecord({ status: 'running' });
+        if (query === 'pendingApprovals:getBySession') {
+          return [makeConvexApproval({ resolved: true, approved: true })];
+        }
+        return [];
+      });
+      const { result } = renderSession('session-1');
+      expect(result.current.sessionStatus).toBe('running');
+    });
 
+    it('maps failed → failed', () => {
+      mockedUseQuery.mockImplementation((query: unknown) => {
+        if (query === 'sessions:get')
+          return makeSessionRecord({ status: 'failed' });
+        return [];
+      });
+      const { result } = renderSession('session-1');
+      expect(result.current.sessionStatus).toBe('failed');
+    });
+
+    it('maps idle → idle', () => {
+      mockedUseQuery.mockImplementation((query: unknown) => {
+        if (query === 'sessions:get')
+          return makeSessionRecord({ status: 'idle' });
+        return [];
+      });
+      const { result } = renderSession('session-1');
+      expect(result.current.sessionStatus).toBe('idle');
+    });
+
+    it('does not show waiting_input when session is idle with unresolved approvals', () => {
+      mockedUseQuery.mockImplementation((query: unknown) => {
+        if (query === 'sessions:get')
+          return makeSessionRecord({ status: 'idle' });
+        if (query === 'pendingApprovals:getBySession') {
+          return [makeConvexApproval({ resolved: false })];
+        }
+        return [];
+      });
+      const { result } = renderSession('session-1');
+      expect(result.current.sessionStatus).toBe('idle');
+    });
+
+    it('does not show waiting_input when session is failed with unresolved approvals', () => {
+      mockedUseQuery.mockImplementation((query: unknown) => {
+        if (query === 'sessions:get')
+          return makeSessionRecord({ status: 'failed' });
+        if (query === 'pendingApprovals:getBySession') {
+          return [makeConvexApproval({ resolved: false })];
+        }
+        return [];
+      });
+      const { result } = renderSession('session-1');
       expect(result.current.sessionStatus).toBe('failed');
     });
   });
 
-  describe('sdkSessionId from Convex (for resume flow)', () => {
-    it('is available once the Convex session record has sdkSessionId', () => {
-      mockedUseQuery.mockImplementation((query: unknown) => {
-        if (query === 'sessions:get') {
-          return { sdkSessionId: 'sdk-resume-id-xyz', status: 'idle' };
-        }
-        if (query === 'sessionEvents:getBySession') return [];
-        return null;
-      });
-
-      const { result } = renderSession('session-idle');
-      expect(result.current.sdkSessionId).toBe('sdk-resume-id-xyz');
+  describe('companionOnline', () => {
+    it('is false when no session record exists', () => {
+      const { result } = renderSession('session-1');
+      expect(result.current.companionOnline).toBe(false);
     });
 
-    it('updates reactively when Convex session record updates', () => {
-      let sessionRecord: { sdkSessionId?: string; status: string } = {
-        status: 'running',
-      };
+    it('is true when session status is queued', () => {
       mockedUseQuery.mockImplementation((query: unknown) => {
-        if (query === 'sessions:get') return sessionRecord;
-        if (query === 'sessionEvents:getBySession') return [];
-        return null;
+        if (query === 'sessions:get')
+          return makeSessionRecord({ status: 'queued' });
+        return [];
+      });
+      const { result } = renderSession('session-1');
+      expect(result.current.companionOnline).toBe(true);
+    });
+
+    it('is true when lastHeartbeat is within 10s of now', () => {
+      const recentHeartbeat = Date.now() - 5000; // 5s ago
+      mockedUseQuery.mockImplementation((query: unknown) => {
+        if (query === 'sessions:get') {
+          return makeSessionRecord({
+            status: 'running',
+            lastHeartbeat: recentHeartbeat,
+          });
+        }
+        return [];
+      });
+      const { result } = renderSession('session-1');
+      expect(result.current.companionOnline).toBe(true);
+    });
+
+    it('is false when lastHeartbeat is stale (>10s old)', () => {
+      const staleHeartbeat = Date.now() - 15000; // 15s ago
+      mockedUseQuery.mockImplementation((query: unknown) => {
+        if (query === 'sessions:get') {
+          return makeSessionRecord({
+            status: 'running',
+            lastHeartbeat: staleHeartbeat,
+          });
+        }
+        return [];
+      });
+      const { result } = renderSession('session-1');
+      expect(result.current.companionOnline).toBe(false);
+    });
+
+    it('is false when no lastHeartbeat and status is not queued', () => {
+      mockedUseQuery.mockImplementation((query: unknown) => {
+        if (query === 'sessions:get') {
+          return makeSessionRecord({
+            status: 'running',
+            lastHeartbeat: undefined,
+          });
+        }
+        return [];
+      });
+      const { result } = renderSession('session-1');
+      expect(result.current.companionOnline).toBe(false);
+    });
+
+    it('updates companionOnline reactively when heartbeat changes', () => {
+      const staleHeartbeat = Date.now() - 15000;
+      let heartbeat: number | undefined = staleHeartbeat;
+      mockedUseQuery.mockImplementation((query: unknown) => {
+        if (query === 'sessions:get') {
+          return makeSessionRecord({
+            status: 'running',
+            lastHeartbeat: heartbeat,
+          });
+        }
+        return [];
       });
 
-      const { result, rerender } = renderSession('session-live');
-      expect(result.current.sdkSessionId).toBeUndefined();
+      const { result, rerender } = renderSession('session-1');
+      expect(result.current.companionOnline).toBe(false);
 
-      // Simulate Convex updating the record with sdkSessionId
-      sessionRecord = { sdkSessionId: 'sdk-newly-set', status: 'idle' };
+      heartbeat = Date.now() - 1000; // fresh heartbeat
       rerender();
-
-      expect(result.current.sdkSessionId).toBe('sdk-newly-set');
+      expect(result.current.companionOnline).toBe(true);
     });
   });
 
-  describe('persistenceWarning', () => {
-    it('sets persistenceWarning when a warning message is received', () => {
+  describe('approve()', () => {
+    it('calls resolveApproval mutation with approved: true', () => {
+      mockResolveApproval.mockResolvedValue(undefined);
+
       const { result } = renderSession('session-1');
-      act(() =>
-        ws()._simulateMessage({
-          type: 'warning',
-          sessionId: 'session-1',
-          message:
-            'Failed to persist session data to database — events may be lost on refresh',
-        }),
-      );
-      expect(result.current.persistenceWarning).toBe(
-        'Failed to persist session data to database — events may be lost on refresh',
-      );
+
+      act(() => result.current.approve('req-1'));
+
+      expect(mockResolveApproval).toHaveBeenCalledWith({
+        sessionId: 'session-1',
+        requestId: 'req-1',
+        approved: true,
+      });
     });
 
-    it('starts as null before any warning is received', () => {
+    it('is a no-op when sessionId is null', () => {
+      const { result } = renderSession(null);
+      act(() => result.current.approve('req-1'));
+      expect(mockResolveApproval).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('deny()', () => {
+    it('calls resolveApproval mutation with approved: false', () => {
+      mockResolveApproval.mockResolvedValue(undefined);
+
       const { result } = renderSession('session-1');
-      expect(result.current.persistenceWarning).toBeNull();
+
+      act(() => result.current.deny('req-2', 'Too dangerous'));
+
+      expect(mockResolveApproval).toHaveBeenCalledWith({
+        sessionId: 'session-1',
+        requestId: 'req-2',
+        approved: false,
+        denyMessage: 'Too dangerous',
+      });
     });
 
-    it('resets persistenceWarning to null when sessionId changes', () => {
-      let id = 'session-a';
-      const { result, rerender } = renderHook(() => useSession(id));
+    it('passes denyMessage as undefined when no message is provided', () => {
+      mockResolveApproval.mockResolvedValue(undefined);
 
-      act(() =>
-        ws()._simulateMessage({
-          type: 'warning',
-          sessionId: 'session-a',
-          message: 'Something failed',
-        }),
-      );
-      expect(result.current.persistenceWarning).toBe('Something failed');
+      const { result } = renderSession('session-1');
 
-      id = 'session-b';
-      rerender();
-      expect(result.current.persistenceWarning).toBeNull();
+      act(() => result.current.deny('req-3'));
+
+      expect(mockResolveApproval).toHaveBeenCalledWith({
+        sessionId: 'session-1',
+        requestId: 'req-3',
+        approved: false,
+        denyMessage: undefined,
+      });
     });
 
-    it('updates persistenceWarning with the latest warning message', () => {
-      const { result } = renderSession('session-1');
-      act(() =>
-        ws()._simulateMessage({
-          type: 'warning',
-          sessionId: 'session-1',
-          message: 'First warning',
-        }),
-      );
-      expect(result.current.persistenceWarning).toBe('First warning');
-
-      act(() =>
-        ws()._simulateMessage({
-          type: 'warning',
-          sessionId: 'session-1',
-          message: 'Second warning',
-        }),
-      );
-      expect(result.current.persistenceWarning).toBe('Second warning');
+    it('is a no-op when sessionId is null', () => {
+      const { result } = renderSession(null);
+      act(() => result.current.deny('req-1'));
+      expect(mockResolveApproval).not.toHaveBeenCalled();
     });
   });
 
   describe('sendMessage()', () => {
-    it('calls the Convex sessionMessages.send mutation', async () => {
+    it('calls the sessionMessages.send mutation', async () => {
       mockSendSessionMessage.mockResolvedValue(undefined);
 
       const { result } = renderSession('session-abc');
@@ -831,17 +620,13 @@ describe('useSession', () => {
     it('sets messageQueued when session is running and message is sent', async () => {
       mockSendSessionMessage.mockResolvedValue(undefined);
 
+      mockedUseQuery.mockImplementation((query: unknown) => {
+        if (query === 'sessions:get')
+          return makeSessionRecord({ status: 'running' });
+        return [];
+      });
+
       const { result } = renderSession('session-running');
-
-      // Simulate running status
-      act(() =>
-        ws()._simulateMessage({
-          type: 'status',
-          sessionId: 'session-running',
-          status: 'running',
-        }),
-      );
-
       expect(result.current.sessionStatus).toBe('running');
 
       await act(async () => {
@@ -854,22 +639,41 @@ describe('useSession', () => {
     it('does not set messageQueued when session is idle', async () => {
       mockSendSessionMessage.mockResolvedValue(undefined);
 
-      const { result } = renderSession('session-idle');
+      mockedUseQuery.mockImplementation((query: unknown) => {
+        if (query === 'sessions:get')
+          return makeSessionRecord({ status: 'idle' });
+        return [];
+      });
 
-      // Session is idle
-      act(() =>
-        ws()._simulateMessage({
-          type: 'status',
-          sessionId: 'session-idle',
-          status: 'idle',
-        }),
-      );
+      const { result } = renderSession('session-idle');
 
       await act(async () => {
         await result.current.sendMessage('session-idle', 'resume message');
       });
 
-      // Not running, so messageQueued stays false
+      expect(result.current.messageQueued).toBe(false);
+    });
+
+    it('does not set messageQueued when session is waiting_input', async () => {
+      mockSendSessionMessage.mockResolvedValue(undefined);
+
+      mockedUseQuery.mockImplementation((query: unknown) => {
+        if (query === 'sessions:get')
+          return makeSessionRecord({ status: 'running' });
+        if (query === 'pendingApprovals:getBySession') {
+          return [makeConvexApproval({ resolved: false })];
+        }
+        return [];
+      });
+
+      const { result } = renderSession('session-waiting');
+      expect(result.current.sessionStatus).toBe('waiting_input');
+
+      await act(async () => {
+        await result.current.sendMessage('session-waiting', 'message');
+      });
+
+      // waiting_input is not 'running', so messageQueued should not be set
       expect(result.current.messageQueued).toBe(false);
     });
 
@@ -883,6 +687,81 @@ describe('useSession', () => {
           await result.current.sendMessage('session-missing', 'hello');
         }),
       ).rejects.toThrow();
+    });
+  });
+
+  describe('messageQueued reset', () => {
+    it('resets messageQueued when session transitions from running to idle', async () => {
+      mockSendSessionMessage.mockResolvedValue(undefined);
+
+      let status = 'running';
+      mockedUseQuery.mockImplementation((query: unknown) => {
+        if (query === 'sessions:get') return makeSessionRecord({ status });
+        return [];
+      });
+
+      const { result, rerender } = renderSession('session-1');
+
+      // Send a message while running
+      await act(async () => {
+        await result.current.sendMessage('session-1', 'hi');
+      });
+      expect(result.current.messageQueued).toBe(true);
+
+      // Transition to idle
+      status = 'idle';
+      rerender();
+
+      expect(result.current.messageQueued).toBe(false);
+    });
+
+    it('resets messageQueued when session transitions from running to failed', async () => {
+      mockSendSessionMessage.mockResolvedValue(undefined);
+
+      let status = 'running';
+      mockedUseQuery.mockImplementation((query: unknown) => {
+        if (query === 'sessions:get') return makeSessionRecord({ status });
+        return [];
+      });
+
+      const { result, rerender } = renderSession('session-1');
+
+      await act(async () => {
+        await result.current.sendMessage('session-1', 'hi');
+      });
+      expect(result.current.messageQueued).toBe(true);
+
+      status = 'failed';
+      rerender();
+
+      expect(result.current.messageQueued).toBe(false);
+    });
+
+    it('does NOT reset messageQueued when session transitions to waiting_input', async () => {
+      mockSendSessionMessage.mockResolvedValue(undefined);
+
+      let approvals: ReturnType<typeof makeConvexApproval>[] = [];
+      mockedUseQuery.mockImplementation((query: unknown) => {
+        if (query === 'sessions:get')
+          return makeSessionRecord({ status: 'running' });
+        if (query === 'pendingApprovals:getBySession') return approvals;
+        return [];
+      });
+
+      const { result, rerender } = renderSession('session-1');
+
+      await act(async () => {
+        await result.current.sendMessage('session-1', 'hi');
+      });
+      expect(result.current.messageQueued).toBe(true);
+
+      // New unresolved approval arrives → status becomes waiting_input
+      approvals = [makeConvexApproval({ resolved: false })];
+      rerender();
+
+      // messageQueued should still be true (waiting_input is not a terminal state)
+      expect(result.current.sessionStatus).toBe('waiting_input');
+      expect(result.current.messageQueued).toBe(true);
     });
   });
 });

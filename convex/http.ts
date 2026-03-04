@@ -288,6 +288,132 @@ http.route({
   }),
 });
 
+// ── Pending approvals ────────────────────────────────────────────────
+
+http.route({
+  path: '/api/internal/pendingApprovals/create',
+  method: 'POST',
+  handler: httpAction(async (ctx, request) => {
+    const authError = validateSecret(request);
+    if (authError) return authError;
+
+    const body = await parseBody(request);
+    if (body instanceof Response) return body;
+
+    try {
+      const { sessionId, requestId, tool, input } = body;
+      await ctx.runMutation(internal.pendingApprovals.serverCreate, {
+        sessionId,
+        requestId,
+        tool,
+        input,
+      });
+      return jsonOk();
+    } catch (err) {
+      console.error('pendingApprovals.serverCreate failed:', err);
+      return jsonError('Mutation failed', 400);
+    }
+  }),
+});
+
+http.route({
+  path: '/api/internal/pendingApprovals/listResolvedUnconsumed',
+  method: 'POST',
+  handler: httpAction(async (ctx, request) => {
+    const authError = validateSecret(request);
+    if (authError) return authError;
+
+    const body = await parseBody(request);
+    if (body instanceof Response) return body;
+
+    try {
+      const { sessionId } = body;
+      const approvals = await ctx.runQuery(
+        internal.pendingApprovals.serverListResolvedUnconsumed,
+        { sessionId },
+      );
+      return new Response(JSON.stringify(approvals), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    } catch (err) {
+      console.error('pendingApprovals.listResolvedUnconsumed failed:', err);
+      return jsonError('Query failed', 500);
+    }
+  }),
+});
+
+http.route({
+  path: '/api/internal/pendingApprovals/markConsumed',
+  method: 'POST',
+  handler: httpAction(async (ctx, request) => {
+    const authError = validateSecret(request);
+    if (authError) return authError;
+
+    const body = await parseBody(request);
+    if (body instanceof Response) return body;
+
+    try {
+      const { id } = body;
+      await ctx.runMutation(internal.pendingApprovals.serverMarkConsumed, {
+        id,
+      });
+      return jsonOk();
+    } catch (err) {
+      console.error('pendingApprovals.serverMarkConsumed failed:', err);
+      return jsonError('Mutation failed', 400);
+    }
+  }),
+});
+
+http.route({
+  path: '/api/internal/pendingApprovals/denyAll',
+  method: 'POST',
+  handler: httpAction(async (ctx, request) => {
+    const authError = validateSecret(request);
+    if (authError) return authError;
+
+    const body = await parseBody(request);
+    if (body instanceof Response) return body;
+
+    try {
+      const { sessionId } = body;
+      await ctx.runMutation(internal.pendingApprovals.serverDenyAll, {
+        sessionId,
+      });
+      return jsonOk();
+    } catch (err) {
+      console.error('pendingApprovals.serverDenyAll failed:', err);
+      return jsonError('Mutation failed', 400);
+    }
+  }),
+});
+
+// ── Session heartbeat ────────────────────────────────────────────────
+
+http.route({
+  path: '/api/internal/sessions/batchHeartbeat',
+  method: 'POST',
+  handler: httpAction(async (ctx, request) => {
+    const authError = validateSecret(request);
+    if (authError) return authError;
+
+    const body = await parseBody(request);
+    if (body instanceof Response) return body;
+
+    try {
+      const { sessionIds } = body;
+      await ctx.runMutation(internal.sessions.serverBatchHeartbeat, {
+        sessionIds,
+      });
+      return jsonOk();
+    } catch (err) {
+      console.error('serverBatchHeartbeat failed:', err);
+      return jsonError('Mutation failed', 400);
+    }
+  }),
+});
+
 // ── Session event persistence ────────────────────────────────────────
 
 http.route({
@@ -338,6 +464,32 @@ http.route({
     } catch (err) {
       console.error('getNextBatchIndex failed:', err);
       return jsonError('Query failed', 400);
+    }
+  }),
+});
+
+// ── Companion heartbeat ───────────────────────────────────────────────
+
+http.route({
+  path: '/api/internal/companion/heartbeat',
+  method: 'POST',
+  handler: httpAction(async (ctx, request) => {
+    const authError = validateSecret(request);
+    if (authError) return authError;
+
+    const body = await parseBody(request);
+    if (body instanceof Response) return body;
+
+    try {
+      const { activeSessionCount, machineId } = body;
+      await ctx.runMutation(internal.companion.upsertHeartbeat, {
+        activeSessionCount,
+        machineId,
+      });
+      return jsonOk();
+    } catch (err) {
+      console.error('companion.upsertHeartbeat failed:', err);
+      return jsonError('Mutation failed', 400);
     }
   }),
 });

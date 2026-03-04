@@ -558,6 +558,27 @@ export const reapStaleSessions = internalMutation({
 });
 
 /**
+ * Updates `lastHeartbeat` for a batch of active sessions.
+ *
+ * Called by the companion's polling loop every 2 seconds to signal that the
+ * process is alive and managing these sessions. The frontend uses the
+ * heartbeat to derive `companionOnline`. Internal — not callable from the
+ * browser.
+ */
+export const serverBatchHeartbeat = internalMutation({
+  args: { sessionIds: v.array(v.id('sessions')) },
+  handler: async (ctx, args) => {
+    const now = Date.now();
+    for (const id of args.sessionIds) {
+      const session = await ctx.db.get(id);
+      if (session) {
+        await ctx.db.patch(id, { lastHeartbeat: now });
+      }
+    }
+  },
+});
+
+/**
  * Returns all sessions with status `stopped`.
  *
  * The companion checks this to detect user-initiated stop requests and abort

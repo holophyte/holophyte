@@ -38,11 +38,20 @@ export default async function globalSetup(config: FullConfig) {
     await addButton.click();
     await page.waitForSelector('text=Add Repository', { timeout: 5000 });
 
-    // Click the folder picker (intercepted)
-    await page.locator('button', { hasText: 'Choose a folder' }).click();
+    // Click the folder picker (intercepted) — icon button with title="Browse..."
+    await page.locator('button[title="Browse..."]').click();
 
-    // Wait for the intercepted response to populate the fields
-    await page.waitForSelector(`text=${repoName}`, { timeout: 5000 });
+    // Wait for the intercepted response to populate the name input
+    await page.waitForFunction(
+      (name) => {
+        const input = document.getElementById(
+          'repo-name',
+        ) as HTMLInputElement | null;
+        return input?.value === name;
+      },
+      repoName,
+      { timeout: 5000 },
+    );
 
     // Submit the form
     await page.locator('button', { hasText: 'Add Repo' }).click();

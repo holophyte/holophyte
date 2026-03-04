@@ -24,6 +24,7 @@
     "worktree:create": "scripts/worktree-create.sh",
     "pr-comments": "scripts/pr-comments.sh",
     "storybook": "storybook dev -p 6006",
+    "companion": "bun run src/companion.ts",
     "build-storybook": "storybook build",
     "docs:dev": "cd docs && bunx docusaurus start",
     "docs:build": "cd docs && bunx docusaurus build"

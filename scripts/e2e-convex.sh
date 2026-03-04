@@ -156,6 +156,9 @@ start_e2e_convex() {
   E2E_INTERNAL_API_SECRET=$(openssl rand -hex 32)
   cd "$REPO_ROOT" && bunx convex env set INTERNAL_API_SECRET "$E2E_INTERNAL_API_SECRET"
 
+  # Generate JWT keys for @convex-dev/auth (fresh instances don't have them)
+  cd "$REPO_ROOT" && bunx @convex-dev/auth --skip-git-check --allow-dirty-git-state
+
   # Write port config for test-e2e.sh / playwright.config.ts
   cat > "$E2E_PORTS_FILE" <<EOF
 E2E_CONVEX_CLOUD_PORT=$cloud_port
