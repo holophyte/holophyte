@@ -51,6 +51,12 @@ console.log(
 // Deploy Convex functions in production so frontend and backend stay in sync.
 // VERCEL_ENV is set automatically by Vercel: 'production', 'preview', or 'development'.
 if (process.env.VERCEL_ENV === 'production') {
+  if (!process.env.CONVEX_DEPLOY_KEY) {
+    console.error(
+      'CONVEX_DEPLOY_KEY environment variable is required for production Convex deploy',
+    );
+    process.exit(1);
+  }
   console.log('Production environment detected — deploying Convex functions...');
   const deploy = Bun.spawnSync(['bunx', 'convex', 'deploy'], {
     stdout: 'inherit',
