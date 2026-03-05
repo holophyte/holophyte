@@ -2,6 +2,15 @@ import tailwindPlugin from 'bun-plugin-tailwind';
 
 console.log('Building Holophyte SPA...');
 
+// Fail fast if CONVEX_URL is missing
+const convexUrl = process.env.CONVEX_URL;
+if (!convexUrl) {
+  console.error(
+    'CONVEX_URL environment variable is required for production builds',
+  );
+  process.exit(1);
+}
+
 // Clean stale output from previous builds
 const { rmSync } = await import('node:fs');
 rmSync('./dist', { recursive: true, force: true });
@@ -21,4 +30,41 @@ if (!result.success) {
   process.exit(1);
 }
 
-console.log(`Build complete. ${result.outputs.length} output files written to dist/`);
+// Generate config.js with build-time environment variables
+const config = {
+  convexUrl,
+  e2eTest: false, // Dev-only feature — never enabled in static/Vercel builds.
+  allowAnonymousAuth: false, // Dev-only feature — never enabled in static/Vercel builds.
+  homeDir: '', // Legacy — not meaningful on Vercel. See #130.
+};
+
+await Bun.write(
+  './dist/config.js',
+  `window.__HOLOPHYTE_CONFIG__=${JSON.stringify(config)};`,
+);
+console.log('Generated dist/config.js');
+
+console.log(
+  `Build complete. ${result.outputs.length + 1} output files written to dist/`,
+);
+
+// Deploy Convex functions in production so frontend and backend stay in sync.
+// VERCEL_ENV is set automatically by Vercel: 'production', 'preview', or 'development'.
+if (process.env.VERCEL_ENV === 'production') {
+  if (!process.env.CONVEX_DEPLOY_KEY) {
+    console.error(
+      'CONVEX_DEPLOY_KEY environment variable is required for production Convex deploy',
+    );
+    process.exit(1);
+  }
+  console.log('Production environment detected — deploying Convex functions...');
+  const deploy = Bun.spawnSync(['bunx', 'convex', 'deploy'], {
+    stdout: 'inherit',
+    stderr: 'inherit',
+  });
+  if (deploy.exitCode !== 0) {
+    console.error('Convex deploy failed');
+    process.exit(1);
+  }
+  console.log('Convex functions deployed.');
+}

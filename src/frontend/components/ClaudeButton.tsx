@@ -2,8 +2,9 @@ import { api } from '@convex/_generated/api';
 import type { Doc } from '@convex/_generated/dataModel';
 import { useMatch, useNavigate } from '@tanstack/react-router';
 import { useMutation, useQuery } from 'convex/react';
-import { Loader2, Play, Square } from 'lucide-react';
+import { AlertTriangle, Loader2, Play, Square } from 'lucide-react';
 import { useState } from 'react';
+import { useCompanionStatus } from '@/frontend/hooks/useCompanionStatus';
 import { useStickyValue } from '@/frontend/hooks/useStickyValue';
 import { useAppStore } from '@/frontend/stores/app';
 import type { ClaudeModelId } from './ModelPicker';
@@ -31,6 +32,7 @@ export function ClaudeButton({ task }: ClaudeButtonProps) {
   const [error, setError] = useState<string | null>(null);
   const [model, setModel] = useState<ClaudeModelId>(DEFAULT_MODEL);
   const [prevTaskId, setPrevTaskId] = useState(task._id);
+  const { state: companionState } = useCompanionStatus();
 
   // Reset model to default when switching to a different task
   if (task._id !== prevTaskId) {
@@ -121,13 +123,21 @@ export function ClaudeButton({ task }: ClaudeButtonProps) {
           size="sm"
           className="flex-1"
           onClick={handleLaunch}
-          disabled={!task.prompt || !task.repo}
+          disabled={!task.prompt || !task.repo || companionState === 'loading'}
         >
           <Play className="h-4 w-4 mr-1" />
           Launch Claude Code
         </Button>
         <ModelPicker value={model} onChange={setModel} />
       </div>
+      {(companionState === 'offline' || companionState === 'stale') && (
+        <p className="text-xs text-yellow-600 mt-1 flex items-center gap-1">
+          <AlertTriangle className="h-3 w-3 shrink-0" />
+          {companionState === 'offline'
+            ? "Companion offline \u2014 task will queue but won't start until it reconnects."
+            : 'Companion connection is stale \u2014 task may be delayed.'}
+        </p>
+      )}
       {error && <p className="text-xs text-red-600 mt-1">{error}</p>}
     </>
   );

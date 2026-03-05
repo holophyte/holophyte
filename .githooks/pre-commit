@@ -3,12 +3,15 @@ set -euo pipefail
 
 echo "Pre-commit: running quality checks..."
 
-# 1. Generate/refresh Convex types from schema
+# 1. Generate/refresh Convex types from schema and stage them.
+#    convex/_generated/ is committed — keep it in sync with schema changes.
 echo "  convex codegen..."
-bunx convex codegen 2>/dev/null || {
+if bunx convex codegen 2>/dev/null; then
+  git add convex/_generated/
+else
   echo "Warning: convex codegen failed (local backend may not be running)"
   echo "  Skipping codegen — lint and typecheck will still run"
-}
+fi
 
 # 2. Biome lint check
 echo "  lint..."

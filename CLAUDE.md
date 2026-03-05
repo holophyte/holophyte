@@ -83,7 +83,7 @@ src/frontend/components/ui → Radix UI primitives (Button, Dialog, Input, etc.)
 convex/schema.ts           → Data model: repos, tasks, sessions
 convex/{repos,tasks,sessions}.ts → Convex queries and mutations
 scripts/                   → Shared shell scripts (convex-local, dev-local, worktree-create, pr-comments)
-.githooks/pre-commit       → Pre-commit hook (codegen + lint + typecheck)
+.githooks/pre-commit       → Pre-commit hook (codegen + stage + lint + typecheck)
 ```
 
 **Data flow for SDK sessions:**
@@ -209,7 +209,7 @@ Server configuration lives in environment variables with sensible defaults:
 
 ## Commit Guidelines
 
-- Pre-commit hooks run automatically: `convex codegen` → `lint` → `typecheck`
+- Pre-commit hooks run automatically: `convex codegen` → `git add convex/_generated/` → `lint` → `typecheck`
 - Pre-commit hooks are mandatory for AI agents. Never use `--no-verify` or `--no-gpg-sign` to skip hooks.
 - Run `bun run lint:fix` to auto-fix lint issues before committing
 - Use conventional commit prefixes: `feat:`, `fix:`, `refactor:`, `test:`, `chore:`, `docs:`
@@ -219,6 +219,7 @@ Server configuration lives in environment variables with sensible defaults:
 
 ## Key Gotchas
 
+- **`convex/_generated/` is committed** — Convex codegen can't run in CI/Vercel, so generated types are checked into git. The pre-commit hook auto-runs codegen and stages the output. If you change `convex/schema.ts` or Convex functions, the hook keeps `_generated/` in sync.
 - Bun.serve() route handlers need explicit `Request` type annotation in strict mode
 - Bun.serve() generic `<WsData>` types the `ws.data` object
 - Biome doesn't understand CSS `theme()` function — use `var()` instead

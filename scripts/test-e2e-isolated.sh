@@ -63,11 +63,9 @@ CONVEX_TEAM=$CONVEX_TEAM
 CONVEX_PROJECT=$CONVEX_PROJECT
 EOF
 
-# Install dependencies and copy Convex generated types
+# Install dependencies (convex/_generated is already in the worktree via git)
 echo "Installing dependencies..."
 cd "$WORKTREE_PATH" && bun install --frozen-lockfile
-echo "Copying Convex generated types..."
-cp -r "$REPO_ROOT/convex/_generated" "$WORKTREE_PATH/convex/_generated"
 
 # Run E2E tests — capture exit code to return after cleanup
 echo ""
