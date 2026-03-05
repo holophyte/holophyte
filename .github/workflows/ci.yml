@@ -34,8 +34,10 @@ jobs:
           CONVEX_DEPLOYMENT: ${{ vars.CONVEX_DEPLOYMENT }}
           CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY }}
       - name: Verify convex/_generated/ is up-to-date
+        env:
+          CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY }}
         run: |
-          if [ "${{ steps.codegen.outcome }}" = "failure" ] && [ -n "${{ secrets.CONVEX_DEPLOY_KEY }}" ]; then
+          if [ "${{ steps.codegen.outcome }}" = "failure" ] && [ -n "$CONVEX_DEPLOY_KEY" ]; then
             echo "::error::convex codegen failed — check schema and Convex function syntax"
             exit 1
           fi
