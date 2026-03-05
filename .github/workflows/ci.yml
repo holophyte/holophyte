@@ -28,12 +28,17 @@ jobs:
       - uses: oven-sh/setup-bun@v2
       - run: bun install --frozen-lockfile
       - run: bunx convex codegen
+        id: codegen
         continue-on-error: true # secrets unavailable on fork PRs
         env:
           CONVEX_DEPLOYMENT: ${{ vars.CONVEX_DEPLOYMENT }}
           CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY }}
       - name: Verify convex/_generated/ is up-to-date
         run: |
+          if [ "${{ steps.codegen.outcome }}" = "failure" ] && [ -n "${{ secrets.CONVEX_DEPLOY_KEY }}" ]; then
+            echo "::error::convex codegen failed — check schema and Convex function syntax"
+            exit 1
+          fi
           if ! git diff --exit-code convex/_generated/; then
             echo "::error::convex/_generated/ is out of sync — run 'bunx convex codegen' and commit the result"
             exit 1
