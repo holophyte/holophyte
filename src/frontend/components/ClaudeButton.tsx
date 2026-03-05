@@ -123,7 +123,7 @@ export function ClaudeButton({ task }: ClaudeButtonProps) {
           size="sm"
           className="flex-1"
           onClick={handleLaunch}
-          disabled={!task.prompt || !task.repo}
+          disabled={!task.prompt || !task.repo || companionState === 'loading'}
         >
           <Play className="h-4 w-4 mr-1" />
           Launch Claude Code
