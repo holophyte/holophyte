@@ -33,8 +33,8 @@ if (!result.success) {
 // Generate config.js with build-time environment variables
 const config = {
   convexUrl,
-  e2eTest: false,
-  allowAnonymousAuth: false,
+  e2eTest: false, // Dev-only feature — never enabled in static/Vercel builds.
+  allowAnonymousAuth: false, // Dev-only feature — never enabled in static/Vercel builds.
   homeDir: '', // Legacy — not meaningful on Vercel. See #130.
 };
 

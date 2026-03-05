@@ -55,7 +55,7 @@ export default function CompanionStatus() {
         <TooltipContent side="right">
           <div className="space-y-1">
             <p className="font-medium">Companion {labels[state]}</p>
-            {status?.lastSeen ? (
+            {status?.lastSeen != null ? (
               <>
                 <p>
                   Last seen: {new Date(status.lastSeen).toLocaleTimeString()}
