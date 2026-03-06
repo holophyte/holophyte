@@ -79,72 +79,32 @@ Completed in [#122](https://github.com/holophyte/holophyte/pull/122).
 
 ### Open issues
 
-- [#123](https://github.com/holophyte/holophyte/issues/123) — Use `companion.getStatus` query for `companionOnline` when no active sessions (Phase 3 work)
+- ~~[#123](https://github.com/holophyte/holophyte/issues/123) — Use `companion.getStatus` query for `companionOnline` when no active sessions~~ ✅ resolved in [#128](https://github.com/holophyte/holophyte/pull/128)
 - [#125](https://github.com/holophyte/holophyte/issues/125) — Detect and reject duplicate companion instances on startup
 - [#126](https://github.com/holophyte/holophyte/issues/126) — Migrate companion from polling to Convex subscriptions
 
 ---
 
-## Phase 3: Deploy to Vercel
+## Phase 3: Deploy to Vercel ✅
 
-Connect the repo to Vercel and verify the full loop works.
+Completed in [#128](https://github.com/holophyte/holophyte/pull/128).
 
-### Tasks
+### What was done
 
-- [x] Connect GitHub repo to Vercel — framework "Other", build command `bun run build`, output dir `dist` ✅ done manually
-- [x] Set Vercel env vars — `CONVEX_URL` pointing to Convex Cloud deployment ✅ done manually
-- [x] Deploy Convex to production — `bun run convex:deploy` ✅ done manually
-- [ ] Fix static build config — generate `dist/config.js` at build time in `scripts/build.ts` so the existing `window.__HOLOPHYTE_CONFIG__` pattern works on Vercel without a server
-- [ ] Deploy and verify — dashboard loads at Vercel URL, shows data from Convex Cloud
-- [ ] Add companion status indicator — green/yellow/gray badge in the dashboard header using `api.companion.getStatus` query ([#123](https://github.com/holophyte/holophyte/issues/123))
+- [x] **Static build config** — `scripts/build.ts` generates `dist/config.js` with `window.__HOLOPHYTE_CONFIG__` from build-time env vars. `CONVEX_URL` required (fail-fast at top of script). `e2eTest` and `allowAnonymousAuth` hardcoded to `false` (dev-only features). `homeDir` set to `''` (legacy, see [#130](https://github.com/holophyte/holophyte/issues/130)).
+- [x] **Production Convex deploy** — `scripts/build.ts` runs `bunx convex deploy` when `VERCEL_ENV === 'production'`, with `CONVEX_DEPLOY_KEY` pre-flight check. Keeps frontend and backend deployments in sync.
+- [x] **CompanionStatus component** — `src/frontend/components/CompanionStatus.tsx` in sidebar with green/yellow/gray dot + label. Tooltip shows last seen time, active session count, and stale/offline warnings. Skeleton loading state while Convex query resolves.
+- [x] **`useCompanionStatus` hook** — `src/frontend/hooks/useCompanionStatus.ts` with shared 5-second clock via `useSyncExternalStore` singleton (single timer across all consumers). Derives `loading | connected | stale | offline` from heartbeat age.
+- [x] **ClaudeButton offline warning** — shows alert for both `offline` and `stale` states. Launch button disabled during `loading` state ([#131](https://github.com/holophyte/holophyte/issues/131)).
+- [x] **`convex/_generated/` committed to git** — Convex codegen can't run in CI/Vercel, so generated types are checked in. Pre-commit hook auto-runs codegen and stages output. CI drift check catches stale files.
+- [x] **CI codegen drift check** — new `codegen-check` job in `.github/workflows/ci.yml` runs codegen then verifies no git diff. `continue-on-error` on codegen step for fork PRs, with step outcome check to catch real failures on internal branches. Secrets passed via env vars per GitHub security hardening.
+- [x] **Vercel deploys successfully** — dashboard loads at Vercel URL, shows data from Convex Cloud.
+
+### Open issues
+
+- [#129](https://github.com/holophyte/holophyte/issues/129) — Convex preview backends for Vercel preview deployments
+- [#130](https://github.com/holophyte/holophyte/issues/130) — Remove `homeDir` from frontend config (legacy, not meaningful on Vercel)
 - [ ] Test full loop — create task on Vercel dashboard → companion picks it up → agent runs → approve from browser → see results
-
-### Agent Team Prompt
-
-```
-/autopilot-team
-
-Fix static build config and add companion status indicator to the dashboard.
-
-Context: The frontend is now a static SPA (Phase 0), session streaming goes through Convex (Phase 1), and the companion is a standalone process (Phase 2). Vercel is connected and Convex is deployed to production, but the Vercel build fails because there's no server to generate /config.js. Fix the static build and add a companion status indicator.
-
-What needs to happen:
-
-1. Fix static build config — generate config.js at build time:
-   - The frontend reads config from window.__HOLOPHYTE_CONFIG__ injected via <script src="/config.js"> in public/index.html. In dev, the Bun server generates this route dynamically. On Vercel, there's no server.
-   - In scripts/build.ts, AFTER Bun.build() completes, generate a dist/config.js file that writes window.__HOLOPHYTE_CONFIG__ with values from build-time env vars:
-     - convexUrl: read from process.env.CONVEX_URL (required — fail the build if missing)
-     - e2eTest: false (always false in production)
-     - allowAnonymousAuth: false (always false in production)
-     - homeDir: '' (not applicable on Vercel — no local filesystem)
-   - The existing public/index.html already has <script src="/config.js"> so it will load the generated file from dist/. No changes needed to index.html or config.ts.
-   - Do NOT modify src/frontend/lib/config.ts — the window.__HOLOPHYTE_CONFIG__ pattern stays as-is.
-   - Do NOT modify the /config.js route in src/server.ts — that's still used for local dev.
-   - Verify: `CONVEX_URL=https://example.convex.cloud bun run build` should produce dist/config.js containing window.__HOLOPHYTE_CONFIG__={convexUrl:"https://example.convex.cloud",...}
-
-2. Add a CompanionStatus component:
-   - Location: src/frontend/components/CompanionStatus.tsx
-   - Reads companion heartbeat from useQuery(api.companion.getStatus) — added in Phase 2 (convex/companion.ts). Returns { lastSeen, activeSessionCount, machineId } or null.
-   - Shows a small status badge in the app header (src/frontend/App.tsx):
-     - Green dot + "Connected" — lastSeen within last 30s
-     - Yellow dot + "Stale" — lastSeen 30s–5min ago
-     - Gray dot + "Offline" — no heartbeat for 5+ min, or getStatus returns null
-   - Tooltip or hover showing last seen time and active session count
-   - Use existing UI patterns: cn() for classNames, Tailwind for styling, lucide-react for icons
-
-3. Add a banner or tooltip when companion is offline explaining that tasks will queue but won't execute until the companion reconnects
-
-4. Update the "Start Session" flow to show a warning if companion is offline (task will be queued but not picked up)
-
-Important constraints:
-- Follow existing component patterns (default export, interface ComponentNameProps, cn() helper)
-- Use Radix UI primitives from src/frontend/components/ui/ where appropriate
-- Tailwind v4 with CSS variables (no theme() function — use var())
-- Do NOT break bun run dev:local — the /config.js server route still handles local dev
-- Run bun run lint:fix before committing
-- Make sure to test as much as possible manually before sending the PR or when iterating on PR comments
-- Do not merge the PR until I've reviewed it manually
-```
 
 ---
 
