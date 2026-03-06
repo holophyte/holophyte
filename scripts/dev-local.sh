@@ -41,7 +41,12 @@ if [ -f "$LOCKFILE" ]; then
 fi
 
 echo $$ > "$LOCKFILE"
-trap 'rm -f "$LOCKFILE"' EXIT
+cleanup() {
+  rm -f "$LOCKFILE"
+  # Kill entire process group so grandchildren (bun server, convex-local) don't orphan
+  kill 0 2>/dev/null || true
+}
+trap cleanup EXIT
 
 export PORT="$DEV_PORT"
 # Auto-enable anonymous auth for local dev (manual testing via ?auth query param)
