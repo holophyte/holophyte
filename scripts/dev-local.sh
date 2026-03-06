@@ -42,9 +42,9 @@ fi
 
 echo $$ > "$LOCKFILE"
 cleanup() {
-  # Kill entire process group so grandchildren (bun server, convex-local) don't orphan
-  kill -- -$$ 2>/dev/null || true
   rm -f "$LOCKFILE"
+  # Kill entire process group so grandchildren (bun server, convex-local) don't orphan
+  kill 0 2>/dev/null || true
 }
 trap cleanup EXIT
 
