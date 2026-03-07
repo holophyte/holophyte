@@ -71,13 +71,13 @@ describe('clearOrgSelection', () => {
     expect(useAppStore.getState().bulkSelectedTaskIds).toEqual([]);
   });
 
-  it('persists cleared selectedOrgId to localStorage', () => {
+  it('does not persist selectedOrgId to localStorage', () => {
     useAppStore.setState({ selectedOrgId: fakeOrgId });
 
     useAppStore.getState().clearOrgSelection();
 
     const stored = JSON.parse(localStorage.getItem('holophyte-app') ?? '{}');
-    expect(stored.state.selectedOrgId).toBeNull();
+    expect(stored.state.selectedOrgId).toBeUndefined();
   });
 });
 
