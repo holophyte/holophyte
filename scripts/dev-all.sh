@@ -55,7 +55,8 @@ if [ -f "$ENV_LOCAL" ]; then
   LOCAL_SECRET=$(grep '^INTERNAL_API_SECRET=' "$ENV_LOCAL" | head -1 | cut -d= -f2 || true)
   if [ -n "$LOCAL_SECRET" ]; then
     echo "Syncing INTERNAL_API_SECRET to cloud deployment..."
-    cd "$REPO_ROOT" && bunx convex env set INTERNAL_API_SECRET "$LOCAL_SECRET" 2>/dev/null || true
+    cd "$REPO_ROOT" && bunx convex env set INTERNAL_API_SECRET "$LOCAL_SECRET" || \
+      echo "Warning: Failed to sync INTERNAL_API_SECRET to cloud deployment (companion auth may fail)"
   fi
 fi
 
