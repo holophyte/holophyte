@@ -21,6 +21,11 @@ fi
 # shellcheck source=/dev/null
 source "$DEV_PORTS"
 
+# .dev-ports may contain INTERNAL_API_SECRET (legacy). Unset it so it doesn't
+# leak into the Bun server's env — shell env vars override .env.local, causing
+# a mismatch with the secret convex-local.sh reads from .env.local.
+unset INTERNAL_API_SECRET
+
 if ! [[ "${DEV_PORT:-}" =~ ^[0-9]+$ ]] || \
    ! [[ "${CONVEX_CLOUD_PORT:-}" =~ ^[0-9]+$ ]] || \
    ! [[ "${CONVEX_SITE_PORT:-}" =~ ^[0-9]+$ ]]; then

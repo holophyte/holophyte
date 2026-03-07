@@ -24,6 +24,10 @@ fi
 # shellcheck source=/dev/null
 source "$DEV_PORTS"
 
+# .dev-ports may contain INTERNAL_API_SECRET (legacy). Unset it so it doesn't
+# interfere with the secret resolution below (which reads from .env.local/.env).
+unset INTERNAL_API_SECRET
+
 if ! [[ "${CONVEX_CLOUD_PORT:-}" =~ ^[0-9]+$ ]] || \
    ! [[ "${CONVEX_SITE_PORT:-}" =~ ^[0-9]+$ ]]; then
   echo "Error: .dev-ports is missing required variables (CONVEX_CLOUD_PORT, CONVEX_SITE_PORT)"
