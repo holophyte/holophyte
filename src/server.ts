@@ -15,7 +15,7 @@ const server = Bun.serve({
     '/config.js': {
       GET() {
         const config = {
-          convexUrl: process.env.CONVEX_URL ?? '',
+          convexUrl: (process.env.CONVEX_URL ?? '').replace(/\/+$/, ''),
           e2eTest:
             !!process.env.E2E_TEST && process.env.NODE_ENV !== 'production',
           allowAnonymousAuth:
