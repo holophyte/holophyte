@@ -413,11 +413,13 @@ export async function startSession(opts: {
   }
 
   // Build SDK options.
-  // Strip CLAUDECODE env var — if the Holophyte server is itself launched from
-  // a Claude Code session, spawned SDK sessions inherit it and refuse to start
-  // ("cannot be launched inside another Claude Code session").
+  // Strip Claude Code env vars — if the Holophyte server is itself launched from
+  // a Claude Code session, spawned SDK sessions inherit these and may refuse to
+  // start or misidentify as third-party usage.
   const sdkEnv = { ...process.env };
   delete sdkEnv.CLAUDECODE;
+  delete sdkEnv.CLAUDE_CODE_ENTRYPOINT;
+  delete sdkEnv.CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS;
 
   const sdkOptions: Parameters<typeof sdkQuery>[0]['options'] = {
     cwd: opts.repoPath,
