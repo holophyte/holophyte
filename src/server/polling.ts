@@ -142,8 +142,9 @@ export async function companionPoll() {
       // Best-effort — don't log every failure
     }
   } catch (err) {
-    // Don't log every poll failure (noisy when Convex is unavailable)
-    if (String(err).includes('not set')) return;
+    // Don't log transient failures (noisy during startup or when Convex is unavailable)
+    const msg = String(err);
+    if (msg.includes('not set') || msg.includes('ConnectionRefused')) return;
     console.error('Companion poll error:', err);
   } finally {
     polling = false;

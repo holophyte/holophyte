@@ -69,15 +69,20 @@ set_env_var() {
   fi
 }
 
-# ── Ensure INTERNAL_API_SECRET is in .env (for the Bun server) ──────
+# ── Ensure INTERNAL_API_SECRET is set (for the Bun server) ─────────
+# Bun prioritizes .env.local over .env, so check .env.local first to
+# stay in sync with what the server actually reads at runtime.
 EXISTING_SECRET=""
-if [ -f "$ENV_FILE" ]; then
+if [ -f "$ENV_LOCAL" ]; then
+  EXISTING_SECRET=$(grep '^INTERNAL_API_SECRET=' "$ENV_LOCAL" | head -1 | cut -d= -f2 || true)
+fi
+if [ -z "${EXISTING_SECRET:-}" ] && [ -f "$ENV_FILE" ]; then
   EXISTING_SECRET=$(grep '^INTERNAL_API_SECRET=' "$ENV_FILE" | head -1 | cut -d= -f2 || true)
 fi
 if [ -z "${EXISTING_SECRET:-}" ]; then
   INTERNAL_API_SECRET=$(openssl rand -hex 32)
-  set_env_var "$ENV_FILE" "INTERNAL_API_SECRET" "$INTERNAL_API_SECRET"
-  echo "Generated INTERNAL_API_SECRET and added to .env"
+  set_env_var "$ENV_LOCAL" "INTERNAL_API_SECRET" "$INTERNAL_API_SECRET"
+  echo "Generated INTERNAL_API_SECRET and added to .env.local"
 else
   INTERNAL_API_SECRET="$EXISTING_SECRET"
 fi
@@ -87,9 +92,13 @@ fi
 set_convex_secret() {
   for i in $(seq 1 30); do
     if curl -sf "http://127.0.0.1:$CONVEX_CLOUD_PORT" >/dev/null 2>&1; then
-      # Always set Convex secret to match .env (source of truth for the Bun server).
-      # If we only skip when Convex already has a value, a deleted .env causes a
-      # mismatch: new .env secret vs stale Convex secret → auth failures.
+      # Wait for the initial function push to complete before setting env vars.
+      # Setting env vars during a push causes "Environment variables have changed
+      # during push" and forces a retry.
+      sleep 3
+      # Always set Convex secret to match .env.local (source of truth for the Bun
+      # server). If we only skip when Convex already has a value, a deleted .env
+      # causes a mismatch: new secret vs stale Convex secret → auth failures.
       cd "$REPO_ROOT" && bunx convex env set INTERNAL_API_SECRET "$INTERNAL_API_SECRET"
       echo "Set INTERNAL_API_SECRET on local Convex deployment"
       return

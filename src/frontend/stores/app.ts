@@ -168,7 +168,7 @@ export const useAppStore = create<AppState>()(
     }),
     {
       name: 'holophyte-app',
-      version: 2,
+      version: 3,
       migrate: (persisted) => {
         const state = persisted as Record<string, unknown>;
         if (
@@ -177,14 +177,14 @@ export const useAppStore = create<AppState>()(
         ) {
           state.theme = DEFAULT_THEME;
         }
-        // Remove keys managed by router
+        // Remove keys no longer persisted or managed by router
+        delete state.selectedOrgId;
         delete state.selectedRepoId;
         delete state.selectedTaskId;
         delete state.viewMode;
         return state as unknown as AppState;
       },
       partialize: (state) => ({
-        selectedOrgId: state.selectedOrgId,
         backlogCollapsed: state.backlogCollapsed,
         taskPageDetailCollapsed: state.taskPageDetailCollapsed,
         showArchive: state.showArchive,

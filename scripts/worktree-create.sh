@@ -62,9 +62,10 @@ cp "$REPO_ROOT/.env" "$WORKTREE_PATH/" 2>/dev/null || true
 
 # Save non-Convex vars from .env.local to restore after Convex provisioning
 # (convex dev --configure existing overwrites the file)
+# Exclude INTERNAL_API_SECRET — a fresh one is generated later in this script.
 NON_CONVEX_VARS=""
 if [ -f "$REPO_ROOT/.env.local" ]; then
-  NON_CONVEX_VARS=$(grep -vE '^(CONVEX_DEPLOYMENT|CONVEX_URL|CONVEX_SITE_URL|# Deployment used by|$)' \
+  NON_CONVEX_VARS=$(grep -vE '^(CONVEX_DEPLOYMENT|CONVEX_URL|CONVEX_SITE_URL|INTERNAL_API_SECRET|# Deployment used by|$)' \
     "$REPO_ROOT/.env.local" || true)
 fi
 
@@ -168,12 +169,13 @@ cd "$WORKTREE_PATH" && bunx convex env set ALLOW_ANONYMOUS_AUTH 1
 # Generate and set INTERNAL_API_SECRET for companion ↔ Convex communication
 INTERNAL_API_SECRET=$(openssl rand -hex 32)
 cd "$WORKTREE_PATH" && bunx convex env set INTERNAL_API_SECRET "$INTERNAL_API_SECRET"
-# Replace or append (never duplicate) the secret in .env
-ENV_FILE="$WORKTREE_PATH/.env"
-if [ -f "$ENV_FILE" ] && grep -q '^INTERNAL_API_SECRET=' "$ENV_FILE"; then
-  sed -i '' "s|^INTERNAL_API_SECRET=.*|INTERNAL_API_SECRET=$INTERNAL_API_SECRET|" "$ENV_FILE"
+# Store the secret in .env.local (Bun prioritizes .env.local over .env).
+# convex-local.sh reads from .env.local first to stay in sync with the server.
+ENV_LOCAL_FILE="$WORKTREE_PATH/.env.local"
+if [ -f "$ENV_LOCAL_FILE" ] && grep -q '^INTERNAL_API_SECRET=' "$ENV_LOCAL_FILE"; then
+  sed -i '' "s|^INTERNAL_API_SECRET=.*|INTERNAL_API_SECRET=$INTERNAL_API_SECRET|" "$ENV_LOCAL_FILE"
 else
-  echo "INTERNAL_API_SECRET=$INTERNAL_API_SECRET" >> "$ENV_FILE"
+  echo "INTERNAL_API_SECRET=$INTERNAL_API_SECRET" >> "$ENV_LOCAL_FILE"
 fi
 
 # Generate JWT keys for Convex Auth (anonymous + OAuth login)
