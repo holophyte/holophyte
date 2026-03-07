@@ -145,7 +145,11 @@ export function AddRepoDialog({ open, onOpenChange }: AddRepoDialogProps) {
                 <TooltipProvider>
                   <Tooltip>
                     <TooltipTrigger asChild>
-                      <button type="button" className="inline-flex">
+                      <button
+                        type="button"
+                        tabIndex={-1}
+                        className="inline-flex"
+                      >
                         <Info className="h-3.5 w-3.5 text-muted-foreground cursor-help" />
                       </button>
                     </TooltipTrigger>
