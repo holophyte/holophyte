@@ -481,10 +481,11 @@ http.route({
     if (body instanceof Response) return body;
 
     try {
-      const { activeSessionCount, machineId } = body;
+      const { activeSessionCount, machineId, url } = body;
       await ctx.runMutation(internal.companion.upsertHeartbeat, {
         activeSessionCount,
         machineId,
+        url,
       });
       return jsonOk();
     } catch (err) {

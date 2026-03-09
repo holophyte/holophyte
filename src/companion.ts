@@ -1,6 +1,10 @@
 import { callConvexInternal } from './server/convex-client';
 import { startCompanionPolling, stopCompanionPolling } from './server/polling';
-import { handleAuthProxy, handlePickDirectory } from './server/routes';
+import {
+  handleAuthProxy,
+  handlePickDirectory,
+  handlePickDirectoryCors,
+} from './server/routes';
 
 // ── Headless Companion Server ────────────────────────────────────────
 // Runs the companion polling loop and local-only API routes without
@@ -16,6 +20,9 @@ const server = Bun.serve({
       async POST() {
         return handlePickDirectory();
       },
+      OPTIONS() {
+        return handlePickDirectoryCors();
+      },
     },
   },
 
@@ -24,12 +31,13 @@ const server = Bun.serve({
   },
 });
 
-console.log(`Holophyte companion running on port ${server.port}`);
+const url = `http://localhost:${server.port}`;
+console.log(`Holophyte companion running on ${url}`);
 console.log(`  Convex URL: ${process.env.CONVEX_URL || '(not set)'}`);
 console.log(`  Convex Site: ${process.env.CONVEX_SITE_URL || '(not set)'}`);
 
 // Start companion polling for queued/stopped sessions
-startCompanionPolling();
+startCompanionPolling({ url });
 
 // On startup, clean up sessions left in inconsistent states from a prior crash
 // or companion outage:

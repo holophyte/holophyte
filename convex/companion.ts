@@ -6,6 +6,7 @@ export const upsertHeartbeat = internalMutation({
   args: {
     activeSessionCount: v.number(),
     machineId: v.optional(v.string()),
+    url: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const existing = await ctx.db.query('companion').first();
@@ -14,12 +15,14 @@ export const upsertHeartbeat = internalMutation({
         lastSeen: Date.now(),
         activeSessionCount: args.activeSessionCount,
         ...(args.machineId !== undefined && { machineId: args.machineId }),
+        ...(args.url !== undefined && { url: args.url }),
       });
     } else {
       await ctx.db.insert('companion', {
         lastSeen: Date.now(),
         activeSessionCount: args.activeSessionCount,
         machineId: args.machineId,
+        url: args.url,
       });
     }
   },

@@ -22,6 +22,15 @@ vi.mock('@/frontend/stores/app', () => ({
     selector({ selectedOrgId: 'org-123' }),
 }));
 
+// Mock companion status — connected with no URL (same-origin)
+vi.mock('@/frontend/hooks/useCompanionStatus', () => ({
+  useCompanionStatus: () => ({
+    state: 'connected',
+    status: null,
+    companionUrl: null,
+  }),
+}));
+
 import { AddRepoDialog, expandTilde, nameFromPath } from './AddRepoDialog';
 
 // ── Pure function tests ─────────────────────────────────────────────
