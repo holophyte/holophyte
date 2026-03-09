@@ -1,15 +1,12 @@
 import { exists } from 'node:fs/promises';
 import { basename } from 'node:path';
 
-function corsHeaders(req?: Request): HeadersInit {
+function corsOriginHeaders(req?: Request): Record<string, string> {
   const allowedOrigin = process.env.ALLOWED_ORIGIN ?? '';
   const requestOrigin = req?.headers.get('Origin') ?? '';
   const matched =
     allowedOrigin && requestOrigin === allowedOrigin ? allowedOrigin : null;
-  const headers: Record<string, string> = {
-    'Access-Control-Allow-Methods': 'POST, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type',
-  };
+  const headers: Record<string, string> = { Vary: 'Origin' };
   if (matched) {
     headers['Access-Control-Allow-Origin'] = matched;
   }
@@ -17,11 +14,18 @@ function corsHeaders(req?: Request): HeadersInit {
 }
 
 export function handlePickDirectoryCors(req: Request): Response {
-  return new Response(null, { status: 204, headers: corsHeaders(req) });
+  return new Response(null, {
+    status: 204,
+    headers: {
+      ...corsOriginHeaders(req),
+      'Access-Control-Allow-Methods': 'POST, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type',
+    },
+  });
 }
 
 export async function handlePickDirectory(req: Request): Promise<Response> {
-  const headers = corsHeaders(req);
+  const headers = corsOriginHeaders(req);
   try {
     if (process.platform !== 'darwin') {
       return Response.json(

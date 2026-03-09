@@ -67,7 +67,6 @@ export function AddRepoDialog({ open, onOpenChange }: AddRepoDialogProps) {
       const baseUrl = companionUrl ?? '';
       if (baseUrl && !/^https?:\/\/localhost(:\d+)?$/.test(baseUrl)) {
         setError('Companion URL is invalid.');
-        setPicking(false);
         return;
       }
       const res = await fetch(`${baseUrl}/api/pick-directory`, {
