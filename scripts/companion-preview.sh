@@ -15,14 +15,24 @@ PREVIEW_NAME="${SANITIZED}-${SUFFIX}"
 
 echo "Looking up preview backend: $PREVIEW_NAME"
 
-# Clear local Convex deployment if it's a local backend — the CLI needs
-# the cloud project identity to query preview deployments.
-if [[ "${CONVEX_DEPLOYMENT:-}" == local:* ]]; then
-  unset CONVEX_DEPLOYMENT
+# Load .env.companion if CONVEX_DEPLOY_KEY isn't already set
+if [ -z "${CONVEX_DEPLOY_KEY:-}" ] && [ -f .env.companion ]; then
+  CONVEX_DEPLOY_KEY=$(grep '^CONVEX_DEPLOY_KEY=' .env.companion | cut -d= -f2-)
+  export CONVEX_DEPLOY_KEY
 fi
 
+if [ -z "${CONVEX_DEPLOY_KEY:-}" ]; then
+  echo "Error: CONVEX_DEPLOY_KEY is required to access preview backends."
+  echo "Set it in .env.companion or: export CONVEX_DEPLOY_KEY=<key>"
+  exit 1
+fi
+
+# The Convex CLI reads .env.local which may have a local CONVEX_DEPLOYMENT.
+# Use --env-file .env.companion to override with the cloud deploy key.
+CONVEX_OPTS=(--preview-name "$PREVIEW_NAME" --env-file .env.companion)
+
 # Fetch env vars from the preview backend
-ENV_OUTPUT=$(bunx convex env list --preview-name "$PREVIEW_NAME" 2>&1) || {
+ENV_OUTPUT=$(bunx convex env list "${CONVEX_OPTS[@]}" 2>&1) || {
   echo "Error: Could not fetch env vars for preview '$PREVIEW_NAME'"
   echo "$ENV_OUTPUT"
   exit 1
