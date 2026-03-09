@@ -1,3 +1,4 @@
+import { exists } from 'node:fs/promises';
 import { basename } from 'node:path';
 
 export async function handlePickDirectory(): Promise<Response> {
@@ -23,8 +24,7 @@ export async function handlePickDirectory(): Promise<Response> {
     const raw = await new Response(proc.stdout).text();
     const dirPath = raw.trim().replace(/\/$/, '');
 
-    const gitDir = Bun.file(`${dirPath}/.git`);
-    const isGitRepo = await gitDir.exists();
+    const isGitRepo = await exists(`${dirPath}/.git`);
 
     return Response.json({
       cancelled: false,
