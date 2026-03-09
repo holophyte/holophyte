@@ -73,7 +73,14 @@ echo "  CONVEX_URL:      $CONVEX_URL"
 echo "  CONVEX_SITE_URL: $CONVEX_SITE_URL"
 echo ""
 
+# Load .env.companion for additional vars (e.g. CLAUDE_CODE_OAUTH_TOKEN),
+# then override the three preview-specific vars.
+ENV_FILE_OPTS=()
+if [ -f .env.companion ]; then
+  ENV_FILE_OPTS=(--env-file=.env.companion)
+fi
+
 CONVEX_URL="$CONVEX_URL" \
 CONVEX_SITE_URL="$CONVEX_SITE_URL" \
 INTERNAL_API_SECRET="$INTERNAL_API_SECRET" \
-  bun --no-env-file run src/companion.ts
+  bun --no-env-file "${ENV_FILE_OPTS[@]}" run src/companion.ts
