@@ -41,7 +41,7 @@ if (isPreview && !process.env.CONVEX_IS_PREVIEW_CMD) {
       '--preview-create',
       previewName,
       '--cmd',
-      'CONVEX_IS_PREVIEW_CMD=1 bun run build',
+      `CONVEX_IS_PREVIEW_CMD=1 CONVEX_PREVIEW_NAME=${previewName} bun run build`,
       '--cmd-url-env-var-name',
       'CONVEX_URL',
     ],
@@ -79,12 +79,26 @@ if (isPreview && !process.env.CONVEX_IS_PREVIEW_CMD) {
     // Non-fatal — the build itself succeeded
   }
 
-  const envSet = Bun.spawnSync(
-    ['bunx', 'convex', 'env', 'set', 'ALLOW_ANONYMOUS_AUTH', '1', '--preview-name', previewName],
-    { stdout: 'inherit', stderr: 'inherit' },
-  );
-  if (envSet.exitCode !== 0) {
-    console.error('Warning: failed to set ALLOW_ANONYMOUS_AUTH on preview backend');
+  // Read the Convex URL written by the nested build (see below).
+  const convexUrlFile = '.convex-preview-url';
+  const previewConvexUrl = await Bun.file(convexUrlFile)
+    .text()
+    .catch(() => '');
+
+  // Set env vars needed for the preview backend to function.
+  // CONVEX_SELF_URL lets the companion script discover the preview backend URL.
+  const previewEnvVars: Record<string, string> = {
+    ALLOW_ANONYMOUS_AUTH: '1',
+    ...(previewConvexUrl && { CONVEX_SELF_URL: previewConvexUrl.trim() }),
+  };
+  for (const [key, value] of Object.entries(previewEnvVars)) {
+    const envSet = Bun.spawnSync(
+      ['bunx', 'convex', 'env', 'set', key, value, '--preview-name', previewName],
+      { stdout: 'inherit', stderr: 'inherit' },
+    );
+    if (envSet.exitCode !== 0) {
+      console.error(`Warning: failed to set ${key} on preview backend`);
+    }
   }
 
   // The nested `bun run build` already wrote dist/ — we're done.
@@ -137,6 +151,12 @@ console.log('Generated dist/config.js');
 console.log(
   `Build complete. ${result.outputs.length + 1} output files written to dist/`,
 );
+
+// When running inside `convex deploy --cmd`, write the Convex URL to a temp file
+// so the outer build scope can store it as an env var on the preview backend.
+if (process.env.CONVEX_IS_PREVIEW_CMD) {
+  await Bun.write('.convex-preview-url', convexUrl);
+}
 
 // ── Production: deploy Convex after build ─────────────────────────────
 if (isProduction) {
