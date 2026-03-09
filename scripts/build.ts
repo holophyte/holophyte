@@ -99,16 +99,22 @@ async function deployConvexPreview(): Promise<string> {
 
   const deploy = Bun.spawnSync(
     ['bunx', 'convex', 'deploy', '--preview-create', previewName],
-    { stdout: 'pipe', stderr: 'inherit' },
+    { stdout: 'pipe', stderr: 'pipe' },
   );
+
+  const stdout = deploy.stdout.toString();
+  const stderr = deploy.stderr.toString();
+  // Convex CLI prints progress/results to stderr
+  if (stdout) console.log(stdout);
+  if (stderr) console.log(stderr);
 
   if (deploy.exitCode !== 0) {
     console.error('Convex preview deploy failed');
     process.exit(1);
   }
 
-  const output = deploy.stdout.toString();
-  console.log(output);
+  // Combine both streams — Convex CLI writes the URL to stderr
+  const output = `${stdout}\n${stderr}`;
 
   // Parse the preview URL from output: "Deployed Convex functions to https://..."
   const match = output.match(/https:\/\/[^\s]+\.convex\.cloud/);
