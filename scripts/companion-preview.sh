@@ -29,7 +29,10 @@ fi
 
 # The Convex CLI reads .env.local which may have a local CONVEX_DEPLOYMENT.
 # Use --env-file .env.companion to override with the cloud deploy key.
-CONVEX_OPTS=(--preview-name "$PREVIEW_NAME" --env-file .env.companion)
+CONVEX_OPTS=(--preview-name "$PREVIEW_NAME")
+if [ -f .env.companion ]; then
+  CONVEX_OPTS+=(--env-file .env.companion)
+fi
 
 # Fetch env vars from the preview backend
 ENV_OUTPUT=$(bunx convex env list "${CONVEX_OPTS[@]}" 2>&1) || {
@@ -73,4 +76,4 @@ echo ""
 CONVEX_URL="$CONVEX_URL" \
 CONVEX_SITE_URL="$CONVEX_SITE_URL" \
 INTERNAL_API_SECRET="$INTERNAL_API_SECRET" \
-  bun run src/companion.ts
+  bun --no-env-file run src/companion.ts

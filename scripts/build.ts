@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import tailwindPlugin from 'bun-plugin-tailwind';
 
 const vercelEnv = process.env.VERCEL_ENV; // 'production' | 'preview' | 'development'
@@ -89,6 +89,7 @@ if (isPreview && !process.env.CONVEX_IS_PREVIEW_CMD) {
   // CONVEX_SELF_URL lets the companion script discover the preview backend URL.
   const previewEnvVars: Record<string, string> = {
     ALLOW_ANONYMOUS_AUTH: '1',
+    INTERNAL_API_SECRET: randomBytes(32).toString('hex'),
     ...(previewConvexUrl && { CONVEX_SELF_URL: previewConvexUrl.trim() }),
   };
   for (const [key, value] of Object.entries(previewEnvVars)) {
