@@ -35,6 +35,11 @@ const url = `http://localhost:${server.port}`;
 console.log(`Holophyte companion running on ${url}`);
 console.log(`  Convex URL: ${process.env.CONVEX_URL || '(not set)'}`);
 console.log(`  Convex Site: ${process.env.CONVEX_SITE_URL || '(not set)'}`);
+if (!process.env.ALLOWED_ORIGIN) {
+  console.log(
+    '  ⚠ ALLOWED_ORIGIN not set — CORS will block cross-origin requests to pick-directory',
+  );
+}
 
 // Start companion polling for queued/stopped sessions
 startCompanionPolling({ url });
