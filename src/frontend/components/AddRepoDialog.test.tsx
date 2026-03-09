@@ -260,6 +260,23 @@ describe('AddRepoDialog', () => {
       });
     });
 
+    it('shows error when companion URL is invalid', async () => {
+      vi.mocked(useCompanionStatus).mockReturnValue({
+        state: 'connected',
+        status: null,
+        companionUrl: 'https://evil.example.com',
+      });
+      const { user } = renderDialog();
+      await user.click(screen.getByTitle('Browse...'));
+
+      await waitFor(() => {
+        expect(
+          screen.getByText('Companion URL is invalid.'),
+        ).toBeInTheDocument();
+      });
+      expect(fetchSpy).not.toHaveBeenCalled();
+    });
+
     it('routes pick-directory to companion URL when set', async () => {
       vi.mocked(useCompanionStatus).mockReturnValue({
         state: 'connected',

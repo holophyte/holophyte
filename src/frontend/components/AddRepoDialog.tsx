@@ -65,7 +65,7 @@ export function AddRepoDialog({ open, onOpenChange }: AddRepoDialogProps) {
     setError(null);
     try {
       const baseUrl = companionUrl ?? '';
-      if (baseUrl && !/^http:\/\/localhost(:\d+)?$/.test(baseUrl)) {
+      if (baseUrl && !/^http:\/\/localhost:\d+$/.test(baseUrl)) {
         setError('Companion URL is invalid.');
         return;
       }

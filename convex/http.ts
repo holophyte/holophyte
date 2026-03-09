@@ -482,7 +482,7 @@ http.route({
 
     try {
       const { activeSessionCount, machineId, url } = body;
-      if (url != null && !/^http:\/\/localhost(:\d+)?$/.test(url)) {
+      if (url != null && !/^http:\/\/localhost:\d+$/.test(url)) {
         return jsonError('url must be a localhost address', 400);
       }
       await ctx.runMutation(internal.companion.upsertHeartbeat, {
