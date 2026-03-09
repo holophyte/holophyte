@@ -53,6 +53,40 @@ if (isPreview && !process.env.CONVEX_IS_PREVIEW_CMD) {
     process.exit(1);
   }
 
+  // Seed auth keys and env vars on the fresh preview backend.
+  // Each preview deploy creates a new backend, so these must be set every time.
+  console.log('Setting up auth keys on preview backend...');
+
+  // VERCEL_URL is the deployment URL without protocol (e.g. "my-app-abc123.vercel.app")
+  const siteUrl = process.env.VERCEL_URL
+    ? `https://${process.env.VERCEL_URL}`
+    : undefined;
+
+  const authSetup = Bun.spawnSync(
+    [
+      'bunx',
+      '@convex-dev/auth',
+      '--preview-name',
+      previewName,
+      ...(siteUrl ? ['--web-server-url', siteUrl] : []),
+      '--skip-git-check',
+      '--allow-dirty-git-state',
+    ],
+    { stdout: 'inherit', stderr: 'inherit' },
+  );
+  if (authSetup.exitCode !== 0) {
+    console.error('Warning: failed to set up auth keys on preview backend');
+    // Non-fatal — the build itself succeeded
+  }
+
+  const envSet = Bun.spawnSync(
+    ['bunx', 'convex', 'env', 'set', 'ALLOW_ANONYMOUS_AUTH', '1', '--preview-name', previewName],
+    { stdout: 'inherit', stderr: 'inherit' },
+  );
+  if (envSet.exitCode !== 0) {
+    console.error('Warning: failed to set ALLOW_ANONYMOUS_AUTH on preview backend');
+  }
+
   // The nested `bun run build` already wrote dist/ — we're done.
   process.exit(0);
 }
