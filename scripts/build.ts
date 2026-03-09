@@ -7,11 +7,10 @@ const isPreview = vercelEnv === 'preview';
 
 // ── Preview: delegate to Convex CLI ───────────────────────────────────
 // For preview builds, `convex deploy --cmd` re-invokes this script with
-// CONVEX_URL set to the preview backend URL. On the first invocation
-// CONVEX_URL is absent, so we launch the Convex deploy wrapper. On the
-// second (nested) invocation CONVEX_URL is set and we fall through to
-// the normal build below.
-if (isPreview && !process.env.CONVEX_URL) {
+// CONVEX_IS_PREVIEW_CMD=1 set. On the first invocation we launch the
+// Convex deploy wrapper. On the nested invocation we skip this block
+// and fall through to the normal build (with CONVEX_URL set by Convex).
+if (isPreview && !process.env.CONVEX_IS_PREVIEW_CMD) {
   const branch = process.env.VERCEL_GIT_COMMIT_REF;
   if (!branch) {
     console.error(
@@ -42,7 +41,7 @@ if (isPreview && !process.env.CONVEX_URL) {
       '--preview-create',
       previewName,
       '--cmd',
-      'bun run build',
+      'CONVEX_IS_PREVIEW_CMD=1 bun run build',
       '--cmd-url-env-var-name',
       'CONVEX_URL',
     ],
