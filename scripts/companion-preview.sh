@@ -10,7 +10,8 @@ BRANCH="${1:-$(git rev-parse --abbrev-ref HEAD)}"
 
 # Derive preview name using the same logic as build.ts
 SANITIZED=$(echo "$BRANCH" | sed 's/[^a-zA-Z0-9-]/-/g' | cut -c1-50)
-SUFFIX=$(echo -n "$BRANCH" | shasum -a 1 | cut -c1-7)
+SUFFIX=$(echo -n "$BRANCH" | sha1sum 2>/dev/null || echo -n "$BRANCH" | shasum -a 1)
+SUFFIX=$(echo "$SUFFIX" | cut -c1-7)
 PREVIEW_NAME="${SANITIZED}-${SUFFIX}"
 
 echo "Looking up preview backend: $PREVIEW_NAME"

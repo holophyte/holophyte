@@ -41,7 +41,7 @@ if (isPreview && !process.env.CONVEX_IS_PREVIEW_CMD) {
       '--preview-create',
       previewName,
       '--cmd',
-      `CONVEX_IS_PREVIEW_CMD=1 CONVEX_PREVIEW_NAME=${previewName} bun run build`,
+      'CONVEX_IS_PREVIEW_CMD=1 bun run build',
       '--cmd-url-env-var-name',
       'CONVEX_URL',
     ],
