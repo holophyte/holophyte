@@ -1,22 +1,29 @@
 import { exists } from 'node:fs/promises';
 import { basename } from 'node:path';
 
-const CORS_HEADERS = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type',
-};
-
-export function handlePickDirectoryCors(): Response {
-  return new Response(null, { status: 204, headers: CORS_HEADERS });
+function corsHeaders(req?: Request): HeadersInit {
+  const allowedOrigin = process.env.ALLOWED_ORIGIN ?? '';
+  const requestOrigin = req?.headers.get('Origin') ?? '';
+  const origin =
+    allowedOrigin && requestOrigin === allowedOrigin ? allowedOrigin : '';
+  return {
+    'Access-Control-Allow-Origin': origin,
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type',
+  };
 }
 
-export async function handlePickDirectory(): Promise<Response> {
+export function handlePickDirectoryCors(req: Request): Response {
+  return new Response(null, { status: 204, headers: corsHeaders(req) });
+}
+
+export async function handlePickDirectory(req: Request): Promise<Response> {
+  const headers = corsHeaders(req);
   try {
     if (process.platform !== 'darwin') {
       return Response.json(
         { error: 'Directory picker only supported on macOS' },
-        { status: 501, headers: CORS_HEADERS },
+        { status: 501, headers },
       );
     }
     const proc = Bun.spawn(
@@ -29,7 +36,7 @@ export async function handlePickDirectory(): Promise<Response> {
     );
     const exitCode = await proc.exited;
     if (exitCode !== 0) {
-      return Response.json({ cancelled: true }, { headers: CORS_HEADERS });
+      return Response.json({ cancelled: true }, { headers });
     }
     const raw = await new Response(proc.stdout).text();
     const dirPath = raw.trim().replace(/\/$/, '');
@@ -43,13 +50,13 @@ export async function handlePickDirectory(): Promise<Response> {
         name: basename(dirPath),
         isGitRepo,
       },
-      { headers: CORS_HEADERS },
+      { headers },
     );
   } catch (err) {
     console.error('Failed to open directory picker:', err);
     return Response.json(
       { error: 'Failed to open directory picker.' },
-      { status: 500, headers: CORS_HEADERS },
+      { status: 500, headers },
     );
   }
 }

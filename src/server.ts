@@ -42,11 +42,11 @@ const server = Bun.serve({
     '/api/auth/*': async (req: Request) => handleAuthProxy(req),
 
     '/api/pick-directory': {
-      async POST() {
-        return handlePickDirectory();
+      async POST(req: Request) {
+        return handlePickDirectory(req);
       },
-      OPTIONS() {
-        return handlePickDirectoryCors();
+      OPTIONS(req: Request) {
+        return handlePickDirectoryCors(req);
       },
     },
 
