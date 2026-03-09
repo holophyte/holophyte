@@ -28,7 +28,7 @@ if (isPreview && !process.env.CONVEX_IS_PREVIEW_CMD) {
   // Sanitize branch name for preview identifier (e.g. feat/foo → feat-foo-a1b2c3d).
   // Append a short hash to avoid collisions (feat/auth-flow vs feat-auth-flow).
   const suffix = createHash('sha1').update(branch).digest('hex').slice(0, 7);
-  const previewName = `${branch.replace(/[^a-zA-Z0-9-]/g, '-').slice(0, 50)}-${suffix}`;
+  const previewName = `${branch.replace(/[^a-zA-Z0-9-]/g, '-').replace(/-{2,}/g, '-').slice(0, 50)}-${suffix}`;
   console.log(
     `Preview environment — deploying Convex preview "${previewName}"...`,
   );
