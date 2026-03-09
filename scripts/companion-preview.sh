@@ -15,6 +15,12 @@ PREVIEW_NAME="${SANITIZED}-${SUFFIX}"
 
 echo "Looking up preview backend: $PREVIEW_NAME"
 
+# Clear local Convex deployment if it's a local backend — the CLI needs
+# the cloud project identity to query preview deployments.
+if [[ "${CONVEX_DEPLOYMENT:-}" == local:* ]]; then
+  unset CONVEX_DEPLOYMENT
+fi
+
 # Fetch env vars from the preview backend
 ENV_OUTPUT=$(bunx convex env list --preview-name "$PREVIEW_NAME" 2>&1) || {
   echo "Error: Could not fetch env vars for preview '$PREVIEW_NAME'"
