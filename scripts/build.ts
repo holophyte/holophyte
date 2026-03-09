@@ -1,21 +1,67 @@
 import tailwindPlugin from 'bun-plugin-tailwind';
 
-console.log('Building Holophyte SPA...');
-
 const vercelEnv = process.env.VERCEL_ENV; // 'production' | 'preview' | 'development'
 const isProduction = vercelEnv === 'production';
 const isPreview = vercelEnv === 'preview';
 
-// For preview builds, deploy Convex first to get the preview backend URL.
-// For production, CONVEX_URL is set as a Vercel env var.
-let convexUrl = process.env.CONVEX_URL;
+// ── Preview: delegate to Convex CLI ───────────────────────────────────
+// For preview builds, `convex deploy --cmd` re-invokes this script with
+// CONVEX_URL set to the preview backend URL. On the first invocation
+// CONVEX_URL is absent, so we launch the Convex deploy wrapper. On the
+// second (nested) invocation CONVEX_URL is set and we fall through to
+// the normal build below.
+if (isPreview && !process.env.CONVEX_URL) {
+  const branch = process.env.VERCEL_GIT_COMMIT_REF;
+  if (!branch) {
+    console.error(
+      'VERCEL_GIT_COMMIT_REF is required for preview Convex deployments',
+    );
+    process.exit(1);
+  }
+  if (!process.env.CONVEX_DEPLOY_KEY) {
+    console.error(
+      'CONVEX_DEPLOY_KEY is required for preview Convex deployments',
+    );
+    process.exit(1);
+  }
 
-if (isPreview) {
-  convexUrl = await deployConvexPreview();
-} else if (!convexUrl) {
-  console.error(
-    'CONVEX_URL environment variable is required for production builds',
+  // Sanitize branch name for preview identifier (e.g. feat/foo → feat-foo)
+  const previewName = branch.replace(/[^a-zA-Z0-9-]/g, '-');
+  console.log(
+    `Preview environment — deploying Convex preview "${previewName}"...`,
   );
+
+  const deploy = Bun.spawnSync(
+    [
+      'bunx',
+      'convex',
+      'deploy',
+      '--preview-create',
+      previewName,
+      '--cmd',
+      'bun run build',
+      '--cmd-url-env-var-name',
+      'CONVEX_URL',
+    ],
+    { stdout: 'inherit', stderr: 'inherit' },
+  );
+
+  if (deploy.exitCode !== 0) {
+    console.error('Convex preview deploy failed');
+    process.exit(1);
+  }
+
+  // The nested `bun run build` already wrote dist/ — we're done.
+  process.exit(0);
+}
+
+// ── Frontend build ────────────────────────────────────────────────────
+
+console.log('Building Holophyte SPA...');
+
+const convexUrl = process.env.CONVEX_URL;
+if (!convexUrl) {
+  console.error('CONVEX_URL environment variable is required for builds');
   process.exit(1);
 }
 
@@ -56,7 +102,7 @@ console.log(
   `Build complete. ${result.outputs.length + 1} output files written to dist/`,
 );
 
-// Deploy Convex functions in production so frontend and backend stay in sync.
+// ── Production: deploy Convex after build ─────────────────────────────
 if (isProduction) {
   if (!process.env.CONVEX_DEPLOY_KEY) {
     console.error(
@@ -64,7 +110,9 @@ if (isProduction) {
     );
     process.exit(1);
   }
-  console.log('Production environment detected — deploying Convex functions...');
+  console.log(
+    'Production environment detected — deploying Convex functions...',
+  );
   const deploy = Bun.spawnSync(['bunx', 'convex', 'deploy'], {
     stdout: 'inherit',
     stderr: 'inherit',
@@ -74,59 +122,4 @@ if (isProduction) {
     process.exit(1);
   }
   console.log('Convex functions deployed.');
-}
-
-// ── Preview deployment helper ─────────────────────────────────────────
-
-async function deployConvexPreview(): Promise<string> {
-  const branch = process.env.VERCEL_GIT_COMMIT_REF;
-  if (!branch) {
-    console.error(
-      'VERCEL_GIT_COMMIT_REF is required for preview Convex deployments',
-    );
-    process.exit(1);
-  }
-  if (!process.env.CONVEX_DEPLOY_KEY) {
-    console.error(
-      'CONVEX_DEPLOY_KEY is required for preview Convex deployments',
-    );
-    process.exit(1);
-  }
-
-  // Sanitize branch name for use as preview identifier (e.g. feat/foo → feat-foo)
-  const previewName = branch.replace(/[^a-zA-Z0-9-]/g, '-');
-  console.log(`Preview environment detected — deploying Convex preview "${previewName}"...`);
-
-  const deploy = Bun.spawnSync(
-    ['bunx', 'convex', 'deploy', '--preview-create', previewName],
-    { stdout: 'pipe', stderr: 'pipe' },
-  );
-
-  const stdout = deploy.stdout.toString();
-  const stderr = deploy.stderr.toString();
-  // Convex CLI prints progress/results to stderr
-  if (stdout) console.log(stdout);
-  if (stderr) console.log(stderr);
-
-  if (deploy.exitCode !== 0) {
-    console.error('Convex preview deploy failed');
-    process.exit(1);
-  }
-
-  // Combine both streams — Convex CLI writes the URL to stderr
-  const output = `${stdout}\n${stderr}`;
-
-  // Parse the preview URL from output: "Deployed Convex functions to https://..."
-  const match = output.match(/https:\/\/[^\s]+\.convex\.cloud/);
-  if (!match) {
-    console.error(
-      'Could not parse preview Convex URL from deploy output:\n',
-      output,
-    );
-    process.exit(1);
-  }
-
-  const url = match[0];
-  console.log(`Preview Convex URL: ${url}`);
-  return url;
 }
