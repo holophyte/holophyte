@@ -20,6 +20,7 @@ export function handlePickDirectoryCors(req: Request): Response {
       ...corsOriginHeaders(req),
       'Access-Control-Allow-Methods': 'POST, OPTIONS',
       'Access-Control-Allow-Headers': 'Content-Type',
+      'Access-Control-Max-Age': '86400',
     },
   });
 }
