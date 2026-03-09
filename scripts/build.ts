@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import tailwindPlugin from 'bun-plugin-tailwind';
 
 const vercelEnv = process.env.VERCEL_ENV; // 'production' | 'preview' | 'development'
@@ -25,8 +26,10 @@ if (isPreview && !process.env.CONVEX_URL) {
     process.exit(1);
   }
 
-  // Sanitize branch name for preview identifier (e.g. feat/foo → feat-foo)
-  const previewName = branch.replace(/[^a-zA-Z0-9-]/g, '-');
+  // Sanitize branch name for preview identifier (e.g. feat/foo → feat-foo-a1b2c3d).
+  // Append a short hash to avoid collisions (feat/auth-flow vs feat-auth-flow).
+  const suffix = createHash('sha1').update(branch).digest('hex').slice(0, 7);
+  const previewName = `${branch.replace(/[^a-zA-Z0-9-]/g, '-').slice(0, 50)}-${suffix}`;
   console.log(
     `Preview environment — deploying Convex preview "${previewName}"...`,
   );
