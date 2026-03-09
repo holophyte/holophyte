@@ -4,13 +4,16 @@ import { basename } from 'node:path';
 function corsHeaders(req?: Request): HeadersInit {
   const allowedOrigin = process.env.ALLOWED_ORIGIN ?? '';
   const requestOrigin = req?.headers.get('Origin') ?? '';
-  const origin =
-    allowedOrigin && requestOrigin === allowedOrigin ? allowedOrigin : '';
-  return {
-    'Access-Control-Allow-Origin': origin,
+  const matched =
+    allowedOrigin && requestOrigin === allowedOrigin ? allowedOrigin : null;
+  const headers: Record<string, string> = {
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type',
   };
+  if (matched) {
+    headers['Access-Control-Allow-Origin'] = matched;
+  }
+  return headers;
 }
 
 export function handlePickDirectoryCors(req: Request): Response {
