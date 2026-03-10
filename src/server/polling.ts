@@ -166,4 +166,5 @@ export function stopCompanionPolling() {
     clearInterval(pollTimer);
     pollTimer = null;
   }
+  companionUrl = undefined;
 }
