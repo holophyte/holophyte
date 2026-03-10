@@ -81,7 +81,7 @@ if [ -f .env.companion ]; then
 fi
 
 # Derive the Vercel preview URL for CORS
-PREVIEW_URL="https://holophyte-git-${SANITIZED}-ko-vials-projects.vercel.app"
+PREVIEW_URL="https://holophyte-git-$(echo "${SANITIZED}" | tr '[:upper:]' '[:lower:]')-ko-vials-projects.vercel.app"
 
 ALLOWED_ORIGIN="$PREVIEW_URL" \
 CONVEX_URL="$CONVEX_URL" \
