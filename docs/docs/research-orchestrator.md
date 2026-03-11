@@ -106,6 +106,65 @@ Session completes
 
 Both modes share the same automation pipeline. The only difference is the final gate: manual waits for user merge, auto checks CI + zero unresolved comments and merges itself.
 
+**Mockup — YOLO pipeline state machine:**
+```
+                          ┌──────────────────────────────────────────────────┐
+                          │              YOLO Pipeline                       │
+                          │                                                  │
+  ┌─────────┐   start     │  ┌─────────┐  done   ┌──────────┐  pass        │
+  │  Idle   │────────────►│  │ Session │────────►│ Verify   │─────────┐    │
+  └─────────┘             │  │ Running │         │ (test/   │         │    │
+                          │  └─────────┘         │  lint/   │         │    │
+                          │       ▲              │  types)  │         │    │
+                          │       │ retry        └──────────┘         │    │
+                          │       │                   │ fail          │    │
+                          │       │                   ▼              ▼    │
+                          │       │              ┌──────────┐  ┌────────┐ │
+                          │       └──────────────│ Auto-Fix │  │ Create │ │
+                          │         (max 2)      └──────────┘  │   PR   │ │
+                          │                                     └────────┘ │
+                          │                                         │      │
+                          │                          ┌──────────────┘      │
+                          │                          ▼                     │
+                          │                    ┌───────────┐               │
+                          │                    │ CI + Bots │               │
+                          │                    │  Running   │               │
+                          │                    └───────────┘               │
+                          │                     │          │               │
+                          │              comments?    all clear            │
+                          │                     ▼          │               │
+                          │              ┌───────────┐     │               │
+                          │              │  Comment  │     │               │
+                          │              │  Handler  │◄────┘               │
+                          │              │           │  (loop)             │
+                          │              └───────────┘                     │
+                          │               │         │                      │
+                          │          unresolved   all resolved             │
+                          │               │         │                      │
+                          │               ▼         ▼                      │
+                          │  ┌──────────────┐  ┌──────────────┐           │
+                          │  │ Await User   │  │  Gate Check  │           │
+                          │  │ (always for  │  │              │           │
+                          │  │  Manual)     │  │  Auto: merge │           │
+                          │  └──────┬───────┘  │  Manual: wait│           │
+                          │         │          └──────┬───────┘           │
+                          │         │ merge           │ merge             │
+                          │         ▼                 ▼                   │
+                          │       ┌─────────────────────┐                 │
+                          │       │       Done          │                 │
+                          │       │  ► start dependents │                 │
+                          │       └─────────────────────┘                 │
+                          │              │          │                      │
+                          │         (if failure detected downstream)       │
+                          │              ▼                                 │
+                          │       ┌─────────────┐                         │
+                          │       │  Rollback   │                         │
+                          │       │ git revert  │                         │
+                          │       │ pause deps  │                         │
+                          │       └─────────────┘                         │
+                          └──────────────────────────────────────────────────┘
+```
+
 #### PR Comment Handler
 
 An automated loop that processes PR review comments:
@@ -140,6 +199,57 @@ Epic starts
 ```
 
 Smart YOLO detects independent tasks and runs them in parallel. Dependent tasks wait.
+
+### DAG Visualization
+
+Interactive node/edge graph showing task dependencies with real-time status propagation.
+
+**Mockup:**
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  Epic: "User Authentication"                          View: Graph │ List   │
+│  4/7 tasks done · 2 running · 1 blocked               YOLO: Auto ▾       │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│   ┌──────────────┐                                                         │
+│   │ ✅ Schema    │                                                          │
+│   │ migration    │──────────┐                                              │
+│   │ 12.4k tokens │          │                                              │
+│   └──────────────┘          │                                              │
+│          │                  │                                               │
+│          ▼                  ▼                                               │
+│   ┌──────────────┐   ┌──────────────┐                                      │
+│   │ ✅ Auth      │   │ ✅ Password  │                                       │
+│   │ middleware   │   │ hashing util │                                       │
+│   │  8.1k tokens │   │  3.2k tokens │                                      │
+│   └──────────────┘   └──────────────┘                                      │
+│          │                  │                                               │
+│          ▼                  │                                               │
+│   ┌──────────────┐         │                                               │
+│   │ 🔄 Login     │◄────────┘                                               │
+│   │ endpoint     │──────────┐                                              │
+│   │ ● Running... │          │                                              │
+│   └──────────────┘          │                                              │
+│          │                  │                                               │
+│          ▼                  ▼                                               │
+│   ┌──────────────┐   ┌──────────────┐                                      │
+│   │ 🔄 Session   │   │ ⏸ Protected  │                                      │
+│   │ management   │   │ routes       │                                       │
+│   │ ● Running... │   │ Waiting: 2   │◄─── blocked on Login + Session       │
+│   └──────────────┘   └──────────────┘                                      │
+│          │                  │                                               │
+│          └──────┬───────────┘                                               │
+│                 ▼                                                            │
+│          ┌──────────────┐                                                   │
+│          │ ○ E2E tests  │                                                   │
+│          │ Waiting: 2   │                                                   │
+│          │ ~15k est.    │                                                   │
+│          └──────────────┘                                                   │
+│                                                                             │
+│  Legend: ✅ Done  🔄 Running  ⏸ Blocked  ○ Pending  🔴 Failed              │
+│  Total tokens: 23.7k used · ~25k estimated remaining                       │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
 
 ### Sub-Tasks with Auto-Close
 
@@ -205,6 +315,45 @@ Store the full Claude Code event stream (already streamed via WebSocket) as a pe
 - Split view: left panel shows the conversation/event at the current position, right panel shows the file diff at that point in time
 - Scrub to any point to see the full state: which files were open, what the agent was thinking, what tool it called
 
+**Mockup:**
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  Session Replay — "Add user auth endpoint"          Session #3  ⏱ 4m 32s  │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  ◀◀  ▶  ▶▶   1x ▾   ──●───────────────────────────────────────── 1:23/4:32│
+│                        ▲     ▲  ▲▲    ▲         ▲   ▲▲  ▲                  │
+│                        │     │  ││    │         │   ││  │                   │
+│                      Read  Edit ││  Shell     Read  ││ Approve              │
+│                                 ││                  ││                      │
+│  Filter: [x] Tool calls  [x] Edits  [ ] Reads  [x] Shell  [x] Messages    │
+│                                                                             │
+├──────────────────────────────────┬──────────────────────────────────────────┤
+│  Conversation                    │  File Diff                              │
+│                                  │                                         │
+│  ┌─ Agent ─────────────────────┐ │  src/server.ts                          │
+│  │ I'll add the auth endpoint  │ │  ┌────────────────────────────────────┐ │
+│  │ to server.ts. Let me read   │ │  │  @@ -45,6 +45,18 @@               │ │
+│  │ the current routes first.   │ │  │    '/api/config': () => ...        │ │
+│  └─────────────────────────────┘ │  │  + '/api/auth/login': async (r) =>│ │
+│                                  │  │  +   const { email, pass } = ...   │ │
+│  ┌─ Tool: Read ────────────────┐ │  │  +   const user = await db...     │ │
+│  │ src/server.ts (245 lines)   │ │  │  +   return Response.json({...    │ │
+│  └─────────────────────────────┘ │  │  + },                             │ │
+│                                  │  └────────────────────────────────────┘ │
+│  ┌─ Agent ─────────────────────┐ │                                         │
+│  │ I see the route pattern.    │ │  Files changed at this point: 1        │
+│  │ Adding POST /api/auth/login │ │  +18 -0 lines                          │
+│  └─────────────────────────────┘ │                                         │
+│                                  │                                         │
+│  ┌─ Tool: Edit ───── ● NOW ───┐ │                                         │
+│  │ src/server.ts:45            │ │                                         │
+│  │ Added auth route handler    │ │                                         │
+│  └─────────────────────────────┘ │                                         │
+│                                  │                                         │
+└──────────────────────────────────┴──────────────────────────────────────────┘
+```
+
 **Data model:**
 ```typescript
 // convex/schema.ts - sessions table addition
@@ -269,6 +418,95 @@ The current template system is inadequate and should be replaced. Deferred to a 
 - Template variables filled from task context
 - Template composition (base + override)
 - Template marketplace / sharing
+
+## UI Mockups
+
+### Task Detail Panel (Updated)
+
+Shows the new orchestration fields integrated into the existing task detail view.
+
+```
+┌─────────────────────────────────────────┐
+│  ← Back                     ⋯  🗑       │
+├─────────────────────────────────────────┤
+│                                         │
+│  Add user login endpoint                │
+│  ─────────────────────────────────────  │
+│                                         │
+│  Status: In Progress ▾                  │
+│  Priority: High ▾                       │
+│                                         │
+│  ┌─ Dependencies ──────────────────┐    │
+│  │  ✅ Schema migration            │    │
+│  │  ✅ Password hashing util       │    │
+│  │  + Add dependency...            │    │
+│  └─────────────────────────────────┘    │
+│                                         │
+│  ┌─ YOLO Mode ─────────────────────┐   │
+│  │  ○ Off  ● Manual  ○ Auto        │   │
+│  │                                  │   │
+│  │  On merge: start dependents     │   │
+│  │  Dependents: Session mgmt,      │   │
+│  │              Protected routes    │   │
+│  └──────────────────────────────────┘   │
+│                                         │
+│  ┌─ Token Budget ──────────────────┐   │
+│  │  Budget: 20,000 tokens     Edit │   │
+│  │  Used:   12,400 (62%)           │   │
+│  │  ████████████░░░░░░░░           │   │
+│  └──────────────────────────────────┘   │
+│                                         │
+│  ┌─ Prompt ────────────────────────┐   │
+│  │  Add a POST /api/auth/login     │   │
+│  │  endpoint that accepts email    │   │
+│  │  and password, validates against│   │
+│  │  the users table, and returns   │   │
+│  │  a JWT token...                 │   │
+│  └──────────────────────────────────┘   │
+│                                         │
+│  ┌─ Claude Code Session ───────────┐   │
+│  │  Model: claude-sonnet-4-6 ▾     │   │
+│  │                                  │   │
+│  │  [  🚀 Launch Claude Code    ]  │   │
+│  │                                  │   │
+│  │  Sessions:                       │   │
+│  │   #3 ● Running (1:23)   View ▸  │   │
+│  │   #2 ✅ Done (4:32)    Replay ▸ │   │
+│  │   #1 🔴 Failed (2:11)  Replay ▸ │   │
+│  └──────────────────────────────────┘   │
+│                                         │
+└─────────────────────────────────────────┘
+```
+
+### YOLO Pipeline Status (Task Card Badge)
+
+Compact status shown on kanban task cards during YOLO execution.
+
+```
+┌─ Kanban Column: In Progress ────────────────┐
+│                                              │
+│  ┌────────────────────────────────────────┐  │
+│  │  Add login endpoint          YOLO 🟢  │  │
+│  │  ──────────────────────────────────    │  │
+│  │  ● PR #47 · CI passing · 0 comments   │  │
+│  │  ██████████████████░░ 12.4k tokens     │  │
+│  └────────────────────────────────────────┘  │
+│                                              │
+│  ┌────────────────────────────────────────┐  │
+│  │  Session management          YOLO 🟡  │  │
+│  │  ──────────────────────────────────    │  │
+│  │  ● PR #48 · 2 comments · addressing   │  │
+│  │  ████████░░░░░░░░░░░░  6.1k tokens    │  │
+│  └────────────────────────────────────────┘  │
+│                                              │
+│  ┌────────────────────────────────────────┐  │
+│  │  Protected routes            YOLO ⏸   │  │
+│  │  ──────────────────────────────────    │  │
+│  │  Blocked: waiting on 2 dependencies    │  │
+│  └────────────────────────────────────────┘  │
+│                                              │
+└──────────────────────────────────────────────┘
+```
 
 ## Known Issues
 
