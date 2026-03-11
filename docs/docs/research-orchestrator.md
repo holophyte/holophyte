@@ -214,14 +214,14 @@ Interactive node/edge graph showing task dependencies with real-time status prop
 │   ┌──────────────┐                                                         │
 │   │ ✅ Schema    │                                                          │
 │   │ migration    │──────────┐                                              │
-│   │ 12.4k tokens │          │                                              │
+│   │ $0.34        │          │                                              │
 │   └──────────────┘          │                                              │
 │          │                  │                                               │
 │          ▼                  ▼                                               │
 │   ┌──────────────┐   ┌──────────────┐                                      │
 │   │ ✅ Auth      │   │ ✅ Password  │                                       │
 │   │ middleware   │   │ hashing util │                                       │
-│   │  8.1k tokens │   │  3.2k tokens │                                      │
+│   │  $0.22       │   │  $0.09       │                                      │
 │   └──────────────┘   └──────────────┘                                      │
 │          │                  │                                               │
 │          ▼                  │                                               │
@@ -243,11 +243,11 @@ Interactive node/edge graph showing task dependencies with real-time status prop
 │          ┌──────────────┐                                                   │
 │          │ ○ E2E tests  │                                                   │
 │          │ Waiting: 2   │                                                   │
-│          │ ~15k est.    │                                                   │
+│          │ ~$0.41 est.  │                                                   │
 │          └──────────────┘                                                   │
 │                                                                             │
 │  Legend: ✅ Done  🔄 Running  ⏸ Blocked  ○ Pending  🔴 Failed              │
-│  Total tokens: 23.7k used · ~25k estimated remaining                       │
+│  Cost: $0.65 spent · ~$0.68 estimated remaining                            │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -404,26 +404,25 @@ When a YOLO task fails verification or breaks a dependent downstream task, autom
 
 This makes Auto YOLO safe to run unattended — failures are contained, not cascading.
 
-### Token Estimation & Budgets
+### Session Cost Tracking
 
-Track estimated token usage per task for planning and visibility, even though billing is subscription-based (Claude Max/Pro).
+Show the dollar cost of each session directly in the UI. More intuitive than raw token counts — nobody thinks in tokens, everyone thinks in money.
 
-**Per-task estimation:**
-- Before execution: estimate based on prompt length + repo size + expected tool calls
-- During execution: track actual tokens consumed from SDK events
-- After execution: store final token count on the task
+**Per-session cost display:**
+- During execution: show running cost in session panel (e.g., "$0.47 so far")
+- After execution: store final cost on the session record
+- Task-level rollup: sum of all session costs for that task
 
-**Budget controls:**
-- Set a max token budget per task or per epic
-- Pipeline pauses and notifies when budget threshold is reached (e.g., 80% warning, 100% hard stop)
-- Dashboard showing cumulative token usage across tasks/epics/time periods
-- Helps users understand which tasks are expensive and optimize prompts accordingly
+**Cost visibility (not budgets):**
+- Session cost shown on task detail panel and session list
+- Per-task cumulative cost visible on kanban cards
+- Daily/weekly cost summaries in settings (future)
+- No per-task budget enforcement — cost is informational, not a hard limit
 
 **Schema:**
 ```typescript
-// convex/schema.ts - tasks table addition
-tokenBudget: v.optional(v.number()),
-tokensUsed: v.optional(v.number()),
+// convex/schema.ts - sessions table addition
+costUsd: v.optional(v.number()),  // total session cost in USD
 ```
 
 ### Merge Queue Integration
@@ -472,11 +471,12 @@ Shows the new orchestration fields integrated into the existing task detail view
 │  │              Protected routes    │   │
 │  └──────────────────────────────────┘   │
 │                                         │
-│  ┌─ Token Budget ──────────────────┐   │
-│  │  Budget: 20,000 tokens     Edit │   │
-│  │  Used:   12,400 (62%)           │   │
-│  │  ████████████░░░░░░░░           │   │
-│  └──────────────────────────────────┘   │
+│  ┌─ Session Cost ─────────────────┐   │
+│  │  Total: $0.34                  │   │
+│  │  #3 (running): $0.12 so far   │   │
+│  │  #2 (done):    $0.18          │   │
+│  │  #1 (failed):  $0.04          │   │
+│  └─────────────────────────────────┘   │
 │                                         │
 │  ┌─ Prompt ────────────────────────┐   │
 │  │  Add a POST /api/auth/login     │   │
@@ -511,14 +511,14 @@ Compact status shown on kanban task cards during YOLO execution.
 │  │  Add login endpoint          YOLO 🟢  │  │
 │  │  ──────────────────────────────────    │  │
 │  │  ● PR #47 · CI passing · 0 comments   │  │
-│  │  ██████████████████░░ 12.4k tokens     │  │
+│  │  ██████████████████░░ $0.34            │  │
 │  └────────────────────────────────────────┘  │
 │                                              │
 │  ┌────────────────────────────────────────┐  │
 │  │  Session management          YOLO 🟡  │  │
 │  │  ──────────────────────────────────    │  │
 │  │  ● PR #48 · 2 comments · addressing   │  │
-│  │  ████████░░░░░░░░░░░░  6.1k tokens    │  │
+│  │  ████████░░░░░░░░░░░░  $0.17          │  │
 │  └────────────────────────────────────────┘  │
 │                                              │
 │  ┌────────────────────────────────────────┐  │

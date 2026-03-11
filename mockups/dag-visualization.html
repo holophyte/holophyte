@@ -155,7 +155,7 @@
       display: flex; align-items: center; gap: 8px;
     }
 
-    .node-tokens {
+    .node-cost {
       font-family: var(--font-mono); font-size: 10px;
     }
 
@@ -265,7 +265,7 @@
   </div>
 
   <div id="status-announcer" aria-live="polite" class="sr-only">
-    Epic: User Authentication. 4 of 7 tasks done, 2 running, 1 blocked.
+    Epic: User Authentication. 4 of 7 tasks done, 2 running, 1 blocked. $0.65 spent.
   </div>
 
   <!-- Header -->
@@ -304,14 +304,14 @@
 
       <!-- Layer 1: Root -->
       <div class="dag-row">
-        <div class="task-node done" tabindex="0" role="button" aria-label="Schema migration — done, 12.4k tokens used">
+        <div class="task-node done" tabindex="0" role="button" aria-label="Schema migration — done, cost $0.34">
           <div class="node-status done">
             <span class="node-status-icon" aria-hidden="true">✓</span>
             Done
           </div>
           <div class="node-title">Schema migration</div>
           <div class="node-meta">
-            <span class="node-tokens">12.4k tokens</span>
+            <span class="node-cost">$0.34</span>
           </div>
           <div class="node-progress-bar">
             <div class="node-progress-fill" style="width: 100%; background: var(--green);"></div>
@@ -330,28 +330,28 @@
 
       <!-- Layer 2: Auth middleware + Password hashing -->
       <div class="dag-row">
-        <div class="task-node done" tabindex="0" role="button" aria-label="Auth middleware — done, 8.1k tokens used">
+        <div class="task-node done" tabindex="0" role="button" aria-label="Auth middleware — done, cost $0.22">
           <div class="node-status done">
             <span class="node-status-icon" aria-hidden="true">✓</span>
             Done
           </div>
           <div class="node-title">Auth middleware</div>
           <div class="node-meta">
-            <span class="node-tokens">8.1k tokens</span>
+            <span class="node-cost">$0.22</span>
           </div>
           <div class="node-progress-bar">
             <div class="node-progress-fill" style="width: 100%; background: var(--green);"></div>
           </div>
         </div>
 
-        <div class="task-node done" tabindex="0" role="button" aria-label="Password hashing util — done, 3.2k tokens used">
+        <div class="task-node done" tabindex="0" role="button" aria-label="Password hashing util — done, cost $0.09">
           <div class="node-status done">
             <span class="node-status-icon" aria-hidden="true">✓</span>
             Done
           </div>
           <div class="node-title">Password hashing util</div>
           <div class="node-meta">
-            <span class="node-tokens">3.2k tokens</span>
+            <span class="node-cost">$0.09</span>
           </div>
           <div class="node-progress-bar">
             <div class="node-progress-fill" style="width: 100%; background: var(--green);"></div>
@@ -378,7 +378,7 @@
           </div>
           <div class="node-title">Login endpoint</div>
           <div class="node-meta">
-            <span class="node-tokens">~8k estimated</span>
+            <span class="node-cost">$0.12 so far</span>
           </div>
           <div class="node-progress-bar">
             <div class="node-progress-fill" style="width: 45%; background: var(--blue);"></div>
@@ -405,7 +405,7 @@
           </div>
           <div class="node-title">Session management</div>
           <div class="node-meta">
-            <span class="node-tokens">~6k estimated</span>
+            <span class="node-cost">$0.08 so far</span>
           </div>
           <div class="node-progress-bar">
             <div class="node-progress-fill" style="width: 35%; background: var(--blue);"></div>
@@ -438,7 +438,7 @@
 
       <!-- Layer 5: E2E tests -->
       <div class="dag-row">
-        <div class="task-node pending" tabindex="0" role="button" aria-label="E2E tests — pending, waiting on 2 dependencies, estimated 15k tokens">
+        <div class="task-node pending" tabindex="0" role="button" aria-label="E2E tests — pending, waiting on 2 dependencies, estimated cost $0.41">
           <div class="node-status pending">
             <span class="node-status-icon" aria-hidden="true">○</span>
             Pending
@@ -446,7 +446,7 @@
           <div class="node-title">E2E tests</div>
           <div class="node-meta">
             <span>Waiting on 2 deps</span>
-            <span class="node-tokens">~15k est.</span>
+            <span class="node-cost">~$0.41 est.</span>
           </div>
           <div class="node-progress-bar">
             <div class="node-progress-fill" style="width: 0%;"></div>
@@ -467,7 +467,7 @@
       <span class="legend-item"><span class="legend-icon" style="color: var(--red);" aria-hidden="true">✕</span> Failed</span>
     </div>
     <div class="legend-summary" role="status">
-      Tokens: <strong>23.7k</strong> used · ~<strong>25k</strong> estimated remaining
+      Cost: <strong>$0.65</strong> spent · ~<strong>$0.68</strong> estimated remaining
     </div>
   </footer>
 

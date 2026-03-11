@@ -181,37 +181,29 @@
     }
     .yolo-info strong { color: var(--text-secondary); }
 
-    /* ── Token Budget ── */
-    .budget-header {
+    /* ── Session Cost ── */
+    .cost-total {
+      font-family: var(--font-mono); font-size: 20px; font-weight: 700;
+      margin-bottom: 12px;
+    }
+
+    .cost-breakdown {
+      display: flex; flex-direction: column; gap: 6px;
+    }
+
+    .cost-line {
       display: flex; align-items: center; justify-content: space-between;
-      margin-bottom: 10px;
+      font-size: 13px; color: var(--text-secondary);
     }
 
-    .budget-value {
-      font-family: var(--font-mono); font-size: 14px; font-weight: 600;
+    .cost-line-label {
+      display: flex; align-items: center; gap: 6px;
     }
 
-    .budget-edit-btn {
-      font-size: 11px; color: var(--accent); background: none;
-      border: none; cursor: pointer; font-weight: 500;
-    }
-    .budget-edit-btn:hover { text-decoration: underline; }
-    .budget-edit-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    .cost-line-status { font-size: 12px; }
 
-    .budget-used {
-      font-size: 12px; color: var(--text-muted); margin-bottom: 8px;
-    }
-    .budget-used strong { color: var(--text-primary); }
-
-    .budget-bar {
-      height: 8px; background: var(--bg-tertiary); border-radius: 4px;
-      overflow: hidden;
-    }
-
-    .budget-bar-fill {
-      height: 100%; border-radius: 4px;
-      background: linear-gradient(90deg, var(--accent), #8b5cf6);
-      transition: width 0.5s;
+    .cost-line-amount {
+      font-family: var(--font-mono); font-weight: 500; color: var(--text-primary);
     }
 
     /* ── Prompt ── */
@@ -280,7 +272,7 @@
 </head>
 <body>
   <div class="mockup-banner">
-    <strong>MOCKUP</strong> — Holophyte Task Detail Panel | Dependencies, YOLO mode, token budget, sessions
+    <strong>MOCKUP</strong> — Holophyte Task Detail Panel | Dependencies, YOLO mode, session costs, sessions
   </div>
 
   <div class="task-panel">
@@ -356,22 +348,36 @@
         </div>
       </div>
 
-      <!-- Token Budget -->
+      <!-- Session Cost -->
       <div class="section-card">
         <div class="section-header" role="button" aria-expanded="true" tabindex="0">
-          <span>Token Budget</span>
-          <span style="font-size: 11px; color: var(--text-muted);">62%</span>
+          <span>Session Cost</span>
+          <span style="font-size: 11px; color: var(--text-muted);">3 sessions</span>
         </div>
         <div class="section-body">
-          <div class="budget-header">
-            <span class="budget-value">20,000 tokens</span>
-            <button class="budget-edit-btn" aria-label="Edit token budget">Edit</button>
-          </div>
-          <div class="budget-used">
-            Used: <strong>12,400</strong> (62%)
-          </div>
-          <div class="budget-bar" role="progressbar" aria-valuenow="62" aria-valuemin="0" aria-valuemax="100" aria-label="Token budget usage: 62%">
-            <div class="budget-bar-fill" style="width: 62%;"></div>
+          <div class="cost-total" aria-label="Total cost: $0.34">$0.34</div>
+          <div class="cost-breakdown">
+            <div class="cost-line">
+              <span class="cost-line-label">
+                <span class="cost-line-status" style="color: var(--blue);" aria-hidden="true">●</span>
+                #3 Running
+              </span>
+              <span class="cost-line-amount">$0.12 so far</span>
+            </div>
+            <div class="cost-line">
+              <span class="cost-line-label">
+                <span class="cost-line-status" style="color: var(--green);" aria-hidden="true">✓</span>
+                #2 Done
+              </span>
+              <span class="cost-line-amount">$0.18</span>
+            </div>
+            <div class="cost-line">
+              <span class="cost-line-label">
+                <span class="cost-line-status" style="color: var(--red);" aria-hidden="true">✕</span>
+                #1 Failed
+              </span>
+              <span class="cost-line-amount">$0.04</span>
+            </div>
           </div>
         </div>
       </div>
