@@ -534,6 +534,98 @@ The comment handler needs to:
 
 This fits naturally as a Convex action that orchestrates `gh` CLI calls and Claude Code sessions through the existing companion process.
 
+### Leveraging Claude Code `/loop` for YOLO
+
+Claude Code's `/loop` command (March 2026) provides session-scoped cron scheduling — exactly what we need for several YOLO pipeline stages. Instead of building our own polling infrastructure, we can inject `/loop` commands into session prompts and let Claude Code handle the scheduling natively.
+
+**How `/loop` works:**
+- `/loop 5m check if the deployment finished` — fires a prompt every 5 minutes
+- Session-scoped: runs while the Claude Code process is alive, auto-expires after 3 days
+- Up to 50 concurrent scheduled tasks per session
+- Uses `CronCreate`/`CronList`/`CronDelete` tools under the hood
+- No catch-up for missed fires; waits if Claude is busy
+
+**Key insight:** Our YOLO pipeline currently proposes building a custom Convex polling action for PR comment handling and CI monitoring. `/loop` eliminates that entirely — we can spawn a single long-lived "watcher" session per YOLO task that monitors and acts autonomously.
+
+#### Architecture: Two-Session YOLO
+
+Instead of one session per task, YOLO tasks get two:
+
+```
+Session 1: "Worker" (short-lived)
+  - Receives the task prompt
+  - Writes code, runs tests, creates PR
+  - Exits when done
+
+Session 2: "Watcher" (long-lived)
+  - Spawned after Worker creates a PR
+  - Injected prompt:
+      /loop 5m check PR #47 for new comments. For each unresolved comment:
+      classify it, fix bugs, reply to questions, resolve false positives.
+      If CI is green and all comments are resolved, auto-merge the PR
+      and exit.
+  - Self-terminates when PR is merged or task is paused
+```
+
+**Advantages over custom polling:**
+- No Convex action scheduler to build and maintain
+- Claude itself classifies and addresses comments (no separate classification step)
+- `/loop` handles interval timing, jitter, and missed-fire semantics
+- The watcher session has full context: the repo, the PR, `gh` CLI, and Claude's reasoning
+- We get session replay for free on the watcher too — full audit trail of every poll
+
+**Watcher session prompt template:**
+```
+You are monitoring PR #{prNumber} on {repo} for task "{taskTitle}".
+
+/loop {interval} /review-pr-comments {prNumber}
+
+After each review cycle, check:
+1. Are all review comments resolved?
+2. Is CI passing? (gh pr checks {prNumber})
+
+If both are true:
+- {autoYolo ? "Merge the PR: gh pr merge {prNumber} --squash" : "Notify that PR is ready for manual merge"}
+- Exit this session
+
+If CI is failing, attempt a fix (max 2 retries).
+If a comment reveals a real bug, push a fix commit.
+
+Budget: stop after {maxTokens} tokens or {maxDuration}.
+```
+
+**What this replaces in the plan:**
+- ~~Custom Convex polling action~~ → `/loop` in watcher session
+- ~~Comment classification service~~ → Claude's native reasoning
+- ~~CI status checker~~ → `gh pr checks` inside `/loop`
+- ~~Auto-merge service~~ → `gh pr merge` inside watcher session
+
+**What we still build ourselves (Holophyte orchestrator layer):**
+- Spawning/stopping watcher sessions (Agent SDK)
+- Streaming watcher events to the UI (existing WebSocket infra)
+- DAG advancement when a watcher reports PR merged (Convex mutation)
+- Budget enforcement — kill the watcher if token limit hit
+- Emergency stop — kill the watcher if task is paused
+
+#### Impact on Phased Plan
+
+`/loop` simplifies Phase 3 significantly:
+- Phase 2 item 7 (PR comment handler) becomes: "spawn a watcher session with `/loop /review-pr-comments`"
+- Phase 3 items 8-9 (YOLO Manual/Auto) share the same watcher — only the merge gate differs (prompt template conditional)
+- Phase 3 item 10 (Epic YOLO) is unchanged — DAG advancement still lives in Convex
+
+**Estimated effort reduction:** ~40% less custom code for the YOLO pipeline. The watcher pattern also makes the system more debuggable since every poll cycle is visible in session replay.
+
+#### Limitations & Mitigations
+
+| Limitation | Mitigation |
+|---|---|
+| Session must stay alive | Holophyte's companion process already runs persistently; watcher sessions are just long-lived Agent SDK spawns |
+| 3-day auto-expiry | Holophyte detects expiry via session exit event and respawns if PR is still open |
+| No catch-up on missed fires | Acceptable — PR comments don't need sub-minute latency |
+| 50 task limit per session | One watcher per YOLO task, each with 1-2 loops — well within limits |
+| Token cost of idle polling | Budget controls cap total spend; most polls are cheap (just `gh` CLI calls) |
+
 ### Auto-Merge Safety
 
 Auto YOLO should have guardrails:
