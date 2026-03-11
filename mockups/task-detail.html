@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Holophyte Task Detail — Interactive Mockup</title>
+  <style>
+    :root {
+      --bg-primary: #0a0a0f;
+      --bg-secondary: #12121a;
+      --bg-tertiary: #1a1a2e;
+      --bg-card: #16162a;
+      --border: #2a2a4a;
+      --border-active: #4a4a8a;
+      --text-primary: #e8e8f0;
+      --text-secondary: #8888aa;
+      --text-muted: #555570;
+      --accent: #6366f1;
+      --accent-glow: rgba(99, 102, 241, 0.15);
+      --green: #22c55e;
+      --green-dim: rgba(34, 197, 94, 0.15);
+      --amber: #f59e0b;
+      --amber-dim: rgba(245, 158, 11, 0.15);
+      --red: #ef4444;
+      --red-dim: rgba(239, 68, 68, 0.15);
+      --blue: #3b82f6;
+      --radius: 8px;
+      --font: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      --font-mono: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: var(--font);
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    .sr-only {
+      position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+      overflow: hidden; clip: rect(0, 0, 0, 0); border: 0;
+    }
+
+    .mockup-banner {
+      background: linear-gradient(135deg, var(--accent), #8b5cf6);
+      padding: 10px 20px; text-align: center; font-size: 12px;
+      color: rgba(255,255,255,0.9); font-weight: 500; width: 100%;
+    }
+    .mockup-banner strong { color: white; }
+
+    /* ── Panel Container ── */
+    .task-panel {
+      width: 100%; max-width: 480px; background: var(--bg-secondary);
+      border-left: 1px solid var(--border); border-right: 1px solid var(--border);
+      min-height: calc(100vh - 38px); display: flex; flex-direction: column;
+    }
+
+    /* ── Header ── */
+    .panel-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 14px 20px; border-bottom: 1px solid var(--border);
+    }
+
+    .back-btn {
+      display: flex; align-items: center; gap: 6px;
+      color: var(--text-secondary); background: none;
+      border: 1px solid var(--border); padding: 6px 12px;
+      border-radius: var(--radius); cursor: pointer; font-size: 13px;
+      transition: all 0.15s;
+    }
+    .back-btn:hover { background: var(--bg-tertiary); color: var(--text-primary); }
+    .back-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+    .header-actions { display: flex; gap: 8px; }
+
+    .icon-btn {
+      width: 32px; height: 32px; border-radius: 6px;
+      border: 1px solid var(--border); background: transparent;
+      color: var(--text-muted); cursor: pointer; font-size: 14px;
+      display: flex; align-items: center; justify-content: center;
+      transition: all 0.15s;
+    }
+    .icon-btn:hover { border-color: var(--border-active); color: var(--text-secondary); }
+    .icon-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    .icon-btn.danger:hover { border-color: rgba(239, 68, 68, 0.4); color: var(--red); }
+
+    /* ── Scroll Content ── */
+    .panel-content {
+      flex: 1; overflow-y: auto; padding: 20px;
+      display: flex; flex-direction: column; gap: 20px;
+    }
+
+    /* ── Task Title ── */
+    .task-title {
+      font-size: 20px; font-weight: 700; line-height: 1.3;
+    }
+
+    /* ── Field Row ── */
+    .field-row {
+      display: flex; align-items: center; gap: 12px;
+    }
+
+    .field-label {
+      font-size: 12px; color: var(--text-muted); min-width: 60px;
+      font-weight: 500;
+    }
+
+    .field-select {
+      padding: 6px 12px; border-radius: 6px; font-size: 13px;
+      background: var(--bg-tertiary); border: 1px solid var(--border);
+      color: var(--text-primary); cursor: pointer;
+    }
+    .field-select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+    .status-pill {
+      display: inline-flex; align-items: center; gap: 5px;
+      padding: 5px 12px; border-radius: 14px; font-size: 12px; font-weight: 500;
+    }
+    .status-pill.in-progress { background: rgba(59, 130, 246, 0.15); color: var(--blue); }
+    .status-pill.high { background: var(--red-dim); color: var(--red); }
+
+    /* ── Section Card ── */
+    .section-card {
+      background: var(--bg-card); border: 1px solid var(--border);
+      border-radius: var(--radius); overflow: hidden;
+    }
+
+    .section-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 10px 14px; border-bottom: 1px solid var(--border);
+      font-size: 12px; font-weight: 600; color: var(--text-secondary);
+      cursor: pointer; transition: background 0.15s;
+    }
+    .section-header:hover { background: var(--bg-tertiary); }
+
+    .section-body { padding: 12px 14px; }
+
+    /* ── Dependencies ── */
+    .dep-item {
+      display: flex; align-items: center; gap: 8px;
+      padding: 6px 0; font-size: 13px;
+    }
+    .dep-icon { font-size: 14px; }
+    .dep-name { color: var(--text-primary); }
+    .dep-status { font-size: 11px; color: var(--text-muted); margin-left: auto; }
+
+    .add-dep-btn {
+      display: flex; align-items: center; gap: 6px;
+      padding: 6px 0; font-size: 12px; color: var(--accent);
+      background: none; border: none; cursor: pointer;
+      transition: opacity 0.15s;
+    }
+    .add-dep-btn:hover { opacity: 0.8; }
+    .add-dep-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+    /* ── YOLO Mode ── */
+    .yolo-options {
+      display: flex; gap: 4px; margin-bottom: 12px;
+    }
+
+    .yolo-radio {
+      flex: 1; padding: 8px 12px; border-radius: 6px;
+      border: 1px solid var(--border); background: transparent;
+      color: var(--text-muted); font-size: 12px; font-weight: 500;
+      cursor: pointer; text-align: center; transition: all 0.15s;
+    }
+    .yolo-radio.active {
+      background: var(--accent-glow); border-color: var(--accent);
+      color: var(--accent);
+    }
+    .yolo-radio:hover:not(.active) { border-color: var(--border-active); color: var(--text-secondary); }
+    .yolo-radio:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+    .yolo-info {
+      font-size: 12px; color: var(--text-muted); line-height: 1.5;
+    }
+    .yolo-info strong { color: var(--text-secondary); }
+
+    /* ── Token Budget ── */
+    .budget-header {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 10px;
+    }
+
+    .budget-value {
+      font-family: var(--font-mono); font-size: 14px; font-weight: 600;
+    }
+
+    .budget-edit-btn {
+      font-size: 11px; color: var(--accent); background: none;
+      border: none; cursor: pointer; font-weight: 500;
+    }
+    .budget-edit-btn:hover { text-decoration: underline; }
+    .budget-edit-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+    .budget-used {
+      font-size: 12px; color: var(--text-muted); margin-bottom: 8px;
+    }
+    .budget-used strong { color: var(--text-primary); }
+
+    .budget-bar {
+      height: 8px; background: var(--bg-tertiary); border-radius: 4px;
+      overflow: hidden;
+    }
+
+    .budget-bar-fill {
+      height: 100%; border-radius: 4px;
+      background: linear-gradient(90deg, var(--accent), #8b5cf6);
+      transition: width 0.5s;
+    }
+
+    /* ── Prompt ── */
+    .prompt-text {
+      font-size: 13px; line-height: 1.6; color: var(--text-secondary);
+      white-space: pre-wrap;
+    }
+
+    /* ── Sessions ── */
+    .model-row {
+      display: flex; align-items: center; gap: 8px; margin-bottom: 14px;
+    }
+
+    .model-label { font-size: 12px; color: var(--text-muted); }
+
+    .model-select {
+      flex: 1; padding: 6px 10px; border-radius: 6px;
+      background: var(--bg-tertiary); border: 1px solid var(--border);
+      color: var(--text-primary); font-size: 12px; font-family: var(--font-mono);
+      cursor: pointer;
+    }
+    .model-select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+    .launch-btn {
+      width: 100%; padding: 12px; border-radius: var(--radius);
+      background: var(--accent); border: none; color: white;
+      font-size: 14px; font-weight: 600; cursor: pointer;
+      display: flex; align-items: center; justify-content: center; gap: 8px;
+      transition: opacity 0.15s; margin-bottom: 14px;
+    }
+    .launch-btn:hover { opacity: 0.9; }
+    .launch-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; }
+
+    .sessions-label {
+      font-size: 11px; color: var(--text-muted); font-weight: 600;
+      text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px;
+    }
+
+    .session-item {
+      display: flex; align-items: center; gap: 10px;
+      padding: 8px 10px; border-radius: 6px; margin-bottom: 4px;
+      background: var(--bg-tertiary); cursor: pointer; transition: all 0.15s;
+    }
+    .session-item:hover { background: var(--border); }
+    .session-item:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+    .session-num { font-size: 12px; font-weight: 600; min-width: 24px; }
+    .session-status-icon { font-size: 12px; }
+    .session-status-label { font-size: 12px; color: var(--text-secondary); flex: 1; }
+    .session-duration {
+      font-size: 11px; color: var(--text-muted); font-family: var(--font-mono);
+    }
+    .session-action {
+      font-size: 11px; color: var(--accent); font-weight: 500;
+    }
+
+    /* ── Scrollbar ── */
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+    @media (prefers-reduced-motion: reduce) {
+      * { transition: none !important; }
+    }
+  </style>
+</head>
+<body>
+  <div class="mockup-banner">
+    <strong>MOCKUP</strong> — Holophyte Task Detail Panel | Dependencies, YOLO mode, token budget, sessions
+  </div>
+
+  <div class="task-panel">
+    <!-- Header -->
+    <div class="panel-header">
+      <button class="back-btn" aria-label="Back to board">
+        <span aria-hidden="true">←</span> Back
+      </button>
+      <div class="header-actions">
+        <button class="icon-btn" aria-label="More options">⋯</button>
+        <button class="icon-btn danger" aria-label="Delete task">🗑</button>
+      </div>
+    </div>
+
+    <!-- Scrollable Content -->
+    <div class="panel-content">
+      <!-- Title -->
+      <h1 class="task-title">Add user login endpoint</h1>
+
+      <!-- Status + Priority -->
+      <div style="display: flex; gap: 16px;">
+        <div class="field-row">
+          <span class="field-label">Status</span>
+          <span class="status-pill in-progress" role="status">
+            <span aria-hidden="true">●</span> In Progress
+          </span>
+        </div>
+        <div class="field-row">
+          <span class="field-label">Priority</span>
+          <span class="status-pill high">High</span>
+        </div>
+      </div>
+
+      <!-- Dependencies -->
+      <div class="section-card">
+        <div class="section-header" role="button" aria-expanded="true" tabindex="0">
+          <span>Dependencies</span>
+          <span style="font-size: 11px; color: var(--text-muted);">2 / 2 met</span>
+        </div>
+        <div class="section-body">
+          <div class="dep-item">
+            <span class="dep-icon" aria-hidden="true">✅</span>
+            <span class="dep-name">Schema migration</span>
+            <span class="dep-status">Done</span>
+          </div>
+          <div class="dep-item">
+            <span class="dep-icon" aria-hidden="true">✅</span>
+            <span class="dep-name">Password hashing util</span>
+            <span class="dep-status">Done</span>
+          </div>
+          <button class="add-dep-btn" aria-label="Add a dependency">
+            <span aria-hidden="true">+</span> Add dependency...
+          </button>
+        </div>
+      </div>
+
+      <!-- YOLO Mode -->
+      <div class="section-card">
+        <div class="section-header" role="button" aria-expanded="true" tabindex="0">
+          <span>YOLO Mode</span>
+          <span style="font-size: 11px; color: var(--accent);">Manual</span>
+        </div>
+        <div class="section-body">
+          <div class="yolo-options" role="radiogroup" aria-label="YOLO mode selection">
+            <button class="yolo-radio" role="radio" aria-checked="false">Off</button>
+            <button class="yolo-radio active" role="radio" aria-checked="true">Manual</button>
+            <button class="yolo-radio" role="radio" aria-checked="false">Auto</button>
+          </div>
+          <div class="yolo-info">
+            <strong>On merge:</strong> start dependents<br>
+            <strong>Dependents:</strong> Session mgmt, Protected routes
+          </div>
+        </div>
+      </div>
+
+      <!-- Token Budget -->
+      <div class="section-card">
+        <div class="section-header" role="button" aria-expanded="true" tabindex="0">
+          <span>Token Budget</span>
+          <span style="font-size: 11px; color: var(--text-muted);">62%</span>
+        </div>
+        <div class="section-body">
+          <div class="budget-header">
+            <span class="budget-value">20,000 tokens</span>
+            <button class="budget-edit-btn" aria-label="Edit token budget">Edit</button>
+          </div>
+          <div class="budget-used">
+            Used: <strong>12,400</strong> (62%)
+          </div>
+          <div class="budget-bar" role="progressbar" aria-valuenow="62" aria-valuemin="0" aria-valuemax="100" aria-label="Token budget usage: 62%">
+            <div class="budget-bar-fill" style="width: 62%;"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Prompt -->
+      <div class="section-card">
+        <div class="section-header" role="button" aria-expanded="true" tabindex="0">
+          <span>Prompt</span>
+        </div>
+        <div class="section-body">
+          <div class="prompt-text">Add a POST /api/auth/login endpoint that accepts email and password, validates against the users table, and returns a JWT token. Follow the existing route patterns in server.ts.</div>
+        </div>
+      </div>
+
+      <!-- Claude Code Sessions -->
+      <div class="section-card">
+        <div class="section-header" role="button" aria-expanded="true" tabindex="0">
+          <span>Claude Code Session</span>
+        </div>
+        <div class="section-body">
+          <div class="model-row">
+            <span class="model-label">Model:</span>
+            <select class="model-select" aria-label="Select model">
+              <option>claude-sonnet-4-6</option>
+              <option>claude-opus-4-6</option>
+              <option>claude-haiku-4-5</option>
+            </select>
+          </div>
+
+          <button class="launch-btn" aria-label="Launch Claude Code session">
+            🚀 Launch Claude Code
+          </button>
+
+          <div class="sessions-label">Sessions</div>
+
+          <a class="session-item" href="#" tabindex="0" aria-label="Session 3, currently running, 1 minute 23 seconds">
+            <span class="session-num">#3</span>
+            <span class="session-status-icon" style="color: var(--blue);">●</span>
+            <span class="session-status-label">Running</span>
+            <span class="session-duration">1:23</span>
+            <span class="session-action">View ▸</span>
+          </a>
+
+          <a class="session-item" href="#" tabindex="0" aria-label="Session 2, completed, 4 minutes 32 seconds — click to replay">
+            <span class="session-num">#2</span>
+            <span class="session-status-icon" style="color: var(--green);">✓</span>
+            <span class="session-status-label">Done</span>
+            <span class="session-duration">4:32</span>
+            <span class="session-action">Replay ▸</span>
+          </a>
+
+          <a class="session-item" href="#" tabindex="0" aria-label="Session 1, failed, 2 minutes 11 seconds — click to replay">
+            <span class="session-num">#1</span>
+            <span class="session-status-icon" style="color: var(--red);">✕</span>
+            <span class="session-status-label">Failed</span>
+            <span class="session-duration">2:11</span>
+            <span class="session-action">Replay ▸</span>
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // YOLO radio toggle
+    document.querySelectorAll('.yolo-radio').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.yolo-radio').forEach(b => {
+          b.classList.remove('active');
+          b.setAttribute('aria-checked', 'false');
+        });
+        btn.classList.add('active');
+        btn.setAttribute('aria-checked', 'true');
+      });
+    });
+
+    // Section collapse toggle
+    document.querySelectorAll('.section-header').forEach(header => {
+      header.addEventListener('click', () => {
+        const body = header.nextElementSibling;
+        const expanded = header.getAttribute('aria-expanded') !== 'false';
+        header.setAttribute('aria-expanded', String(!expanded));
+        if (body) body.style.display = expanded ? 'none' : 'block';
+      });
+    });
+  </script>
+</body>
+</html>

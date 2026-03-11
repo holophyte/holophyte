@@ -1,0 +1,496 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Holophyte DAG Visualization — Interactive Mockup</title>
+  <style>
+    :root {
+      --bg-primary: #0a0a0f;
+      --bg-secondary: #12121a;
+      --bg-tertiary: #1a1a2e;
+      --bg-card: #16162a;
+      --border: #2a2a4a;
+      --border-active: #4a4a8a;
+      --text-primary: #e8e8f0;
+      --text-secondary: #8888aa;
+      --text-muted: #555570;
+      --accent: #6366f1;
+      --accent-glow: rgba(99, 102, 241, 0.15);
+      --green: #22c55e;
+      --green-dim: rgba(34, 197, 94, 0.15);
+      --amber: #f59e0b;
+      --amber-dim: rgba(245, 158, 11, 0.15);
+      --red: #ef4444;
+      --red-dim: rgba(239, 68, 68, 0.15);
+      --blue: #3b82f6;
+      --blue-dim: rgba(59, 130, 246, 0.15);
+      --radius: 8px;
+      --font: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      --font-mono: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: var(--font);
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .sr-only {
+      position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+      overflow: hidden; clip: rect(0, 0, 0, 0); border: 0;
+    }
+
+    .mockup-banner {
+      background: linear-gradient(135deg, var(--accent), #8b5cf6);
+      padding: 10px 20px; text-align: center; font-size: 12px;
+      color: rgba(255,255,255,0.9); font-weight: 500;
+    }
+    .mockup-banner strong { color: white; }
+
+    /* ── Header ── */
+    .dag-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 16px 24px; border-bottom: 1px solid var(--border);
+      background: var(--bg-secondary);
+    }
+
+    .dag-header-left {
+      display: flex; align-items: center; gap: 16px;
+    }
+
+    .epic-title { font-size: 18px; font-weight: 700; }
+
+    .epic-stats {
+      display: flex; gap: 12px; font-size: 13px; color: var(--text-secondary);
+    }
+
+    .stat-item {
+      display: flex; align-items: center; gap: 5px;
+    }
+
+    .stat-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+    }
+
+    .dag-header-right {
+      display: flex; align-items: center; gap: 12px;
+    }
+
+    .view-toggle {
+      display: flex; background: var(--bg-tertiary); border-radius: 6px;
+      border: 1px solid var(--border); overflow: hidden;
+    }
+
+    .view-btn {
+      padding: 6px 14px; font-size: 12px; border: none; cursor: pointer;
+      background: transparent; color: var(--text-muted); font-weight: 500;
+      transition: all 0.15s;
+    }
+    .view-btn.active { background: var(--accent); color: white; }
+    .view-btn:hover:not(.active) { color: var(--text-secondary); }
+    .view-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+    .yolo-badge {
+      display: flex; align-items: center; gap: 6px;
+      padding: 6px 14px; border-radius: 20px; font-size: 12px; font-weight: 600;
+      background: var(--green-dim); color: var(--green); border: 1px solid rgba(34, 197, 94, 0.3);
+    }
+
+    /* ── DAG Canvas ── */
+    .dag-canvas {
+      flex: 1; position: relative; overflow: auto; padding: 40px;
+    }
+
+    .dag-graph {
+      display: flex; flex-direction: column; align-items: center;
+      gap: 24px; min-width: 600px;
+    }
+
+    .dag-row {
+      display: flex; gap: 40px; justify-content: center;
+    }
+
+    /* ── Task Node ── */
+    .task-node {
+      width: 200px; background: var(--bg-card);
+      border: 1px solid var(--border); border-radius: 10px;
+      padding: 16px; cursor: pointer; transition: all 0.2s;
+      position: relative;
+    }
+    .task-node:hover { border-color: var(--border-active); transform: translateY(-2px); }
+    .task-node:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+    .task-node.done { border-color: rgba(34, 197, 94, 0.3); }
+    .task-node.running { border-color: rgba(59, 130, 246, 0.4); box-shadow: 0 0 16px var(--blue-dim); }
+    .task-node.blocked { border-color: rgba(245, 158, 11, 0.3); opacity: 0.7; }
+    .task-node.pending { opacity: 0.5; }
+    .task-node.failed { border-color: rgba(239, 68, 68, 0.4); }
+
+    .node-status {
+      display: flex; align-items: center; gap: 6px;
+      font-size: 11px; font-weight: 600; margin-bottom: 8px;
+    }
+
+    .node-status-icon { font-size: 14px; }
+
+    .node-status.done { color: var(--green); }
+    .node-status.running { color: var(--blue); }
+    .node-status.blocked { color: var(--amber); }
+    .node-status.pending { color: var(--text-muted); }
+    .node-status.failed { color: var(--red); }
+
+    .node-title {
+      font-size: 14px; font-weight: 600; margin-bottom: 6px;
+      line-height: 1.3;
+    }
+
+    .node-meta {
+      font-size: 11px; color: var(--text-muted);
+      display: flex; align-items: center; gap: 8px;
+    }
+
+    .node-tokens {
+      font-family: var(--font-mono); font-size: 10px;
+    }
+
+    .node-progress-bar {
+      height: 3px; background: var(--bg-tertiary); border-radius: 2px;
+      margin-top: 10px; overflow: hidden;
+    }
+
+    .node-progress-fill {
+      height: 100%; border-radius: 2px;
+      transition: width 0.5s;
+    }
+
+    .running-indicator {
+      position: absolute; top: -3px; right: -3px;
+      width: 10px; height: 10px; border-radius: 50%;
+      background: var(--blue); border: 2px solid var(--bg-card);
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.4); }
+      50% { opacity: 0.7; box-shadow: 0 0 0 6px rgba(59, 130, 246, 0); }
+    }
+
+    /* ── SVG Edges ── */
+    .dag-edges {
+      position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+      pointer-events: none; z-index: 0;
+    }
+
+    .dag-graph { position: relative; z-index: 1; }
+
+    /* Edge connectors (CSS-based for mockup simplicity) */
+    .edge-connector {
+      position: relative; display: flex; justify-content: center;
+      height: 24px; width: 100%;
+    }
+
+    .edge-line {
+      width: 2px; height: 100%; background: var(--border);
+    }
+    .edge-line.done { background: rgba(34, 197, 94, 0.4); }
+    .edge-line.active { background: rgba(59, 130, 246, 0.4); }
+
+    .edge-split {
+      position: relative; display: flex; justify-content: center;
+      width: 280px; height: 24px;
+    }
+
+    .edge-split::before, .edge-split::after {
+      content: ''; position: absolute; top: 0;
+      width: 2px; height: 100%; background: var(--border);
+    }
+    .edge-split::before { left: 30%; }
+    .edge-split::after { right: 30%; }
+    .edge-split.done::before, .edge-split.done::after { background: rgba(34, 197, 94, 0.4); }
+
+    .edge-horizontal {
+      position: absolute; top: 0; height: 2px;
+      left: 30%; right: 30%; background: var(--border);
+    }
+    .edge-horizontal.done { background: rgba(34, 197, 94, 0.4); }
+
+    .edge-merge {
+      position: relative; display: flex; justify-content: center;
+      width: 280px; height: 24px;
+    }
+
+    /* ── Legend ── */
+    .dag-legend {
+      padding: 16px 24px; border-top: 1px solid var(--border);
+      background: var(--bg-secondary); display: flex;
+      align-items: center; justify-content: space-between;
+    }
+
+    .legend-items {
+      display: flex; gap: 20px;
+    }
+
+    .legend-item {
+      display: flex; align-items: center; gap: 6px;
+      font-size: 12px; color: var(--text-secondary);
+    }
+
+    .legend-icon { font-size: 14px; }
+
+    .legend-summary {
+      font-size: 13px; color: var(--text-muted);
+    }
+    .legend-summary strong { color: var(--text-primary); }
+
+    /* ── Responsive ── */
+    @media (prefers-reduced-motion: reduce) {
+      .running-indicator { animation: none; }
+      .task-node:hover { transform: none; }
+    }
+
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  </style>
+</head>
+<body>
+  <div class="mockup-banner">
+    <strong>MOCKUP</strong> — Holophyte DAG Visualization | Interactive dependency graph with real-time status
+  </div>
+
+  <div id="status-announcer" aria-live="polite" class="sr-only">
+    Epic: User Authentication. 4 of 7 tasks done, 2 running, 1 blocked.
+  </div>
+
+  <!-- Header -->
+  <header class="dag-header" role="banner">
+    <div class="dag-header-left">
+      <h1 class="epic-title">User Authentication</h1>
+      <div class="epic-stats" role="status" aria-label="Epic progress: 4 done, 2 running, 1 blocked">
+        <span class="stat-item">
+          <span class="stat-dot" style="background: var(--green);" aria-hidden="true"></span>
+          4 done
+        </span>
+        <span class="stat-item">
+          <span class="stat-dot" style="background: var(--blue);" aria-hidden="true"></span>
+          2 running
+        </span>
+        <span class="stat-item">
+          <span class="stat-dot" style="background: var(--amber);" aria-hidden="true"></span>
+          1 blocked
+        </span>
+      </div>
+    </div>
+    <div class="dag-header-right">
+      <div class="view-toggle" role="tablist" aria-label="View mode">
+        <button class="view-btn active" role="tab" aria-selected="true">Graph</button>
+        <button class="view-btn" role="tab" aria-selected="false">List</button>
+      </div>
+      <div class="yolo-badge" aria-label="YOLO mode: Auto">
+        <span aria-hidden="true">⚡</span> YOLO: Auto
+      </div>
+    </div>
+  </header>
+
+  <!-- DAG Canvas -->
+  <main class="dag-canvas" aria-label="Task dependency graph">
+    <div class="dag-graph">
+
+      <!-- Layer 1: Root -->
+      <div class="dag-row">
+        <div class="task-node done" tabindex="0" role="button" aria-label="Schema migration — done, 12.4k tokens used">
+          <div class="node-status done">
+            <span class="node-status-icon" aria-hidden="true">✓</span>
+            Done
+          </div>
+          <div class="node-title">Schema migration</div>
+          <div class="node-meta">
+            <span class="node-tokens">12.4k tokens</span>
+          </div>
+          <div class="node-progress-bar">
+            <div class="node-progress-fill" style="width: 100%; background: var(--green);"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Edges: Schema → Auth middleware + Password hashing -->
+      <div class="edge-connector" aria-hidden="true">
+        <div style="position: relative; width: 280px; height: 24px;">
+          <div class="edge-horizontal done"></div>
+          <div style="position: absolute; left: 30%; width: 2px; height: 100%; background: rgba(34, 197, 94, 0.4);"></div>
+          <div style="position: absolute; right: 30%; width: 2px; height: 100%; background: rgba(34, 197, 94, 0.4);"></div>
+        </div>
+      </div>
+
+      <!-- Layer 2: Auth middleware + Password hashing -->
+      <div class="dag-row">
+        <div class="task-node done" tabindex="0" role="button" aria-label="Auth middleware — done, 8.1k tokens used">
+          <div class="node-status done">
+            <span class="node-status-icon" aria-hidden="true">✓</span>
+            Done
+          </div>
+          <div class="node-title">Auth middleware</div>
+          <div class="node-meta">
+            <span class="node-tokens">8.1k tokens</span>
+          </div>
+          <div class="node-progress-bar">
+            <div class="node-progress-fill" style="width: 100%; background: var(--green);"></div>
+          </div>
+        </div>
+
+        <div class="task-node done" tabindex="0" role="button" aria-label="Password hashing util — done, 3.2k tokens used">
+          <div class="node-status done">
+            <span class="node-status-icon" aria-hidden="true">✓</span>
+            Done
+          </div>
+          <div class="node-title">Password hashing util</div>
+          <div class="node-meta">
+            <span class="node-tokens">3.2k tokens</span>
+          </div>
+          <div class="node-progress-bar">
+            <div class="node-progress-fill" style="width: 100%; background: var(--green);"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Edges: Both → Login endpoint -->
+      <div class="edge-connector" aria-hidden="true">
+        <div style="position: relative; width: 280px; height: 24px;">
+          <div class="edge-horizontal" style="background: rgba(34, 197, 94, 0.4);"></div>
+          <div style="position: absolute; left: 30%; width: 2px; height: 100%; background: rgba(34, 197, 94, 0.4);"></div>
+          <div style="position: absolute; right: 30%; width: 2px; height: 100%; background: rgba(34, 197, 94, 0.4);"></div>
+        </div>
+      </div>
+
+      <!-- Layer 3: Login endpoint -->
+      <div class="dag-row">
+        <div class="task-node running" tabindex="0" role="button" aria-label="Login endpoint — running, currently in progress">
+          <div class="running-indicator" aria-hidden="true"></div>
+          <div class="node-status running">
+            <span class="node-status-icon" aria-hidden="true">●</span>
+            Running...
+          </div>
+          <div class="node-title">Login endpoint</div>
+          <div class="node-meta">
+            <span class="node-tokens">~8k estimated</span>
+          </div>
+          <div class="node-progress-bar">
+            <div class="node-progress-fill" style="width: 45%; background: var(--blue);"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Edges: Login → Session mgmt + Protected routes -->
+      <div class="edge-connector" aria-hidden="true">
+        <div style="position: relative; width: 280px; height: 24px;">
+          <div class="edge-horizontal" style="background: var(--border);"></div>
+          <div style="position: absolute; left: 30%; width: 2px; height: 100%; background: var(--border);"></div>
+          <div style="position: absolute; right: 30%; width: 2px; height: 100%; background: var(--border);"></div>
+        </div>
+      </div>
+
+      <!-- Layer 4: Session mgmt + Protected routes -->
+      <div class="dag-row">
+        <div class="task-node running" tabindex="0" role="button" aria-label="Session management — running, 35% complete">
+          <div class="running-indicator" aria-hidden="true"></div>
+          <div class="node-status running">
+            <span class="node-status-icon" aria-hidden="true">●</span>
+            Running...
+          </div>
+          <div class="node-title">Session management</div>
+          <div class="node-meta">
+            <span class="node-tokens">~6k estimated</span>
+          </div>
+          <div class="node-progress-bar">
+            <div class="node-progress-fill" style="width: 35%; background: var(--blue);"></div>
+          </div>
+        </div>
+
+        <div class="task-node blocked" tabindex="0" role="button" aria-label="Protected routes — blocked, waiting on Login endpoint and Session management">
+          <div class="node-status blocked">
+            <span class="node-status-icon" aria-hidden="true">⏸</span>
+            Blocked
+          </div>
+          <div class="node-title">Protected routes</div>
+          <div class="node-meta">
+            <span>Waiting on 2 deps</span>
+          </div>
+          <div class="node-progress-bar">
+            <div class="node-progress-fill" style="width: 0%;"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Edges: Both → E2E tests -->
+      <div class="edge-connector" aria-hidden="true">
+        <div style="position: relative; width: 280px; height: 24px;">
+          <div class="edge-horizontal" style="background: var(--border);"></div>
+          <div style="position: absolute; left: 30%; width: 2px; height: 100%; background: var(--border);"></div>
+          <div style="position: absolute; right: 30%; width: 2px; height: 100%; background: var(--border);"></div>
+        </div>
+      </div>
+
+      <!-- Layer 5: E2E tests -->
+      <div class="dag-row">
+        <div class="task-node pending" tabindex="0" role="button" aria-label="E2E tests — pending, waiting on 2 dependencies, estimated 15k tokens">
+          <div class="node-status pending">
+            <span class="node-status-icon" aria-hidden="true">○</span>
+            Pending
+          </div>
+          <div class="node-title">E2E tests</div>
+          <div class="node-meta">
+            <span>Waiting on 2 deps</span>
+            <span class="node-tokens">~15k est.</span>
+          </div>
+          <div class="node-progress-bar">
+            <div class="node-progress-fill" style="width: 0%;"></div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </main>
+
+  <!-- Legend -->
+  <footer class="dag-legend" role="contentinfo">
+    <div class="legend-items" aria-label="Status legend">
+      <span class="legend-item"><span class="legend-icon" aria-hidden="true">✓</span> Done</span>
+      <span class="legend-item"><span class="legend-icon" style="color: var(--blue);" aria-hidden="true">●</span> Running</span>
+      <span class="legend-item"><span class="legend-icon" style="color: var(--amber);" aria-hidden="true">⏸</span> Blocked</span>
+      <span class="legend-item"><span class="legend-icon" style="color: var(--text-muted);" aria-hidden="true">○</span> Pending</span>
+      <span class="legend-item"><span class="legend-icon" style="color: var(--red);" aria-hidden="true">✕</span> Failed</span>
+    </div>
+    <div class="legend-summary" role="status">
+      Tokens: <strong>23.7k</strong> used · ~<strong>25k</strong> estimated remaining
+    </div>
+  </footer>
+
+  <script>
+    // View toggle
+    document.querySelectorAll('.view-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.view-btn').forEach(b => {
+          b.classList.remove('active');
+          b.setAttribute('aria-selected', 'false');
+        });
+        btn.classList.add('active');
+        btn.setAttribute('aria-selected', 'true');
+      });
+    });
+
+    // Node click — show selected state
+    document.querySelectorAll('.task-node').forEach(node => {
+      node.addEventListener('click', () => {
+        document.querySelectorAll('.task-node').forEach(n => n.style.boxShadow = '');
+        node.style.boxShadow = '0 0 0 2px var(--accent)';
+      });
+    });
+  </script>
+</body>
+</html>

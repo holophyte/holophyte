@@ -1,0 +1,530 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Holophyte YOLO Pipeline — Interactive Mockup</title>
+  <style>
+    :root {
+      --bg-primary: #0a0a0f;
+      --bg-secondary: #12121a;
+      --bg-tertiary: #1a1a2e;
+      --bg-card: #16162a;
+      --border: #2a2a4a;
+      --border-active: #4a4a8a;
+      --text-primary: #e8e8f0;
+      --text-secondary: #8888aa;
+      --text-muted: #555570;
+      --accent: #6366f1;
+      --accent-glow: rgba(99, 102, 241, 0.15);
+      --green: #22c55e;
+      --green-dim: rgba(34, 197, 94, 0.15);
+      --amber: #f59e0b;
+      --amber-dim: rgba(245, 158, 11, 0.15);
+      --red: #ef4444;
+      --red-dim: rgba(239, 68, 68, 0.15);
+      --blue: #3b82f6;
+      --blue-dim: rgba(59, 130, 246, 0.15);
+      --radius: 8px;
+      --font: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      --font-mono: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: var(--font);
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .sr-only {
+      position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+      overflow: hidden; clip: rect(0, 0, 0, 0); border: 0;
+    }
+
+    .mockup-banner {
+      background: linear-gradient(135deg, var(--accent), #8b5cf6);
+      padding: 10px 20px; text-align: center; font-size: 12px;
+      color: rgba(255,255,255,0.9); font-weight: 500;
+    }
+    .mockup-banner strong { color: white; }
+
+    /* ── Header ── */
+    .pipeline-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 16px 24px; border-bottom: 1px solid var(--border);
+      background: var(--bg-secondary);
+    }
+
+    .pipeline-header-left {
+      display: flex; align-items: center; gap: 16px;
+    }
+
+    .pipeline-title { font-size: 16px; font-weight: 700; }
+
+    .pipeline-mode {
+      display: flex; align-items: center; gap: 6px;
+      padding: 5px 12px; border-radius: 14px; font-size: 12px; font-weight: 600;
+    }
+    .pipeline-mode.auto { background: var(--green-dim); color: var(--green); }
+    .pipeline-mode.manual { background: var(--amber-dim); color: var(--amber); }
+
+    .pipeline-header-right {
+      display: flex; align-items: center; gap: 12px;
+    }
+
+    .emergency-btn {
+      padding: 6px 14px; border-radius: var(--radius);
+      border: 1px solid rgba(239, 68, 68, 0.4); background: var(--red-dim);
+      color: var(--red); font-size: 12px; font-weight: 600;
+      cursor: pointer; transition: all 0.15s;
+    }
+    .emergency-btn:hover { background: rgba(239, 68, 68, 0.2); }
+    .emergency-btn:focus-visible { outline: 2px solid var(--red); outline-offset: 2px; }
+
+    /* ── Pipeline Flow ── */
+    .pipeline-flow {
+      flex: 1; overflow-x: auto; padding: 40px 24px;
+      display: flex; align-items: flex-start; gap: 0;
+    }
+
+    /* ── Stage ── */
+    .stage {
+      display: flex; flex-direction: column; align-items: center;
+      min-width: 160px; flex-shrink: 0;
+    }
+
+    .stage-node {
+      width: 160px; background: var(--bg-card);
+      border: 2px solid var(--border); border-radius: 12px;
+      padding: 16px; text-align: center;
+      transition: all 0.2s; cursor: pointer; position: relative;
+    }
+    .stage-node:hover { border-color: var(--border-active); }
+    .stage-node:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+    .stage-node.done { border-color: rgba(34, 197, 94, 0.4); }
+    .stage-node.active { border-color: rgba(59, 130, 246, 0.5); box-shadow: 0 0 20px var(--blue-dim); }
+    .stage-node.waiting { border-color: var(--border); opacity: 0.5; }
+    .stage-node.failed { border-color: rgba(239, 68, 68, 0.4); }
+    .stage-node.skipped { border-style: dashed; opacity: 0.4; }
+
+    .stage-icon {
+      font-size: 24px; margin-bottom: 8px;
+    }
+
+    .stage-label {
+      font-size: 13px; font-weight: 600; margin-bottom: 4px;
+    }
+
+    .stage-detail {
+      font-size: 11px; color: var(--text-muted); line-height: 1.4;
+    }
+
+    .stage-badge {
+      position: absolute; top: -8px; right: -8px;
+      width: 20px; height: 20px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 10px; font-weight: 700;
+      border: 2px solid var(--bg-card);
+    }
+    .stage-badge.done { background: var(--green); color: white; }
+    .stage-badge.active { background: var(--blue); color: white; animation: pulse 2s infinite; }
+    .stage-badge.failed { background: var(--red); color: white; }
+
+    @keyframes pulse {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.4); }
+      50% { box-shadow: 0 0 0 6px rgba(59, 130, 246, 0); }
+    }
+
+    /* ── Connector Arrow ── */
+    .connector {
+      display: flex; align-items: center; min-width: 60px;
+      padding-top: 40px; /* align with node center */
+    }
+
+    .connector-line {
+      flex: 1; height: 2px; background: var(--border); position: relative;
+    }
+    .connector-line.done { background: rgba(34, 197, 94, 0.4); }
+    .connector-line.active {
+      background: linear-gradient(90deg, rgba(59, 130, 246, 0.4), var(--border));
+    }
+
+    .connector-arrow {
+      width: 0; height: 0;
+      border-top: 6px solid transparent;
+      border-bottom: 6px solid transparent;
+      border-left: 8px solid var(--border);
+    }
+    .connector-arrow.done { border-left-color: rgba(34, 197, 94, 0.4); }
+    .connector-arrow.active { border-left-color: rgba(59, 130, 246, 0.4); }
+
+    .connector-label {
+      font-size: 10px; color: var(--text-muted); position: absolute;
+      top: -16px; left: 50%; transform: translateX(-50%); white-space: nowrap;
+    }
+
+    /* ── Branch (fork/join) ── */
+    .branch-container {
+      display: flex; flex-direction: column; align-items: center;
+      gap: 12px; min-width: 160px;
+    }
+
+    .branch-fork {
+      display: flex; gap: 24px;
+    }
+
+    .branch-line {
+      width: 2px; height: 20px; background: var(--border); margin: 0 auto;
+    }
+    .branch-line.done { background: rgba(34, 197, 94, 0.4); }
+
+    /* ── Retry Loop Indicator ── */
+    .retry-loop {
+      position: absolute; bottom: -22px; left: 50%; transform: translateX(-50%);
+      font-size: 10px; color: var(--text-muted);
+      display: flex; align-items: center; gap: 4px;
+    }
+
+    .retry-arrow { font-size: 12px; }
+
+    /* ── Info Panel ── */
+    .info-panel {
+      padding: 16px 24px; border-top: 1px solid var(--border);
+      background: var(--bg-secondary); display: flex; gap: 24px;
+      flex-wrap: wrap;
+    }
+
+    .info-card {
+      background: var(--bg-card); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 12px 16px; min-width: 200px;
+      flex: 1;
+    }
+
+    .info-card-label {
+      font-size: 11px; color: var(--text-muted); font-weight: 600;
+      text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px;
+    }
+
+    .info-card-value { font-size: 14px; font-weight: 600; }
+
+    .info-card-detail { font-size: 12px; color: var(--text-secondary); margin-top: 4px; }
+
+    /* ── Kanban Cards Section ── */
+    .kanban-section {
+      padding: 24px; border-top: 1px solid var(--border);
+    }
+
+    .kanban-section-title {
+      font-size: 14px; font-weight: 700; margin-bottom: 16px;
+      color: var(--text-secondary);
+    }
+
+    .kanban-cards { display: flex; gap: 16px; overflow-x: auto; }
+
+    .kanban-card {
+      min-width: 280px; background: var(--bg-card);
+      border: 1px solid var(--border); border-radius: var(--radius);
+      padding: 14px 16px; cursor: pointer; transition: all 0.15s;
+    }
+    .kanban-card:hover { border-color: var(--border-active); }
+    .kanban-card:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+    .kanban-card-header {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 8px;
+    }
+
+    .kanban-card-title { font-size: 14px; font-weight: 600; }
+
+    .yolo-indicator {
+      display: flex; align-items: center; gap: 4px;
+      font-size: 11px; font-weight: 700;
+    }
+    .yolo-indicator.green { color: var(--green); }
+    .yolo-indicator.yellow { color: var(--amber); }
+    .yolo-indicator.paused { color: var(--text-muted); }
+
+    .yolo-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+    }
+
+    .kanban-card-status {
+      font-size: 12px; color: var(--text-secondary); margin-bottom: 8px;
+      display: flex; align-items: center; gap: 6px;
+    }
+
+    .kanban-card-bar {
+      height: 4px; background: var(--bg-tertiary); border-radius: 2px;
+      overflow: hidden;
+    }
+
+    .kanban-card-bar-fill {
+      height: 100%; border-radius: 2px;
+    }
+
+    .kanban-card-tokens {
+      font-size: 11px; color: var(--text-muted); margin-top: 6px;
+      font-family: var(--font-mono);
+    }
+
+    /* ── Scrollbar ── */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+    @media (prefers-reduced-motion: reduce) {
+      .stage-badge.active { animation: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="mockup-banner">
+    <strong>MOCKUP</strong> — Holophyte YOLO Pipeline | State machine visualization + kanban card badges
+  </div>
+
+  <div id="status-announcer" aria-live="polite" class="sr-only">
+    YOLO Pipeline for "Add login endpoint". Currently at: CI and review bots running. Mode: Auto.
+  </div>
+
+  <!-- Header -->
+  <header class="pipeline-header" role="banner">
+    <div class="pipeline-header-left">
+      <h1 class="pipeline-title">YOLO Pipeline</h1>
+      <span class="pipeline-mode auto" aria-label="Mode: Auto YOLO">
+        <span aria-hidden="true">⚡</span> Auto
+      </span>
+      <span style="font-size: 13px; color: var(--text-secondary);">
+        Add login endpoint
+      </span>
+    </div>
+    <div class="pipeline-header-right">
+      <button class="emergency-btn" aria-label="Emergency stop — pause pipeline">
+        ⏹ Emergency Stop
+      </button>
+    </div>
+  </header>
+
+  <!-- Pipeline State Machine Flow -->
+  <main class="pipeline-flow" aria-label="Pipeline stages">
+
+    <!-- Stage 1: Session -->
+    <div class="stage">
+      <div class="stage-node done" tabindex="0" role="button" aria-label="Session — done">
+        <span class="stage-badge done" aria-hidden="true">✓</span>
+        <div class="stage-icon" aria-hidden="true">🤖</div>
+        <div class="stage-label">Session</div>
+        <div class="stage-detail">Worker completed<br>4m 32s</div>
+      </div>
+    </div>
+
+    <div class="connector" aria-hidden="true">
+      <div class="connector-line done">
+        <span class="connector-label">done</span>
+      </div>
+      <div class="connector-arrow done"></div>
+    </div>
+
+    <!-- Stage 2: Verify -->
+    <div class="stage">
+      <div class="stage-node done" tabindex="0" role="button" aria-label="Verification — passed. Tests, lint, types all green.">
+        <span class="stage-badge done" aria-hidden="true">✓</span>
+        <div class="stage-icon" aria-hidden="true">🧪</div>
+        <div class="stage-label">Verify</div>
+        <div class="stage-detail">Tests ✓ Lint ✓ Types ✓</div>
+        <div class="retry-loop" aria-label="Retry loop: max 2 attempts">
+          <span class="retry-arrow" aria-hidden="true">↻</span> max 2 retries
+        </div>
+      </div>
+    </div>
+
+    <div class="connector" aria-hidden="true">
+      <div class="connector-line done">
+        <span class="connector-label">pass</span>
+      </div>
+      <div class="connector-arrow done"></div>
+    </div>
+
+    <!-- Stage 3: Create PR -->
+    <div class="stage">
+      <div class="stage-node done" tabindex="0" role="button" aria-label="Create PR — done. PR #47 created.">
+        <span class="stage-badge done" aria-hidden="true">✓</span>
+        <div class="stage-icon" aria-hidden="true">📝</div>
+        <div class="stage-label">Create PR</div>
+        <div class="stage-detail">PR #47 created</div>
+      </div>
+    </div>
+
+    <div class="connector" aria-hidden="true">
+      <div class="connector-line done"></div>
+      <div class="connector-arrow done"></div>
+    </div>
+
+    <!-- Stage 4: CI + Bots -->
+    <div class="stage">
+      <div class="stage-node active" tabindex="0" role="button" aria-label="CI and review bots — currently running">
+        <span class="stage-badge active" aria-hidden="true">⟳</span>
+        <div class="stage-icon" aria-hidden="true">🔄</div>
+        <div class="stage-label">CI + Bots</div>
+        <div class="stage-detail">GitHub Actions...<br>CodeRabbit reviewing</div>
+      </div>
+    </div>
+
+    <div class="connector" aria-hidden="true">
+      <div class="connector-line active"></div>
+      <div class="connector-arrow active"></div>
+    </div>
+
+    <!-- Stage 5: Comment Handler (Watcher) -->
+    <div class="stage">
+      <div class="stage-node waiting" tabindex="0" role="button" aria-label="Comment handler — waiting for CI results">
+        <div class="stage-icon" aria-hidden="true">💬</div>
+        <div class="stage-label">Comment Handler</div>
+        <div class="stage-detail">Watcher session<br>/loop 5m polling</div>
+        <div class="retry-loop" style="color: var(--accent);">
+          <span class="retry-arrow" aria-hidden="true">↻</span> loop until resolved
+        </div>
+      </div>
+    </div>
+
+    <div class="connector" aria-hidden="true">
+      <div class="connector-line"></div>
+      <div class="connector-arrow"></div>
+    </div>
+
+    <!-- Stage 6: Gate Check -->
+    <div class="stage">
+      <div class="stage-node waiting" tabindex="0" role="button" aria-label="Gate check — waiting. Auto mode: will merge when CI green and no unresolved comments.">
+        <div class="stage-icon" aria-hidden="true">🚦</div>
+        <div class="stage-label">Gate Check</div>
+        <div class="stage-detail">Auto: merge<br>Manual: wait</div>
+      </div>
+    </div>
+
+    <div class="connector" aria-hidden="true">
+      <div class="connector-line"></div>
+      <div class="connector-arrow"></div>
+    </div>
+
+    <!-- Stage 7: Done -->
+    <div class="stage">
+      <div class="stage-node waiting" tabindex="0" role="button" aria-label="Done — waiting. Will start 2 dependent tasks.">
+        <div class="stage-icon" aria-hidden="true">✅</div>
+        <div class="stage-label">Done</div>
+        <div class="stage-detail">Start 2 dependents</div>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- Info Cards -->
+  <div class="info-panel" role="complementary" aria-label="Pipeline details">
+    <div class="info-card">
+      <div class="info-card-label">Current Stage</div>
+      <div class="info-card-value" style="color: var(--blue);">CI + Bots Running</div>
+      <div class="info-card-detail">GitHub Actions, CodeRabbit, Greptile</div>
+    </div>
+    <div class="info-card">
+      <div class="info-card-label">PR Status</div>
+      <div class="info-card-value">#47 Open</div>
+      <div class="info-card-detail">0 comments · CI pending</div>
+    </div>
+    <div class="info-card">
+      <div class="info-card-label">Watcher Session</div>
+      <div class="info-card-value">Standby</div>
+      <div class="info-card-detail">Will poll every 5m once CI completes</div>
+    </div>
+    <div class="info-card">
+      <div class="info-card-label">Tokens Used</div>
+      <div class="info-card-value">12,400 / 20,000</div>
+      <div class="info-card-detail">Worker: 12.4k · Watcher: 0 (not started)</div>
+    </div>
+  </div>
+
+  <!-- Kanban Card Badges Preview -->
+  <section class="kanban-section" aria-label="Kanban card badge examples">
+    <h2 class="kanban-section-title">Kanban Card Badges (In Progress column)</h2>
+    <div class="kanban-cards">
+
+      <div class="kanban-card" tabindex="0">
+        <div class="kanban-card-header">
+          <span class="kanban-card-title">Add login endpoint</span>
+          <span class="yolo-indicator green">
+            <span class="yolo-dot" style="background: var(--green);" aria-hidden="true"></span>
+            YOLO
+          </span>
+        </div>
+        <div class="kanban-card-status">
+          <span aria-hidden="true">●</span> PR #47 · CI passing · 0 comments
+        </div>
+        <div class="kanban-card-bar">
+          <div class="kanban-card-bar-fill" style="width: 90%; background: var(--green);"></div>
+        </div>
+        <div class="kanban-card-tokens">12.4k tokens</div>
+      </div>
+
+      <div class="kanban-card" tabindex="0">
+        <div class="kanban-card-header">
+          <span class="kanban-card-title">Session management</span>
+          <span class="yolo-indicator yellow">
+            <span class="yolo-dot" style="background: var(--amber);" aria-hidden="true"></span>
+            YOLO
+          </span>
+        </div>
+        <div class="kanban-card-status">
+          <span aria-hidden="true">●</span> PR #48 · 2 comments · addressing
+        </div>
+        <div class="kanban-card-bar">
+          <div class="kanban-card-bar-fill" style="width: 40%; background: var(--amber);"></div>
+        </div>
+        <div class="kanban-card-tokens">6.1k tokens</div>
+      </div>
+
+      <div class="kanban-card" tabindex="0">
+        <div class="kanban-card-header">
+          <span class="kanban-card-title">Protected routes</span>
+          <span class="yolo-indicator paused">
+            <span class="yolo-dot" style="background: var(--text-muted);" aria-hidden="true"></span>
+            YOLO
+          </span>
+        </div>
+        <div class="kanban-card-status">
+          Blocked: waiting on 2 dependencies
+        </div>
+        <div class="kanban-card-bar">
+          <div class="kanban-card-bar-fill" style="width: 0%;"></div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <script>
+    // Stage node click — highlight
+    document.querySelectorAll('.stage-node').forEach(node => {
+      node.addEventListener('click', () => {
+        document.querySelectorAll('.stage-node').forEach(n => n.style.outline = '');
+        node.style.outline = '2px solid var(--accent)';
+        node.style.outlineOffset = '4px';
+      });
+    });
+
+    // Emergency stop
+    document.querySelector('.emergency-btn')?.addEventListener('click', () => {
+      const announcer = document.getElementById('status-announcer');
+      if (announcer) announcer.textContent = 'Pipeline paused by emergency stop.';
+      document.querySelectorAll('.stage-node.active').forEach(n => {
+        n.classList.remove('active');
+        n.classList.add('failed');
+        const badge = n.querySelector('.stage-badge');
+        if (badge) { badge.classList.remove('active'); badge.classList.add('failed'); badge.textContent = '⏹'; }
+      });
+    });
+  </script>
+</body>
+</html>

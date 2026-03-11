@@ -1,0 +1,772 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Holophyte Session Replay — Interactive Mockup</title>
+  <style>
+    :root {
+      --bg-primary: #0a0a0f;
+      --bg-secondary: #12121a;
+      --bg-tertiary: #1a1a2e;
+      --bg-card: #16162a;
+      --border: #2a2a4a;
+      --border-active: #4a4a8a;
+      --text-primary: #e8e8f0;
+      --text-secondary: #8888aa;
+      --text-muted: #555570;
+      --accent: #6366f1;
+      --accent-glow: rgba(99, 102, 241, 0.15);
+      --green: #22c55e;
+      --green-dim: rgba(34, 197, 94, 0.15);
+      --amber: #f59e0b;
+      --amber-dim: rgba(245, 158, 11, 0.15);
+      --red: #ef4444;
+      --red-dim: rgba(239, 68, 68, 0.15);
+      --blue: #3b82f6;
+      --blue-dim: rgba(59, 130, 246, 0.15);
+      --radius: 8px;
+      --font: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      --font-mono: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: var(--font);
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .sr-only {
+      position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+      overflow: hidden; clip: rect(0, 0, 0, 0); border: 0;
+    }
+
+    /* ── Banner ── */
+    .mockup-banner {
+      background: linear-gradient(135deg, var(--accent), #8b5cf6);
+      padding: 10px 20px;
+      text-align: center;
+      font-size: 12px;
+      color: rgba(255,255,255,0.9);
+      font-weight: 500;
+    }
+    .mockup-banner strong { color: white; }
+
+    /* ── Header ── */
+    .replay-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 20px;
+      border-bottom: 1px solid var(--border);
+      background: var(--bg-secondary);
+    }
+
+    .replay-header-left {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .back-btn {
+      display: flex; align-items: center; gap: 6px;
+      color: var(--text-secondary); background: none;
+      border: 1px solid var(--border); padding: 6px 12px;
+      border-radius: var(--radius); cursor: pointer; font-size: 13px;
+      transition: all 0.15s;
+    }
+    .back-btn:hover { background: var(--bg-tertiary); color: var(--text-primary); }
+    .back-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+    .replay-title { font-size: 15px; font-weight: 600; }
+    .replay-meta { font-size: 12px; color: var(--text-muted); margin-left: 8px; }
+
+    .session-badge {
+      font-size: 12px; padding: 4px 10px; border-radius: 12px;
+      background: var(--green-dim); color: var(--green); font-weight: 500;
+    }
+    .session-badge.failed { background: var(--red-dim); color: var(--red); }
+
+    .replay-header-right {
+      display: flex; align-items: center; gap: 12px;
+    }
+    .duration { color: var(--text-muted); font-size: 13px; }
+
+    /* ── Timeline Controls ── */
+    .timeline-section {
+      padding: 16px 20px;
+      background: var(--bg-secondary);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .playback-row {
+      display: flex; align-items: center; gap: 12px; margin-bottom: 12px;
+    }
+
+    .play-btn {
+      width: 36px; height: 36px; border-radius: 50%;
+      background: var(--accent); border: none; color: white;
+      font-size: 16px; cursor: pointer; display: flex;
+      align-items: center; justify-content: center; transition: all 0.15s;
+    }
+    .play-btn:hover { opacity: 0.85; }
+    .play-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+    .skip-btn {
+      background: none; border: 1px solid var(--border); color: var(--text-secondary);
+      padding: 6px 8px; border-radius: 4px; cursor: pointer; font-size: 12px;
+      transition: all 0.15s;
+    }
+    .skip-btn:hover { border-color: var(--border-active); color: var(--text-primary); }
+    .skip-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+    .speed-select {
+      background: var(--bg-tertiary); border: 1px solid var(--border);
+      color: var(--text-primary); padding: 6px 10px; border-radius: 4px;
+      font-size: 12px; cursor: pointer;
+    }
+    .speed-select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+    .time-display {
+      font-family: var(--font-mono); font-size: 13px; color: var(--text-secondary);
+      margin-left: auto;
+    }
+
+    /* ── Timeline Track ── */
+    .timeline-track {
+      position: relative; height: 40px; margin-bottom: 8px;
+    }
+
+    .timeline-bar {
+      position: absolute; top: 16px; left: 0; right: 0; height: 8px;
+      background: var(--bg-tertiary); border-radius: 4px; cursor: pointer;
+    }
+
+    .timeline-progress {
+      height: 100%; background: var(--accent); border-radius: 4px;
+      width: 32%; transition: width 0.3s;
+    }
+
+    .timeline-handle {
+      position: absolute; top: 12px; left: 32%; transform: translateX(-50%);
+      width: 16px; height: 16px; background: var(--accent); border-radius: 50%;
+      border: 2px solid var(--bg-secondary); cursor: grab;
+      box-shadow: 0 0 8px var(--accent-glow);
+      transition: left 0.3s;
+    }
+
+    .timeline-marker {
+      position: absolute; top: 0; transform: translateX(-50%);
+      display: flex; flex-direction: column; align-items: center;
+      cursor: pointer; transition: all 0.15s;
+    }
+    .timeline-marker:hover .marker-dot { transform: scale(1.4); }
+    .timeline-marker:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; border-radius: 2px; }
+
+    .marker-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      transition: transform 0.15s;
+    }
+    .marker-dot.read { background: var(--blue); }
+    .marker-dot.edit { background: var(--green); }
+    .marker-dot.shell { background: var(--amber); }
+    .marker-dot.approve { background: var(--red); }
+    .marker-dot.message { background: var(--text-muted); }
+
+    .marker-label {
+      font-size: 9px; color: var(--text-muted); margin-top: 2px;
+      white-space: nowrap; opacity: 0; transition: opacity 0.15s;
+    }
+    .timeline-marker:hover .marker-label,
+    .timeline-marker:focus .marker-label { opacity: 1; }
+
+    .marker-active .marker-dot { box-shadow: 0 0 8px currentColor; }
+    .marker-active .marker-label { opacity: 1; color: var(--text-primary); }
+
+    /* ── Filters ── */
+    .filter-row {
+      display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+    }
+
+    .filter-label { font-size: 11px; color: var(--text-muted); margin-right: 4px; }
+
+    .filter-chip {
+      display: inline-flex; align-items: center; gap: 5px;
+      padding: 4px 10px; border-radius: 12px; font-size: 11px;
+      cursor: pointer; transition: all 0.15s; border: 1px solid transparent;
+      background: var(--bg-tertiary); color: var(--text-secondary);
+    }
+    .filter-chip.active { border-color: var(--border-active); color: var(--text-primary); }
+    .filter-chip:hover { border-color: var(--border-active); }
+    .filter-chip:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+    .filter-dot {
+      width: 6px; height: 6px; border-radius: 50%;
+    }
+
+    /* ── Compaction Banner ── */
+    .compaction-banner {
+      display: flex; align-items: center; gap: 10px;
+      padding: 10px 16px; margin: 8px 0;
+      background: rgba(99, 102, 241, 0.08);
+      border: 1px dashed rgba(99, 102, 241, 0.3);
+      border-radius: var(--radius); font-size: 12px;
+      color: var(--text-secondary); cursor: pointer;
+      transition: all 0.15s;
+    }
+    .compaction-banner:hover {
+      background: rgba(99, 102, 241, 0.12);
+      border-color: rgba(99, 102, 241, 0.5);
+    }
+    .compaction-banner:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    .compaction-icon { font-size: 14px; }
+    .compaction-expand {
+      margin-left: auto; font-size: 11px; color: var(--accent);
+      font-weight: 500;
+    }
+
+    /* ── Main Content (Split View) ── */
+    .main-content {
+      display: flex; flex: 1; overflow: hidden;
+    }
+
+    /* ── Conversation Panel ── */
+    .conversation-panel {
+      flex: 1; display: flex; flex-direction: column;
+      border-right: 1px solid var(--border); min-width: 0;
+    }
+
+    .panel-header {
+      padding: 10px 20px; border-bottom: 1px solid var(--border);
+      background: var(--bg-secondary); font-size: 13px;
+      font-weight: 500; color: var(--text-secondary);
+      display: flex; align-items: center; justify-content: space-between;
+    }
+
+    .conversation-scroll {
+      flex: 1; overflow-y: auto; padding: 20px;
+      display: flex; flex-direction: column; gap: 16px;
+    }
+
+    .message {
+      display: flex; gap: 12px;
+    }
+
+    .message-avatar {
+      width: 28px; height: 28px; border-radius: 6px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 14px; flex-shrink: 0;
+    }
+    .message-avatar.agent {
+      background: var(--accent-glow); border: 1px solid rgba(99, 102, 241, 0.3);
+    }
+
+    .message-body { flex: 1; min-width: 0; }
+    .message-sender { font-size: 12px; font-weight: 600; margin-bottom: 4px; color: var(--text-secondary); }
+    .message-content { font-size: 14px; line-height: 1.6; }
+    .message-content p { margin-bottom: 8px; }
+    .message-content p:last-child { margin-bottom: 0; }
+
+    .tool-use {
+      background: var(--bg-tertiary); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 10px 14px; margin: 8px 0;
+    }
+    .tool-use.active-event {
+      border-color: var(--accent);
+      box-shadow: 0 0 12px var(--accent-glow);
+    }
+
+    .tool-use-header {
+      display: flex; align-items: center; gap: 8px;
+      font-size: 12px; color: var(--text-secondary);
+    }
+    .tool-use-icon { font-size: 14px; }
+    .tool-use-label { font-weight: 500; }
+    .tool-use-file { font-family: var(--font-mono); font-size: 11px; color: var(--text-muted); }
+
+    .now-indicator {
+      display: inline-flex; align-items: center; gap: 4px;
+      margin-left: auto; font-size: 10px; font-weight: 600;
+      color: var(--accent); text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .now-dot {
+      width: 6px; height: 6px; border-radius: 50%;
+      background: var(--accent); animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+
+    /* ── Diff Panel ── */
+    .diff-panel {
+      width: 480px; display: flex; flex-direction: column;
+      background: var(--bg-secondary); flex-shrink: 0;
+    }
+
+    .diff-file-header {
+      padding: 8px 16px; background: var(--bg-tertiary);
+      border-bottom: 1px solid var(--border);
+      font-family: var(--font-mono); font-size: 12px; color: var(--text-secondary);
+      display: flex; align-items: center; justify-content: space-between;
+    }
+
+    .diff-stats {
+      display: flex; gap: 8px; font-size: 11px;
+    }
+    .diff-stats .added { color: var(--green); }
+    .diff-stats .removed { color: var(--red); }
+
+    .diff-scroll { flex: 1; overflow-y: auto; }
+
+    .diff-hunk {
+      font-family: var(--font-mono); font-size: 12px; line-height: 1.7;
+    }
+
+    .diff-hunk-header {
+      padding: 6px 16px; background: var(--bg-tertiary);
+      color: var(--text-muted); font-size: 11px;
+      border-top: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .diff-line {
+      padding: 0 16px; white-space: pre;
+      display: flex;
+    }
+
+    .diff-line-num {
+      display: inline-block; width: 40px; color: var(--text-muted);
+      text-align: right; padding-right: 12px; flex-shrink: 0;
+      user-select: none;
+    }
+
+    .diff-line-content { flex: 1; }
+
+    .diff-line.context { color: var(--text-secondary); }
+    .diff-line.added {
+      background: rgba(34, 197, 94, 0.08); color: var(--green);
+    }
+    .diff-line.removed {
+      background: rgba(239, 68, 68, 0.08); color: var(--red);
+    }
+
+    .diff-summary {
+      padding: 12px 16px; border-top: 1px solid var(--border);
+      font-size: 12px; color: var(--text-muted);
+      display: flex; align-items: center; gap: 16px;
+    }
+
+    /* ── Scrollbar ── */
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--border-active); }
+
+    /* ── Responsive ── */
+    @media (max-width: 900px) {
+      .diff-panel { display: none; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .now-dot { animation: none; }
+      .timeline-handle, .timeline-progress { transition: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="mockup-banner">
+    <strong>MOCKUP</strong> — Holophyte Session Replay | Seekable timeline with event markers and diff view
+  </div>
+
+  <div id="status-announcer" aria-live="polite" class="sr-only">
+    Session replay: 1 minute 23 seconds of 4 minutes 32 seconds. Currently viewing Edit event on server.ts
+  </div>
+
+  <!-- Header -->
+  <header class="replay-header" role="banner">
+    <div class="replay-header-left">
+      <button class="back-btn" aria-label="Return to task detail">
+        <span aria-hidden="true">←</span> Back
+      </button>
+      <span class="replay-title">
+        Add user auth endpoint
+        <span class="replay-meta">Session #3</span>
+      </span>
+      <span class="session-badge" aria-label="Session completed successfully">Done</span>
+    </div>
+    <div class="replay-header-right">
+      <span class="duration" aria-label="Session duration: 4 minutes 32 seconds">4m 32s</span>
+    </div>
+  </header>
+
+  <!-- Timeline Controls -->
+  <section class="timeline-section" aria-label="Replay timeline">
+    <div class="playback-row">
+      <button class="skip-btn" aria-label="Previous event">◀◀</button>
+      <button class="play-btn" aria-label="Play replay" id="playBtn">▶</button>
+      <button class="skip-btn" aria-label="Next event">▶▶</button>
+
+      <select class="speed-select" aria-label="Playback speed">
+        <option value="1" selected>1x</option>
+        <option value="2">2x</option>
+        <option value="4">4x</option>
+      </select>
+
+      <span class="time-display" aria-label="Current position: 1 minute 23 seconds of 4 minutes 32 seconds">
+        1:23 / 4:32
+      </span>
+    </div>
+
+    <!-- Timeline Track with Event Markers -->
+    <div class="timeline-track" role="slider" aria-label="Timeline scrubber" aria-valuenow="32" aria-valuemin="0" aria-valuemax="100" tabindex="0">
+      <div class="timeline-bar">
+        <div class="timeline-progress"></div>
+      </div>
+      <div class="timeline-handle"></div>
+
+      <!-- Event markers -->
+      <button class="timeline-marker" style="left: 8%;" aria-label="Read event at 0:22" tabindex="0">
+        <span class="marker-dot read"></span>
+        <span class="marker-label">Read</span>
+      </button>
+      <button class="timeline-marker" style="left: 18%;" aria-label="Read event at 0:49" tabindex="0">
+        <span class="marker-dot read"></span>
+        <span class="marker-label">Read</span>
+      </button>
+      <button class="timeline-marker marker-active" style="left: 32%;" aria-label="Edit event at 1:23 — currently viewing" tabindex="0">
+        <span class="marker-dot edit"></span>
+        <span class="marker-label">Edit</span>
+      </button>
+      <button class="timeline-marker" style="left: 36%;" aria-label="Edit event at 1:38" tabindex="0">
+        <span class="marker-dot edit"></span>
+        <span class="marker-label">Edit</span>
+      </button>
+      <button class="timeline-marker" style="left: 48%;" aria-label="Shell command at 2:10" tabindex="0">
+        <span class="marker-dot shell"></span>
+        <span class="marker-label">Shell</span>
+      </button>
+      <button class="timeline-marker" style="left: 62%;" aria-label="Read event at 2:48" tabindex="0">
+        <span class="marker-dot read"></span>
+        <span class="marker-label">Read</span>
+      </button>
+      <button class="timeline-marker" style="left: 72%;" aria-label="Edit event at 3:15" tabindex="0">
+        <span class="marker-dot edit"></span>
+        <span class="marker-label">Edit</span>
+      </button>
+      <button class="timeline-marker" style="left: 76%;" aria-label="Edit event at 3:27" tabindex="0">
+        <span class="marker-dot edit"></span>
+        <span class="marker-label">Edit</span>
+      </button>
+      <button class="timeline-marker" style="left: 88%;" aria-label="Approval event at 3:58" tabindex="0">
+        <span class="marker-dot approve"></span>
+        <span class="marker-label">Approve</span>
+      </button>
+    </div>
+
+    <!-- Filter chips -->
+    <div class="filter-row" role="group" aria-label="Event type filters">
+      <span class="filter-label">Filter:</span>
+      <button class="filter-chip active" aria-pressed="true">
+        <span class="filter-dot" style="background: var(--blue);" aria-hidden="true"></span>
+        Tool calls
+      </button>
+      <button class="filter-chip active" aria-pressed="true">
+        <span class="filter-dot" style="background: var(--green);" aria-hidden="true"></span>
+        Edits
+      </button>
+      <button class="filter-chip" aria-pressed="false">
+        <span class="filter-dot" style="background: var(--text-muted);" aria-hidden="true"></span>
+        Reads
+      </button>
+      <button class="filter-chip active" aria-pressed="true">
+        <span class="filter-dot" style="background: var(--amber);" aria-hidden="true"></span>
+        Shell
+      </button>
+      <button class="filter-chip active" aria-pressed="true">
+        <span class="filter-dot" style="background: var(--text-secondary);" aria-hidden="true"></span>
+        Messages
+      </button>
+    </div>
+  </section>
+
+  <!-- Main Content: Split View -->
+  <div class="main-content">
+    <!-- Conversation Panel (Left) -->
+    <section class="conversation-panel" aria-label="Session conversation">
+      <div class="panel-header">
+        <span>Conversation</span>
+        <span style="font-size: 11px; color: var(--text-muted);">7 events</span>
+      </div>
+
+      <div class="conversation-scroll" role="log" aria-label="Replay event log" tabindex="0">
+        <!-- Agent message 1 -->
+        <div class="message">
+          <div class="message-avatar agent" aria-hidden="true">✦</div>
+          <div class="message-body">
+            <div class="message-sender">Claude</div>
+            <div class="message-content">
+              <p>I'll add the auth endpoint to server.ts. Let me read the current routes first.</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tool: Read -->
+        <div class="tool-use">
+          <div class="tool-use-header">
+            <span class="tool-use-icon" aria-hidden="true">📖</span>
+            <span class="tool-use-label">Read</span>
+            <span class="tool-use-file">src/server.ts (245 lines)</span>
+          </div>
+        </div>
+
+        <!-- Compaction banner -->
+        <div class="compaction-banner" role="button" tabindex="0" aria-label="Compacted region: 6 events summarized. Click to expand.">
+          <span class="compaction-icon" aria-hidden="true">📦</span>
+          <span>Events 3–8 compacted — agent read 4 files, analyzed route patterns</span>
+          <span class="compaction-expand">Show full history ▾</span>
+        </div>
+
+        <!-- Agent message 2 -->
+        <div class="message">
+          <div class="message-avatar agent" aria-hidden="true">✦</div>
+          <div class="message-body">
+            <div class="message-sender">Claude</div>
+            <div class="message-content">
+              <p>I see the route pattern. Adding POST /api/auth/login to handle email + password authentication.</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tool: Edit (active event — currently scrubbed to) -->
+        <div class="tool-use active-event">
+          <div class="tool-use-header">
+            <span class="tool-use-icon" aria-hidden="true">✏️</span>
+            <span class="tool-use-label">Edit</span>
+            <span class="tool-use-file">src/server.ts:45</span>
+            <span class="now-indicator">
+              <span class="now-dot" aria-hidden="true"></span>
+              NOW
+            </span>
+          </div>
+        </div>
+
+        <!-- Tool: Edit (future, dimmed) -->
+        <div class="tool-use" style="opacity: 0.4;">
+          <div class="tool-use-header">
+            <span class="tool-use-icon" aria-hidden="true">✏️</span>
+            <span class="tool-use-label">Edit</span>
+            <span class="tool-use-file">src/server.ts:62</span>
+          </div>
+        </div>
+
+        <!-- Future agent message (dimmed) -->
+        <div class="message" style="opacity: 0.4;">
+          <div class="message-avatar agent" aria-hidden="true">✦</div>
+          <div class="message-body">
+            <div class="message-sender">Claude</div>
+            <div class="message-content">
+              <p>Let me run the tests to verify the endpoint works correctly.</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Future tool (dimmed) -->
+        <div class="tool-use" style="opacity: 0.4;">
+          <div class="tool-use-header">
+            <span class="tool-use-icon" aria-hidden="true">🖥️</span>
+            <span class="tool-use-label">Shell</span>
+            <span class="tool-use-file">bun run test src/server.test.ts</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Diff Panel (Right) -->
+    <aside class="diff-panel" aria-label="File diff at current position">
+      <div class="panel-header">
+        <span>File Diff</span>
+      </div>
+
+      <div class="diff-file-header">
+        <span>src/server.ts</span>
+        <span class="diff-stats">
+          <span class="added" aria-label="18 lines added">+18</span>
+          <span class="removed" aria-label="0 lines removed">-0</span>
+        </span>
+      </div>
+
+      <div class="diff-scroll">
+        <div class="diff-hunk">
+          <div class="diff-hunk-header">@@ -45,6 +45,24 @@</div>
+
+          <div class="diff-line context">
+            <span class="diff-line-num">43</span>
+            <span class="diff-line-content">  '/api/repos': handleRepos,</span>
+          </div>
+          <div class="diff-line context">
+            <span class="diff-line-num">44</span>
+            <span class="diff-line-content">  '/api/config': () =&gt; Response.json({ url: CONVEX_URL }),</span>
+          </div>
+          <div class="diff-line context">
+            <span class="diff-line-num">45</span>
+            <span class="diff-line-content"></span>
+          </div>
+          <div class="diff-line added">
+            <span class="diff-line-num">46</span>
+            <span class="diff-line-content">+ '/api/auth/login': async (req: Request) =&gt; {</span>
+          </div>
+          <div class="diff-line added">
+            <span class="diff-line-num">47</span>
+            <span class="diff-line-content">+   const { email, password } = await req.json();</span>
+          </div>
+          <div class="diff-line added">
+            <span class="diff-line-num">48</span>
+            <span class="diff-line-content">+   if (!email || !password) {</span>
+          </div>
+          <div class="diff-line added">
+            <span class="diff-line-num">49</span>
+            <span class="diff-line-content">+     return Response.json(</span>
+          </div>
+          <div class="diff-line added">
+            <span class="diff-line-num">50</span>
+            <span class="diff-line-content">+       { error: 'Email and password required' },</span>
+          </div>
+          <div class="diff-line added">
+            <span class="diff-line-num">51</span>
+            <span class="diff-line-content">+       { status: 400 }</span>
+          </div>
+          <div class="diff-line added">
+            <span class="diff-line-num">52</span>
+            <span class="diff-line-content">+     );</span>
+          </div>
+          <div class="diff-line added">
+            <span class="diff-line-num">53</span>
+            <span class="diff-line-content">+   }</span>
+          </div>
+          <div class="diff-line added">
+            <span class="diff-line-num">54</span>
+            <span class="diff-line-content">+   const user = await db.query('users')</span>
+          </div>
+          <div class="diff-line added">
+            <span class="diff-line-num">55</span>
+            <span class="diff-line-content">+     .filter((q) =&gt; q.eq(q.field('email'), email))</span>
+          </div>
+          <div class="diff-line added">
+            <span class="diff-line-num">56</span>
+            <span class="diff-line-content">+     .first();</span>
+          </div>
+          <div class="diff-line added">
+            <span class="diff-line-num">57</span>
+            <span class="diff-line-content">+   if (!user || !await verify(password, user.hash)) {</span>
+          </div>
+          <div class="diff-line added">
+            <span class="diff-line-num">58</span>
+            <span class="diff-line-content">+     return Response.json(</span>
+          </div>
+          <div class="diff-line added">
+            <span class="diff-line-num">59</span>
+            <span class="diff-line-content">+       { error: 'Invalid credentials' },</span>
+          </div>
+          <div class="diff-line added">
+            <span class="diff-line-num">60</span>
+            <span class="diff-line-content">+       { status: 401 }</span>
+          </div>
+          <div class="diff-line added">
+            <span class="diff-line-num">61</span>
+            <span class="diff-line-content">+     );</span>
+          </div>
+          <div class="diff-line added">
+            <span class="diff-line-num">62</span>
+            <span class="diff-line-content">+   }</span>
+          </div>
+          <div class="diff-line added">
+            <span class="diff-line-num">63</span>
+            <span class="diff-line-content">+   return Response.json({ token: signJwt(user) });</span>
+          </div>
+          <div class="diff-line added">
+            <span class="diff-line-num">64</span>
+            <span class="diff-line-content">+ },</span>
+          </div>
+          <div class="diff-line context">
+            <span class="diff-line-num">65</span>
+            <span class="diff-line-content"></span>
+          </div>
+          <div class="diff-line context">
+            <span class="diff-line-num">66</span>
+            <span class="diff-line-content">  '/api/tasks': handleTasks,</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="diff-summary">
+        <span>Files changed at this point: <strong>1</strong></span>
+        <span style="color: var(--green);">+18</span>
+        <span style="color: var(--red);">-0</span>
+        <span>lines</span>
+      </div>
+    </aside>
+  </div>
+
+  <script>
+    // Filter chip toggle
+    document.querySelectorAll('.filter-chip').forEach(chip => {
+      chip.addEventListener('click', () => {
+        const active = chip.classList.toggle('active');
+        chip.setAttribute('aria-pressed', String(active));
+      });
+    });
+
+    // Play/pause toggle
+    const playBtn = document.getElementById('playBtn');
+    let playing = false;
+    playBtn?.addEventListener('click', () => {
+      playing = !playing;
+      playBtn.textContent = playing ? '⏸' : '▶';
+      playBtn.setAttribute('aria-label', playing ? 'Pause replay' : 'Play replay');
+    });
+
+    // Compaction banner expand
+    document.querySelector('.compaction-banner')?.addEventListener('click', function() {
+      const isExpanded = this.dataset.expanded === 'true';
+      if (isExpanded) {
+        this.querySelector('.compaction-expand').textContent = 'Show full history ▾';
+        this.dataset.expanded = 'false';
+      } else {
+        this.querySelector('.compaction-expand').textContent = 'Hide full history ▴';
+        this.dataset.expanded = 'true';
+      }
+    });
+
+    // Timeline marker click
+    document.querySelectorAll('.timeline-marker').forEach(marker => {
+      marker.addEventListener('click', () => {
+        document.querySelectorAll('.timeline-marker').forEach(m => m.classList.remove('marker-active'));
+        marker.classList.add('marker-active');
+      });
+    });
+
+    // Keyboard: left/right to navigate markers
+    document.querySelector('.timeline-track')?.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+        e.preventDefault();
+        const markers = [...document.querySelectorAll('.timeline-marker')];
+        const active = markers.findIndex(m => m.classList.contains('marker-active'));
+        const next = e.key === 'ArrowRight'
+          ? Math.min(active + 1, markers.length - 1)
+          : Math.max(active - 1, 0);
+        markers.forEach(m => m.classList.remove('marker-active'));
+        markers[next]?.classList.add('marker-active');
+        markers[next]?.focus();
+      }
+    });
+  </script>
+</body>
+</html>
