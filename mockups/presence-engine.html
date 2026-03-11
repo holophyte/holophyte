@@ -1,0 +1,631 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Holophyte — Presence Engine & Notification Tiers Mockup</title>
+  <style>
+    :root {
+      --bg-primary: #0a0a0f;
+      --bg-secondary: #12121a;
+      --bg-tertiary: #1a1a2e;
+      --bg-card: #16162a;
+      --border: #2a2a4a;
+      --border-active: #4a4a8a;
+      --text-primary: #e8e8f0;
+      --text-secondary: #8888aa;
+      --text-muted: #555570;
+      --accent: #6366f1;
+      --accent-glow: rgba(99, 102, 241, 0.15);
+      --green: #22c55e;
+      --green-dim: rgba(34, 197, 94, 0.15);
+      --amber: #f59e0b;
+      --amber-dim: rgba(245, 158, 11, 0.15);
+      --red: #ef4444;
+      --red-dim: rgba(239, 68, 68, 0.15);
+      --radius: 8px;
+      --font: 'Inter', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+      --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: var(--font);
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      min-height: 100vh;
+      padding: 60px 40px 40px;
+    }
+
+    .mockup-banner {
+      background: linear-gradient(135deg, var(--accent), #8b5cf6);
+      padding: 10px 20px;
+      text-align: center;
+      font-size: 12px;
+      color: rgba(255,255,255,0.9);
+      font-weight: 500;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 100;
+    }
+
+    h1 { font-size: 22px; font-weight: 600; margin-bottom: 8px; text-align: center; }
+    .subtitle {
+      color: var(--text-secondary); font-size: 14px; margin-bottom: 40px;
+      text-align: center; line-height: 1.5; max-width: 700px; margin-left: auto; margin-right: auto;
+    }
+
+    .section { max-width: 900px; margin: 0 auto 48px; }
+    .section h2 {
+      font-size: 16px; font-weight: 600; margin-bottom: 6px;
+      display: flex; align-items: center; gap: 10px;
+    }
+    .section .desc {
+      color: var(--text-secondary); font-size: 13px; margin-bottom: 20px; line-height: 1.5;
+    }
+
+    /* ── Presence Bar Variants ── */
+    .presence-bar {
+      display: flex;
+      align-items: center;
+      padding: 10px 20px;
+      border: 1px solid var(--border);
+      background: var(--bg-secondary);
+      gap: 20px;
+      border-radius: var(--radius);
+      margin-bottom: 12px;
+    }
+
+    .presence-label {
+      display: flex; align-items: center; gap: 8px;
+      font-size: 13px; color: var(--text-muted); font-weight: 500; flex-shrink: 0;
+    }
+
+    .presence-items {
+      display: flex; gap: 16px; flex: 1; overflow-x: auto; align-items: center;
+    }
+
+    .presence-item {
+      display: flex; align-items: center; gap: 8px; font-size: 13px;
+      color: var(--text-secondary); white-space: nowrap; padding: 4px 10px;
+      border-radius: 6px; transition: background 0.15s; cursor: pointer;
+    }
+
+    .presence-item:hover { background: var(--bg-tertiary); }
+    .presence-item:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+    .agent-name { font-weight: 600; }
+    .agent-name.you { color: var(--accent); }
+    .agent-name.a1 { color: var(--green); }
+    .agent-name.a2 { color: var(--amber); }
+    .agent-name.a3 { color: var(--blue, #3b82f6); }
+
+    .agent-activity { color: var(--text-secondary); }
+    .agent-status-tag {
+      font-size: 10px; padding: 2px 6px; border-radius: 4px; font-weight: 500;
+    }
+    .agent-status-tag.active { background: var(--green-dim); color: var(--green); }
+    .agent-status-tag.idle { background: var(--bg-tertiary); color: var(--text-muted); }
+    .agent-status-tag.needs-input { background: var(--amber-dim); color: var(--amber); }
+
+    .mini-bar {
+      width: 50px; height: 4px; background: var(--bg-tertiary);
+      border-radius: 2px; overflow: hidden; flex-shrink: 0;
+    }
+    .mini-bar-fill {
+      height: 100%; border-radius: 2px; transition: width 1s;
+    }
+    .mini-bar-fill.green { background: var(--green); }
+    .mini-bar-fill.amber { background: var(--amber); }
+    .mini-bar-fill.accent { background: var(--accent); }
+
+    .presence-time { color: var(--text-muted); font-size: 11px; }
+
+    /* Companion pulse */
+    .companion-pulse {
+      width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0;
+      animation: breathe 3s ease-in-out infinite;
+    }
+    .companion-pulse.healthy { background: var(--green); }
+    .companion-pulse.warning { background: var(--amber); }
+
+    @keyframes breathe {
+      0%, 100% { opacity: 0.4; transform: scale(0.9); }
+      50% { opacity: 1; transform: scale(1.1); }
+    }
+
+    /* ── Notification Tiers ── */
+    .notification-tiers {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 12px;
+    }
+
+    @media (max-width: 700px) {
+      .notification-tiers { grid-template-columns: 1fr; }
+    }
+
+    .tier-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px;
+      transition: border-color 0.15s;
+    }
+
+    .tier-card:hover { border-color: var(--border-active); }
+
+    .tier-header {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 12px;
+    }
+
+    .tier-name {
+      font-size: 14px; font-weight: 600;
+      display: flex; align-items: center; gap: 8px;
+    }
+
+    .tier-toggle {
+      width: 36px; height: 20px; border-radius: 10px; border: none;
+      cursor: pointer; position: relative; transition: background 0.2s;
+    }
+    .tier-toggle.on { background: var(--accent); }
+    .tier-toggle.off { background: var(--bg-tertiary); border: 1px solid var(--border); }
+
+    .tier-toggle::after {
+      content: '';
+      position: absolute; top: 2px; width: 16px; height: 16px;
+      border-radius: 50%; background: white; transition: left 0.2s;
+    }
+    .tier-toggle.on::after { left: 18px; }
+    .tier-toggle.off::after { left: 2px; }
+
+    .tier-desc {
+      font-size: 12px; color: var(--text-secondary); line-height: 1.5; margin-bottom: 12px;
+    }
+
+    .tier-example {
+      background: var(--bg-tertiary); border-radius: 6px; padding: 10px 14px;
+      font-size: 12px; display: flex; align-items: flex-start; gap: 10px;
+    }
+
+    .tier-example-icon { font-size: 16px; flex-shrink: 0; margin-top: 1px; }
+    .tier-example-text { color: var(--text-secondary); line-height: 1.5; }
+    .tier-example-text strong { color: var(--text-primary); font-weight: 500; }
+
+    /* ── Toast demos ── */
+    .toast-stack {
+      display: flex; flex-direction: column; gap: 8px;
+    }
+
+    .toast {
+      display: flex; align-items: center; gap: 12px;
+      padding: 12px 16px; border-radius: var(--radius);
+      font-size: 13px; border: 1px solid var(--border);
+      background: var(--bg-secondary);
+    }
+
+    .toast.urgent {
+      border-color: rgba(239, 68, 68, 0.4);
+      background: linear-gradient(135deg, var(--bg-secondary), var(--red-dim));
+    }
+
+    .toast.informative {
+      border-color: rgba(34, 197, 94, 0.3);
+    }
+
+    .toast.ambient {
+      border-color: var(--border);
+      opacity: 0.7;
+    }
+
+    .toast-icon { font-size: 16px; flex-shrink: 0; }
+    .toast-content { flex: 1; }
+    .toast-title { font-weight: 500; margin-bottom: 2px; }
+    .toast-desc { font-size: 12px; color: var(--text-secondary); }
+    .toast-time { font-size: 11px; color: var(--text-muted); flex-shrink: 0; }
+    .toast-action {
+      padding: 4px 10px; border-radius: 4px; border: 1px solid var(--border);
+      background: var(--bg-tertiary); color: var(--text-primary); font-size: 11px;
+      cursor: pointer; flex-shrink: 0;
+    }
+    .toast-action:hover { border-color: var(--border-active); }
+    .toast-action:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+    /* ── Context Recovery ── */
+    .recovery-banner {
+      background: var(--accent-glow);
+      border: 1px solid rgba(99, 102, 241, 0.3);
+      border-radius: var(--radius);
+      padding: 14px 20px;
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 16px;
+    }
+
+    .recovery-text {
+      font-size: 13px; color: var(--text-primary); line-height: 1.5;
+    }
+
+    .recovery-text strong { color: var(--accent); }
+
+    .recovery-action {
+      padding: 8px 16px; border-radius: var(--radius);
+      background: var(--accent); color: white; border: none;
+      font-size: 13px; font-weight: 500; cursor: pointer;
+      white-space: nowrap; flex-shrink: 0;
+    }
+    .recovery-action:hover { opacity: 0.9; }
+    .recovery-action:focus-visible { outline: 2px solid white; outline-offset: 2px; }
+
+    .recovery-dismiss {
+      background: none; border: none; color: var(--text-muted);
+      cursor: pointer; font-size: 16px; flex-shrink: 0; padding: 4px;
+    }
+
+    /* ── Next Action Suggestions ── */
+    .next-actions {
+      display: flex; gap: 8px; flex-wrap: wrap;
+    }
+
+    .next-action-btn {
+      display: flex; align-items: center; gap: 6px;
+      padding: 8px 14px; border-radius: var(--radius);
+      border: 1px solid var(--border); background: var(--bg-card);
+      color: var(--text-primary); font-size: 13px; cursor: pointer;
+      transition: all 0.15s;
+    }
+    .next-action-btn:hover { border-color: var(--border-active); background: var(--bg-tertiary); }
+    .next-action-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    .next-action-btn .icon { font-size: 14px; }
+    .next-action-btn.suggested {
+      border-color: rgba(99, 102, 241, 0.4);
+      background: var(--accent-glow);
+    }
+
+    .annotation {
+      font-size: 11px; color: var(--text-muted); margin-top: 10px;
+      padding: 8px 12px; background: var(--bg-tertiary); border-radius: 6px; line-height: 1.6;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .companion-pulse { animation: none; opacity: 0.8; }
+    }
+  </style>
+</head>
+<body>
+  <div class="mockup-banner">
+    <strong>MOCKUP</strong> — Presence Engine & Notification Tiers | ADHD-friendly agent orchestration
+  </div>
+
+  <h1>The Presence Engine</h1>
+  <p class="subtitle">
+    Digital body doubling for focus — visible parallel agent activity provides ambient accountability.
+    Notification tiers prevent overwhelm while keeping you informed. Context recovery eliminates re-orientation friction.
+  </p>
+
+  <!-- Section 1: Presence Bar Variants -->
+  <div class="section">
+    <h2>🤝 Presence Bar — "Working Together"</h2>
+    <p class="desc">
+      Always visible at the bottom of the screen. Shows you and your agents as a team, not as tools.
+      The companion pulse breathes gently — present but not demanding attention.
+    </p>
+
+    <!-- Variant: Active work -->
+    <div class="presence-bar" role="contentinfo" aria-label="Working together — 3 agents active">
+      <div class="companion-pulse healthy" aria-label="Companion connected" role="status"></div>
+      <div class="presence-label">Working together</div>
+      <div class="presence-items" role="list">
+        <div class="presence-item" role="listitem" tabindex="0">
+          <span class="agent-name you">You</span>
+          <span class="agent-activity">reviewing OAuth fix</span>
+          <span class="presence-time">23m</span>
+        </div>
+        <div class="presence-item" role="listitem" tabindex="0">
+          <span class="agent-name a1">Agent 1</span>
+          <span class="agent-activity">writing payment tests</span>
+          <div class="mini-bar" role="meter" aria-valuenow="47" aria-valuemin="0" aria-valuemax="100" aria-label="47% complete">
+            <div class="mini-bar-fill green" style="width: 47%;"></div>
+          </div>
+          <span class="presence-time">8m</span>
+        </div>
+        <div class="presence-item" role="listitem" tabindex="0">
+          <span class="agent-name a2">Agent 2</span>
+          <span class="agent-activity">refactoring user model</span>
+          <span class="agent-status-tag needs-input">needs input</span>
+        </div>
+        <div class="presence-item" role="listitem" tabindex="0">
+          <span class="agent-name a3">Agent 3</span>
+          <span class="agent-activity">running E2E tests</span>
+          <div class="mini-bar" role="meter" aria-valuenow="82" aria-valuemin="0" aria-valuemax="100" aria-label="82% complete">
+            <div class="mini-bar-fill accent" style="width: 82%;"></div>
+          </div>
+          <span class="presence-time">14m</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Variant: Quiet / solo work -->
+    <div class="presence-bar" role="contentinfo" aria-label="Working alone — no agents active">
+      <div class="companion-pulse healthy" aria-label="Companion connected" role="status"></div>
+      <div class="presence-label">Just you right now</div>
+      <div class="presence-items">
+        <div class="presence-item" tabindex="0">
+          <span class="agent-name you">You</span>
+          <span class="agent-activity">writing task prompts</span>
+          <span class="presence-time">5m</span>
+        </div>
+        <span style="color: var(--text-muted); font-size: 12px; font-style: italic;">
+          No agents running — start a session to work together
+        </span>
+      </div>
+    </div>
+
+    <div class="annotation">
+      <strong>Body doubling principle:</strong> ADHD research shows that having another "presence" while working
+      dramatically improves focus. The Presence Bar reframes agents from "background tools" to "working alongside you."
+      Clicking any item navigates to that task/session. The companion pulse is a subtle breathing animation — present but not distracting.
+    </div>
+  </div>
+
+  <!-- Section 2: Notification Tiers -->
+  <div class="section">
+    <h2>🔔 Notification Tiers</h2>
+    <p class="desc">
+      Four tiers, each independently toggleable. ADHD users can dial down to "Urgent only" during deep focus
+      without missing critical approvals. Default: Urgent + Informative on, Ambient + Digest off.
+    </p>
+
+    <div class="notification-tiers">
+      <div class="tier-card">
+        <div class="tier-header">
+          <div class="tier-name">
+            <span style="color: var(--red);">🚨</span> Urgent
+          </div>
+          <button class="tier-toggle on" role="switch" aria-checked="true" aria-label="Urgent notifications: enabled"></button>
+        </div>
+        <div class="tier-desc">
+          Approval requests, agent failures, permission errors. Things that block progress.
+        </div>
+        <div class="tier-example">
+          <span class="tier-example-icon">⚠️</span>
+          <div class="tier-example-text">
+            <strong>Agent needs approval</strong> to run <code style="font-size: 11px;">rm -rf node_modules</code>
+            <br>Delivered: Sound + visual toast + <code style="font-size: 11px;">aria-live="assertive"</code>
+          </div>
+        </div>
+      </div>
+
+      <div class="tier-card">
+        <div class="tier-header">
+          <div class="tier-name">
+            <span style="color: var(--green);">✅</span> Informative
+          </div>
+          <button class="tier-toggle on" role="switch" aria-checked="true" aria-label="Informative notifications: enabled"></button>
+        </div>
+        <div class="tier-desc">
+          Session completions, test results, task movements. Positive progress updates.
+        </div>
+        <div class="tier-example">
+          <span class="tier-example-icon">✓</span>
+          <div class="tier-example-text">
+            <strong>Auth tests pass</strong> — 12/12 in 3.2s
+            <br>Delivered: Badge count + <code style="font-size: 11px;">aria-live="polite"</code>
+          </div>
+        </div>
+      </div>
+
+      <div class="tier-card">
+        <div class="tier-header">
+          <div class="tier-name">
+            <span style="color: var(--accent);">💡</span> Ambient
+          </div>
+          <button class="tier-toggle off" role="switch" aria-checked="false" aria-label="Ambient notifications: disabled"></button>
+        </div>
+        <div class="tier-desc">
+          Agent currently editing files, heartbeat updates, progress ticks. Background awareness only.
+        </div>
+        <div class="tier-example">
+          <span class="tier-example-icon">📝</span>
+          <div class="tier-example-text">
+            <strong>Agent 1</strong> is editing <code style="font-size: 11px;">src/payment/webhook.ts</code>
+            <br>Delivered: Presence bar update only (no toast, no sound)
+          </div>
+        </div>
+      </div>
+
+      <div class="tier-card">
+        <div class="tier-header">
+          <div class="tier-name">
+            <span style="color: var(--text-muted);">📊</span> Digest
+          </div>
+          <button class="tier-toggle off" role="switch" aria-checked="false" aria-label="Digest notifications: disabled"></button>
+        </div>
+        <div class="tier-desc">
+          Periodic summaries on demand. "Today: 5 sessions completed, 1 needs review, $4.20 spent."
+        </div>
+        <div class="tier-example">
+          <span class="tier-example-icon">📋</span>
+          <div class="tier-example-text">
+            <strong>Daily summary:</strong> 3 tasks completed, 2 in review, $6.40 total cost
+            <br>Delivered: On-demand only (click bell icon or scheduled email)
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Section 3: Toast Examples -->
+  <div class="section">
+    <h2>💬 Toast Notifications in Action</h2>
+    <p class="desc">
+      Each tier has a distinct visual weight. Urgent toasts demand attention. Informative toasts confirm progress.
+      The "Snooze" option lets you defer decisions during deep focus without losing them.
+    </p>
+
+    <div class="toast-stack">
+      <div class="toast urgent" role="alertdialog" aria-label="Approval needed">
+        <span class="toast-icon">⚠️</span>
+        <div class="toast-content">
+          <div class="toast-title">Approval Required</div>
+          <div class="toast-desc">Agent wants to run: <code style="font-size: 11px;">bun test src/server/auth.test.ts</code></div>
+        </div>
+        <button class="toast-action" style="background: var(--green); border-color: var(--green); color: white;">Approve</button>
+        <button class="toast-action">Deny</button>
+        <button class="toast-action" style="font-size: 10px; color: var(--text-muted);">Snooze 5m</button>
+        <span class="toast-time">now</span>
+      </div>
+
+      <div class="toast informative" role="status">
+        <span class="toast-icon">✅</span>
+        <div class="toast-content">
+          <div class="toast-title">Payment webhook handler complete</div>
+          <div class="toast-desc">Session finished — 3 files changed, all tests pass</div>
+        </div>
+        <button class="toast-action">Review</button>
+        <span class="toast-time">2m ago</span>
+      </div>
+
+      <div class="toast informative" role="status">
+        <span class="toast-icon">🔄</span>
+        <div class="toast-content">
+          <div class="toast-title">Task moved to Review</div>
+          <div class="toast-desc">"Refactor user model" — Agent 2 completed and needs your review</div>
+        </div>
+        <button class="toast-action">View</button>
+        <span class="toast-time">8m ago</span>
+      </div>
+
+      <div class="toast ambient" role="status">
+        <span class="toast-icon" style="opacity: 0.6;">📝</span>
+        <div class="toast-content">
+          <div class="toast-title" style="color: var(--text-secondary);">Agent 3 started E2E tests</div>
+          <div class="toast-desc">Running <code style="font-size: 11px;">bun run test:e2e</code></div>
+        </div>
+        <span class="toast-time">12m ago</span>
+      </div>
+    </div>
+
+    <div class="annotation">
+      <strong>ADHD-friendly pattern:</strong> The "Snooze 5m" button on approvals lets users defer without losing the request.
+      No shame, no alarm — just "I'll get to it." The request reappears gently after 5 minutes.
+      Ambient toasts auto-dismiss after 3 seconds and never play sounds.
+    </div>
+  </div>
+
+  <!-- Section 4: Context Recovery -->
+  <div class="section">
+    <h2>🧭 Context Recovery — "Where Was I?"</h2>
+    <p class="desc">
+      When a user returns after being away, Holophyte immediately re-orients them.
+      No archaeology needed — one banner tells you the state and offers the next action.
+    </p>
+
+    <!-- Recovery banner -->
+    <div class="recovery-banner" role="status" aria-label="Welcome back. Your last task has updates.">
+      <div class="recovery-text">
+        <strong>Welcome back!</strong> You were reviewing <strong>"Fix OAuth redirect"</strong>.
+        Agent finished 12 minutes ago — 2 files changed, all tests pass.
+      </div>
+      <button class="recovery-action" autofocus>Jump to Review →</button>
+      <button class="recovery-dismiss" aria-label="Dismiss">×</button>
+    </div>
+
+    <div class="annotation" style="margin-bottom: 24px;">
+      <strong>Context recovery principle:</strong> ADHD users lose context frequently. Coming back to a tool
+      after 20 minutes should take <1 second to re-orient. This banner appears on app load if the user
+      has an active task they haven't viewed in >5 minutes. One click to resume.
+    </div>
+
+    <!-- Next action suggestions -->
+    <h3 style="font-size: 14px; font-weight: 600; margin-bottom: 12px;">
+      "What Should I Do Next?"
+    </h3>
+    <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 16px; line-height: 1.5;">
+      After a session completes, Holophyte suggests the most logical next action.
+      The primary suggestion is highlighted. Reduces "staring at screen" paralysis.
+    </p>
+
+    <div class="next-actions">
+      <button class="next-action-btn suggested">
+        <span class="icon">👁</span> Review diff
+        <span style="font-size: 10px; color: var(--accent); margin-left: 4px;">(suggested)</span>
+      </button>
+      <button class="next-action-btn">
+        <span class="icon">🧪</span> Run tests
+      </button>
+      <button class="next-action-btn">
+        <span class="icon">💬</span> Send follow-up
+      </button>
+      <button class="next-action-btn">
+        <span class="icon">✅</span> Mark as done
+      </button>
+      <button class="next-action-btn">
+        <span class="icon">➡️</span> Start next task
+      </button>
+    </div>
+
+    <div class="annotation">
+      <strong>Activation energy principle:</strong> For ADHD users, starting the next action is the hardest part.
+      These buttons eliminate the "what now?" decision. The suggested action is based on task state:
+      if tests haven't run → suggest "Run tests." If all tests pass → suggest "Review diff."
+      If diff is reviewed → suggest "Mark as done."
+    </div>
+  </div>
+
+  <!-- Section 5: Gentle Time Awareness -->
+  <div class="section">
+    <h2>⏱ Gentle Time Awareness</h2>
+    <p class="desc">
+      Time indicators that inform without pressuring. No countdowns. No alarms. No "OVERDUE" screaming.
+    </p>
+
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+      <div style="background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px;">
+        <div style="font-size: 13px; font-weight: 600; margin-bottom: 8px; color: var(--red);">❌ Don't: Punishing</div>
+        <div style="padding: 8px 12px; background: var(--red-dim); border-radius: 6px; font-size: 13px;">
+          <div style="color: var(--red); font-weight: 600;">⚠️ OVERDUE by 3 days!</div>
+          <div style="color: var(--text-secondary); font-size: 12px; margin-top: 4px;">
+            This task was due March 8. Please complete it immediately.
+          </div>
+        </div>
+        <div style="font-size: 11px; color: var(--text-muted); margin-top: 8px;">
+          Triggers shame. Makes the user feel behind. Counterproductive for ADHD.
+        </div>
+      </div>
+
+      <div style="background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px;">
+        <div style="font-size: 13px; font-weight: 600; margin-bottom: 8px; color: var(--green);">✅ Do: Gentle</div>
+        <div style="padding: 8px 12px; background: var(--bg-tertiary); border-radius: 6px; font-size: 13px;">
+          <div style="color: var(--text-primary);">Originally due March 8</div>
+          <div style="color: var(--text-muted); font-size: 12px; margin-top: 4px;">
+            <button style="background: none; border: none; color: var(--accent); cursor: pointer; font-size: 12px; padding: 0; text-decoration: underline;">
+              Reschedule →
+            </button>
+          </div>
+        </div>
+        <div style="font-size: 11px; color: var(--text-muted); margin-top: 8px;">
+          Neutral tone. Offers a forward action. No judgment. Just "what do you want to do?"
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Toggle switches
+    document.querySelectorAll('.tier-toggle').forEach(toggle => {
+      toggle.addEventListener('click', () => {
+        const isOn = toggle.classList.contains('on');
+        toggle.classList.toggle('on', !isOn);
+        toggle.classList.toggle('off', isOn);
+        toggle.setAttribute('aria-checked', !isOn ? 'true' : 'false');
+      });
+    });
+
+    // Simulate companion pulse health check
+    const pulse = document.querySelectorAll('.companion-pulse');
+    // The breathing animation is CSS-only, no JS needed
+  </script>
+</body>
+</html>

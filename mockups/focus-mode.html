@@ -1,0 +1,1193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Holophyte Focus Mode — Interactive Mockup</title>
+  <style>
+    :root {
+      --bg-primary: #0a0a0f;
+      --bg-secondary: #12121a;
+      --bg-tertiary: #1a1a2e;
+      --bg-card: #16162a;
+      --border: #2a2a4a;
+      --border-active: #4a4a8a;
+      --text-primary: #e8e8f0;
+      --text-secondary: #8888aa;
+      --text-muted: #555570;
+      --accent: #6366f1;
+      --accent-glow: rgba(99, 102, 241, 0.15);
+      --green: #22c55e;
+      --green-dim: rgba(34, 197, 94, 0.15);
+      --amber: #f59e0b;
+      --amber-dim: rgba(245, 158, 11, 0.15);
+      --red: #ef4444;
+      --red-dim: rgba(239, 68, 68, 0.15);
+      --blue: #3b82f6;
+      --radius: 8px;
+      --font: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      --font-mono: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: var(--font);
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ── Top Bar ── */
+    .top-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 20px;
+      border-bottom: 1px solid var(--border);
+      background: var(--bg-secondary);
+      height: 52px;
+      flex-shrink: 0;
+    }
+
+    .top-bar-left {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .back-btn {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      color: var(--text-secondary);
+      background: none;
+      border: 1px solid var(--border);
+      padding: 6px 12px;
+      border-radius: var(--radius);
+      cursor: pointer;
+      font-size: 13px;
+      transition: all 0.15s;
+    }
+
+    .back-btn:hover {
+      background: var(--bg-tertiary);
+      color: var(--text-primary);
+      border-color: var(--border-active);
+    }
+
+    .back-btn:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
+    }
+
+    .task-title {
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--text-primary);
+    }
+
+    .task-id {
+      color: var(--text-muted);
+      font-size: 13px;
+      margin-left: 4px;
+    }
+
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 500;
+    }
+
+    .status-badge.running {
+      background: var(--green-dim);
+      color: var(--green);
+    }
+
+    .status-badge.idle {
+      background: var(--bg-tertiary);
+      color: var(--text-secondary);
+    }
+
+    .status-badge.needs-approval {
+      background: var(--amber-dim);
+      color: var(--amber);
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      display: inline-block;
+    }
+
+    .status-dot.running {
+      background: var(--green);
+      animation: pulse 2s infinite;
+    }
+
+    .status-dot.idle {
+      background: var(--text-muted);
+    }
+
+    .status-dot.needs-approval {
+      background: var(--amber);
+      animation: pulse 1.5s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+
+    .top-bar-right {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .elapsed {
+      color: var(--text-muted);
+      font-size: 12px;
+    }
+
+    .control-btn {
+      padding: 6px 14px;
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+      background: var(--bg-tertiary);
+      color: var(--text-primary);
+      font-size: 13px;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .control-btn:hover {
+      border-color: var(--border-active);
+    }
+
+    .control-btn:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
+    }
+
+    .control-btn.primary {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: white;
+    }
+
+    .control-btn.primary:hover {
+      opacity: 0.9;
+    }
+
+    /* ── Main Content ── */
+    .main-content {
+      display: flex;
+      flex: 1;
+      overflow: hidden;
+    }
+
+    /* ── Session Panel (Left) ── */
+    .session-panel {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      border-right: 1px solid var(--border);
+      min-width: 0;
+    }
+
+    .session-header {
+      padding: 12px 20px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: var(--bg-secondary);
+    }
+
+    .session-label {
+      font-size: 13px;
+      color: var(--text-secondary);
+      font-weight: 500;
+    }
+
+    .model-tag {
+      font-size: 11px;
+      color: var(--text-muted);
+      background: var(--bg-tertiary);
+      padding: 3px 8px;
+      border-radius: 4px;
+      font-family: var(--font-mono);
+    }
+
+    .session-thread {
+      flex: 1;
+      overflow-y: auto;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .message {
+      display: flex;
+      gap: 12px;
+      max-width: 100%;
+    }
+
+    .message-avatar {
+      width: 28px;
+      height: 28px;
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      flex-shrink: 0;
+    }
+
+    .message-avatar.agent {
+      background: var(--accent-glow);
+      border: 1px solid rgba(99, 102, 241, 0.3);
+    }
+
+    .message-avatar.user {
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border);
+    }
+
+    .message-body {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .message-sender {
+      font-size: 12px;
+      font-weight: 600;
+      margin-bottom: 4px;
+      color: var(--text-secondary);
+    }
+
+    .message-content {
+      font-size: 14px;
+      line-height: 1.6;
+      color: var(--text-primary);
+    }
+
+    .message-content p {
+      margin-bottom: 8px;
+    }
+
+    .message-content p:last-child {
+      margin-bottom: 0;
+    }
+
+    .tool-use {
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 10px 14px;
+      margin: 8px 0;
+      font-size: 13px;
+    }
+
+    .tool-use-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--text-secondary);
+      font-size: 12px;
+      margin-bottom: 6px;
+    }
+
+    .tool-use-icon {
+      font-size: 14px;
+    }
+
+    .tool-use code {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      background: var(--bg-primary);
+      padding: 6px 10px;
+      border-radius: 4px;
+      display: block;
+      overflow-x: auto;
+      color: var(--text-primary);
+      margin-top: 4px;
+    }
+
+    .thinking-indicator {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 12px 16px;
+      color: var(--text-muted);
+      font-size: 13px;
+      font-style: italic;
+    }
+
+    .thinking-dots {
+      display: flex;
+      gap: 4px;
+    }
+
+    .thinking-dots span {
+      width: 4px;
+      height: 4px;
+      border-radius: 50%;
+      background: var(--text-muted);
+      animation: thinking 1.4s infinite;
+    }
+
+    .thinking-dots span:nth-child(2) { animation-delay: 0.2s; }
+    .thinking-dots span:nth-child(3) { animation-delay: 0.4s; }
+
+    @keyframes thinking {
+      0%, 80%, 100% { opacity: 0.3; }
+      40% { opacity: 1; }
+    }
+
+    /* Approval request */
+    .approval-request {
+      background: var(--amber-dim);
+      border: 1px solid rgba(245, 158, 11, 0.3);
+      border-radius: var(--radius);
+      padding: 16px;
+      margin: 8px 0;
+    }
+
+    .approval-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--amber);
+      margin-bottom: 10px;
+    }
+
+    .approval-command {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      background: rgba(0,0,0,0.3);
+      padding: 8px 12px;
+      border-radius: 4px;
+      margin-bottom: 12px;
+      color: var(--text-primary);
+    }
+
+    .approval-actions {
+      display: flex;
+      gap: 8px;
+    }
+
+    .approve-btn {
+      padding: 6px 16px;
+      border-radius: var(--radius);
+      border: none;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .approve-btn.yes {
+      background: var(--green);
+      color: white;
+    }
+
+    .approve-btn.no {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text-secondary);
+    }
+
+    .approve-btn.snooze {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+      font-size: 12px;
+    }
+
+    .approve-btn:hover {
+      opacity: 0.85;
+    }
+
+    .approve-btn:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
+    }
+
+    /* Composer */
+    .composer {
+      padding: 12px 20px;
+      border-top: 1px solid var(--border);
+      background: var(--bg-secondary);
+    }
+
+    .composer-input {
+      width: 100%;
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 10px 14px;
+      color: var(--text-primary);
+      font-size: 14px;
+      font-family: var(--font);
+      resize: none;
+      outline: none;
+    }
+
+    .composer-input:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 2px var(--accent-glow);
+    }
+
+    .composer-input::placeholder {
+      color: var(--text-muted);
+    }
+
+    /* ── Review Panel (Right) ── */
+    .review-panel {
+      width: 420px;
+      display: flex;
+      flex-direction: column;
+      background: var(--bg-secondary);
+      flex-shrink: 0;
+    }
+
+    .review-header {
+      padding: 12px 20px;
+      border-bottom: 1px solid var(--border);
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .review-tabs {
+      display: flex;
+      gap: 2px;
+      padding: 8px 20px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .review-tab {
+      padding: 6px 14px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      color: var(--text-muted);
+      background: transparent;
+      border: none;
+      transition: all 0.15s;
+    }
+
+    .review-tab.active {
+      background: var(--bg-tertiary);
+      color: var(--text-primary);
+    }
+
+    .review-tab:hover:not(.active) {
+      color: var(--text-secondary);
+    }
+
+    .review-tab:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
+    }
+
+    .review-content {
+      flex: 1;
+      overflow-y: auto;
+      padding: 20px;
+    }
+
+    /* Summary card */
+    .summary-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px;
+      margin-bottom: 16px;
+    }
+
+    .summary-card h3 {
+      font-size: 13px;
+      font-weight: 600;
+      margin-bottom: 10px;
+      color: var(--text-primary);
+    }
+
+    .summary-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      font-size: 13px;
+      color: var(--text-secondary);
+      margin-bottom: 6px;
+      line-height: 1.5;
+    }
+
+    .summary-icon {
+      flex-shrink: 0;
+      margin-top: 2px;
+    }
+
+    /* File changes */
+    .file-change {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 12px;
+      border-radius: 6px;
+      margin-bottom: 4px;
+      font-size: 13px;
+      font-family: var(--font-mono);
+      background: var(--bg-tertiary);
+    }
+
+    .file-change-name {
+      color: var(--text-primary);
+    }
+
+    .file-change-stats {
+      display: flex;
+      gap: 8px;
+      font-size: 11px;
+    }
+
+    .file-change-stats .added {
+      color: var(--green);
+    }
+
+    .file-change-stats .removed {
+      color: var(--red);
+    }
+
+    /* Test results */
+    .test-results {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 16px;
+      background: var(--green-dim);
+      border: 1px solid rgba(34, 197, 94, 0.2);
+      border-radius: var(--radius);
+      margin-bottom: 16px;
+    }
+
+    .test-results.failing {
+      background: var(--red-dim);
+      border-color: rgba(239, 68, 68, 0.2);
+    }
+
+    .test-count {
+      font-size: 14px;
+      font-weight: 600;
+    }
+
+    .test-label {
+      font-size: 12px;
+      color: var(--text-secondary);
+    }
+
+    /* Confidence indicator */
+    .confidence-section {
+      margin-top: 16px;
+    }
+
+    .confidence-section h4 {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 10px;
+    }
+
+    .confidence-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 0;
+      font-size: 13px;
+    }
+
+    .confidence-bar {
+      width: 60px;
+      height: 6px;
+      background: var(--bg-tertiary);
+      border-radius: 3px;
+      overflow: hidden;
+      flex-shrink: 0;
+    }
+
+    .confidence-bar-fill {
+      height: 100%;
+      border-radius: 3px;
+    }
+
+    .confidence-bar-fill.high { background: var(--green); width: 90%; }
+    .confidence-bar-fill.medium { background: var(--amber); width: 60%; }
+    .confidence-bar-fill.low { background: var(--red); width: 30%; }
+
+    .confidence-label {
+      color: var(--text-secondary);
+      min-width: 50px;
+      font-size: 11px;
+      text-transform: uppercase;
+    }
+
+    .confidence-file {
+      color: var(--text-primary);
+      font-family: var(--font-mono);
+      font-size: 12px;
+    }
+
+    /* Review actions */
+    .review-actions {
+      padding: 16px 20px;
+      border-top: 1px solid var(--border);
+      display: flex;
+      gap: 8px;
+      flex-shrink: 0;
+    }
+
+    .review-action-btn {
+      flex: 1;
+      padding: 10px 16px;
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+      background: var(--bg-tertiary);
+      color: var(--text-primary);
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .review-action-btn:hover {
+      border-color: var(--border-active);
+    }
+
+    .review-action-btn:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
+    }
+
+    .review-action-btn.approve {
+      background: var(--green);
+      border-color: var(--green);
+      color: white;
+    }
+
+    .review-action-btn.approve:hover {
+      opacity: 0.9;
+    }
+
+    /* ── Presence Bar (Bottom) ── */
+    .presence-bar {
+      display: flex;
+      align-items: center;
+      padding: 8px 20px;
+      border-top: 1px solid var(--border);
+      background: var(--bg-secondary);
+      gap: 24px;
+      height: 44px;
+      flex-shrink: 0;
+    }
+
+    .presence-label {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12px;
+      color: var(--text-muted);
+      font-weight: 500;
+      flex-shrink: 0;
+    }
+
+    .presence-items {
+      display: flex;
+      gap: 20px;
+      flex: 1;
+      overflow-x: auto;
+    }
+
+    .presence-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12px;
+      color: var(--text-secondary);
+      white-space: nowrap;
+      cursor: pointer;
+      padding: 4px 8px;
+      border-radius: 4px;
+      transition: background 0.15s;
+    }
+
+    .presence-item:hover {
+      background: var(--bg-tertiary);
+    }
+
+    .presence-item:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
+    }
+
+    .presence-progress {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .mini-progress {
+      width: 40px;
+      height: 3px;
+      background: var(--bg-tertiary);
+      border-radius: 2px;
+      overflow: hidden;
+    }
+
+    .mini-progress-fill {
+      height: 100%;
+      background: var(--accent);
+      border-radius: 2px;
+      transition: width 0.5s;
+    }
+
+    .presence-time {
+      color: var(--text-muted);
+      font-size: 11px;
+    }
+
+    /* ── Skip Links ── */
+    .skip-links {
+      position: absolute;
+      top: -100px;
+      left: 0;
+      z-index: 1000;
+    }
+
+    .skip-links a {
+      position: absolute;
+      top: 0;
+      left: 0;
+      padding: 8px 16px;
+      background: var(--accent);
+      color: white;
+      text-decoration: none;
+      font-size: 14px;
+      border-radius: 0 0 8px 0;
+    }
+
+    .skip-links a:focus {
+      top: 100px;
+    }
+
+    /* ── Mockup Banner ── */
+    .mockup-banner {
+      background: linear-gradient(135deg, var(--accent), #8b5cf6);
+      padding: 10px 20px;
+      text-align: center;
+      font-size: 12px;
+      color: rgba(255,255,255,0.9);
+      font-weight: 500;
+      letter-spacing: 0.3px;
+    }
+
+    .mockup-banner strong {
+      color: white;
+    }
+
+    /* ── View switcher (bottom-left mockup control) ── */
+    .view-switcher {
+      position: fixed;
+      bottom: 56px;
+      left: 20px;
+      display: flex;
+      gap: 4px;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 4px;
+      z-index: 100;
+    }
+
+    .view-switch-btn {
+      padding: 6px 12px;
+      border-radius: 4px;
+      border: none;
+      font-size: 11px;
+      font-weight: 500;
+      cursor: pointer;
+      color: var(--text-muted);
+      background: transparent;
+      transition: all 0.15s;
+    }
+
+    .view-switch-btn.active {
+      background: var(--accent);
+      color: white;
+    }
+
+    .view-switch-btn:hover:not(.active) {
+      color: var(--text-secondary);
+    }
+
+    /* ── Responsive ── */
+    @media (max-width: 900px) {
+      .review-panel {
+        display: none;
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .status-dot.running,
+      .status-dot.needs-approval {
+        animation: none;
+      }
+      .thinking-dots span {
+        animation: none;
+        opacity: 0.6;
+      }
+    }
+
+    /* ── Scrollbar ── */
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--border-active); }
+
+    /* SR-only */
+    .sr-only {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      border: 0;
+    }
+  </style>
+</head>
+<body>
+  <!-- Skip links for accessibility -->
+  <nav class="skip-links" aria-label="Skip navigation">
+    <a href="#session-output">Skip to session output</a>
+    <a href="#review-panel">Skip to review panel</a>
+  </nav>
+
+  <div class="mockup-banner">
+    <strong>MOCKUP</strong> — Holophyte Focus Mode Concept | Interactive prototype for product research
+  </div>
+
+  <!-- Screen reader announcements -->
+  <div id="status-announcer" aria-live="polite" aria-atomic="true" class="sr-only">
+    Agent is editing src/server/auth.ts — 7 actions completed
+  </div>
+  <div id="approval-announcer" aria-live="assertive" class="sr-only"></div>
+
+  <!-- Top Bar -->
+  <header class="top-bar" role="banner">
+    <div class="top-bar-left">
+      <button class="back-btn" aria-label="Exit focus mode, return to board">
+        <span aria-hidden="true">←</span> Back to Board
+      </button>
+      <span class="task-title">
+        Fix OAuth Redirect Loop
+        <span class="task-id" aria-label="task number 42">#42</span>
+      </span>
+      <span class="status-badge needs-approval" role="status">
+        <span class="status-dot needs-approval" aria-hidden="true"></span>
+        <span>⚠ Needs Approval</span>
+      </span>
+    </div>
+    <div class="top-bar-right">
+      <span class="elapsed" aria-label="Focused for 23 minutes">23 min focused</span>
+      <button class="control-btn" aria-label="Pause agent session">⏸ Pause</button>
+      <button class="control-btn" aria-label="Open session settings">⚙</button>
+    </div>
+  </header>
+
+  <!-- Main Content -->
+  <div class="main-content">
+    <!-- Session Panel (Left) -->
+    <section class="session-panel" aria-label="Agent session">
+      <div class="session-header">
+        <span class="session-label">Session 3</span>
+        <span class="model-tag">claude-sonnet-4-6</span>
+      </div>
+
+      <div id="session-output" class="session-thread" role="log" aria-label="Agent conversation" tabindex="0">
+        <!-- User message -->
+        <div class="message">
+          <div class="message-avatar user" aria-hidden="true">👤</div>
+          <div class="message-body">
+            <div class="message-sender">You</div>
+            <div class="message-content">
+              <p>Fix the OAuth redirect loop in the login flow. After successful GitHub OAuth callback, users are being redirected back to /login instead of /dashboard. The issue is in src/server/auth.ts — the redirect URL isn't being preserved across the OAuth flow.</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Agent message -->
+        <div class="message">
+          <div class="message-avatar agent" aria-hidden="true">✦</div>
+          <div class="message-body">
+            <div class="message-sender">Claude</div>
+            <div class="message-content">
+              <p>I'll investigate the OAuth redirect issue. Let me start by reading the auth configuration and tracing the redirect flow.</p>
+            </div>
+
+            <div class="tool-use">
+              <div class="tool-use-header">
+                <span class="tool-use-icon">📖</span>
+                <span>Read — src/server/auth.ts</span>
+              </div>
+            </div>
+
+            <div class="message-content">
+              <p>I found the issue. The <code>returnTo</code> parameter is set during the initial redirect but gets lost because it's stored in a cookie that expires during the OAuth roundtrip. The fix involves:</p>
+              <p>1. Storing the return URL in the OAuth <code>state</code> parameter instead of a cookie<br>
+              2. Extracting it from the callback's <code>state</code> query parameter<br>
+              3. Using it as the final redirect target</p>
+            </div>
+
+            <div class="tool-use">
+              <div class="tool-use-header">
+                <span class="tool-use-icon">✏️</span>
+                <span>Edit — src/server/auth.ts</span>
+              </div>
+              <code>// Before: returnTo stored in cookie (expires during OAuth roundtrip)
+// After: returnTo encoded in OAuth state parameter
+const state = encodeOAuthState({ returnTo: req.query.returnTo ?? '/dashboard' });
+const authUrl = `${GITHUB_AUTH_URL}?state=${state}&...`;</code>
+            </div>
+
+            <div class="tool-use">
+              <div class="tool-use-header">
+                <span class="tool-use-icon">✏️</span>
+                <span>Edit — src/server/auth.ts (callback handler)</span>
+              </div>
+              <code>// Extract returnTo from state parameter on callback
+const { returnTo } = decodeOAuthState(req.query.state);
+return Response.redirect(returnTo ?? '/dashboard');</code>
+            </div>
+          </div>
+        </div>
+
+        <!-- Approval request -->
+        <div class="message">
+          <div class="message-avatar agent" aria-hidden="true">✦</div>
+          <div class="message-body">
+            <div class="message-sender">Claude</div>
+            <div class="message-content">
+              <p>I'd like to run the auth test suite to verify the fix works correctly.</p>
+            </div>
+            <div class="approval-request" role="alertdialog" aria-label="Agent requests approval to run tests">
+              <div class="approval-header">
+                <span aria-hidden="true">⚠</span> Approval Required
+              </div>
+              <div class="approval-command" aria-label="Command to approve">
+                bun run test src/server/auth.test.ts
+              </div>
+              <div class="approval-actions">
+                <button class="approve-btn yes" autofocus>✓ Approve</button>
+                <button class="approve-btn no">✕ Deny</button>
+                <button class="approve-btn snooze" aria-label="Remind me in 5 minutes">Snooze 5m</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="composer">
+        <input
+          class="composer-input"
+          type="text"
+          placeholder="Send a follow-up message..."
+          aria-label="Send follow-up message to agent"
+          disabled
+        />
+      </div>
+    </section>
+
+    <!-- Review Panel (Right) -->
+    <aside id="review-panel" class="review-panel" aria-label="Review panel">
+      <div class="review-header">
+        <span>Review</span>
+      </div>
+
+      <div class="review-tabs" role="tablist" aria-label="Review sections">
+        <button class="review-tab active" role="tab" aria-selected="true">Summary</button>
+        <button class="review-tab" role="tab" aria-selected="false">Diff</button>
+        <button class="review-tab" role="tab" aria-selected="false">Tests</button>
+      </div>
+
+      <div class="review-content" role="tabpanel">
+        <!-- Summary card -->
+        <div class="summary-card">
+          <h3>Session Summary</h3>
+          <div class="summary-item">
+            <span class="summary-icon" aria-hidden="true">🔍</span>
+            <span>Diagnosed OAuth redirect loop caused by expired cookie during OAuth roundtrip</span>
+          </div>
+          <div class="summary-item">
+            <span class="summary-icon" aria-hidden="true">🔧</span>
+            <span>Moved return URL from cookie to OAuth state parameter — survives the roundtrip</span>
+          </div>
+          <div class="summary-item">
+            <span class="summary-icon" aria-hidden="true">⏳</span>
+            <span>Waiting for approval to run auth tests</span>
+          </div>
+        </div>
+
+        <!-- Files changed -->
+        <div class="summary-card">
+          <h3>Files Changed</h3>
+          <div class="file-change">
+            <span class="file-change-name">src/server/auth.ts</span>
+            <span class="file-change-stats">
+              <span class="added" aria-label="14 lines added">+14</span>
+              <span class="removed" aria-label="8 lines removed">-8</span>
+            </span>
+          </div>
+          <div class="file-change">
+            <span class="file-change-name">src/server/oauth-state.ts</span>
+            <span class="file-change-stats">
+              <span class="added" aria-label="22 lines added">+22</span>
+              <span class="removed" aria-label="0 lines removed">-0</span>
+            </span>
+          </div>
+        </div>
+
+        <!-- Test results -->
+        <div class="test-results" role="status" aria-label="Test results: pending">
+          <span style="font-size: 18px;" aria-hidden="true">⏳</span>
+          <div>
+            <div class="test-count" style="color: var(--text-secondary);">Tests pending</div>
+            <div class="test-label">Awaiting approval to run</div>
+          </div>
+        </div>
+
+        <!-- Confidence indicators -->
+        <div class="confidence-section">
+          <h4>Agent Confidence</h4>
+          <div class="confidence-item">
+            <div class="confidence-bar" role="meter" aria-valuenow="90" aria-valuemin="0" aria-valuemax="100" aria-label="High confidence">
+              <div class="confidence-bar-fill high"></div>
+            </div>
+            <span class="confidence-label" style="color: var(--green);">High</span>
+            <span class="confidence-file">auth.ts — state param fix</span>
+          </div>
+          <div class="confidence-item">
+            <div class="confidence-bar" role="meter" aria-valuenow="90" aria-valuemin="0" aria-valuemax="100" aria-label="High confidence">
+              <div class="confidence-bar-fill high"></div>
+            </div>
+            <span class="confidence-label" style="color: var(--green);">High</span>
+            <span class="confidence-file">oauth-state.ts — new helper</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="review-actions">
+        <button class="review-action-btn" aria-label="Run tests before approving">Run Tests</button>
+        <button class="review-action-btn" aria-label="View full diff">View Diff</button>
+        <button class="review-action-btn approve" aria-label="Approve all changes and commit">Approve &amp; Commit</button>
+      </div>
+    </aside>
+  </div>
+
+  <!-- Presence Bar (Body Doubling) -->
+  <footer class="presence-bar" role="contentinfo" aria-label="Working together — agents active">
+    <div class="presence-label">
+      <span aria-hidden="true">🤝</span>
+      <span>Working together</span>
+    </div>
+    <div class="presence-items" role="list">
+      <a class="presence-item" role="listitem" href="#" tabindex="0" aria-label="You are reviewing OAuth redirect, 23 minutes">
+        <span style="color: var(--accent);">You</span>
+        <span>reviewing OAuth redirect</span>
+        <span class="presence-time">23m</span>
+      </a>
+      <a class="presence-item" role="listitem" href="#" tabindex="0" aria-label="Agent 1 writing payment tests, 47% complete, 8 minutes">
+        <span style="color: var(--green);">Agent 1</span>
+        <span>writing payment tests</span>
+        <div class="presence-progress">
+          <div class="mini-progress" role="meter" aria-valuenow="47" aria-valuemin="0" aria-valuemax="100">
+            <div class="mini-progress-fill" style="width: 47%;"></div>
+          </div>
+          <span class="presence-time">8m</span>
+        </div>
+      </a>
+      <a class="presence-item" role="listitem" href="#" tabindex="0" aria-label="Agent 2 refactoring user model, idle, needs your input">
+        <span style="color: var(--amber);">Agent 2</span>
+        <span>refactoring user model</span>
+        <span style="color: var(--amber); font-size: 11px;">needs input</span>
+      </a>
+    </div>
+  </footer>
+
+  <!-- View density switcher (mockup control) -->
+  <div class="view-switcher" aria-label="UI density mode (mockup control)">
+    <button class="view-switch-btn" title="Scan mode — compact overview">Scan</button>
+    <button class="view-switch-btn" title="Work mode — balanced view">Work</button>
+    <button class="view-switch-btn active" title="Focus mode — single task, full viewport">Focus</button>
+  </div>
+
+  <script>
+    // Simulate dynamic approval announcement
+    const approvalAnnouncer = document.getElementById('approval-announcer');
+    setTimeout(() => {
+      if (approvalAnnouncer) {
+        approvalAnnouncer.textContent = 'Approval required: Agent wants to run bun test src/server/auth.test.ts';
+      }
+    }, 1000);
+
+    // Tab switching
+    document.querySelectorAll('.review-tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        document.querySelectorAll('.review-tab').forEach(t => {
+          t.classList.remove('active');
+          t.setAttribute('aria-selected', 'false');
+        });
+        tab.classList.add('active');
+        tab.setAttribute('aria-selected', 'true');
+      });
+    });
+
+    // View switcher
+    document.querySelectorAll('.view-switch-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.view-switch-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+      });
+    });
+
+    // Keyboard navigation
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        document.querySelector('.back-btn')?.click();
+      }
+    });
+  </script>
+</body>
+</html>
