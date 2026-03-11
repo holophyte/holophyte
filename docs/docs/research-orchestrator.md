@@ -364,11 +364,33 @@ events: v.optional(v.array(v.object({
 }))),
 ```
 
+**Pre-compaction log preservation:**
+
+Claude Code auto-compacts conversation history as sessions approach context limits. The compacted summary is what the agent works from, but the original uncompacted events are far more valuable for replay and debugging. Store the full pre-compaction event stream alongside the compacted version:
+
+- **Full log** — every event as-received from the SDK, stored in order. This is the replay source of truth.
+- **Compacted log** — the summarized version Claude actually saw. Shown inline in the timeline by default.
+- **UI toggle** — "Show full history" expands compacted regions to reveal the original events that were summarized away. Collapsed by default to keep the timeline readable, but one click expands any compacted section.
+
+This is cheap to implement since we already stream all SDK events via WebSocket — just persist them to Convex before any compaction happens. The compaction boundaries become visible markers on the timeline (e.g., "Events 47-182 compacted into summary").
+
+```typescript
+// convex/schema.ts - sessions table
+events: v.optional(v.array(v.object({
+  timestamp: v.number(),
+  type: v.string(),
+  data: v.any(),
+  compacted: v.optional(v.boolean()),  // true if this event was part of a compacted range
+  compactionId: v.optional(v.string()), // groups events that were compacted together
+}))),
+```
+
 **Use cases:**
-- Debug failed sessions — scrub to the point of failure
+- Debug failed sessions — scrub to the point of failure, expand compacted regions to see what happened
 - Learn what prompts/approaches work best
 - Share session replays with teammates for review
 - Audit trail for auto-YOLO runs
+- Post-mortem analysis — see exactly what context the agent lost during compaction and whether that caused a mistake
 
 ### Rollback Chains
 
