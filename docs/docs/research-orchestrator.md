@@ -193,6 +193,87 @@ This is Traycer's key insight — plans are reviewable artifacts that catch issu
 13. **Context preservation** — pause/resume sessions without re-explaining
 14. **MCP companion agent** — task CRUD, ideation, prompt help via chat
 
+### Session Replay (Interactive Timeline)
+
+Store the full Claude Code event stream (already streamed via WebSocket) as a persistent, replayable artifact on each task.
+
+**UI: seekable timeline scrubber**
+- Horizontal timeline bar showing session duration
+- Event markers: tool calls, file edits, approvals, errors — each a clickable point on the timeline
+- Playback controls: play/pause, speed (1x/2x/4x), skip to next event
+- Event filtering: toggle visibility by type (tool calls, file reads, edits, shell commands, conversation)
+- Split view: left panel shows the conversation/event at the current position, right panel shows the file diff at that point in time
+- Scrub to any point to see the full state: which files were open, what the agent was thinking, what tool it called
+
+**Data model:**
+```typescript
+// convex/schema.ts - sessions table addition
+events: v.optional(v.array(v.object({
+  timestamp: v.number(),
+  type: v.string(),       // 'tool_call' | 'tool_result' | 'message' | 'approval' | 'error'
+  data: v.any(),          // event payload
+}))),
+```
+
+**Use cases:**
+- Debug failed sessions — scrub to the point of failure
+- Learn what prompts/approaches work best
+- Share session replays with teammates for review
+- Audit trail for auto-YOLO runs
+
+### Rollback Chains
+
+When a YOLO task fails verification or breaks a dependent downstream task, automatically revert and pause:
+
+1. **Detection** — post-session verification fails, CI fails, or a dependent task reports breakage
+2. **Revert** — `git revert` the merged PR, creating a clean revert commit
+3. **Pause** — mark the task as "failed", pause all downstream dependents
+4. **Notify** — surface the failure reason in the task card with a link to the revert PR
+5. **Re-queue** — user can fix the prompt/approach and re-run, or manually intervene
+
+This makes Auto YOLO safe to run unattended — failures are contained, not cascading.
+
+### Token Estimation & Budgets
+
+Track estimated token usage per task for planning and visibility, even though billing is subscription-based (Claude Max/Pro).
+
+**Per-task estimation:**
+- Before execution: estimate based on prompt length + repo size + expected tool calls
+- During execution: track actual tokens consumed from SDK events
+- After execution: store final token count on the task
+
+**Budget controls:**
+- Set a max token budget per task or per epic
+- Pipeline pauses and notifies when budget threshold is reached (e.g., 80% warning, 100% hard stop)
+- Dashboard showing cumulative token usage across tasks/epics/time periods
+- Helps users understand which tasks are expensive and optimize prompts accordingly
+
+**Schema:**
+```typescript
+// convex/schema.ts - tasks table addition
+tokenBudget: v.optional(v.number()),
+tokensUsed: v.optional(v.number()),
+```
+
+### Merge Queue Integration
+
+For repos with GitHub merge queues enabled, Auto YOLO should add PRs to the merge queue rather than direct-merging:
+- Respects branch protection rules
+- Handles rebase conflicts between parallel PRs automatically
+- Falls back to direct merge if no merge queue is configured
+
+### Prompt Templates (Future — Needs Separate Design)
+
+The current template system is inadequate and should be replaced. Deferred to a separate design doc. Key requirements to explore:
+- Per-repo template directories (`.holophyte/templates/`)
+- Template variables filled from task context
+- Template composition (base + override)
+- Template marketplace / sharing
+
+## Known Issues
+
+- **Missing "Start session with Claude" button** — does not display in one version of the task detail view. See GitHub issue.
+
 ## Technical Notes
 
 ### Why Not Use an External DAG Library?
