@@ -3,7 +3,6 @@ import { useMutation } from 'convex/react';
 import { FolderOpen, Info, Loader2 } from 'lucide-react';
 import { useState } from 'react';
 import { useCompanionStatus } from '@/frontend/hooks/useCompanionStatus';
-import { homeDir } from '@/frontend/lib/config';
 import { useAppStore } from '@/frontend/stores/app';
 import Button from './ui/Button';
 import {
@@ -34,11 +33,14 @@ export function nameFromPath(path: string): string {
   return segments[segments.length - 1] ?? '';
 }
 
-/** Expand leading `~` or `~/` to the server's home directory. */
+/**
+ * Expand leading `~` or `~/` to the home directory.
+ *
+ * Tilde expansion is no longer supported — the frontend has no access to the
+ * server's home directory. This function is kept for API compatibility but
+ * always returns the path unchanged. Users must enter absolute paths.
+ */
 export function expandTilde(path: string): string {
-  if (!homeDir) return path;
-  if (path === '~') return homeDir;
-  if (path.startsWith('~/')) return homeDir + path.slice(1);
   return path;
 }
 
@@ -104,12 +106,7 @@ export function AddRepoDialog({ open, onOpenChange }: AddRepoDialogProps) {
     }
 
     if (!trimmedPath.startsWith('/')) {
-      const isTilde = path.trim().startsWith('~');
-      setError(
-        isTilde && !homeDir
-          ? 'Could not resolve ~ — enter the full absolute path instead.'
-          : 'Path must be absolute (start with / or ~/).',
-      );
+      setError('Path must be absolute (start with /).');
       return;
     }
 
@@ -169,8 +166,7 @@ export function AddRepoDialog({ open, onOpenChange }: AddRepoDialogProps) {
                       </button>
                     </TooltipTrigger>
                     <TooltipContent side="right">
-                      Absolute path to a git repo. Use ~ for home directory
-                      (e.g. ~/projects/my-repo) or a full path (e.g.
+                      Absolute path to a local git repo (e.g.
                       /Users/you/projects/my-repo).
                     </TooltipContent>
                   </Tooltip>
@@ -179,7 +175,7 @@ export function AddRepoDialog({ open, onOpenChange }: AddRepoDialogProps) {
               <div className="flex gap-2">
                 <Input
                   id="repo-path"
-                  placeholder="~/projects/my-repo"
+                  placeholder="/Users/you/projects/my-repo"
                   value={path}
                   onChange={(e) => handlePathChange(e.target.value)}
                   className="font-mono text-xs"

@@ -3,9 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 // Mock config module — must be before component import
-vi.mock('@/frontend/lib/config', () => ({
-  homeDir: '/Users/testuser',
-}));
+vi.mock('@/frontend/lib/config', () => ({}));
 
 // Mock Convex
 const mockCreateRepo = vi.fn();
@@ -58,25 +56,23 @@ describe('nameFromPath', () => {
     expect(nameFromPath('my-repo')).toBe('my-repo');
   });
 
-  it('handles tilde paths', () => {
-    expect(nameFromPath('~/projects/my-repo')).toBe('my-repo');
+  it('handles absolute paths', () => {
+    expect(nameFromPath('/Users/you/projects/my-repo')).toBe('my-repo');
   });
 });
 
 describe('expandTilde', () => {
-  // homeDir is mocked as '/Users/testuser'
+  // homeDir was removed — expandTilde is now a no-op
 
-  it('expands bare ~ to home directory', () => {
-    expect(expandTilde('~')).toBe('/Users/testuser');
+  it('returns bare ~ unchanged', () => {
+    expect(expandTilde('~')).toBe('~');
   });
 
-  it('expands ~/ prefix to home directory', () => {
-    expect(expandTilde('~/projects/repo')).toBe(
-      '/Users/testuser/projects/repo',
-    );
+  it('returns ~/ prefix unchanged', () => {
+    expect(expandTilde('~/projects/repo')).toBe('~/projects/repo');
   });
 
-  it('does not expand ~ in the middle of a path', () => {
+  it('leaves ~ in the middle of a path unchanged', () => {
     expect(expandTilde('/some/~/path')).toBe('/some/~/path');
   });
 
@@ -109,7 +105,7 @@ describe('AddRepoDialog', () => {
     renderDialog();
     expect(screen.getByText('Add Repository')).toBeInTheDocument();
     expect(
-      screen.getByPlaceholderText('~/projects/my-repo'),
+      screen.getByPlaceholderText('/Users/you/projects/my-repo'),
     ).toBeInTheDocument();
     expect(screen.getByPlaceholderText('my-project')).toBeInTheDocument();
   });
@@ -121,30 +117,36 @@ describe('AddRepoDialog', () => {
 
   it('auto-fills name from typed path', async () => {
     const { user } = renderDialog();
-    const pathInput = screen.getByPlaceholderText('~/projects/my-repo');
+    const pathInput = screen.getByPlaceholderText(
+      '/Users/you/projects/my-repo',
+    );
     await user.type(pathInput, '/Users/ko/my-project');
     expect(screen.getByPlaceholderText('my-project')).toHaveValue('my-project');
   });
 
   it('shows error for relative path on submit', async () => {
     const { user } = renderDialog();
-    const pathInput = screen.getByPlaceholderText('~/projects/my-repo');
+    const pathInput = screen.getByPlaceholderText(
+      '/Users/you/projects/my-repo',
+    );
     const nameInput = screen.getByPlaceholderText('my-project');
     await user.type(pathInput, 'relative/path');
     await user.clear(nameInput);
     await user.type(nameInput, 'test');
     await user.click(screen.getByRole('button', { name: 'Add Repo' }));
     expect(
-      screen.getByText('Path must be absolute (start with / or ~/).'),
+      screen.getByText('Path must be absolute (start with /).'),
     ).toBeInTheDocument();
   });
 
-  it('expands ~ and submits to createRepo', async () => {
+  it('submits absolute path to createRepo', async () => {
     mockCreateRepo.mockResolvedValueOnce('repo-id');
     const { user, onOpenChange } = renderDialog();
-    const pathInput = screen.getByPlaceholderText('~/projects/my-repo');
+    const pathInput = screen.getByPlaceholderText(
+      '/Users/you/projects/my-repo',
+    );
     const nameInput = screen.getByPlaceholderText('my-project');
-    await user.type(pathInput, '~/projects/my-repo');
+    await user.type(pathInput, '/Users/you/projects/my-repo');
     await user.clear(nameInput);
     await user.type(nameInput, 'my-repo');
     await user.click(screen.getByRole('button', { name: 'Add Repo' }));
@@ -152,7 +154,7 @@ describe('AddRepoDialog', () => {
     await waitFor(() => {
       expect(mockCreateRepo).toHaveBeenCalledWith({
         name: 'my-repo',
-        path: '/Users/testuser/projects/my-repo',
+        path: '/Users/you/projects/my-repo',
         orgId: 'org-123',
       });
     });
@@ -165,7 +167,7 @@ describe('AddRepoDialog', () => {
     );
     const { user } = renderDialog();
     await user.type(
-      screen.getByPlaceholderText('~/projects/my-repo'),
+      screen.getByPlaceholderText('/Users/you/projects/my-repo'),
       '/Users/ko/repo',
     );
     await user.type(screen.getByPlaceholderText('my-project'), 'repo');
@@ -192,9 +194,9 @@ describe('AddRepoDialog', () => {
       await user.click(screen.getByTitle('Browse...'));
 
       await waitFor(() => {
-        expect(screen.getByPlaceholderText('~/projects/my-repo')).toHaveValue(
-          '/Users/ko/Development/holophyte',
-        );
+        expect(
+          screen.getByPlaceholderText('/Users/you/projects/my-repo'),
+        ).toHaveValue('/Users/ko/Development/holophyte');
       });
       expect(screen.getByPlaceholderText('my-project')).toHaveValue(
         'holophyte',
@@ -231,7 +233,9 @@ describe('AddRepoDialog', () => {
       await waitFor(() => {
         expect(fetchSpy).toHaveBeenCalled();
       });
-      expect(screen.getByPlaceholderText('~/projects/my-repo')).toHaveValue('');
+      expect(
+        screen.getByPlaceholderText('/Users/you/projects/my-repo'),
+      ).toHaveValue('');
     });
 
     it('shows error when picker fails', async () => {
