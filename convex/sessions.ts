@@ -6,6 +6,7 @@ import {
   query,
 } from './_generated/server';
 import { requireOrgMembership, requireRole } from './lib/auth';
+import { validateCompanionSecret } from './lib/validateSecret';
 import { sessionStatusValidator } from './schema';
 
 /**
@@ -587,6 +588,49 @@ export const serverBatchHeartbeat = internalMutation({
 export const listStopped = internalQuery({
   args: {},
   handler: async (ctx) => {
+    return await ctx.db
+      .query('sessions')
+      .withIndex('by_status', (q) => q.eq('status', 'stopped'))
+      .collect();
+  },
+});
+
+/**
+ * Public companion query: returns all queued sessions with repoPath.
+ *
+ * Same as the internal `listQueued` but accessible to the companion via
+ * ConvexClient subscriptions. Validates the INTERNAL_API_SECRET secret arg.
+ */
+export const companionListQueued = query({
+  args: { secret: v.string() },
+  handler: async (ctx, args) => {
+    if (!validateCompanionSecret(args.secret)) throw new Error('Unauthorized');
+    const queued = await ctx.db
+      .query('sessions')
+      .withIndex('by_status', (q) => q.eq('status', 'queued'))
+      .collect();
+    const result = [];
+    for (const session of queued) {
+      const task = await ctx.db.get(session.taskId);
+      if (!task) continue;
+      const repo = await ctx.db.get(task.repoId);
+      if (!repo) continue;
+      result.push({ ...session, repoPath: repo.path });
+    }
+    return result;
+  },
+});
+
+/**
+ * Public companion query: returns all sessions with status `stopped`.
+ *
+ * Same as the internal `listStopped` but accessible to the companion via
+ * ConvexClient subscriptions. Validates the INTERNAL_API_SECRET secret arg.
+ */
+export const companionListStopped = query({
+  args: { secret: v.string() },
+  handler: async (ctx, args) => {
+    if (!validateCompanionSecret(args.secret)) throw new Error('Unauthorized');
     return await ctx.db
       .query('sessions')
       .withIndex('by_status', (q) => q.eq('status', 'stopped'))

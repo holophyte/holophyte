@@ -42,3 +42,10 @@ export function validateSecret(request: Request): Response | null {
 
   return null;
 }
+
+/** Constant-time check for companion queries. Returns true if valid. */
+export function validateCompanionSecret(secret: string): boolean {
+  const expected = process.env.INTERNAL_API_SECRET;
+  if (!expected) return false;
+  return constantTimeEqual(secret, expected);
+}

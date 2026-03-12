@@ -1,15 +1,12 @@
 // ── Companion polling ────────────────────────────────────────────────
 
 import { hostname } from 'node:os';
-import type { PermissionMode } from '@/claude/manager';
-import {
-  getActiveSessions,
-  getSession,
-  sendMessageToSession,
-  startSession,
-  stopSession,
-} from '@/claude/manager';
+import { getActiveSessions } from '@/claude/manager';
 import { callConvexInternal, queryConvexInternal } from './convex-client';
+import {
+  startCompanionSubscriptions,
+  stopCompanionSubscriptions,
+} from './subscriptions';
 
 export interface QueuedSession {
   _id: string;
@@ -41,87 +38,7 @@ export async function companionPoll() {
   polling = true;
 
   try {
-    // 1. Pick up queued sessions
-    const queued = await queryConvexInternal<QueuedSession[]>(
-      '/api/internal/sessions/listQueued',
-      {},
-    );
-    for (const session of queued) {
-      if (!session.queuedPrompt) continue;
-      // Skip if this session is already running locally
-      if (getSession(session._id)) continue;
-
-      try {
-        const claimed = await queryConvexInternal<{ ok: boolean }>(
-          '/api/internal/sessions/claimQueued',
-          { id: session._id },
-        );
-        if (!claimed.ok) continue;
-
-        await startSession({
-          sessionId: session._id,
-          repoPath: session.repoPath,
-          prompt: session.queuedPrompt,
-          model: session.model,
-          permissionMode: session.permissionMode as PermissionMode | undefined,
-          resumeSdkSessionId: session.sdkSessionId,
-        });
-      } catch (err) {
-        console.error(`Failed to pick up queued session ${session._id}:`, err);
-        // Mark as failed so it doesn't retry forever
-        try {
-          await callConvexInternal('/api/internal/sessions/updateStatus', {
-            id: session._id,
-            status: 'failed',
-          });
-        } catch {
-          // Best-effort
-        }
-      }
-    }
-
-    // 2. Check for stopped sessions (user requested stop via Convex)
-    const stopped = await queryConvexInternal<StoppedSession[]>(
-      '/api/internal/sessions/listStopped',
-      {},
-    );
-    for (const session of stopped) {
-      if (getSession(session._id)) {
-        stopSession(session._id);
-      } else {
-        // Session not running locally — transition to idle directly
-        try {
-          await callConvexInternal('/api/internal/sessions/updateStatus', {
-            id: session._id,
-            status: 'idle',
-          });
-        } catch {
-          // Best-effort
-        }
-      }
-    }
-
-    // 3. Deliver pending messages to running sessions
-    const messages = await queryConvexInternal<PendingMessage[]>(
-      '/api/internal/sessionMessages/listPending',
-      {},
-    );
-    for (const msg of messages) {
-      const delivered = sendMessageToSession(msg.sessionId, msg.text);
-      // Mark consumed only on successful delivery — if the session isn't
-      // running locally, leave the message unconsumed for retry.
-      if (delivered) {
-        try {
-          await callConvexInternal(
-            '/api/internal/sessionMessages/markConsumed',
-            { id: msg._id },
-          );
-        } catch (err) {
-          console.error(`Failed to mark message ${msg._id} as consumed:`, err);
-        }
-      }
-    }
-    // 4. Send heartbeat for all active sessions
+    // 1. Send heartbeat for all active sessions
     const activeIds = getActiveSessions();
     if (activeIds.length > 0) {
       try {
@@ -133,7 +50,7 @@ export async function companionPoll() {
       }
     }
 
-    // 5. Send companion-level heartbeat (every cycle, even with zero sessions)
+    // 2. Send companion-level heartbeat (every cycle, even with zero sessions)
     try {
       await callConvexInternal('/api/internal/companion/heartbeat', {
         activeSessionCount: activeIds.length,
@@ -166,6 +83,7 @@ export function stopCompanionPolling() {
     clearInterval(pollTimer);
     pollTimer = null;
   }
+  stopCompanionSubscriptions();
   companionUrl = undefined;
 }
 
@@ -223,6 +141,17 @@ export async function startCompanion(url: string): Promise<void> {
     // Non-critical — Convex may not be configured yet
   }
 
-  // 3. Start the polling loop
+  // 3. Start reactive subscriptions for queued/stopped sessions and pending messages
+  const convexUrl = process.env.CONVEX_URL;
+  const secret = process.env.INTERNAL_API_SECRET;
+  if (convexUrl && secret) {
+    startCompanionSubscriptions({ convexUrl, secret });
+  } else {
+    console.error(
+      'WARNING: CONVEX_URL or INTERNAL_API_SECRET not set — companion subscriptions unavailable, sessions will not be reactive',
+    );
+  }
+
+  // 4. Start the polling loop (heartbeats only)
   startCompanionPolling({ url });
 }
