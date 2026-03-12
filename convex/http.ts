@@ -477,11 +477,16 @@ http.route({
     const authError = validateSecret(request);
     if (authError) return authError;
 
-    const status = await ctx.runQuery(internal.companion.getLastSeen, {});
-    return new Response(JSON.stringify(status), {
-      status: 200,
-      headers: { 'Content-Type': 'application/json' },
-    });
+    try {
+      const status = await ctx.runQuery(internal.companion.getLastSeen, {});
+      return new Response(JSON.stringify(status), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    } catch (err) {
+      console.error('companion.getLastSeen failed:', err);
+      return jsonError('Query failed', 500);
+    }
   }),
 });
 

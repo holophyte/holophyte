@@ -182,13 +182,22 @@ const DUPLICATE_THRESHOLD_MS = 10_000;
  */
 export async function startCompanion(url: string): Promise<void> {
   // 1. Duplicate check
+  // Note: this is an advisory check — two companions starting simultaneously
+  // within POLL_INTERVAL_MS of each other can both pass before either has
+  // written its first heartbeat (TOCTOU). This is acceptable; the window is
+  // narrow and the scenario is unlikely in practice.
   try {
     const status = await queryConvexInternal<{
       lastSeen: number;
       machineId?: string;
     } | null>('/api/internal/companion/status', {});
-    if (status && Date.now() - status.lastSeen < DUPLICATE_THRESHOLD_MS) {
-      const secondsAgo = Math.round((Date.now() - status.lastSeen) / 1000);
+    const now = Date.now();
+    if (
+      status &&
+      now - status.lastSeen < DUPLICATE_THRESHOLD_MS &&
+      status.machineId !== MACHINE_ID
+    ) {
+      const secondsAgo = Math.round((now - status.lastSeen) / 1000);
       console.error(
         `Error: Another companion is already connected to this deployment (last seen ${secondsAgo}s ago).\n` +
           `Stop it first, or check your CONVEX_DEPLOYMENT config.`,
