@@ -1,0 +1,1177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Holophyte Decision Queue — Interactive Mockup</title>
+  <style>
+    :root {
+      --bg-primary: #0a0a0f;
+      --bg-secondary: #12121a;
+      --bg-tertiary: #1a1a2e;
+      --bg-card: #16162a;
+      --border: #2a2a4a;
+      --border-active: #4a4a8a;
+      --text-primary: #e8e8f0;
+      --text-secondary: #8888aa;
+      --text-muted: #555570;
+      --accent: #6366f1;
+      --accent-glow: rgba(99, 102, 241, 0.15);
+      --green: #22c55e;
+      --green-dim: rgba(34, 197, 94, 0.15);
+      --amber: #f59e0b;
+      --amber-dim: rgba(245, 158, 11, 0.15);
+      --red: #ef4444;
+      --red-dim: rgba(239, 68, 68, 0.15);
+      --blue: #3b82f6;
+      --blue-dim: rgba(59, 130, 246, 0.15);
+      --radius: 8px;
+      --font: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      --font-mono: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: var(--font);
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ── Mockup Banner ── */
+    .mockup-banner {
+      background: linear-gradient(135deg, var(--accent), #8b5cf6);
+      padding: 10px 20px;
+      text-align: center;
+      font-size: 12px;
+      color: rgba(255,255,255,0.9);
+      font-weight: 500;
+      letter-spacing: 0.3px;
+    }
+    .mockup-banner strong { color: white; }
+
+    /* ── Nav ── */
+    .nav-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 20px;
+      height: 52px;
+      border-bottom: 1px solid var(--border);
+      background: var(--bg-secondary);
+      flex-shrink: 0;
+    }
+
+    .nav-left {
+      display: flex;
+      align-items: center;
+      gap: 24px;
+    }
+
+    .nav-logo {
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--text-primary);
+      letter-spacing: -0.3px;
+    }
+
+    .nav-tabs {
+      display: flex;
+      gap: 4px;
+    }
+
+    .nav-tab {
+      padding: 8px 16px;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      color: var(--text-muted);
+      background: transparent;
+      border: none;
+      transition: all 0.15s;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .nav-tab.active {
+      background: var(--bg-tertiary);
+      color: var(--text-primary);
+    }
+
+    .nav-tab:hover:not(.active) {
+      color: var(--text-secondary);
+    }
+
+    .nav-tab:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
+    }
+
+    .nav-badge {
+      background: var(--accent);
+      color: white;
+      font-size: 11px;
+      font-weight: 600;
+      padding: 1px 7px;
+      border-radius: 10px;
+      min-width: 20px;
+      text-align: center;
+    }
+
+    .nav-right {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-size: 13px;
+      color: var(--text-muted);
+    }
+
+    /* ── Page Layout ── */
+    .page {
+      display: flex;
+      flex: 1;
+      overflow: hidden;
+    }
+
+    .queue-main {
+      flex: 1;
+      overflow-y: auto;
+      padding: 24px 32px;
+      max-width: 800px;
+    }
+
+    .queue-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 24px;
+    }
+
+    .queue-title {
+      font-size: 20px;
+      font-weight: 700;
+    }
+
+    .queue-meta {
+      font-size: 13px;
+      color: var(--text-muted);
+    }
+
+    /* ── Top Item (Expanded) ── */
+    .top-item {
+      background: var(--bg-card);
+      border: 1px solid var(--border-active);
+      border-radius: 12px;
+      padding: 24px;
+      margin-bottom: 16px;
+      position: relative;
+    }
+
+    .top-item-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 16px;
+    }
+
+    .item-type-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 12px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    .item-type-badge.permission {
+      background: var(--amber-dim);
+      color: var(--amber);
+    }
+
+    .item-type-badge.review {
+      background: var(--blue-dim);
+      color: var(--blue);
+    }
+
+    .item-type-badge.completed {
+      background: var(--green-dim);
+      color: var(--green);
+    }
+
+    .item-type-badge.error {
+      background: var(--red-dim);
+      color: var(--red);
+    }
+
+    .item-meta {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    .effort-tag {
+      padding: 2px 8px;
+      border-radius: 4px;
+      background: var(--bg-tertiary);
+      font-size: 11px;
+      color: var(--text-secondary);
+    }
+
+    .top-item-task {
+      font-size: 14px;
+      color: var(--text-secondary);
+      margin-bottom: 16px;
+    }
+
+    .top-item-task strong {
+      color: var(--text-primary);
+    }
+
+    .command-block {
+      background: var(--bg-primary);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 12px 16px;
+      font-family: var(--font-mono);
+      font-size: 13px;
+      color: var(--text-primary);
+      margin-bottom: 16px;
+    }
+
+    .context-snippet {
+      font-size: 13px;
+      color: var(--text-secondary);
+      line-height: 1.6;
+      margin-bottom: 16px;
+    }
+
+    .show-full {
+      color: var(--accent);
+      font-size: 12px;
+      background: none;
+      border: none;
+      cursor: pointer;
+      font-weight: 500;
+      padding: 0;
+    }
+
+    .show-full:hover { text-decoration: underline; }
+
+    .show-full:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
+    }
+
+    .top-item-actions {
+      display: flex;
+      gap: 8px;
+      margin-top: 20px;
+    }
+
+    .action-btn {
+      padding: 10px 20px;
+      border-radius: var(--radius);
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      border: 1px solid var(--border);
+      background: var(--bg-tertiary);
+      color: var(--text-primary);
+      transition: all 0.15s;
+    }
+
+    .action-btn:hover {
+      border-color: var(--border-active);
+    }
+
+    .action-btn:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
+    }
+
+    .action-btn.approve {
+      background: var(--green);
+      border-color: var(--green);
+      color: white;
+    }
+
+    .action-btn.approve:hover { opacity: 0.9; }
+
+    .action-btn.deny {
+      background: transparent;
+      color: var(--text-secondary);
+    }
+
+    .action-btn.batch {
+      background: var(--accent-glow);
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
+    /* ── Remaining Items (Compact) ── */
+    .remaining-header {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 8px;
+      margin-top: 24px;
+    }
+
+    .queue-item-compact {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 16px;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      margin-bottom: 6px;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .queue-item-compact:hover {
+      border-color: var(--border-active);
+      background: var(--bg-tertiary);
+    }
+
+    .queue-item-compact:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
+    }
+
+    .compact-left {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .compact-icon {
+      width: 28px;
+      height: 28px;
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      flex-shrink: 0;
+    }
+
+    .compact-icon.completed {
+      background: var(--green-dim);
+    }
+
+    .compact-icon.review {
+      background: var(--blue-dim);
+    }
+
+    .compact-icon.error {
+      background: var(--red-dim);
+    }
+
+    .compact-icon.permission {
+      background: var(--amber-dim);
+    }
+
+    .compact-title {
+      font-size: 13px;
+      color: var(--text-primary);
+      font-weight: 500;
+    }
+
+    .compact-task {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-top: 2px;
+    }
+
+    .compact-right {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-size: 12px;
+      color: var(--text-muted);
+      flex-shrink: 0;
+    }
+
+    /* ── Running Agents Sidebar ── */
+    .agents-sidebar {
+      width: 300px;
+      border-left: 1px solid var(--border);
+      background: var(--bg-secondary);
+      display: flex;
+      flex-direction: column;
+      flex-shrink: 0;
+      overflow-y: auto;
+    }
+
+    .sidebar-header {
+      padding: 16px 20px;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .agent-list {
+      flex: 1;
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .agent-card {
+      padding: 12px 14px;
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .agent-card:hover {
+      border-color: var(--border-active);
+    }
+
+    .agent-card:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
+    }
+
+    .agent-card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 8px;
+    }
+
+    .agent-name {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-primary);
+    }
+
+    .agent-status {
+      font-size: 11px;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .agent-status.running { color: var(--green); }
+    .agent-status.paused { color: var(--amber); }
+    .agent-status.done { color: var(--text-muted); }
+
+    .agent-status-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      display: inline-block;
+    }
+
+    .agent-status-dot.running {
+      background: var(--green);
+      animation: pulse 2s infinite;
+    }
+
+    .agent-status-dot.paused {
+      background: var(--amber);
+      animation: pulse 1.5s infinite;
+    }
+
+    .agent-status-dot.done {
+      background: var(--text-muted);
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+
+    .agent-task {
+      font-size: 12px;
+      color: var(--text-secondary);
+      margin-bottom: 8px;
+    }
+
+    .agent-progress-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .agent-progress-bar {
+      flex: 1;
+      height: 4px;
+      background: var(--bg-primary);
+      border-radius: 2px;
+      overflow: hidden;
+    }
+
+    .agent-progress-fill {
+      height: 100%;
+      border-radius: 2px;
+      transition: width 0.5s;
+    }
+
+    .agent-progress-fill.running { background: var(--accent); }
+    .agent-progress-fill.paused { background: var(--amber); }
+    .agent-progress-fill.done { background: var(--green); }
+
+    .agent-progress-info {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 11px;
+      color: var(--text-muted);
+      flex-shrink: 0;
+    }
+
+    .agent-cost {
+      font-family: var(--font-mono);
+    }
+
+    /* ── Daily Stats Footer ── */
+    .daily-stats {
+      padding: 12px 20px;
+      border-top: 1px solid var(--border);
+      font-size: 12px;
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .daily-stats span { white-space: nowrap; }
+
+    .daily-stat-value {
+      color: var(--text-secondary);
+      font-weight: 500;
+    }
+
+    /* ── Empty State ── */
+    .empty-state {
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 80px 20px;
+    }
+
+    .empty-state.visible { display: flex; }
+
+    .empty-agents-count {
+      font-size: 16px;
+      color: var(--text-secondary);
+      margin-bottom: 8px;
+    }
+
+    .empty-message {
+      font-size: 20px;
+      font-weight: 600;
+      color: var(--text-primary);
+      margin-bottom: 24px;
+    }
+
+    .empty-actions {
+      display: flex;
+      gap: 12px;
+    }
+
+    .empty-btn {
+      padding: 10px 24px;
+      border-radius: var(--radius);
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      border: 1px solid var(--border);
+      background: var(--bg-tertiary);
+      color: var(--text-primary);
+      transition: all 0.15s;
+    }
+
+    .empty-btn:hover { border-color: var(--border-active); }
+
+    .empty-btn:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
+    }
+
+    .empty-btn.primary {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: white;
+    }
+
+    /* ── While You Were Away (Digest) ── */
+    .digest-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.6);
+      z-index: 200;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .digest-overlay.visible { display: flex; }
+
+    .digest-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-active);
+      border-radius: 16px;
+      padding: 32px;
+      max-width: 480px;
+      width: 100%;
+    }
+
+    .digest-title {
+      font-size: 18px;
+      font-weight: 700;
+      margin-bottom: 4px;
+    }
+
+    .digest-subtitle {
+      font-size: 13px;
+      color: var(--text-muted);
+      margin-bottom: 24px;
+    }
+
+    .digest-section {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+
+    .digest-section-icon {
+      font-size: 16px;
+      flex-shrink: 0;
+      margin-top: 2px;
+    }
+
+    .digest-section-content {
+      flex: 1;
+    }
+
+    .digest-section-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text-primary);
+      margin-bottom: 4px;
+    }
+
+    .digest-section-detail {
+      font-size: 13px;
+      color: var(--text-secondary);
+      line-height: 1.5;
+    }
+
+    .digest-cost {
+      font-family: var(--font-mono);
+      font-size: 14px;
+      color: var(--text-primary);
+      font-weight: 500;
+    }
+
+    .digest-cta {
+      margin-top: 24px;
+      display: flex;
+      justify-content: center;
+    }
+
+    .digest-cta-btn {
+      padding: 12px 32px;
+      border-radius: var(--radius);
+      background: var(--accent);
+      border: none;
+      color: white;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity 0.15s;
+    }
+
+    .digest-cta-btn:hover { opacity: 0.9; }
+
+    .digest-cta-btn:focus-visible {
+      outline: 2px solid white;
+      outline-offset: 2px;
+    }
+
+    /* ── View Switcher (mockup control) ── */
+    .view-switcher {
+      position: fixed;
+      bottom: 20px;
+      left: 20px;
+      display: flex;
+      gap: 4px;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 4px;
+      z-index: 100;
+    }
+
+    .view-switch-btn {
+      padding: 6px 12px;
+      border-radius: 4px;
+      border: none;
+      font-size: 11px;
+      font-weight: 500;
+      cursor: pointer;
+      color: var(--text-muted);
+      background: transparent;
+      transition: all 0.15s;
+    }
+
+    .view-switch-btn.active {
+      background: var(--accent);
+      color: white;
+    }
+
+    .view-switch-btn:hover:not(.active) {
+      color: var(--text-secondary);
+    }
+
+    /* ── Skip Links ── */
+    .skip-links {
+      position: absolute;
+      top: -100px;
+      left: 0;
+      z-index: 1000;
+    }
+
+    .skip-links a {
+      position: absolute;
+      top: 0;
+      left: 0;
+      padding: 8px 16px;
+      background: var(--accent);
+      color: white;
+      text-decoration: none;
+      font-size: 14px;
+      border-radius: 0 0 8px 0;
+    }
+
+    .skip-links a:focus { top: 100px; }
+
+    /* ── Scrollbar ── */
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--border-active); }
+
+    /* ── SR-only ── */
+    .sr-only {
+      position: absolute;
+      width: 1px; height: 1px;
+      padding: 0; margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      border: 0;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .agent-status-dot.running,
+      .agent-status-dot.paused { animation: none; }
+    }
+
+    @media (max-width: 900px) {
+      .agents-sidebar { display: none; }
+      .queue-main { max-width: 100%; }
+    }
+  </style>
+</head>
+<body>
+  <!-- Skip links -->
+  <nav class="skip-links" aria-label="Skip navigation">
+    <a href="#queue-items">Skip to queue items</a>
+    <a href="#agents-sidebar">Skip to running agents</a>
+  </nav>
+
+  <div class="mockup-banner">
+    <strong>MOCKUP</strong> — Holophyte Decision Queue | Primary daily interface for agent orchestration decisions
+  </div>
+
+  <!-- Screen reader announcements -->
+  <div id="queue-announcer" aria-live="polite" aria-atomic="true" class="sr-only">
+    3 items need your attention. Top item: Permission approval for Fix OAuth Redirect.
+  </div>
+
+  <!-- Nav Bar -->
+  <nav class="nav-bar" role="navigation" aria-label="Main navigation">
+    <div class="nav-left">
+      <span class="nav-logo">Holophyte</span>
+      <div class="nav-tabs" role="tablist">
+        <button class="nav-tab active" role="tab" aria-selected="true" id="tab-queue">
+          Queue
+          <span class="nav-badge" aria-label="3 items">3</span>
+        </button>
+        <button class="nav-tab" role="tab" aria-selected="false" id="tab-board">Board</button>
+      </div>
+    </div>
+    <div class="nav-right">
+      <span>5 agents active</span>
+    </div>
+  </nav>
+
+  <!-- Page -->
+  <div class="page">
+    <!-- Queue Main Content -->
+    <main class="queue-main" id="queue-items">
+      <div class="queue-header">
+        <h1 class="queue-title">Decision Queue</h1>
+        <span class="queue-meta">3 items · Quick wins first</span>
+      </div>
+
+      <!-- Active queue content (toggled by view switcher) -->
+      <div id="active-state">
+        <!-- Top Item: Permission Approval -->
+        <div class="top-item" role="article" aria-label="Top priority: Permission approval for Fix OAuth Redirect">
+          <div class="top-item-header">
+            <span class="item-type-badge permission">
+              <span aria-hidden="true">⚠</span> Permission Approval
+            </span>
+            <div class="item-meta">
+              <span>waiting 12s</span>
+              <span class="effort-tag">Low effort</span>
+            </div>
+          </div>
+
+          <div class="top-item-task">
+            <strong>Fix OAuth Redirect Loop</strong> (#42) · Session 3
+          </div>
+
+          <div style="font-size: 13px; color: var(--text-secondary); margin-bottom: 10px;">
+            Agent wants to run:
+          </div>
+
+          <div class="command-block" aria-label="Command requiring approval">
+            bun run test src/server/auth.test.ts
+          </div>
+
+          <div class="context-snippet">
+            Fixed OAuth redirect by moving return URL from cookie to OAuth state parameter.
+            Wants to verify the fix with the auth test suite.
+          </div>
+
+          <div style="display: flex; justify-content: flex-end; margin-bottom: 4px;">
+            <button class="show-full" aria-label="Show full session context">Show full session ▸</button>
+          </div>
+
+          <div class="top-item-actions">
+            <button class="action-btn approve" autofocus>✓ Approve</button>
+            <button class="action-btn deny">✕ Deny</button>
+            <button class="action-btn batch">✓✓ Approve All Bash</button>
+          </div>
+        </div>
+
+        <!-- Remaining Items -->
+        <div class="remaining-header">Up next</div>
+
+        <div class="queue-item-compact" role="button" tabindex="0" aria-label="Task completed: Add payment webhook, 2 minutes ago">
+          <div class="compact-left">
+            <div class="compact-icon completed" aria-hidden="true">✓</div>
+            <div>
+              <div class="compact-title">Task Completed</div>
+              <div class="compact-task">Add payment webhook (#38) · Clean diff, all tests pass</div>
+            </div>
+          </div>
+          <div class="compact-right">
+            <span>2 min ago</span>
+            <span class="effort-tag">Low</span>
+          </div>
+        </div>
+
+        <div class="queue-item-compact" role="button" tabindex="0" aria-label="Code review: Refactor user model, 8 minutes ago">
+          <div class="compact-left">
+            <div class="compact-icon review" aria-hidden="true">◎</div>
+            <div>
+              <div class="compact-title">Code Review</div>
+              <div class="compact-task">Refactor user model (#45) · 4 files changed, +82 -41</div>
+            </div>
+          </div>
+          <div class="compact-right">
+            <span>8 min ago</span>
+            <span class="effort-tag">High</span>
+          </div>
+        </div>
+
+        <div class="queue-item-compact" role="button" tabindex="0" aria-label="Error triage: E2E test scaffold, 14 minutes ago">
+          <div class="compact-left">
+            <div class="compact-icon error" aria-hidden="true">!</div>
+            <div>
+              <div class="compact-title">Error Triage</div>
+              <div class="compact-task">E2E test scaffold (#50) · Agent stalled after timeout</div>
+            </div>
+          </div>
+          <div class="compact-right">
+            <span>14 min ago</span>
+            <span class="effort-tag">Medium</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Empty State (hidden by default) -->
+      <div id="empty-state" class="empty-state">
+        <div class="empty-agents-count">3 agents working</div>
+        <div class="empty-message">Nothing needs you right now</div>
+        <div class="empty-actions">
+          <button class="empty-btn primary">Start a new task</button>
+          <button class="empty-btn">View kanban board</button>
+        </div>
+      </div>
+    </main>
+
+    <!-- Running Agents Sidebar -->
+    <aside id="agents-sidebar" class="agents-sidebar" aria-label="Running agents">
+      <div class="sidebar-header">Running Agents</div>
+      <div class="agent-list">
+        <div class="agent-card" tabindex="0" role="button" aria-label="Agent 1: writing payment tests, 63% complete, 8 minutes, cost $0.12">
+          <div class="agent-card-header">
+            <span class="agent-name">Agent 1</span>
+            <span class="agent-status running">
+              <span class="agent-status-dot running" aria-hidden="true"></span>
+              Running
+            </span>
+          </div>
+          <div class="agent-task">Writing payment tests (#38)</div>
+          <div class="agent-progress-row">
+            <div class="agent-progress-bar" role="progressbar" aria-valuenow="63" aria-valuemin="0" aria-valuemax="100">
+              <div class="agent-progress-fill running" style="width: 63%;"></div>
+            </div>
+            <div class="agent-progress-info">
+              <span>8m</span>
+              <span class="agent-cost">$0.12</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="agent-card" tabindex="0" role="button" aria-label="Agent 2: refactoring user model, 41% complete, 3 minutes, cost $0.06">
+          <div class="agent-card-header">
+            <span class="agent-name">Agent 2</span>
+            <span class="agent-status running">
+              <span class="agent-status-dot running" aria-hidden="true"></span>
+              Running
+            </span>
+          </div>
+          <div class="agent-task">Refactoring user model (#45)</div>
+          <div class="agent-progress-row">
+            <div class="agent-progress-bar" role="progressbar" aria-valuenow="41" aria-valuemin="0" aria-valuemax="100">
+              <div class="agent-progress-fill running" style="width: 41%;"></div>
+            </div>
+            <div class="agent-progress-info">
+              <span>3m</span>
+              <span class="agent-cost">$0.06</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="agent-card" tabindex="0" role="button" aria-label="Agent 3: auth fix, paused waiting on you, cost $0.08">
+          <div class="agent-card-header">
+            <span class="agent-name">Agent 3</span>
+            <span class="agent-status paused">
+              <span class="agent-status-dot paused" aria-hidden="true"></span>
+              Waiting on you
+            </span>
+          </div>
+          <div class="agent-task">Fix OAuth redirect (#42)</div>
+          <div class="agent-progress-row">
+            <div class="agent-progress-bar" role="progressbar" aria-valuenow="100" aria-valuemin="0" aria-valuemax="100">
+              <div class="agent-progress-fill paused" style="width: 100%;"></div>
+            </div>
+            <div class="agent-progress-info">
+              <span>paused</span>
+              <span class="agent-cost">$0.08</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="agent-card" tabindex="0" role="button" aria-label="Agent 4: schema migration, 18% complete, 1 minute, cost $0.03">
+          <div class="agent-card-header">
+            <span class="agent-name">Agent 4</span>
+            <span class="agent-status running">
+              <span class="agent-status-dot running" aria-hidden="true"></span>
+              Running
+            </span>
+          </div>
+          <div class="agent-task">Schema migration (#41)</div>
+          <div class="agent-progress-row">
+            <div class="agent-progress-bar" role="progressbar" aria-valuenow="18" aria-valuemin="0" aria-valuemax="100">
+              <div class="agent-progress-fill running" style="width: 18%;"></div>
+            </div>
+            <div class="agent-progress-info">
+              <span>1m</span>
+              <span class="agent-cost">$0.03</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="agent-card" tabindex="0" role="button" aria-label="Agent 5: E2E test scaffold, stalled, 12 minutes, cost $0.22">
+          <div class="agent-card-header">
+            <span class="agent-name">Agent 5</span>
+            <span class="agent-status" style="color: var(--red);">
+              <span class="agent-status-dot" style="background: var(--red);" aria-hidden="true"></span>
+              Stalled
+            </span>
+          </div>
+          <div class="agent-task">E2E test scaffold (#50)</div>
+          <div class="agent-progress-row">
+            <div class="agent-progress-bar" role="progressbar" aria-valuenow="79" aria-valuemin="0" aria-valuemax="100">
+              <div class="agent-progress-fill" style="width: 79%; background: var(--red);"></div>
+            </div>
+            <div class="agent-progress-info">
+              <span>12m</span>
+              <span class="agent-cost">$0.22</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="daily-stats" role="status" aria-label="Today's statistics">
+        <span>Today: <span class="daily-stat-value">12</span> cleared</span>
+        <span><span class="daily-stat-value">3</span> tasks done</span>
+        <span><span class="daily-stat-value">$0.47</span> spent</span>
+      </div>
+    </aside>
+  </div>
+
+  <!-- "While You Were Away" Digest Overlay -->
+  <div class="digest-overlay" id="digest-overlay" role="dialog" aria-label="While you were away summary" aria-modal="true">
+    <div class="digest-card">
+      <div class="digest-title">Welcome back</div>
+      <div class="digest-subtitle">Here's what happened while you were away (45 min)</div>
+
+      <div class="digest-section">
+        <span class="digest-section-icon" aria-hidden="true">✅</span>
+        <div class="digest-section-content">
+          <div class="digest-section-title">2 tasks completed</div>
+          <div class="digest-section-detail">
+            Add payment webhook (#38) — clean diff, all tests pass<br>
+            Schema migration (#41) — 3 files changed, no issues
+          </div>
+        </div>
+      </div>
+
+      <div class="digest-section">
+        <span class="digest-section-icon" aria-hidden="true">⚠</span>
+        <div class="digest-section-content">
+          <div class="digest-section-title">3 items need your attention</div>
+          <div class="digest-section-detail">
+            1 permission approval · 1 code review · 1 error triage
+          </div>
+        </div>
+      </div>
+
+      <div class="digest-section">
+        <span class="digest-section-icon" aria-hidden="true">💰</span>
+        <div class="digest-section-content">
+          <div class="digest-section-title">Cost while away</div>
+          <div class="digest-cost">$0.52</div>
+        </div>
+      </div>
+
+      <div class="digest-cta">
+        <button class="digest-cta-btn" id="digest-dismiss">Review 3 items</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- View Switcher (mockup control) -->
+  <div class="view-switcher" aria-label="Mockup view switcher">
+    <button class="view-switch-btn active" data-view="active" title="Active queue with items">Active</button>
+    <button class="view-switch-btn" data-view="empty" title="Empty state — nothing needs attention">Empty</button>
+    <button class="view-switch-btn" data-view="digest" title="While you were away digest">Digest</button>
+  </div>
+
+  <script>
+    // View switcher
+    const views = {
+      active: () => {
+        document.getElementById('active-state').style.display = 'block';
+        document.getElementById('empty-state').classList.remove('visible');
+        document.getElementById('digest-overlay').classList.remove('visible');
+        document.querySelector('.queue-meta').textContent = '3 items · Quick wins first';
+        document.querySelector('.nav-badge').textContent = '3';
+        document.querySelector('.nav-badge').style.display = '';
+      },
+      empty: () => {
+        document.getElementById('active-state').style.display = 'none';
+        document.getElementById('empty-state').classList.add('visible');
+        document.getElementById('digest-overlay').classList.remove('visible');
+        document.querySelector('.queue-meta').textContent = '0 items · All clear';
+        document.querySelector('.nav-badge').style.display = 'none';
+      },
+      digest: () => {
+        document.getElementById('active-state').style.display = 'block';
+        document.getElementById('empty-state').classList.remove('visible');
+        document.getElementById('digest-overlay').classList.add('visible');
+        document.querySelector('.queue-meta').textContent = '3 items · Quick wins first';
+        document.querySelector('.nav-badge').textContent = '3';
+        document.querySelector('.nav-badge').style.display = '';
+      },
+    };
+
+    document.querySelectorAll('.view-switch-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.view-switch-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        const view = btn.dataset.view;
+        if (view && views[view]) views[view]();
+      });
+    });
+
+    // Dismiss digest
+    document.getElementById('digest-dismiss')?.addEventListener('click', () => {
+      document.getElementById('digest-overlay').classList.remove('visible');
+      document.querySelector('[data-view="active"]')?.click();
+    });
+
+    // Keyboard: j/k navigation, Escape
+    let focusedIndex = -1;
+    const getItems = () => document.querySelectorAll('.top-item, .queue-item-compact');
+
+    document.addEventListener('keydown', (e) => {
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+
+      const items = getItems();
+      if (e.key === 'j' || e.key === 'ArrowDown') {
+        e.preventDefault();
+        focusedIndex = Math.min(focusedIndex + 1, items.length - 1);
+        items[focusedIndex]?.focus();
+      } else if (e.key === 'k' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        focusedIndex = Math.max(focusedIndex - 1, 0);
+        items[focusedIndex]?.focus();
+      } else if (e.key === 'Escape') {
+        document.getElementById('digest-overlay')?.classList.remove('visible');
+      }
+    });
+
+    // Nav tab switching
+    document.querySelectorAll('.nav-tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        document.querySelectorAll('.nav-tab').forEach(t => {
+          t.classList.remove('active');
+          t.setAttribute('aria-selected', 'false');
+        });
+        tab.classList.add('active');
+        tab.setAttribute('aria-selected', 'true');
+      });
+    });
+  </script>
+</body>
+</html>

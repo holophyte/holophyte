@@ -15,9 +15,10 @@
 5. [ADHD-Friendly Design Principles](#adhd-friendly-design-principles)
 6. [Feature Proposals — Novel Differentiators](#feature-proposals--novel-differentiators)
 7. [Focus Mode — Deep Dive](#focus-mode--deep-dive)
-8. [Missing Capabilities for Increased Power](#missing-capabilities-for-increased-power)
-9. [Implementation Priority Matrix](#implementation-priority-matrix)
-10. [Technical Architecture Notes](#technical-architecture-notes)
+8. [Decision Queue — Deep Dive](#decision-queue--deep-dive)
+9. [Missing Capabilities for Increased Power](#missing-capabilities-for-increased-power)
+10. [Implementation Priority Matrix](#implementation-priority-matrix)
+11. [Technical Architecture Notes](#technical-architecture-notes)
 
 ---
 
@@ -454,7 +455,9 @@ The UI transitions should respect `prefers-reduced-motion` — instant switch in
 
 ## Focus Mode — Deep Dive
 
-Focus Mode is the signature ADHD-friendly feature. It's not just "hide the sidebar." It's a complete rethinking of what the UI shows when you need to concentrate on one thing.
+Focus Mode is the full-viewport deep work view for a single task. It's not just "hide the sidebar." It's a complete rethinking of what the UI shows when you need to concentrate on one thing.
+
+Focus Mode is complementary to the [Decision Queue](#decision-queue--deep-dive). The queue is the **attention router** ("what needs me?"), Focus Mode is the **deep work destination** ("let me go deep on this one task"). Common flow: queue item → open session → enter Focus Mode.
 
 ### Design Philosophy
 
@@ -505,8 +508,8 @@ The user shouldn't have to think about *what to look at*. Focus Mode answers: "H
 
 ### Entry/Exit
 
-- **Enter**: Click "Focus" on any task card, or `Cmd+Shift+F` from any view
-- **Exit**: Click "← Back to Board" or press `Escape`
+- **Enter**: Click "Focus" on any task card, from a queue item's "Show full session" link, or `Cmd+Shift+F` from any view
+- **Exit**: Click "← Back" or press `Escape` — returns to wherever you came from (queue or board)
 - **Auto-enter suggestion**: When user starts a session, offer "Enter Focus Mode?" as a non-blocking toast
 - **Keyboard**: All Focus Mode actions accessible via keyboard — no mouse required
 
@@ -525,6 +528,281 @@ The user shouldn't have to think about *what to look at*. Focus Mode answers: "H
 - **Transition prompts**: When session completes, gentle: "Session done. Take a look when you're ready." — not an alarm
 - **Snooze approvals**: If an approval comes in during deep focus, option to "Remind me in 5 min" instead of forcing an immediate decision
 - **Auto-save everything**: Description, prompt, notes — always saved. Never lose work because you switched context
+
+---
+
+## Decision Queue — Deep Dive
+
+The Decision Queue is Holophyte's primary daily interface — a single stream of actionable items that tells the user exactly what needs their attention right now. It replaces scattered notifications and kanban scanning with constrained, momentum-preserving decisions.
+
+### The Core Problem
+
+The queue solves the **orchestration problem at the human layer**. Existing tools orchestrate agents fine but leave the human to manage their own attention across parallel workstreams. For ADHD brains, this is where the system breaks down — not because the agents aren't working, but because the user can't efficiently context-switch between them.
+
+The queue replaces "what should I be doing?" (open-ended, ADHD kryptonite) with "here's the one thing that needs you right now" (constrained, momentum-preserving).
+
+### Relationship to Focus Mode
+
+Focus Mode and the Decision Queue are complementary:
+
+- **Decision Queue** = the attention router. "What needs me right now?" Surfaces the single most important decision across all active agents and tasks.
+- **Focus Mode** = deep work on one task. "Let me go deep on this." Full-viewport session output + review panel for a single task.
+
+The queue feeds Focus Mode: tap a queue item → opens the relevant session → user can optionally enter Focus Mode for that task. The queue is the *navigator*, Focus Mode is the *destination*.
+
+Both are accessible from the main nav. Users choose their default landing page (queue or kanban board) in settings.
+
+### Queue Item Types
+
+Every item in the queue represents a **decision the user needs to make**:
+
+| Type | Source Event | User Action | Effort |
+|------|-------------|-------------|--------|
+| **Permission approval** | `canUseTool` callback | Approve / Reject / Approve All | Low |
+| **Quick confirmation** | Agent asks yes/no question | Yes / No | Low |
+| **Feedback request** | Agent needs clarification | Type a response | Medium |
+| **Code review** | Agent completed, diff ready | Review diff, approve/request changes | High |
+| **Merge decision** | Review approved, PR ready | Merge / Defer / Edit | Medium |
+| **Error triage** | Agent failed or stalled | Retry / Edit prompt / Kill | Medium |
+| **Task completion** | Agent finished successfully | Archive / Start follow-up | Low |
+
+### Priority Algorithm
+
+Not FIFO. Items are scored by decision effort, urgency, and blocking impact:
+
+```
+score = effortWeight + blockingBonus + agingBonus + urgencyBonus
+```
+
+**Effort weight** (lower effort = higher priority — clear quick wins first):
+- Permission approval: 100
+- Quick confirmation: 90
+- Task completion: 80
+- Error triage: 70
+- Merge decision: 60
+- Feedback request: 50
+- Code review: 40
+
+**Blocking bonus** (+30 if other agents are waiting on this task's completion)
+**Aging bonus** (+2 per minute in queue, capped at +40)
+**Urgency bonus** (inherited from task priority: urgent=+50, high=+25, normal=+0)
+
+**Why quick wins first:** This is the ADHD-critical design decision. Clearing a permission approval takes 2 seconds and unblocks an agent. Clearing five of those before a code review creates **momentum** — the user feels productive and builds energy for the harder review. Traditional FIFO interleaves heavy reviews with quick approvals, breaking flow. Offer a toggle between "Quick wins first" (default) and "Chronological" for users who prefer it.
+
+### Layout
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  Decision Queue                          3 items · 5 agents working         │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  ┌─ Top Item (expanded) ──────────────────────────────────────────────────┐ │
+│  │                                                                        │ │
+│  │  ⚠ Permission Approval                        waiting 12s   Low Effort│ │
+│  │  ─────────────────────────────────────────────────────────────────     │ │
+│  │  Fix OAuth Redirect (#42) · Session 3                                  │ │
+│  │                                                                        │ │
+│  │  Agent wants to run:                                                   │ │
+│  │  ┌──────────────────────────────────────────────────────────────┐      │ │
+│  │  │  bun run test src/server/auth.test.ts                       │      │ │
+│  │  └──────────────────────────────────────────────────────────────┘      │ │
+│  │                                                                        │ │
+│  │  Context: Fixed OAuth redirect by moving return URL from cookie to     │ │
+│  │  state parameter. Wants to verify with auth tests.                     │ │
+│  │                                              ▸ Show full session       │ │
+│  │                                                                        │ │
+│  │  [ ✓ Approve ]  [ ✕ Deny ]  [ ✓✓ Approve All Bash ]                  │ │
+│  │                                                                        │ │
+│  └────────────────────────────────────────────────────────────────────────┘ │
+│                                                                             │
+│  ┌─ Remaining Items ──────────────────────────────────────────────────────┐ │
+│  │                                                                        │ │
+│  │  ✓ Task Completed        Add payment webhook (#38)          2 min ago  │ │
+│  │  ◎ Code Review           Refactor user model (#45)          8 min ago  │ │
+│  │                                                                        │ │
+│  └────────────────────────────────────────────────────────────────────────┘ │
+│                                                                             │
+│  ── Running Agents ──────────────────────────────────────────────────────  │
+│  Agent 1: writing payment tests ██████░░░░ 63%  ·  8m  ·  $0.12           │
+│  Agent 2: refactoring user model ████░░░░░░ 41%  ·  3m  ·  $0.06          │
+│  Agent 3: auth fix (waiting on you) ████████████ paused  ·  $0.08         │
+│  Agent 4: schema migration ██░░░░░░░░ 18%  ·  1m  ·  $0.03               │
+│  Agent 5: e2e test scaffold ████████░░ 79%  ·  12m  ·  $0.22              │
+│                                                                             │
+│  Today: cleared 12 items · 3 tasks done · $0.47 spent                      │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+**Empty state** (no items need attention):
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  Decision Queue                          0 items · 3 agents working         │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│                                                                             │
+│                       3 agents working                                      │
+│                Nothing needs you right now                                  │
+│                                                                             │
+│                [ Start a new task ]    [ View kanban board ]                │
+│                                                                             │
+│  ── Running Agents ──────────────────────────────────────────────────────  │
+│  Agent 1: writing payment tests ██████░░░░ 63%  ·  8m  ·  $0.12           │
+│  Agent 2: schema migration ██████████ done  ·  $0.34                       │
+│  Agent 3: e2e test scaffold ████████░░ 79%  ·  12m  ·  $0.22              │
+│                                                                             │
+│  Today: cleared 12 items · 3 tasks done · $0.47 spent                      │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+**"While you were away" digest** (returning after idle):
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  Welcome back — here's what happened while you were away (45 min)          │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  ✅ 2 tasks completed                                                       │
+│     • Add payment webhook (#38) — clean diff, all tests pass               │
+│     • Schema migration (#41) — 3 files changed, no issues                  │
+│                                                                             │
+│  ⚠ 3 items need your attention                                             │
+│     • 1 permission approval · 1 code review · 1 error triage              │
+│                                                                             │
+│  💰 $0.52 spent while away                                                  │
+│                                                                             │
+│  [ Review 3 items ]                                                         │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Momentum Protection
+
+The queue respects the user's current focus state.
+
+**Rule: Never interrupt active work.** If the user is typing in a chat with Agent C and Agent A finishes, Agent A's review silently enters the queue. No toast, no sound, no badge flash. The queue count in the nav updates quietly.
+
+**When to notify:**
+- User is idle (no interaction for 2+ minutes) → gentle badge update
+- User explicitly checks the queue → show everything
+- Critical error (agent crashed) → subtle but persistent indicator
+
+**Notification batching:** Instead of per-event notifications, batch into periodic digests. Configurable: every 5/10/15 minutes, or "only when I check." Default: 10 minutes.
+
+### Batch Decisions
+
+When multiple agents need similar approvals, batch them into a single decision:
+
+- "Agents A, B, and C all want to run `Bash` — Approve all?" → single click
+- "3 tasks completed with clean diffs — Quick review all?" → carousel view
+- "5 permission requests (all `Read` tool) — Auto-approve `Read` for this session?" → one decision eliminates future interruptions
+
+Batching reduces N decisions to 1 decision. Critical for maintaining flow.
+
+### ADHD-Specific Patterns in the Queue
+
+| Pattern | Implementation |
+|---------|---------------|
+| **Single-task focus** (Llama Life) | One expanded item at top. Everything else collapsed. |
+| **What's next? button** (Goblin Tools) | The queue IS the "what's next" — it always shows the single most important item. |
+| **Decision fatigue reduction** | Constrained choices per item (2-3 buttons), not open-ended. Batch similar decisions. |
+| **Momentum protection** | Never interrupt active chat. Silent queue updates. |
+| **State recovery** | "While you were away" digest on return. Context snippets per item. |
+| **Time awareness** | "Waiting for 12 min" on each item. "Agent A has been stalled for 20 min" as gentle nudge. |
+| **Dopamine design** | Satisfying animation when clearing items. Counter goes down. "Queue clear!" celebration (optional, respects reduced-motion). |
+| **No-shame philosophy** | Queue items don't expire or turn red. No guilt for letting things sit. Aging boosts priority algorithmically, not visually. |
+
+### Data Model
+
+```typescript
+// convex/schema.ts - new table
+queueItems: defineTable({
+  sessionId: v.id('sessions'),
+  taskId: v.id('tasks'),
+  type: v.union(
+    v.literal('permission_approval'),
+    v.literal('quick_confirmation'),
+    v.literal('feedback_request'),
+    v.literal('code_review'),
+    v.literal('merge_decision'),
+    v.literal('error_triage'),
+    v.literal('task_completion'),
+  ),
+  status: v.union(
+    v.literal('pending'),
+    v.literal('in_progress'),
+    v.literal('resolved'),
+    v.literal('dismissed'),
+  ),
+  priority: v.object({
+    effort: v.number(),
+    blocking: v.number(),
+    aging: v.number(),
+    urgency: v.number(),
+  }),
+  contextSnippet: v.string(),
+  payload: v.any(),
+  createdAt: v.number(),
+  resolvedAt: v.optional(v.number()),
+  resolvedAction: v.optional(v.string()),
+})
+  .index('by_status', ['status'])
+  .index('by_session', ['sessionId'])
+  .index('by_task', ['taskId']),
+```
+
+### Queue Item Lifecycle
+
+```
+SDK canUseTool callback fires
+  → Server creates queue item in Convex (type: permission_approval)
+  → Convex real-time pushes to frontend
+  → Queue re-sorts by priority score
+  → If user is on queue page, top item updates
+  → If user is in a different chat, queue count badge updates
+
+User resolves item
+  → Action sent back to server (approve/reject/etc.)
+  → Queue item marked resolved, resolvedAction recorded
+  → Agent unblocked (if permission), task state transitions (if completion)
+  → Next item expands to top position
+```
+
+### Implementation Phases
+
+**Phase 0 — Foundation** (after SDK migration + chat UI):
+- Convex `queueItems` table
+- Queue item creation from `canUseTool` callback (permission approvals only)
+- Basic queue page: list of pending items, sorted by creation time
+- Tap item → navigate to session chat
+- Resolve from chat (approve/reject) → mark resolved in queue
+
+**Phase 1 — Smart Queue:**
+- Priority scoring algorithm (effort + blocking + aging)
+- Expanded top item with context snippet
+- Queue item creation from all event types (reviews, completions, errors)
+- "While you were away" digest
+- Empty state with calm messaging
+
+**Phase 2 — Momentum & Batching:**
+- Momentum protection (suppress notifications during active chat)
+- Batch decisions for similar approval types
+- Auto-approve rules ("always approve Read tool for this repo")
+- Notification preferences (batching interval, DND mode)
+
+**Phase 3 — Queue as Primary Interface:**
+- User-configurable default landing page (queue or kanban)
+- Running agents sidebar
+- Daily stats footer ("Cleared 12 items today, 3 tasks completed, $0.47 spent")
+- Keyboard navigation: `j`/`k` to move between items, `Enter` to act, `Esc` to dismiss
+
+### Open Questions
+
+- **Multi-repo filtering?** Multi-repo users might want filtering. Single-repo users might want everything in one stream.
+- **Dismissed items?** Archive for later review? Gone forever? "Snoozed" with a timer?
+- **Dopamine feedback?** Should completed items stay briefly with a "just cleared" animation, or disappear instantly?
+- **Recommender integration?** Does the "What Should I Work On?" recommender share the queue, or is it a separate surface for suggesting *new* tasks?
+- **Mobile / PWA?** If Holophyte goes PWA, the queue is the most natural mobile-first view — quick approvals from your phone while agents run on your machine.
 
 ---
 
