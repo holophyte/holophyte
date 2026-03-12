@@ -56,7 +56,7 @@ describe('nameFromPath', () => {
     expect(nameFromPath('my-repo')).toBe('my-repo');
   });
 
-  it('handles tilde paths', () => {
+  it('handles absolute paths', () => {
     expect(nameFromPath('/Users/you/projects/my-repo')).toBe('my-repo');
   });
 });
