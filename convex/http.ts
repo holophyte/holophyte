@@ -468,6 +468,23 @@ http.route({
   }),
 });
 
+// ── Companion status (duplicate-instance check) ───────────────────────
+
+http.route({
+  path: '/api/internal/companion/status',
+  method: 'POST',
+  handler: httpAction(async (ctx, request) => {
+    const authError = validateSecret(request);
+    if (authError) return authError;
+
+    const status = await ctx.runQuery(internal.companion.getLastSeen, {});
+    return new Response(JSON.stringify(status), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }),
+});
+
 // ── Companion heartbeat ───────────────────────────────────────────────
 
 http.route({
