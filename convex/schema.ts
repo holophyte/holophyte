@@ -228,5 +228,6 @@ export default defineSchema({
     lastSeen: v.number(),
     activeSessionCount: v.number(),
     machineId: v.optional(v.string()),
+    url: v.optional(v.string()),
   }),
 });

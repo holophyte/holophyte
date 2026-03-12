@@ -1,7 +1,11 @@
 import homepage from '../public/index.html';
 import { callConvexInternal } from './server/convex-client';
 import { startCompanionPolling, stopCompanionPolling } from './server/polling';
-import { handleAuthProxy, handlePickDirectory } from './server/routes';
+import {
+  handleAuthProxy,
+  handlePickDirectory,
+  handlePickDirectoryCors,
+} from './server/routes';
 
 // ── HTTP Server ──────────────────────────────────────────────────────
 
@@ -38,8 +42,11 @@ const server = Bun.serve({
     '/api/auth/*': async (req: Request) => handleAuthProxy(req),
 
     '/api/pick-directory': {
-      async POST() {
-        return handlePickDirectory();
+      async POST(req: Request) {
+        return handlePickDirectory(req);
+      },
+      OPTIONS(req: Request) {
+        return handlePickDirectoryCors(req);
       },
     },
 
@@ -64,7 +71,7 @@ console.log(`  Convex URL: ${process.env.CONVEX_URL || '(not set)'}`);
 console.log(`  Convex Site: ${process.env.CONVEX_SITE_URL || '(not set)'}`);
 
 // Start companion polling for queued/stopped sessions
-startCompanionPolling();
+startCompanionPolling({ url: `http://localhost:${server.port}` });
 
 // On startup, clean up sessions left in inconsistent states from a prior crash
 // or companion outage:

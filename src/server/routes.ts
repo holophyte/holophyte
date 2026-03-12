@@ -1,12 +1,37 @@
 import { exists } from 'node:fs/promises';
 import { basename } from 'node:path';
 
-export async function handlePickDirectory(): Promise<Response> {
+function corsOriginHeaders(req?: Request): Record<string, string> {
+  const allowedOrigin = process.env.ALLOWED_ORIGIN ?? '';
+  const requestOrigin = req?.headers.get('Origin') ?? '';
+  const matched =
+    allowedOrigin && requestOrigin === allowedOrigin ? allowedOrigin : null;
+  const headers: Record<string, string> = { Vary: 'Origin' };
+  if (matched) {
+    headers['Access-Control-Allow-Origin'] = matched;
+  }
+  return headers;
+}
+
+export function handlePickDirectoryCors(req: Request): Response {
+  return new Response(null, {
+    status: 204,
+    headers: {
+      ...corsOriginHeaders(req),
+      'Access-Control-Allow-Methods': 'POST, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type',
+      'Access-Control-Max-Age': '86400',
+    },
+  });
+}
+
+export async function handlePickDirectory(req: Request): Promise<Response> {
+  const headers = corsOriginHeaders(req);
   try {
     if (process.platform !== 'darwin') {
       return Response.json(
         { error: 'Directory picker only supported on macOS' },
-        { status: 501 },
+        { status: 501, headers },
       );
     }
     const proc = Bun.spawn(
@@ -19,24 +44,27 @@ export async function handlePickDirectory(): Promise<Response> {
     );
     const exitCode = await proc.exited;
     if (exitCode !== 0) {
-      return Response.json({ cancelled: true });
+      return Response.json({ cancelled: true }, { headers });
     }
     const raw = await new Response(proc.stdout).text();
     const dirPath = raw.trim().replace(/\/$/, '');
 
     const isGitRepo = await exists(`${dirPath}/.git`);
 
-    return Response.json({
-      cancelled: false,
-      path: dirPath,
-      name: basename(dirPath),
-      isGitRepo,
-    });
+    return Response.json(
+      {
+        cancelled: false,
+        path: dirPath,
+        name: basename(dirPath),
+        isGitRepo,
+      },
+      { headers },
+    );
   } catch (err) {
     console.error('Failed to open directory picker:', err);
     return Response.json(
       { error: 'Failed to open directory picker.' },
-      { status: 500 },
+      { status: 500, headers },
     );
   }
 }

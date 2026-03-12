@@ -2,6 +2,7 @@ import { api } from '@convex/_generated/api';
 import { useMutation } from 'convex/react';
 import { FolderOpen, Info, Loader2 } from 'lucide-react';
 import { useState } from 'react';
+import { useCompanionStatus } from '@/frontend/hooks/useCompanionStatus';
 import { homeDir } from '@/frontend/lib/config';
 import { useAppStore } from '@/frontend/stores/app';
 import Button from './ui/Button';
@@ -48,6 +49,7 @@ export function AddRepoDialog({ open, onOpenChange }: AddRepoDialogProps) {
   const [submitting, setSubmitting] = useState(false);
   const [picking, setPicking] = useState(false);
   const selectedOrgId = useAppStore((s) => s.selectedOrgId);
+  const { state: companionState, companionUrl } = useCompanionStatus();
   const createRepo = useMutation(api.repos.create);
 
   const handlePathChange = (value: string) => {
@@ -62,7 +64,14 @@ export function AddRepoDialog({ open, onOpenChange }: AddRepoDialogProps) {
     setPicking(true);
     setError(null);
     try {
-      const res = await fetch('/api/pick-directory', { method: 'POST' });
+      const baseUrl = companionUrl ?? '';
+      if (baseUrl && !/^http:\/\/localhost:\d+$/.test(baseUrl)) {
+        setError('Companion URL is invalid.');
+        return;
+      }
+      const res = await fetch(`${baseUrl}/api/pick-directory`, {
+        method: 'POST',
+      });
       if (!res.ok) throw new Error('Failed to open directory picker.');
       const data = await res.json();
       if (data.cancelled) {
@@ -74,7 +83,11 @@ export function AddRepoDialog({ open, onOpenChange }: AddRepoDialogProps) {
         setError('Selected folder is not a git repository.');
       }
     } catch {
-      setError('Failed to open directory picker.');
+      setError(
+        companionState !== 'connected'
+          ? 'Companion is not connected. Start the companion to use the directory picker.'
+          : 'Failed to open directory picker.',
+      );
     } finally {
       setPicking(false);
     }

@@ -34,6 +34,7 @@ const MACHINE_ID = process.env.MACHINE_ID ?? hostname();
 export const POLL_INTERVAL_MS = 2000;
 let pollTimer: ReturnType<typeof setInterval> | null = null;
 let polling = false;
+let companionUrl: string | undefined;
 
 export async function companionPoll() {
   if (polling) return; // Skip if previous poll is still running
@@ -137,6 +138,7 @@ export async function companionPoll() {
       await callConvexInternal('/api/internal/companion/heartbeat', {
         activeSessionCount: activeIds.length,
         machineId: MACHINE_ID,
+        url: companionUrl,
       });
     } catch {
       // Best-effort — don't log every failure
@@ -151,8 +153,9 @@ export async function companionPoll() {
   }
 }
 
-export function startCompanionPolling() {
+export function startCompanionPolling(opts?: { url?: string }) {
   if (pollTimer) return;
+  if (opts?.url) companionUrl = opts.url;
   pollTimer = setInterval(companionPoll, POLL_INTERVAL_MS);
   // Run immediately on start
   void companionPoll();
@@ -163,4 +166,5 @@ export function stopCompanionPolling() {
     clearInterval(pollTimer);
     pollTimer = null;
   }
+  companionUrl = undefined;
 }

@@ -22,6 +22,16 @@ vi.mock('@/frontend/stores/app', () => ({
     selector({ selectedOrgId: 'org-123' }),
 }));
 
+// Mock companion status — default: connected with no URL (same-origin)
+vi.mock('@/frontend/hooks/useCompanionStatus', () => ({
+  useCompanionStatus: vi.fn(() => ({
+    state: 'connected',
+    status: null,
+    companionUrl: null,
+  })),
+}));
+
+import { useCompanionStatus } from '@/frontend/hooks/useCompanionStatus';
 import { AddRepoDialog, expandTilde, nameFromPath } from './AddRepoDialog';
 
 // ── Pure function tests ─────────────────────────────────────────────
@@ -247,6 +257,48 @@ describe('AddRepoDialog', () => {
         expect(
           screen.getByText('Failed to open directory picker.'),
         ).toBeInTheDocument();
+      });
+    });
+
+    it('shows error when companion URL is invalid', async () => {
+      vi.mocked(useCompanionStatus).mockReturnValue({
+        state: 'connected',
+        status: null,
+        companionUrl: 'https://evil.example.com',
+      });
+      const { user } = renderDialog();
+      await user.click(screen.getByTitle('Browse...'));
+
+      await waitFor(() => {
+        expect(
+          screen.getByText('Companion URL is invalid.'),
+        ).toBeInTheDocument();
+      });
+      expect(fetchSpy).not.toHaveBeenCalled();
+    });
+
+    it('routes pick-directory to companion URL when set', async () => {
+      vi.mocked(useCompanionStatus).mockReturnValue({
+        state: 'connected',
+        status: null,
+        companionUrl: 'http://localhost:9876',
+      });
+      fetchSpy.mockResolvedValueOnce(
+        Response.json({
+          cancelled: false,
+          path: '/tmp/repo',
+          name: 'repo',
+          isGitRepo: true,
+        }),
+      );
+      const { user } = renderDialog();
+      await user.click(screen.getByTitle('Browse...'));
+
+      await waitFor(() => {
+        expect(fetchSpy).toHaveBeenCalledWith(
+          'http://localhost:9876/api/pick-directory',
+          { method: 'POST' },
+        );
       });
     });
   });

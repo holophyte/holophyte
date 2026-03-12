@@ -1,11 +1,20 @@
 import { callConvexInternal } from './server/convex-client';
 import { startCompanionPolling, stopCompanionPolling } from './server/polling';
-import { handleAuthProxy, handlePickDirectory } from './server/routes';
+import {
+  handleAuthProxy,
+  handlePickDirectory,
+  handlePickDirectoryCors,
+} from './server/routes';
 
 // ── Headless Companion Server ────────────────────────────────────────
 // Runs the companion polling loop and local-only API routes without
 // serving any frontend assets. Used in production (Vercel deployment)
 // where the frontend is hosted separately.
+
+const DEFAULT_ALLOWED_ORIGIN = 'https://holophyte.vercel.app';
+if (!process.env.ALLOWED_ORIGIN) {
+  process.env.ALLOWED_ORIGIN = DEFAULT_ALLOWED_ORIGIN;
+}
 
 const server = Bun.serve({
   port: Number(process.env.PORT) || 8080,
@@ -13,8 +22,11 @@ const server = Bun.serve({
     '/api/auth/*': async (req: Request) => handleAuthProxy(req),
 
     '/api/pick-directory': {
-      async POST() {
-        return handlePickDirectory();
+      async POST(req: Request) {
+        return handlePickDirectory(req);
+      },
+      OPTIONS(req: Request) {
+        return handlePickDirectoryCors(req);
       },
     },
   },
@@ -24,12 +36,14 @@ const server = Bun.serve({
   },
 });
 
-console.log(`Holophyte companion running on port ${server.port}`);
+const url = `http://localhost:${server.port}`;
+console.log(`Holophyte companion running on ${url}`);
 console.log(`  Convex URL: ${process.env.CONVEX_URL || '(not set)'}`);
 console.log(`  Convex Site: ${process.env.CONVEX_SITE_URL || '(not set)'}`);
+console.log(`  Allowed Origin: ${process.env.ALLOWED_ORIGIN}`);
 
 // Start companion polling for queued/stopped sessions
-startCompanionPolling();
+startCompanionPolling({ url });
 
 // On startup, clean up sessions left in inconsistent states from a prior crash
 // or companion outage:

@@ -56,5 +56,5 @@ export function useCompanionStatus() {
       ? 'loading'
       : deriveState(status?.lastSeen, currentTime);
 
-  return { state, status };
+  return { state, status, companionUrl: status?.url ?? null };
 }

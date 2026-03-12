@@ -80,6 +80,10 @@ if [ -f .env.companion ]; then
   ENV_FILE_OPTS=(--env-file=.env.companion)
 fi
 
+# Derive the Vercel preview URL for CORS
+PREVIEW_URL="https://holophyte-git-$(echo "${SANITIZED}" | tr '[:upper:]' '[:lower:]' | sed 's/-*$//')-ko-vials-projects.vercel.app"
+
+ALLOWED_ORIGIN="$PREVIEW_URL" \
 CONVEX_URL="$CONVEX_URL" \
 CONVEX_SITE_URL="$CONVEX_SITE_URL" \
 INTERNAL_API_SECRET="$INTERNAL_API_SECRET" \
