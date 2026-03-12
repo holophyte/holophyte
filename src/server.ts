@@ -1,6 +1,5 @@
 import homepage from '../public/index.html';
-import { callConvexInternal } from './server/convex-client';
-import { startCompanionPolling, stopCompanionPolling } from './server/polling';
+import { startCompanion, stopCompanionPolling } from './server/polling';
 import {
   handleAuthProxy,
   handlePickDirectory,
@@ -69,25 +68,7 @@ console.log(`Holophyte running at http://localhost:${server.port}`);
 console.log(`  Convex URL: ${process.env.CONVEX_URL || '(not set)'}`);
 console.log(`  Convex Site: ${process.env.CONVEX_SITE_URL || '(not set)'}`);
 
-// Start companion polling for queued/stopped sessions
-startCompanionPolling({ url: `http://localhost:${server.port}` });
-
-// On startup, clean up sessions left in inconsistent states from a prior crash
-// or companion outage:
-//   - 'running' → 'idle': process died without finalising the turn
-//   - 'stopped' → 'idle': stop request was never processed (companion was offline)
-(async () => {
-  try {
-    await callConvexInternal('/api/internal/sessions/markStaleRunning', {});
-  } catch {
-    // Non-critical — Convex may not be configured yet
-  }
-  try {
-    await callConvexInternal('/api/internal/sessions/markStoppedAsIdle', {});
-  } catch {
-    // Non-critical — Convex may not be configured yet
-  }
-})();
+void startCompanion(`http://localhost:${server.port}`);
 
 function shutdown() {
   stopCompanionPolling();
