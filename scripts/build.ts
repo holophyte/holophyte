@@ -140,7 +140,6 @@ const config = {
   convexUrl,
   e2eTest: false, // Dev-only feature — never enabled in static/Vercel builds.
   allowAnonymousAuth: isPreview, // Enabled on preview builds for testing via ?auth param.
-  homeDir: '', // Legacy — not meaningful on Vercel. See #130.
 };
 
 await Bun.write(

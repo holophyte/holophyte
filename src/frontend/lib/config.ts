@@ -10,7 +10,6 @@ interface HolophyteConfig {
   convexUrl: string;
   e2eTest: boolean;
   allowAnonymousAuth: boolean;
-  homeDir: string;
 }
 
 const injected = (
@@ -25,6 +24,3 @@ export const e2eTest: boolean = !!injected?.e2eTest;
 
 /** Anonymous auth available — auto sign-in when `?auth` param is present. */
 export const allowAnonymousAuth: boolean = !!injected?.allowAnonymousAuth;
-
-/** Server's home directory — used to expand `~` in paths. */
-export const homeDir: string = injected?.homeDir ?? '';

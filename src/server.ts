@@ -25,7 +25,6 @@ const server = Bun.serve({
           allowAnonymousAuth:
             process.env.NODE_ENV !== 'production' &&
             !!process.env.ALLOW_ANONYMOUS_AUTH,
-          homeDir: process.env.HOME ?? '',
         };
         return new Response(
           `window.__HOLOPHYTE_CONFIG__=${JSON.stringify(config)};`,
