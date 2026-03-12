@@ -551,15 +551,16 @@ convex/coordination.ts
   - getDependencies(taskId) → list of prerequisite tasks + their status
 ```
 
-### 2. Cost Tracking & Budget Controls
+### 2. Session Cost Visibility
 
 **Why:** Users report $70-100/night costs with competing tools. Cost transparency builds trust.
 
 **Proposed:**
-- Track token usage per session (prompt tokens, completion tokens)
+- Track cost per session in USD (from SDK usage events)
 - Show running cost in session panel: "$0.47 so far"
-- Daily/weekly cost summaries in org settings
-- Optional budget limits: "Warn at $10/day, pause at $25/day"
+- Per-task cumulative cost (sum of all sessions)
+- Daily/weekly cost summaries in settings
+- Cost is informational, not enforced — no per-task hard limits
 - Cost comparison when multi-runtime is supported: "This task cost $2.10 with Claude Code vs $1.80 with Codex"
 
 ### 3. Webhook & Integration Layer

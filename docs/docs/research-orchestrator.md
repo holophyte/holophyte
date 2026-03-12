@@ -613,7 +613,7 @@ If both are true:
 If CI is failing, attempt a fix (max 2 retries).
 If a comment reveals a real bug, push a fix commit.
 
-Budget: stop after {maxTokens} tokens or {maxDuration}.
+Budget: stop after {maxCostUsd} spent or {maxDuration} elapsed.
 ```
 
 **What this replaces in the plan:**
@@ -626,7 +626,7 @@ Budget: stop after {maxTokens} tokens or {maxDuration}.
 - Spawning/stopping watcher sessions (Agent SDK)
 - Streaming watcher events to the UI (existing WebSocket infra)
 - DAG advancement when a watcher reports PR merged (Convex mutation)
-- Budget enforcement — kill the watcher if token limit hit
+- Cost enforcement — kill the watcher if cost limit hit
 - Emergency stop — kill the watcher if task is paused
 
 #### Impact on Phased Plan
@@ -646,7 +646,7 @@ Budget: stop after {maxTokens} tokens or {maxDuration}.
 | 3-day auto-expiry | Holophyte detects expiry via session exit event and respawns if PR is still open |
 | No catch-up on missed fires | Acceptable — PR comments don't need sub-minute latency |
 | 50 task limit per session | One watcher per YOLO task, each with 1-2 loops — well within limits |
-| Token cost of idle polling | Budget controls cap total spend; most polls are cheap (just `gh` CLI calls) |
+| Cost of idle polling | Cost controls cap total spend; most polls are cheap (just `gh` CLI calls) |
 
 ### Auto-Merge Safety
 
