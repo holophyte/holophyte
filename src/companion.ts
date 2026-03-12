@@ -17,7 +17,7 @@ if (!process.env.ALLOWED_ORIGIN) {
 }
 
 const server = Bun.serve({
-  port: Number(process.env.PORT) || 8080,
+  port: Number(process.env.PORT) || 0,
   routes: {
     '/api/auth/*': async (req: Request) => handleAuthProxy(req),
 
