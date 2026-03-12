@@ -16,9 +16,10 @@
 6. [Feature Proposals — Novel Differentiators](#feature-proposals--novel-differentiators)
 7. [Focus Mode — Deep Dive](#focus-mode--deep-dive)
 8. [Decision Queue — Deep Dive](#decision-queue--deep-dive)
-9. [Missing Capabilities for Increased Power](#missing-capabilities-for-increased-power)
-10. [Implementation Priority Matrix](#implementation-priority-matrix)
-11. [Technical Architecture Notes](#technical-architecture-notes)
+9. [Companion Agent — Deep Dive](#companion-agent--deep-dive)
+10. [Missing Capabilities for Increased Power](#missing-capabilities-for-increased-power)
+11. [Implementation Priority Matrix](#implementation-priority-matrix)
+12. [Technical Architecture Notes](#technical-architecture-notes)
 
 ---
 
@@ -548,9 +549,32 @@ Focus Mode and the Decision Queue are complementary:
 - **Decision Queue** = the attention router. "What needs me right now?" Surfaces the single most important decision across all active agents and tasks.
 - **Focus Mode** = deep work on one task. "Let me go deep on this." Full-viewport session output + review panel for a single task.
 
-The queue feeds Focus Mode: tap a queue item → opens the relevant session → user can optionally enter Focus Mode for that task. The queue is the *navigator*, Focus Mode is the *destination*.
-
 Both are accessible from the main nav. Users choose their default landing page (queue or kanban board) in settings.
+
+#### Depth Levels
+
+The queue has natural "depth levels" based on effort. Most items resolve inline — Focus Mode only activates when you genuinely need to go deep.
+
+| Depth | Action | Navigation |
+|-------|--------|------------|
+| **Inline** | Approve, deny, archive, confirm | Stay in queue. Never leave. |
+| **Expand** | Error triage, merge decision | Expand item in-place for more context. Still in queue. |
+| **Focus** | Code review, complex feedback | "Focus" button → full-viewport Focus Mode with session + diff. |
+
+The key insight: **most queue items should never require leaving the queue.** Permission approvals, quick confirmations, task completions — these are 2-second actions. The queue's power is clearing 8 items in 30 seconds without navigating anywhere. Focus Mode only activates for deep work (reviewing a 4-file diff, writing a detailed follow-up, debugging a failed agent).
+
+```
+Queue (triage)
+  │
+  ├─ Quick wins → resolve inline, never leave the queue
+  │   (approve, deny, archive completed task)
+  │
+  ├─ Medium items → expand in-place for more context
+  │   (error triage, merge decision)
+  │
+  └─ Deep work → Focus Mode (full viewport)
+      (code review, complex feedback)
+```
 
 ### Queue Item Types
 
@@ -803,6 +827,133 @@ User resolves item
 - **Dopamine feedback?** Should completed items stay briefly with a "just cleared" animation, or disappear instantly?
 - **Recommender integration?** Does the "What Should I Work On?" recommender share the queue, or is it a separate surface for suggesting *new* tasks?
 - **Mobile / PWA?** If Holophyte goes PWA, the queue is the most natural mobile-first view — quick approvals from your phone while agents run on your machine.
+
+---
+
+## Companion Agent — Deep Dive
+
+The Companion is a persistent, project-aware AI chat panel that fills the dead space between decisions. When the queue is empty and agents are working, you're just... waiting. That's where attention wanders. The Companion gives you something productive to do without context-switching away from Holophyte.
+
+### What It Is (and Isn't)
+
+The Companion is **not** another Claude Code session. It doesn't edit files or run commands. It's a lightweight conversational agent that has full awareness of your project state — running agents, queue items, task history, repo context, costs — and uses that to help you think.
+
+| Companion | Claude Code Session |
+|-----------|-------------------|
+| Persistent — always available | Ephemeral — spawned per task |
+| Reads project state, doesn't modify it (Phase 1) | Reads and writes code |
+| Conversational / advisory | Tool-using / agentic |
+| One per workspace | Many per workspace |
+
+### Use Cases
+
+**While waiting (queue empty):**
+- "Help me plan the prompt for the auth migration task"
+- "What's the architecture of the payment system?" (codebase Q&A)
+- "I have 20 minutes before reviews come in — what quick tasks could I queue up?"
+- "Summarize what Agent 2 has done so far on the user model refactor"
+
+**During triage (queue active):**
+- "Agent 3 failed on the E2E tests — what went wrong and how should I retry?"
+- "Is this diff safe to approve? Walk me through the changes."
+- "Compare the approach Agent 1 took vs what I originally asked for"
+
+**Planning & ideation:**
+- "Break down this epic into sub-tasks with dependencies"
+- "What files will need to change for adding WebSocket support?"
+- "Draft a prompt that would make Claude Code handle the edge cases better"
+
+### UI: Persistent Side Panel
+
+The Companion lives in a collapsible panel on the right edge, accessible from any view (queue, kanban board, Focus Mode). It stays open across navigation — you can be mid-conversation with the Companion while clearing queue items.
+
+```
+┌────────────────────────────────────────────────┬─────────────────────┐
+│                                                │                     │
+│                                                │  Companion          │
+│           Queue / Board / Focus Mode           │                     │
+│           (main content)                       │  "What should I     │
+│                                                │   work on next?"    │
+│                                                │                     │
+│                                                │  Based on your      │
+│                                                │  task backlog and   │
+│                                                │  agent availability │
+│                                                │  I'd suggest...     │
+│                                                │                     │
+│                                                │  ┌───────────────┐  │
+│                                                │  │ Ask anything.. │  │
+│                                                │  └───────────────┘  │
+│                                                │                     │
+└────────────────────────────────────────────────┴─────────────────────┘
+```
+
+**Panel states:**
+- **Collapsed**: Small "Companion" tab on the right edge. Unobtrusive.
+- **Open**: 300-350px wide panel with chat thread + input. Slides in, doesn't push main content (overlays on smaller screens).
+- **Keyboard**: `Cmd+Shift+C` to toggle. `Escape` to collapse.
+
+**Context awareness indicators:** The Companion shows what it has access to at the top of the panel — "Seeing 5 agents, 12 tasks, 3 queue items" — so the user knows it's informed without having to ask.
+
+### Project Awareness
+
+The Companion has read access to the full project state:
+
+| Data Source | What It Sees |
+|-------------|-------------|
+| **Running agents** | Current status, task, elapsed time, cost |
+| **Queue items** | Pending decisions, types, ages |
+| **Tasks** | All tasks across statuses, prompts, descriptions |
+| **Sessions** | History of completed sessions, costs, outcomes |
+| **Repo context** | File tree, key files (README, schema, etc.) |
+| **Costs** | Per-session, per-task, daily totals |
+
+This makes the Companion useful as a **project oracle** — it can answer questions like "which tasks have failed the most?" or "what's the total cost of the auth epic?" without the user digging through dashboards.
+
+### Phased Capabilities
+
+**Phase 1 — Advisory (read-only):**
+- Answer questions about project state, codebase, agent status
+- Help draft task prompts and descriptions
+- Explain agent errors and suggest retry strategies
+- Summarize what happened while you were away (deeper than the digest)
+- Suggest what to work on based on backlog and priorities
+
+**Phase 2 — Actions with approval gates:**
+- Create tasks (drafts them, you confirm)
+- Retry failed sessions (shows the new prompt, you approve)
+- Adjust agent priorities (suggests reordering, you confirm)
+- Auto-approve rules ("always approve Read tool") — suggests, you enable
+
+Each action is gated behind an inline approval: "I'd like to create a task for 'Add rate limiting to auth endpoints.' Create it?" [Create] [Edit first] [Cancel]
+
+### Relationship to the Queue
+
+The Companion and Decision Queue share the same screen real estate but serve different modes:
+
+| Queue empty | Companion is the primary interaction — fills the void |
+|-------------|-----------------------------------------------------|
+| Queue active | Companion assists triage — "explain this error", "is this diff safe?" |
+| Focus Mode | Companion available as side panel — "help me write a follow-up prompt" |
+
+The Companion can also **proactively surface things** (gently, respecting momentum protection):
+- "Agent 2 has been running for 30 minutes — that's longer than usual for this type of task. Want me to check on it?"
+- "You have 3 tasks in backlog that could run in parallel right now. Want to see them?"
+
+These are suggestions in the Companion chat, not notifications or toasts. The user sees them when they check the panel, not before.
+
+### ADHD-Specific Design
+
+- **No notification spam**: Proactive messages queue up silently in the Companion panel. A subtle dot indicator shows "Companion has something to say" — no sound, no toast.
+- **Conversational over dashboard**: Instead of building a cost dashboard, the Companion answers "how much have I spent today?" conversationally. Less UI to build, more natural to use.
+- **Rubber ducking**: ADHD brains benefit from talking through problems. The Companion is a zero-judgment sounding board that actually has context.
+- **Task decomposition assist**: "I need to add user auth" → Companion helps break it into atomic, dependency-ordered sub-tasks with draft prompts. This is the hardest part of using any agent orchestrator and the Companion can scaffold it.
+
+### Open Questions
+
+- **Model choice?** The Companion should be fast and cheap (Haiku-class) since it's conversational, not agentic. But codebase Q&A might benefit from a stronger model. Hybrid routing?
+- **Memory across sessions?** Should the Companion remember past conversations? "Last time we discussed auth, you preferred JWT over sessions" — useful but adds complexity.
+- **Multiple repos?** If the user has multiple repos, does the Companion scope to the selected repo or see everything?
+- **Voice input?** For ADHD users, voice-to-text for the Companion could lower the barrier to "talking through" a problem.
 
 ---
 

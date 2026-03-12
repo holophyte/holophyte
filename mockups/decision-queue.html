@@ -784,13 +784,211 @@
       border: 0;
     }
 
+    /* ── Companion Panel ── */
+    .companion-panel {
+      width: 340px;
+      border-left: 1px solid var(--border);
+      background: var(--bg-secondary);
+      display: flex;
+      flex-direction: column;
+      flex-shrink: 0;
+      transition: width 0.2s, opacity 0.2s;
+    }
+
+    .companion-panel.collapsed {
+      width: 0;
+      overflow: hidden;
+      opacity: 0;
+    }
+
+    .companion-header {
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .companion-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-secondary);
+    }
+
+    .companion-context {
+      font-size: 11px;
+      color: var(--text-muted);
+      padding: 8px 16px;
+      border-bottom: 1px solid var(--border);
+      background: var(--bg-tertiary);
+    }
+
+    .companion-thread {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .companion-msg {
+      font-size: 13px;
+      line-height: 1.6;
+      color: var(--text-secondary);
+    }
+
+    .companion-msg.user {
+      color: var(--text-primary);
+      background: var(--bg-tertiary);
+      padding: 10px 14px;
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+    }
+
+    .companion-msg.ai {
+      padding: 0 2px;
+    }
+
+    .companion-msg-sender {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-muted);
+      margin-bottom: 4px;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+    }
+
+    .companion-suggestion {
+      background: var(--accent-glow);
+      border: 1px solid rgba(99, 102, 241, 0.2);
+      border-radius: var(--radius);
+      padding: 10px 14px;
+      font-size: 12px;
+      color: var(--text-secondary);
+      line-height: 1.5;
+    }
+
+    .companion-suggestion strong {
+      color: var(--accent);
+      font-weight: 600;
+    }
+
+    .companion-input-area {
+      padding: 12px 16px;
+      border-top: 1px solid var(--border);
+    }
+
+    .companion-input {
+      width: 100%;
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 10px 14px;
+      color: var(--text-primary);
+      font-size: 13px;
+      font-family: var(--font);
+      outline: none;
+    }
+
+    .companion-input:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 2px var(--accent-glow);
+    }
+
+    .companion-input::placeholder {
+      color: var(--text-muted);
+    }
+
+    .companion-toggle {
+      position: fixed;
+      right: 0;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 28px;
+      height: 64px;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-right: none;
+      border-radius: 6px 0 0 6px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--text-muted);
+      font-size: 11px;
+      writing-mode: vertical-rl;
+      text-orientation: mixed;
+      z-index: 50;
+      transition: all 0.15s;
+    }
+
+    .companion-toggle:hover {
+      background: var(--bg-tertiary);
+      color: var(--text-secondary);
+      border-color: var(--border-active);
+    }
+
+    .companion-toggle:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
+    }
+
+    .companion-toggle.hidden { display: none; }
+
+    .close-btn {
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      cursor: pointer;
+      font-size: 16px;
+      padding: 2px 6px;
+      border-radius: 4px;
+      transition: all 0.15s;
+    }
+
+    .close-btn:hover {
+      color: var(--text-secondary);
+      background: var(--bg-tertiary);
+    }
+
+    /* ── Focus Button on Queue Items ── */
+    .focus-btn {
+      padding: 5px 12px;
+      border-radius: 4px;
+      border: 1px solid var(--border);
+      background: var(--bg-tertiary);
+      color: var(--accent);
+      font-size: 11px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s;
+      white-space: nowrap;
+    }
+
+    .focus-btn:hover {
+      background: var(--accent-glow);
+      border-color: var(--accent);
+    }
+
+    .focus-btn:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
+    }
+
     @media (prefers-reduced-motion: reduce) {
       .agent-status-dot.running,
       .agent-status-dot.paused { animation: none; }
+      .companion-panel { transition: none; }
+    }
+
+    @media (max-width: 1200px) {
+      .companion-panel:not(.collapsed) { width: 280px; }
     }
 
     @media (max-width: 900px) {
       .agents-sidebar { display: none; }
+      .companion-panel { display: none; }
       .queue-main { max-width: 100%; }
     }
   </style>
@@ -905,6 +1103,7 @@
             </div>
           </div>
           <div class="compact-right">
+            <button class="focus-btn" aria-label="Open in Focus Mode">Focus</button>
             <span>8 min ago</span>
             <span class="effort-tag">High</span>
           </div>
@@ -1049,6 +1248,48 @@
     </aside>
   </div>
 
+  <!-- Companion Panel (Right Edge) -->
+  <aside class="companion-panel" id="companion-panel" aria-label="Companion AI assistant">
+    <div class="companion-header">
+      <span class="companion-title">Companion</span>
+      <button class="close-btn" id="companion-close" aria-label="Close companion panel">×</button>
+    </div>
+    <div class="companion-context">
+      Seeing 5 agents · 12 tasks · 3 queue items
+    </div>
+    <div class="companion-thread" role="log" aria-label="Companion conversation">
+      <div class="companion-msg user">
+        <div class="companion-msg-sender">You</div>
+        What should I work on next? I have about 20 minutes before the code reviews come in.
+      </div>
+      <div class="companion-msg ai">
+        <div class="companion-msg-sender">Companion</div>
+        Based on your backlog, here are two quick tasks that could run in parallel while you wait:
+      </div>
+      <div class="companion-suggestion">
+        <strong>1. Add rate limiting to /api/auth</strong> — straightforward, estimated 5-8 min agent time. You wrote a similar one last week for /api/payments that Agent 2 can reference.<br><br>
+        <strong>2. Fix #52 — broken pagination on dashboard</strong> — small bug, < 3 min. Good candidate for auto-YOLO since it has E2E test coverage.
+      </div>
+      <div class="companion-msg ai">
+        <div class="companion-msg-sender">Companion</div>
+        Want me to draft prompts for either of these?
+      </div>
+    </div>
+    <div class="companion-input-area">
+      <input
+        class="companion-input"
+        type="text"
+        placeholder="Ask anything about your project..."
+        aria-label="Send message to companion"
+      />
+    </div>
+  </aside>
+
+  <!-- Companion Toggle Tab (visible when panel is collapsed) -->
+  <button class="companion-toggle hidden" id="companion-toggle" aria-label="Open companion panel">
+    Companion
+  </button>
+
   <!-- "While You Were Away" Digest Overlay -->
   <div class="digest-overlay" id="digest-overlay" role="dialog" aria-label="While you were away summary" aria-modal="true">
     <div class="digest-card">
@@ -1158,6 +1399,35 @@
         items[focusedIndex]?.focus();
       } else if (e.key === 'Escape') {
         document.getElementById('digest-overlay')?.classList.remove('visible');
+      }
+    });
+
+    // Companion panel toggle
+    const companionPanel = document.getElementById('companion-panel');
+    const companionToggle = document.getElementById('companion-toggle');
+    const companionClose = document.getElementById('companion-close');
+
+    companionClose?.addEventListener('click', () => {
+      companionPanel?.classList.add('collapsed');
+      companionToggle?.classList.remove('hidden');
+    });
+
+    companionToggle?.addEventListener('click', () => {
+      companionPanel?.classList.remove('collapsed');
+      companionToggle?.classList.add('hidden');
+    });
+
+    // Cmd+Shift+C to toggle companion
+    document.addEventListener('keydown', (e) => {
+      if (e.metaKey && e.shiftKey && e.key === 'c') {
+        e.preventDefault();
+        if (companionPanel?.classList.contains('collapsed')) {
+          companionPanel?.classList.remove('collapsed');
+          companionToggle?.classList.add('hidden');
+        } else {
+          companionPanel?.classList.add('collapsed');
+          companionToggle?.classList.remove('hidden');
+        }
       }
     });
 
