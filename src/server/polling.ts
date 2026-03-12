@@ -168,3 +168,61 @@ export function stopCompanionPolling() {
   }
   companionUrl = undefined;
 }
+
+// How recently a companion heartbeat must be to indicate an active instance.
+const DUPLICATE_THRESHOLD_MS = 10_000;
+
+/**
+ * Full companion startup sequence:
+ *   1. Detect duplicate instances (exit if another companion is active)
+ *   2. Clean up stale/stopped sessions from a prior crash
+ *   3. Start the polling loop
+ *
+ * All Convex calls are non-fatal — missing config is silently skipped.
+ */
+export async function startCompanion(url: string): Promise<void> {
+  // 1. Duplicate check
+  // Note: this is an advisory check — two companions starting simultaneously
+  // within POLL_INTERVAL_MS of each other can both pass before either has
+  // written its first heartbeat (TOCTOU). This is acceptable; the window is
+  // narrow and the scenario is unlikely in practice.
+  try {
+    const status = await queryConvexInternal<{
+      lastSeen: number;
+      machineId?: string;
+    } | null>('/api/internal/companion/status', {});
+    const now = Date.now();
+    if (
+      status &&
+      now - status.lastSeen < DUPLICATE_THRESHOLD_MS &&
+      status.machineId !== MACHINE_ID
+    ) {
+      const secondsAgo = Math.round((now - status.lastSeen) / 1000);
+      console.error(
+        `Error: Another companion is already connected to this deployment (last seen ${secondsAgo}s ago).\n` +
+          `Stop it first, or check your CONVEX_DEPLOYMENT config.`,
+      );
+      process.exit(1);
+    }
+  } catch {
+    // Skip if Convex is not configured yet
+  }
+
+  // 2. Clean up sessions left in inconsistent states from a prior crash or
+  //    companion outage:
+  //      - 'running' → 'idle': process died without finalising the turn
+  //      - 'stopped' → 'idle': stop request was never processed
+  try {
+    await callConvexInternal('/api/internal/sessions/markStaleRunning', {});
+  } catch {
+    // Non-critical — Convex may not be configured yet
+  }
+  try {
+    await callConvexInternal('/api/internal/sessions/markStoppedAsIdle', {});
+  } catch {
+    // Non-critical — Convex may not be configured yet
+  }
+
+  // 3. Start the polling loop
+  startCompanionPolling({ url });
+}
