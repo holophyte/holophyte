@@ -46,6 +46,14 @@ let convexClientStarting = false;
 // Set by stopCompanionSubscriptions so that if stop is called while
 // deriveCompanionToken is awaiting, we don't create a zombie ConvexClient.
 let stopRequested = false;
+// Incremented by onError callbacks; reset on each fresh startCompanionSubscriptions.
+// Allows isSubscriptionsActive() to return false when subscriptions have errored,
+// so the retry loop in companionPoll can tear down and reconnect.
+let subscriptionErrorCount = 0;
+// Incremented each time a new ConvexClient is created. Captured in each onError
+// callback closure so stale callbacks from a closed client don't corrupt the
+// error count of a newly started one.
+let subscriptionGeneration = 0;
 const unsubscribers: Array<() => void> = [];
 
 // Track in-flight operations to avoid double-processing the same item
@@ -160,6 +168,8 @@ export async function startCompanionSubscriptions(opts: {
   if (convexClient || convexClientStarting) return;
   convexClientStarting = true;
   stopRequested = false;
+  subscriptionErrorCount = 0;
+  const gen = ++subscriptionGeneration;
 
   try {
     const token = await deriveCompanionToken(opts.secret);
@@ -179,7 +189,10 @@ export async function startCompanionSubscriptions(opts: {
             void handleQueuedSession(session);
           }
         },
-        (err) => console.error('companionListQueued subscription error:', err),
+        (err) => {
+          if (gen === subscriptionGeneration) subscriptionErrorCount++;
+          console.error('companionListQueued subscription error:', err);
+        },
       ),
     );
 
@@ -193,7 +206,10 @@ export async function startCompanionSubscriptions(opts: {
             void handleStoppedSession(session);
           }
         },
-        (err) => console.error('companionListStopped subscription error:', err),
+        (err) => {
+          if (gen === subscriptionGeneration) subscriptionErrorCount++;
+          console.error('companionListStopped subscription error:', err);
+        },
       ),
     );
 
@@ -207,7 +223,10 @@ export async function startCompanionSubscriptions(opts: {
             void handlePendingMessage(msg);
           }
         },
-        (err) => console.error('companionListPending subscription error:', err),
+        (err) => {
+          if (gen === subscriptionGeneration) subscriptionErrorCount++;
+          console.error('companionListPending subscription error:', err);
+        },
       ),
     );
   } catch (err) {
@@ -221,15 +240,21 @@ export async function startCompanionSubscriptions(opts: {
   }
 }
 
-/** Returns true if subscriptions are established and the client is connected. */
+/**
+ * Returns true if subscriptions are established and no subscription has errored.
+ * A non-null client with errored subscriptions is functionally equivalent to
+ * having no subscriptions — the retry loop in companionPoll uses this to detect
+ * and recover from persistent subscription failures (e.g. rotated secrets).
+ */
 export function isSubscriptionsActive(): boolean {
-  return convexClient !== null;
+  return convexClient !== null && subscriptionErrorCount === 0;
 }
 
 export function stopCompanionSubscriptions(): void {
   stopRequested = true;
   for (const unsub of unsubscribers) unsub();
   unsubscribers.length = 0;
+  subscriptionErrorCount = 0;
   // Do NOT clear inFlight* sets here — handlers still mid-await will clean up
   // their own IDs via finally blocks. Clearing now would allow re-entry on a
   // quick stop/restart before in-flight work settles.
