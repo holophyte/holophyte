@@ -4,6 +4,7 @@ import { hostname } from 'node:os';
 import { getActiveSessions } from '@/claude/manager';
 import { callConvexInternal, queryConvexInternal } from './convex-client';
 import {
+  isSubscriptionsActive,
   startCompanionSubscriptions,
   stopCompanionSubscriptions,
 } from './subscriptions';
@@ -50,7 +51,20 @@ export async function companionPoll() {
       }
     }
 
-    // 2. Send companion-level heartbeat (every cycle, even with zero sessions)
+    // 2. Retry subscription setup if it failed on startup (transient errors)
+    if (!isSubscriptionsActive()) {
+      const convexUrl = process.env.CONVEX_URL;
+      const secret = process.env.INTERNAL_API_SECRET;
+      if (convexUrl && secret) {
+        try {
+          await startCompanionSubscriptions({ convexUrl, secret });
+        } catch {
+          // Best-effort — will retry on next poll cycle
+        }
+      }
+    }
+
+    // 3. Send companion-level heartbeat (every cycle, even with zero sessions)
     try {
       await callConvexInternal('/api/internal/companion/heartbeat', {
         activeSessionCount: activeIds.length,
