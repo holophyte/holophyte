@@ -67,6 +67,11 @@ async function handleQueuedSession(session: QueuedSession): Promise<void> {
     );
     if (!claimed.ok) return;
 
+    // Re-check after claim: if a stop arrived while we were claiming, bail.
+    // The stop handler skips sessions with in-flight claims, so we must honour
+    // any stop that was deferred while inFlightClaims held this ID.
+    if (inFlightStops.has(session._id)) return;
+
     await startSession({
       sessionId: session._id,
       repoPath: session.repoPath,
@@ -167,6 +172,7 @@ export async function startCompanionSubscriptions(opts: {
             void handleQueuedSession(session);
           }
         },
+        (err) => console.error('companionListQueued subscription error:', err),
       ),
     );
 
@@ -180,6 +186,7 @@ export async function startCompanionSubscriptions(opts: {
             void handleStoppedSession(session);
           }
         },
+        (err) => console.error('companionListStopped subscription error:', err),
       ),
     );
 
@@ -193,6 +200,7 @@ export async function startCompanionSubscriptions(opts: {
             void handlePendingMessage(msg);
           }
         },
+        (err) => console.error('companionListPending subscription error:', err),
       ),
     );
   } finally {
