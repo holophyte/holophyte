@@ -1,5 +1,10 @@
 import { v } from 'convex/values';
-import { internalMutation, mutation, query } from './_generated/server';
+import {
+  internalMutation,
+  internalQuery,
+  mutation,
+  query,
+} from './_generated/server';
 import { requireAuth, requireOrgMembership, requireRole } from './lib/auth';
 
 export const listByUser = query({
@@ -113,6 +118,14 @@ export const update = mutation({
       updates.slug = slug;
     }
     await ctx.db.patch(args.id, updates);
+  },
+});
+
+/** Returns the first organization in the deployment (for companion orgId derivation). */
+export const getDefaultOrg = internalQuery({
+  args: {},
+  handler: async (ctx) => {
+    return await ctx.db.query('organizations').first();
   },
 });
 

@@ -32,7 +32,8 @@ export function ClaudeButton({ task }: ClaudeButtonProps) {
   const [error, setError] = useState<string | null>(null);
   const [model, setModel] = useState<ClaudeModelId>(DEFAULT_MODEL);
   const [prevTaskId, setPrevTaskId] = useState(task._id);
-  const { state: companionState } = useCompanionStatus();
+  const selectedOrgId = useAppStore((s) => s.selectedOrgId);
+  const { state: companionState } = useCompanionStatus(selectedOrgId);
 
   // Reset model to default when switching to a different task
   if (task._id !== prevTaskId) {

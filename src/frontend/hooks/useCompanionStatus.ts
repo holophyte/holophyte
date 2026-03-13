@@ -1,4 +1,5 @@
 import { api } from '@convex/_generated/api';
+import type { Id } from '@convex/_generated/dataModel';
 import { useQuery } from 'convex/react';
 import { useSyncExternalStore } from 'react';
 
@@ -46,11 +47,13 @@ function getSnapshot() {
   return now;
 }
 
-export function useCompanionStatus() {
-  const status = useQuery(api.companion.getStatus);
+export function useCompanionStatus(
+  orgId: Id<'organizations'> | null | undefined,
+) {
+  const status = useQuery(api.companion.getStatus, orgId ? { orgId } : 'skip');
   const currentTime = useSyncExternalStore(subscribe, getSnapshot);
 
-  // status === undefined means the query hasn't resolved yet
+  // status === undefined means the query hasn't resolved yet (or is skipped)
   const state: CompanionState =
     status === undefined
       ? 'loading'
