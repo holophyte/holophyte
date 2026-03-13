@@ -51,7 +51,8 @@ export function AddRepoDialog({ open, onOpenChange }: AddRepoDialogProps) {
   const [submitting, setSubmitting] = useState(false);
   const [picking, setPicking] = useState(false);
   const selectedOrgId = useAppStore((s) => s.selectedOrgId);
-  const { state: companionState, companionUrl } = useCompanionStatus();
+  const { state: companionState, companionUrl } =
+    useCompanionStatus(selectedOrgId);
   const createRepo = useMutation(api.repos.create);
 
   const handlePathChange = (value: string) => {
@@ -67,6 +68,8 @@ export function AddRepoDialog({ open, onOpenChange }: AddRepoDialogProps) {
     setError(null);
     try {
       const baseUrl = companionUrl ?? '';
+      // UX hint only — real localhost validation is enforced server-side
+      // in the companion heartbeat mutation (convex/companion.ts)
       if (baseUrl && !/^http:\/\/localhost:\d+$/.test(baseUrl)) {
         setError('Companion URL is invalid.');
         return;

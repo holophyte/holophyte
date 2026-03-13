@@ -225,9 +225,12 @@ export default defineSchema({
   }).index('by_session_batch', ['sessionId', 'batchIndex']),
 
   companion: defineTable({
+    orgId: v.id('organizations'),
     lastSeen: v.number(),
     activeSessionCount: v.number(),
     machineId: v.optional(v.string()),
     url: v.optional(v.string()),
-  }),
+  })
+    .index('by_org', ['orgId'])
+    .index('by_org_machine', ['orgId', 'machineId']),
 });
