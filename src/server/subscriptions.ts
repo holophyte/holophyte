@@ -15,7 +15,11 @@ import {
 import { callConvexInternal, queryConvexInternal } from './convex-client';
 import type { PendingMessage, QueuedSession, StoppedSession } from './polling';
 
-/** Derives the companion auth token using Web Crypto — mirrors the Convex-side derivation. */
+/**
+ * Derives the companion auth token using Web Crypto — mirrors the Convex-side derivation
+ * in `convex/lib/validateSecret.ts`. Both must be kept in sync; they cannot share a
+ * module because Convex and Bun run in separate bundler contexts.
+ */
 async function deriveCompanionToken(secret: string): Promise<string> {
   const enc = new TextEncoder();
   const key = await crypto.subtle.importKey(
@@ -86,6 +90,9 @@ async function waitForSessionGone(sessionId: string): Promise<void> {
     if (!getSession(sessionId)) return;
     await new Promise<void>((resolve) => setTimeout(resolve, 100));
   }
+  console.error(
+    `Session ${sessionId} did not exit within 10s — releasing inFlightStops lock`,
+  );
 }
 
 async function handleStoppedSession(session: StoppedSession): Promise<void> {

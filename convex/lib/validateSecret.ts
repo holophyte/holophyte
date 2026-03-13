@@ -43,7 +43,18 @@ export function validateSecret(request: Request): Response | null {
   return null;
 }
 
-/** Derives a stable companion auth token by signing a fixed string with the secret. */
+/**
+ * Derives a stable companion auth token by signing a fixed string with the secret.
+ *
+ * The token is static (no time component) so persistent ConvexClient subscriptions
+ * don't need to be re-established. The trade-off — a token captured from dashboard
+ * logs can be replayed until INTERNAL_API_SECRET is rotated — is acceptable for a
+ * local dev tool where dashboard access implies ownership of the deployment.
+ *
+ * Note: an identical derivation lives in `src/server/subscriptions.ts`. Both must
+ * be kept in sync. They cannot share a module because Convex and Bun run in
+ * separate bundler contexts.
+ */
 async function deriveCompanionToken(secret: string): Promise<string> {
   const enc = new TextEncoder();
   const key = await crypto.subtle.importKey(
