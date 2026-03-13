@@ -51,12 +51,15 @@ export async function companionPoll() {
       }
     }
 
-    // 2. Retry subscription setup if it failed on startup (transient errors)
+    // 2. Retry subscription setup if not active (startup failure or subscription error).
+    // stopCompanionSubscriptions() is called first so an errored-but-non-null client
+    // doesn't block the startCompanionSubscriptions guard check.
     if (!isSubscriptionsActive()) {
       const convexUrl = process.env.CONVEX_URL;
       const secret = process.env.INTERNAL_API_SECRET;
       if (convexUrl && secret) {
         try {
+          stopCompanionSubscriptions();
           await startCompanionSubscriptions({ convexUrl, secret });
         } catch {
           // Best-effort — will retry on next poll cycle
