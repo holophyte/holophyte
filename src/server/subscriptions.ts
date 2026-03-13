@@ -43,6 +43,9 @@ let convexClient: ConvexClient | null = null;
 // Prevents two concurrent startCompanionSubscriptions() calls from both passing
 // the convexClient === null check across the async deriveCompanionToken gap.
 let convexClientStarting = false;
+// Set by stopCompanionSubscriptions so that if stop is called while
+// deriveCompanionToken is awaiting, we don't create a zombie ConvexClient.
+let stopRequested = false;
 const unsubscribers: Array<() => void> = [];
 
 // Track in-flight operations to avoid double-processing the same item
@@ -157,9 +160,14 @@ export async function startCompanionSubscriptions(opts: {
 }): Promise<void> {
   if (convexClient || convexClientStarting) return;
   convexClientStarting = true;
+  stopRequested = false;
 
   try {
     const token = await deriveCompanionToken(opts.secret);
+
+    // If stopCompanionSubscriptions() was called while we were awaiting, bail.
+    if (stopRequested) return;
+
     convexClient = new ConvexClient(opts.convexUrl);
 
     // Subscribe to queued sessions — claim and start immediately on update
@@ -209,6 +217,7 @@ export async function startCompanionSubscriptions(opts: {
 }
 
 export function stopCompanionSubscriptions(): void {
+  stopRequested = true;
   for (const unsub of unsubscribers) unsub();
   unsubscribers.length = 0;
   // Do NOT clear inFlight* sets here — handlers still mid-await will clean up
