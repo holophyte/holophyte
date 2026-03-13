@@ -211,6 +211,12 @@ export async function startCompanionSubscriptions(opts: {
         (err) => console.error('companionListPending subscription error:', err),
       ),
     );
+  } catch (err) {
+    // Tear down any partially-created client so callers can retry.
+    convexClient?.close().catch(console.error);
+    convexClient = null;
+    unsubscribers.length = 0;
+    throw err;
   } finally {
     convexClientStarting = false;
   }
