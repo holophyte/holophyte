@@ -145,7 +145,11 @@ export async function startCompanion(url: string): Promise<void> {
   const convexUrl = process.env.CONVEX_URL;
   const secret = process.env.INTERNAL_API_SECRET;
   if (convexUrl && secret) {
-    await startCompanionSubscriptions({ convexUrl, secret });
+    try {
+      await startCompanionSubscriptions({ convexUrl, secret });
+    } catch (err) {
+      console.error('Failed to start companion subscriptions:', err);
+    }
   } else {
     console.error(
       'CONVEX_URL or INTERNAL_API_SECRET not set — companion subscriptions unavailable, sessions will not be reactive',
