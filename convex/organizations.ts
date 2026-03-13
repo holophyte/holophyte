@@ -121,11 +121,20 @@ export const update = mutation({
   },
 });
 
-/** Returns the first organization in the deployment (for companion orgId derivation). */
+/**
+ * Returns the first organization in the deployment (for companion orgId derivation).
+ * Assumes single-org-per-deployment — logs a warning if multiple orgs exist.
+ */
 export const getDefaultOrg = internalQuery({
   args: {},
   handler: async (ctx) => {
-    return await ctx.db.query('organizations').first();
+    const orgs = await ctx.db.query('organizations').order('asc').take(2);
+    if (orgs.length > 1) {
+      console.warn(
+        'Multiple organizations found; using oldest for companion orgId derivation',
+      );
+    }
+    return orgs[0] ?? null;
   },
 });
 

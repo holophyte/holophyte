@@ -70,7 +70,7 @@ export function AddRepoDialog({ open, onOpenChange }: AddRepoDialogProps) {
       const baseUrl = companionUrl ?? '';
       // UX hint only — real localhost validation is enforced server-side
       // in the companion heartbeat mutation (convex/companion.ts)
-      if (baseUrl && !/^http:\/\/localhost:\d+$/.test(baseUrl)) {
+      if (baseUrl && !/^http:\/\/(localhost|127\.0\.0\.1):\d+$/.test(baseUrl)) {
         setError('Companion URL is invalid.');
         return;
       }
