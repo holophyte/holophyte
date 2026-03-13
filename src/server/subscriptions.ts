@@ -50,6 +50,10 @@ let stopRequested = false;
 // Allows isSubscriptionsActive() to return false when subscriptions have errored,
 // so the retry loop in companionPoll can tear down and reconnect.
 let subscriptionErrorCount = 0;
+// Incremented each time a new ConvexClient is created. Captured in each onError
+// callback closure so stale callbacks from a closed client don't corrupt the
+// error count of a newly started one.
+let subscriptionGeneration = 0;
 const unsubscribers: Array<() => void> = [];
 
 // Track in-flight operations to avoid double-processing the same item
@@ -165,6 +169,7 @@ export async function startCompanionSubscriptions(opts: {
   convexClientStarting = true;
   stopRequested = false;
   subscriptionErrorCount = 0;
+  const gen = ++subscriptionGeneration;
 
   try {
     const token = await deriveCompanionToken(opts.secret);
@@ -185,7 +190,7 @@ export async function startCompanionSubscriptions(opts: {
           }
         },
         (err) => {
-          subscriptionErrorCount++;
+          if (gen === subscriptionGeneration) subscriptionErrorCount++;
           console.error('companionListQueued subscription error:', err);
         },
       ),
@@ -202,7 +207,7 @@ export async function startCompanionSubscriptions(opts: {
           }
         },
         (err) => {
-          subscriptionErrorCount++;
+          if (gen === subscriptionGeneration) subscriptionErrorCount++;
           console.error('companionListStopped subscription error:', err);
         },
       ),
@@ -219,7 +224,7 @@ export async function startCompanionSubscriptions(opts: {
           }
         },
         (err) => {
-          subscriptionErrorCount++;
+          if (gen === subscriptionGeneration) subscriptionErrorCount++;
           console.error('companionListPending subscription error:', err);
         },
       ),
@@ -249,6 +254,7 @@ export function stopCompanionSubscriptions(): void {
   stopRequested = true;
   for (const unsub of unsubscribers) unsub();
   unsubscribers.length = 0;
+  subscriptionErrorCount = 0;
   // Do NOT clear inFlight* sets here — handlers still mid-await will clean up
   // their own IDs via finally blocks. Clearing now would allow re-entry on a
   // quick stop/restart before in-flight work settles.
