@@ -1,4 +1,5 @@
 import { v } from 'convex/values';
+import type { QueryCtx } from './_generated/server';
 import {
   internalMutation,
   internalQuery,
@@ -6,6 +7,7 @@ import {
   query,
 } from './_generated/server';
 import { requireOrgMembership, requireRole } from './lib/auth';
+import { validateCompanionToken } from './lib/validateSecret';
 import { sessionStatusValidator } from './schema';
 
 /**
@@ -453,6 +455,23 @@ export const serverUpdateName = internalMutation({
   },
 });
 
+/** Shared implementation for listQueued and companionListQueued. */
+async function fetchQueuedSessions(ctx: QueryCtx) {
+  const queued = await ctx.db
+    .query('sessions')
+    .withIndex('by_status', (q) => q.eq('status', 'queued'))
+    .collect();
+  const result = [];
+  for (const session of queued) {
+    const task = await ctx.db.get(session.taskId);
+    if (!task) continue;
+    const repo = await ctx.db.get(task.repoId);
+    if (!repo) continue;
+    result.push({ ...session, repoPath: repo.path });
+  }
+  return result;
+}
+
 /**
  * Returns all sessions with status `queued`, enriched with the repo path
  * needed by the companion to launch the SDK process.
@@ -462,20 +481,7 @@ export const serverUpdateName = internalMutation({
 export const listQueued = internalQuery({
   args: {},
   handler: async (ctx) => {
-    const queued = await ctx.db
-      .query('sessions')
-      .withIndex('by_status', (q) => q.eq('status', 'queued'))
-      .collect();
-
-    const result = [];
-    for (const session of queued) {
-      const task = await ctx.db.get(session.taskId);
-      if (!task) continue;
-      const repo = await ctx.db.get(task.repoId);
-      if (!repo) continue;
-      result.push({ ...session, repoPath: repo.path });
-    }
-    return result;
+    return fetchQueuedSessions(ctx);
   },
 });
 
@@ -591,5 +597,45 @@ export const listStopped = internalQuery({
       .query('sessions')
       .withIndex('by_status', (q) => q.eq('status', 'stopped'))
       .collect();
+  },
+});
+
+/**
+ * Public companion query: returns all queued sessions with repoPath.
+ *
+ * Same as the internal `listQueued` but accessible to the companion via
+ * ConvexClient subscriptions. Validates the companion token derived from
+ * INTERNAL_API_SECRET so the raw secret never appears in logs.
+ *
+ * Intentionally not org-scoped — the companion serves all orgs globally.
+ */
+export const companionListQueued = query({
+  args: { token: v.string() },
+  handler: async (ctx, args) => {
+    if (!(await validateCompanionToken(args.token)))
+      throw new Error('Unauthorized');
+    return fetchQueuedSessions(ctx);
+  },
+});
+
+/**
+ * Public companion query: returns `_id` for all sessions with status `stopped`.
+ *
+ * Same as the internal `listStopped` but accessible to the companion via
+ * ConvexClient subscriptions. Returns only `_id` to minimise data in transit.
+ * Validates the companion token derived from INTERNAL_API_SECRET.
+ *
+ * Intentionally not org-scoped — the companion serves all orgs globally.
+ */
+export const companionListStopped = query({
+  args: { token: v.string() },
+  handler: async (ctx, args) => {
+    if (!(await validateCompanionToken(args.token)))
+      throw new Error('Unauthorized');
+    const stopped = await ctx.db
+      .query('sessions')
+      .withIndex('by_status', (q) => q.eq('status', 'stopped'))
+      .collect();
+    return stopped.map((s) => ({ _id: s._id }));
   },
 });
