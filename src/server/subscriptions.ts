@@ -15,6 +15,26 @@ import {
 import { callConvexInternal, queryConvexInternal } from './convex-client';
 import type { PendingMessage, QueuedSession, StoppedSession } from './polling';
 
+/** Derives the companion auth token using Web Crypto — mirrors the Convex-side derivation. */
+async function deriveCompanionToken(secret: string): Promise<string> {
+  const enc = new TextEncoder();
+  const key = await crypto.subtle.importKey(
+    'raw',
+    enc.encode(secret),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign'],
+  );
+  const sig = await crypto.subtle.sign(
+    'HMAC',
+    key,
+    enc.encode('holophyte-companion-v1'),
+  );
+  return Array.from(new Uint8Array(sig))
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('');
+}
+
 let convexClient: ConvexClient | null = null;
 const unsubscribers: Array<() => void> = [];
 
@@ -60,6 +80,14 @@ async function handleQueuedSession(session: QueuedSession): Promise<void> {
   }
 }
 
+/** Waits until a session is removed from the local manager map (max 10s). */
+async function waitForSessionGone(sessionId: string): Promise<void> {
+  for (let i = 0; i < 100; i++) {
+    if (!getSession(sessionId)) return;
+    await new Promise<void>((resolve) => setTimeout(resolve, 100));
+  }
+}
+
 async function handleStoppedSession(session: StoppedSession): Promise<void> {
   if (inFlightStops.has(session._id)) return;
 
@@ -67,6 +95,9 @@ async function handleStoppedSession(session: StoppedSession): Promise<void> {
   try {
     if (getSession(session._id)) {
       stopSession(session._id);
+      // Hold the lock until the session is cleaned up so that subscription
+      // re-evaluations triggered by heartbeats don't call stopSession() again.
+      await waitForSessionGone(session._id);
     } else {
       await callConvexInternal('/api/internal/sessions/updateStatus', {
         id: session._id,
@@ -98,19 +129,20 @@ async function handlePendingMessage(msg: PendingMessage): Promise<void> {
   }
 }
 
-export function startCompanionSubscriptions(opts: {
+export async function startCompanionSubscriptions(opts: {
   convexUrl: string;
   secret: string;
-}): void {
+}): Promise<void> {
   if (convexClient) return;
 
+  const token = await deriveCompanionToken(opts.secret);
   convexClient = new ConvexClient(opts.convexUrl);
 
   // Subscribe to queued sessions — claim and start immediately on update
   unsubscribers.push(
     convexClient.onUpdate(
       api.sessions.companionListQueued,
-      { secret: opts.secret },
+      { token },
       (queued) => {
         for (const session of queued) {
           void handleQueuedSession(session);
@@ -123,7 +155,7 @@ export function startCompanionSubscriptions(opts: {
   unsubscribers.push(
     convexClient.onUpdate(
       api.sessions.companionListStopped,
-      { secret: opts.secret },
+      { token },
       (stopped) => {
         for (const session of stopped) {
           void handleStoppedSession(session);
@@ -136,7 +168,7 @@ export function startCompanionSubscriptions(opts: {
   unsubscribers.push(
     convexClient.onUpdate(
       api.sessionMessages.companionListPending,
-      { secret: opts.secret },
+      { token },
       (messages) => {
         for (const msg of messages) {
           void handlePendingMessage(msg);
@@ -149,6 +181,10 @@ export function startCompanionSubscriptions(opts: {
 export function stopCompanionSubscriptions(): void {
   for (const unsub of unsubscribers) unsub();
   unsubscribers.length = 0;
-  void convexClient?.close();
+  // Clear in-flight sets so a restarted companion doesn't skip these IDs.
+  inFlightClaims.clear();
+  inFlightStops.clear();
+  inFlightMessages.clear();
+  convexClient?.close().catch(console.error);
   convexClient = null;
 }

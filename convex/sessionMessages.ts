@@ -1,4 +1,5 @@
 import { v } from 'convex/values';
+import type { QueryCtx } from './_generated/server';
 import {
   internalMutation,
   internalQuery,
@@ -6,7 +7,7 @@ import {
   query,
 } from './_generated/server';
 import { requireOrgMembership, requireRole } from './lib/auth';
-import { validateCompanionSecret } from './lib/validateSecret';
+import { validateCompanionToken } from './lib/validateSecret';
 
 /**
  * Sends a follow-up message to a session.
@@ -38,6 +39,26 @@ export const send = mutation({
   },
 });
 
+/** Shared implementation for listPending and companionListPending. */
+async function fetchPendingMessages(ctx: QueryCtx) {
+  const running = await ctx.db
+    .query('sessions')
+    .withIndex('by_status', (q) => q.eq('status', 'running'))
+    .collect();
+  const runningIds = new Set(running.map((s) => s._id));
+  const result = [];
+  for (const sessionId of runningIds) {
+    const messages = await ctx.db
+      .query('sessionMessages')
+      .withIndex('by_session_pending', (q) =>
+        q.eq('sessionId', sessionId).eq('consumed', false),
+      )
+      .collect();
+    result.push(...messages);
+  }
+  return result;
+}
+
 /**
  * Returns unconsumed messages for active sessions.
  *
@@ -47,24 +68,7 @@ export const send = mutation({
 export const listPending = internalQuery({
   args: {},
   handler: async (ctx) => {
-    // Get all running sessions
-    const running = await ctx.db
-      .query('sessions')
-      .withIndex('by_status', (q) => q.eq('status', 'running'))
-      .collect();
-    const runningIds = new Set(running.map((s) => s._id));
-
-    const result = [];
-    for (const sessionId of runningIds) {
-      const messages = await ctx.db
-        .query('sessionMessages')
-        .withIndex('by_session_pending', (q) =>
-          q.eq('sessionId', sessionId).eq('consumed', false),
-        )
-        .collect();
-      result.push(...messages);
-    }
-    return result;
+    return fetchPendingMessages(ctx);
   },
 });
 
@@ -87,27 +91,16 @@ export const markConsumed = internalMutation({
  * Public companion query: returns unconsumed messages for running sessions.
  *
  * Same as the internal `listPending` but accessible to the companion via
- * ConvexClient subscriptions. Validates the INTERNAL_API_SECRET secret arg.
+ * ConvexClient subscriptions. Validates the companion token derived from
+ * INTERNAL_API_SECRET so the raw secret never appears in logs.
+ *
+ * Intentionally not org-scoped — the companion serves all orgs globally.
  */
 export const companionListPending = query({
-  args: { secret: v.string() },
+  args: { token: v.string() },
   handler: async (ctx, args) => {
-    if (!validateCompanionSecret(args.secret)) throw new Error('Unauthorized');
-    const running = await ctx.db
-      .query('sessions')
-      .withIndex('by_status', (q) => q.eq('status', 'running'))
-      .collect();
-    const runningIds = new Set(running.map((s) => s._id));
-    const result = [];
-    for (const sessionId of runningIds) {
-      const messages = await ctx.db
-        .query('sessionMessages')
-        .withIndex('by_session_pending', (q) =>
-          q.eq('sessionId', sessionId).eq('consumed', false),
-        )
-        .collect();
-      result.push(...messages);
-    }
-    return result;
+    if (!(await validateCompanionToken(args.token)))
+      throw new Error('Unauthorized');
+    return fetchPendingMessages(ctx);
   },
 });

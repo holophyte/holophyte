@@ -43,9 +43,33 @@ export function validateSecret(request: Request): Response | null {
   return null;
 }
 
-/** Constant-time check for companion queries. Returns true if valid. */
-export function validateCompanionSecret(secret: string): boolean {
-  const expected = process.env.INTERNAL_API_SECRET;
-  if (!expected) return false;
-  return constantTimeEqual(secret, expected);
+/** Derives a stable companion auth token by signing a fixed string with the secret. */
+async function deriveCompanionToken(secret: string): Promise<string> {
+  const enc = new TextEncoder();
+  const key = await crypto.subtle.importKey(
+    'raw',
+    enc.encode(secret),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign'],
+  );
+  const sig = await crypto.subtle.sign(
+    'HMAC',
+    key,
+    enc.encode('holophyte-companion-v1'),
+  );
+  return Array.from(new Uint8Array(sig))
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('');
+}
+
+/**
+ * Validates a derived companion token for use in public query handlers.
+ * The companion derives the same token via HMAC so the raw secret never appears in logs.
+ */
+export async function validateCompanionToken(token: string): Promise<boolean> {
+  const secret = process.env.INTERNAL_API_SECRET;
+  if (!secret) return false;
+  const expected = await deriveCompanionToken(secret);
+  return constantTimeEqual(token, expected);
 }
