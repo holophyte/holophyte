@@ -19,17 +19,12 @@ export const upsertHeartbeat = internalMutation({
     }
 
     // Upsert by (orgId, machineId) so multiple companions can coexist across orgs
-    const existing = args.machineId
-      ? await ctx.db
-          .query('companion')
-          .withIndex('by_org_machine', (q) =>
-            q.eq('orgId', args.orgId).eq('machineId', args.machineId),
-          )
-          .first()
-      : await ctx.db
-          .query('companion')
-          .withIndex('by_org', (q) => q.eq('orgId', args.orgId))
-          .first();
+    const existing = await ctx.db
+      .query('companion')
+      .withIndex('by_org_machine', (q) =>
+        q.eq('orgId', args.orgId).eq('machineId', args.machineId),
+      )
+      .first();
 
     if (existing) {
       await ctx.db.patch(existing._id, {
