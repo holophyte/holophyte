@@ -232,5 +232,6 @@ export default defineSchema({
     url: v.optional(v.string()),
   })
     .index('by_org', ['orgId'])
-    .index('by_org_machine', ['orgId', 'machineId']),
+    .index('by_org_machine', ['orgId', 'machineId'])
+    .index('by_org_last_seen', ['orgId', 'lastSeen']),
 });

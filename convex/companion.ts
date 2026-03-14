@@ -55,7 +55,8 @@ export const getLastSeen = internalQuery({
   handler: async (ctx, args) => {
     const record = await ctx.db
       .query('companion')
-      .withIndex('by_org', (q) => q.eq('orgId', args.orgId))
+      .withIndex('by_org_last_seen', (q) => q.eq('orgId', args.orgId))
+      .order('desc')
       .first();
     return record
       ? { lastSeen: record.lastSeen, machineId: record.machineId }
@@ -69,7 +70,8 @@ export const getStatus = query({
     await requireOrgMembership(ctx, args.orgId);
     return await ctx.db
       .query('companion')
-      .withIndex('by_org', (q) => q.eq('orgId', args.orgId))
+      .withIndex('by_org_last_seen', (q) => q.eq('orgId', args.orgId))
+      .order('desc')
       .first();
   },
 });
