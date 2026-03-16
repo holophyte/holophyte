@@ -65,7 +65,8 @@ export function sdkToThreadMessages(
   }
 
   const messages: ThreadMessageLike[] = [];
-  const suggestions: string[] = [];
+  // Only keep the suggestion from the latest turn — clear when a new user message appears
+  let latestSuggestion: string | undefined;
 
   // Second pass: build ThreadMessageLike entries
   for (const event of events) {
@@ -146,6 +147,9 @@ export function sdkToThreadMessages(
 
       if (!userText) continue;
 
+      // A new user message invalidates the previous suggestion
+      latestSuggestion = undefined;
+
       const uuid = (event as { uuid?: string }).uuid;
       messages.push({
         id: uuid,
@@ -155,11 +159,14 @@ export function sdkToThreadMessages(
     } else if ((event as { type: string }).type === 'prompt_suggestion') {
       const suggestion = (event as { suggestion?: string }).suggestion;
       if (suggestion) {
-        suggestions.push(suggestion);
+        latestSuggestion = suggestion;
       }
     }
     // 'result', 'system/init' and other types are ignored
   }
 
-  return { messages, suggestions };
+  return {
+    messages,
+    suggestions: latestSuggestion ? [latestSuggestion] : [],
+  };
 }
