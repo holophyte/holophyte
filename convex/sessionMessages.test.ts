@@ -131,6 +131,37 @@ describe('sessionMessages.listPending', () => {
   });
 });
 
+describe('sessionMessages.companionListPending', () => {
+  it('returns unconsumed messages for running sessions when authenticated', async () => {
+    const t = convexTest(schema);
+    const { authed, sessionId } = await setupSessionEnv(t);
+
+    await t.run(async (ctx) => {
+      await ctx.db.patch(sessionId, { status: 'running' });
+    });
+
+    await authed.mutation(api.sessionMessages.send, {
+      sessionId,
+      text: 'Pending message',
+    });
+
+    const pending = await authed.query(
+      api.sessionMessages.companionListPending,
+      {},
+    );
+    expect(pending).toHaveLength(1);
+    expect(pending[0]?.text).toBe('Pending message');
+  });
+
+  it('throws when unauthenticated', async () => {
+    const t = convexTest(schema);
+
+    await expect(
+      t.query(api.sessionMessages.companionListPending, {}),
+    ).rejects.toThrow('Not authenticated');
+  });
+});
+
 describe('sessionMessages.markConsumed', () => {
   it('sets consumed to true', async () => {
     const t = convexTest(schema);

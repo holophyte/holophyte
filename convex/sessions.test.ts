@@ -679,6 +679,52 @@ describe('sessions.reapStaleSessions', () => {
   });
 });
 
+describe('sessions.companionListQueued', () => {
+  it('returns queued sessions when authenticated', async () => {
+    const t = convexTest(schema);
+    const { authed, taskId } = await setupTaskEnv(t);
+
+    const sessionId = await authed.mutation(api.sessions.create, { taskId });
+
+    const queued = await authed.query(api.sessions.companionListQueued, {});
+    expect(queued).toHaveLength(1);
+    expect(queued[0]?._id).toBe(sessionId);
+    expect(queued[0]?.repoPath).toBe('/tmp/test-repo');
+  });
+
+  it('throws when unauthenticated', async () => {
+    const t = convexTest(schema);
+
+    await expect(t.query(api.sessions.companionListQueued, {})).rejects.toThrow(
+      'Not authenticated',
+    );
+  });
+});
+
+describe('sessions.companionListStopped', () => {
+  it('returns stopped sessions when authenticated', async () => {
+    const t = convexTest(schema);
+    const { authed, taskId } = await setupTaskEnv(t);
+
+    const sessionId = await authed.mutation(api.sessions.create, { taskId });
+    await t.run(async (ctx) => {
+      await ctx.db.patch(sessionId, { status: 'stopped' });
+    });
+
+    const stopped = await authed.query(api.sessions.companionListStopped, {});
+    expect(stopped).toHaveLength(1);
+    expect(stopped[0]?._id).toBe(sessionId);
+  });
+
+  it('throws when unauthenticated', async () => {
+    const t = convexTest(schema);
+
+    await expect(
+      t.query(api.sessions.companionListStopped, {}),
+    ).rejects.toThrow('Not authenticated');
+  });
+});
+
 describe('sessions.serverMarkStoppedAsIdle', () => {
   it('transitions all stopped sessions to idle on startup', async () => {
     const t = convexTest(schema);
