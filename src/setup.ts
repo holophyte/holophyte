@@ -29,40 +29,31 @@ function success(msg: string) {
   console.log(`\x1b[32m✔\x1b[0m ${msg}`);
 }
 
-/** Reads CONVEX_URL and CONVEX_SITE_URL from env or .env.companion. */
-async function loadConfig(): Promise<{
-  convexUrl: string;
-  convexSiteUrl: string;
-}> {
+/** Reads CONVEX_URL from env or .env.companion. */
+async function loadConfig(): Promise<{ convexUrl: string }> {
   let convexUrl = process.env.CONVEX_URL;
-  let convexSiteUrl = process.env.CONVEX_SITE_URL;
 
   // Fall back to .env.companion
-  if (!convexUrl || !convexSiteUrl) {
+  if (!convexUrl) {
     try {
       const envFile = await Bun.file('.env.companion').text();
       for (const line of envFile.split('\n')) {
         const [key, ...rest] = line.split('=');
-        const value = rest.join('=').trim();
+        const value = rest
+          .join('=')
+          .trim()
+          .replace(/^(['"])(.*)\1$/, '$2');
         if (key === 'CONVEX_URL' && !convexUrl) convexUrl = value;
-        if (key === 'CONVEX_SITE_URL' && !convexSiteUrl) convexSiteUrl = value;
       }
     } catch {
       // .env.companion doesn't exist, that's OK
     }
   }
 
-  // Derive CONVEX_SITE_URL from CONVEX_URL if missing
-  if (convexUrl && !convexSiteUrl) {
-    convexSiteUrl = convexUrl.replace('.convex.cloud', '.convex.site');
-  }
-
   if (!convexUrl)
     die('CONVEX_URL is required. Set it in env or .env.companion');
-  if (!convexSiteUrl)
-    die('CONVEX_SITE_URL is required. Set it in env or .env.companion');
 
-  return { convexUrl, convexSiteUrl };
+  return { convexUrl };
 }
 
 /** Prompts the user to select an OAuth provider. */
@@ -115,9 +106,8 @@ async function main() {
     }
   }
 
-  const { convexUrl, convexSiteUrl } = await loadConfig();
+  const { convexUrl } = await loadConfig();
   info(`Convex URL: ${convexUrl}`);
-  info(`Convex Site: ${convexSiteUrl}`);
 
   const provider = await selectProvider();
   info(`Provider: ${provider}`);
@@ -169,9 +159,16 @@ async function main() {
     openBrowser(redirectUrl);
     console.log(`\nIf the browser didn't open, visit:\n  ${redirectUrl}\n`);
 
-    // Step 3: Wait for callback
+    // Step 3: Wait for callback (5 minute timeout)
     info('Waiting for authentication...');
-    const verificationCode = await codePromise;
+    const TIMEOUT_MS = 5 * 60 * 1000;
+    const timeout = new Promise<never>((_, reject) =>
+      setTimeout(
+        () => reject(new Error('OAuth callback timed out after 5 minutes')),
+        TIMEOUT_MS,
+      ),
+    );
+    const verificationCode = await Promise.race([codePromise, timeout]);
 
     // Step 4: Exchange code for tokens
     info('Exchanging code for tokens...');
