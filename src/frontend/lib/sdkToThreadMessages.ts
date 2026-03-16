@@ -9,7 +9,7 @@ type ContentPart = Extract<
 
 export interface SdkConversionResult {
   messages: ThreadMessageLike[];
-  /** Prompt suggestions emitted by the SDK (most recent last). */
+  /** At most one prompt suggestion from the latest SDK turn. */
   suggestions: string[];
 }
 
