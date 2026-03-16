@@ -239,8 +239,20 @@ describe('SessionComposer', () => {
       expect(screen.queryByTestId('suggestion-chip')).not.toBeInTheDocument();
     });
 
-    it('does not render suggestion chip when session is running', () => {
-      render(withRunningSession(<SessionComposer />));
+    it('does not render suggestion chip when session is running even with suggestions', () => {
+      render(
+        <SessionActionsContext.Provider
+          value={{
+            approve: vi.fn(),
+            deny: vi.fn(),
+            pendingApprovals: [],
+            sessionStatus: 'running',
+            suggestions: ['Should not appear'],
+          }}
+        >
+          <SessionComposer />
+        </SessionActionsContext.Provider>,
+      );
       expect(screen.queryByTestId('suggestion-chip')).not.toBeInTheDocument();
     });
   });
