@@ -1,5 +1,5 @@
 import { useAuthActions } from '@convex-dev/auth/react';
-import { FolderGit2 } from 'lucide-react';
+import HolophyteIcon from './icons/HolophyteIcon';
 import Button from './ui/Button';
 
 export default function SignInPage() {
@@ -10,7 +10,7 @@ export default function SignInPage() {
       <div className="w-full max-w-sm space-y-6 px-4">
         <div className="text-center space-y-2">
           <div className="flex items-center justify-center gap-2">
-            <FolderGit2 className="h-8 w-8 text-primary" />
+            <HolophyteIcon className="h-8 w-8 text-primary" />
             <h1 className="text-2xl font-bold tracking-tight">Holophyte</h1>
           </div>
           <p className="text-sm text-muted-foreground">
