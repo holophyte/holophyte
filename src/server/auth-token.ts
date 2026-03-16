@@ -4,7 +4,7 @@
 // The companion uses this to authenticate as the logged-in user
 // via ConvexClient.setAuth().
 
-import { chmod, mkdir } from 'node:fs/promises';
+import { mkdir, rename, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 
@@ -34,17 +34,36 @@ export async function readTokenFile(): Promise<TokenFileData | null> {
     ) {
       return null;
     }
+    // Validate convexUrl is a well-formed HTTPS URL (or localhost for dev)
+    try {
+      const url = new URL(data.convexUrl);
+      if (
+        url.protocol !== 'https:' &&
+        url.hostname !== 'localhost' &&
+        url.hostname !== '127.0.0.1'
+      ) {
+        console.error(
+          'Token file has invalid convexUrl — must be HTTPS or localhost',
+        );
+        return null;
+      }
+    } catch {
+      console.error('Token file has malformed convexUrl');
+      return null;
+    }
     return data as TokenFileData;
   } catch {
     return null;
   }
 }
 
-/** Writes the token file with restricted permissions (0600). */
+/** Writes the token file atomically with restricted permissions (0600). */
 export async function writeTokenFile(data: TokenFileData): Promise<void> {
-  await mkdir(TOKEN_DIR, { recursive: true });
-  await Bun.write(TOKEN_FILE, JSON.stringify(data, null, 2));
-  await chmod(TOKEN_FILE, 0o600);
+  await mkdir(TOKEN_DIR, { recursive: true, mode: 0o700 });
+  // Write to a temp file with restricted permissions, then atomically rename
+  const tmpFile = `${TOKEN_FILE}.tmp`;
+  await writeFile(tmpFile, JSON.stringify(data, null, 2), { mode: 0o600 });
+  await rename(tmpFile, TOKEN_FILE);
 }
 
 /**
@@ -68,11 +87,18 @@ export async function refreshAuthToken(
         format: 'json',
       }),
     });
-    if (!res.ok) return null;
+    if (!res.ok) {
+      console.error(`Auth token refresh failed (${res.status})`);
+      return null;
+    }
     const result = await res.json();
-    if (!result?.value?.tokens) return null;
+    if (!result?.value?.tokens) {
+      console.error('Auth token refresh returned no tokens');
+      return null;
+    }
     return result.value.tokens;
-  } catch {
+  } catch (err) {
+    console.error('Auth token refresh error:', err);
     return null;
   }
 }
