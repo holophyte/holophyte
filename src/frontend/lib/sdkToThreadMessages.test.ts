@@ -104,7 +104,7 @@ describe('sdkToThreadMessages', () => {
   // --- Basic output shape ---
 
   it('returns an empty array for no events', () => {
-    const result = sdkToThreadMessages([], false, []);
+    const { messages: result } = sdkToThreadMessages([], false, []);
     expect(result).toEqual([]);
   });
 
@@ -113,7 +113,7 @@ describe('sdkToThreadMessages', () => {
       { type: 'result', uuid: 'r1' },
       { type: 'system/init', uuid: 'r2' },
     ] as unknown as SDKMessage[];
-    const result = sdkToThreadMessages(ignoredEvents, false, []);
+    const { messages: result } = sdkToThreadMessages(ignoredEvents, false, []);
     expect(result).toEqual([]);
   });
 
@@ -121,7 +121,7 @@ describe('sdkToThreadMessages', () => {
 
   it('maps a text-only assistant event to a ThreadMessageLike with role assistant', () => {
     const event = assistantEventWithUuid('msg-1', 'Hello from Claude');
-    const result = sdkToThreadMessages([event], false, []);
+    const { messages: result } = sdkToThreadMessages([event], false, []);
     expect(result).toHaveLength(1);
     const msg = at(result, 0);
     expect(msg.role).toBe('assistant');
@@ -130,7 +130,7 @@ describe('sdkToThreadMessages', () => {
 
   it('puts assistant text in a text content part', () => {
     const event = assistantEvent('Hello from Claude');
-    const result = sdkToThreadMessages([event], false, []);
+    const { messages: result } = sdkToThreadMessages([event], false, []);
     const msg = at(result, 0);
     expect(Array.isArray(msg.content)).toBe(true);
     const textPart = (
@@ -146,7 +146,7 @@ describe('sdkToThreadMessages', () => {
     const event = assistantEvent('Reading file.', [
       { id: 'tu-1', name: 'Read', input: { file_path: 'src/server.ts' } },
     ]);
-    const result = sdkToThreadMessages([event], false, []);
+    const { messages: result } = sdkToThreadMessages([event], false, []);
     const msg = at(result, 0);
     const parts = msg.content as unknown as Array<{
       type: string;
@@ -166,7 +166,11 @@ describe('sdkToThreadMessages', () => {
       { id: 'tu-1', name: 'Read', input: { file_path: 'src/server.ts' } },
     ]);
     const resultEvent = toolResultEvent('tu-1', 'file contents here');
-    const result = sdkToThreadMessages([event, resultEvent], false, []);
+    const { messages: result } = sdkToThreadMessages(
+      [event, resultEvent],
+      false,
+      [],
+    );
     // Should still produce 1 assistant message (user tool-result events are not rendered as standalone messages)
     const assistantMsg = result.find((m) => m.role === 'assistant');
     expect(assistantMsg).toBeDefined();
@@ -189,7 +193,11 @@ describe('sdkToThreadMessages', () => {
       "error: Cannot find module './missing'",
       true,
     );
-    const result = sdkToThreadMessages([event, errEvent], false, []);
+    const { messages: result } = sdkToThreadMessages(
+      [event, errEvent],
+      false,
+      [],
+    );
     const assistantMsg = result.find((m) => m.role === 'assistant');
     const parts = assistantMsg?.content as unknown as Array<{
       type: string;
@@ -205,7 +213,7 @@ describe('sdkToThreadMessages', () => {
     const event = assistantEvent('Let me read the server file first.', [
       { id: 'tu-3', name: 'Read', input: { file_path: 'src/server.ts' } },
     ]);
-    const result = sdkToThreadMessages([event], false, []);
+    const { messages: result } = sdkToThreadMessages([event], false, []);
     const msg = at(result, 0);
     const parts = msg.content as unknown as Array<{ type: string }>;
     const types = parts.map((p) => p.type);
@@ -219,7 +227,7 @@ describe('sdkToThreadMessages', () => {
       { id: 'tu-5', name: 'Glob', input: { pattern: '**/*.ts' } },
       { id: 'tu-6', name: 'Bash', input: { command: 'bun run test' } },
     ]);
-    const result = sdkToThreadMessages([event], false, []);
+    const { messages: result } = sdkToThreadMessages([event], false, []);
     const msg = at(result, 0);
     const parts = msg.content as unknown as Array<{
       type: string;
@@ -237,7 +245,7 @@ describe('sdkToThreadMessages', () => {
 
   it('maps non-synthetic user text events to ThreadMessageLike with role user', () => {
     const event = userTextEvent('Please add TSDoc comments.');
-    const result = sdkToThreadMessages([event], false, []);
+    const { messages: result } = sdkToThreadMessages([event], false, []);
     expect(result).toHaveLength(1);
     const msg = at(result, 0);
     expect(msg.role).toBe('user');
@@ -254,7 +262,11 @@ describe('sdkToThreadMessages', () => {
       { id: 'tu-7', name: 'Bash', input: { command: 'bun test' } },
     ]);
     const resultEvt = toolResultEvent('tu-7', 'All tests passed');
-    const result = sdkToThreadMessages([assistEvt, resultEvt], false, []);
+    const { messages: result } = sdkToThreadMessages(
+      [assistEvt, resultEvt],
+      false,
+      [],
+    );
     // Only one message — the assistant one; no standalone user message for tool results
     expect(result.filter((m) => m.role === 'user')).toHaveLength(0);
     expect(result.filter((m) => m.role === 'assistant')).toHaveLength(1);
@@ -267,7 +279,11 @@ describe('sdkToThreadMessages', () => {
       uuid: 'uuid-synth',
       isSynthetic: true,
     } as unknown as SDKMessage;
-    const result = sdkToThreadMessages([syntheticEvent], false, []);
+    const { messages: result } = sdkToThreadMessages(
+      [syntheticEvent],
+      false,
+      [],
+    );
     expect(result.filter((m) => m.role === 'user')).toHaveLength(0);
   });
 
@@ -275,7 +291,7 @@ describe('sdkToThreadMessages', () => {
 
   it('sets last assistant message status to in_progress when isRunning is true', () => {
     const event = assistantEvent('Working on it...');
-    const result = sdkToThreadMessages([event], true, []);
+    const { messages: result } = sdkToThreadMessages([event], true, []);
     const lastMsg = result[result.length - 1];
     expect(lastMsg?.status).toEqual(
       expect.objectContaining({ type: 'running' }),
@@ -284,7 +300,7 @@ describe('sdkToThreadMessages', () => {
 
   it('sets last assistant message status to complete when isRunning is false', () => {
     const event = assistantEvent('Done!');
-    const result = sdkToThreadMessages([event], false, []);
+    const { messages: result } = sdkToThreadMessages([event], false, []);
     const lastMsg = result[result.length - 1];
     // complete status — may be { type: 'complete', reason: 'stop' } or similar
     expect(lastMsg?.status).toEqual(
@@ -295,7 +311,11 @@ describe('sdkToThreadMessages', () => {
   it('only marks the last assistant message as in_progress, not earlier ones', () => {
     const event1 = assistantEvent('First message');
     const event2 = assistantEvent('Second message');
-    const result = sdkToThreadMessages([event1, event2], true, []);
+    const { messages: result } = sdkToThreadMessages(
+      [event1, event2],
+      true,
+      [],
+    );
     const assistantMessages = result.filter((m) => m.role === 'assistant');
     expect(assistantMessages).toHaveLength(2);
     // First message should be complete
@@ -322,7 +342,11 @@ describe('sdkToThreadMessages', () => {
         resolved: undefined,
       },
     ];
-    const result = sdkToThreadMessages([event], false, pendingApprovals);
+    const { messages: result } = sdkToThreadMessages(
+      [event],
+      false,
+      pendingApprovals,
+    );
     const assistantMsg = result.find((m) => m.role === 'assistant');
     const parts = assistantMsg?.content as unknown as Array<{
       type: string;
@@ -351,7 +375,11 @@ describe('sdkToThreadMessages', () => {
         resolved: { approved: true },
       },
     ];
-    const result = sdkToThreadMessages([event], false, resolvedApprovals);
+    const { messages: result } = sdkToThreadMessages(
+      [event],
+      false,
+      resolvedApprovals,
+    );
     const assistantMsg = result.find((m) => m.role === 'assistant');
     const parts = assistantMsg?.content as unknown as Array<{
       type: string;
@@ -374,7 +402,7 @@ describe('sdkToThreadMessages', () => {
 
   it('uses SDKMessage uuid as the ThreadMessageLike id', () => {
     const event = assistantEventWithUuid('stable-uuid-123', 'Hello');
-    const result = sdkToThreadMessages([event], false, []);
+    const { messages: result } = sdkToThreadMessages([event], false, []);
     expect(result[0]?.id).toBe('stable-uuid-123');
   });
 
@@ -384,7 +412,7 @@ describe('sdkToThreadMessages', () => {
     const events = [
       { type: 'result', uuid: 'r1', result: 'some result' },
     ] as unknown as SDKMessage[];
-    const result = sdkToThreadMessages(events, false, []);
+    const { messages: result } = sdkToThreadMessages(events, false, []);
     expect(result).toHaveLength(0);
   });
 
@@ -392,7 +420,7 @@ describe('sdkToThreadMessages', () => {
     const events = [
       { type: 'system/init', uuid: 'si1', session_id: 'sess-abc' },
     ] as unknown as SDKMessage[];
-    const result = sdkToThreadMessages(events, false, []);
+    const { messages: result } = sdkToThreadMessages(events, false, []);
     expect(result).toHaveLength(0);
   });
 
@@ -400,7 +428,7 @@ describe('sdkToThreadMessages', () => {
     const events = [
       { type: 'unknown_future_type', uuid: 'unk1' },
     ] as unknown as SDKMessage[];
-    const result = sdkToThreadMessages(events, false, []);
+    const { messages: result } = sdkToThreadMessages(events, false, []);
     expect(result).toHaveLength(0);
   });
 
@@ -414,7 +442,7 @@ describe('sdkToThreadMessages', () => {
       userTextEvent('Please add TSDoc comments to all exported functions.'),
       assistantEvent("I'll add TSDoc comments to all exported functions now."),
     ];
-    const result = sdkToThreadMessages(events, false, []);
+    const { messages: result } = sdkToThreadMessages(events, false, []);
     expect(result).toHaveLength(3);
     expect(result[0]?.role).toBe('assistant');
     expect(result[1]?.role).toBe('user');
@@ -425,7 +453,7 @@ describe('sdkToThreadMessages', () => {
     const event = assistantEvent('', [
       { id: 'tu-10', name: 'Read', input: { file_path: 'README.md' } },
     ]);
-    const result = sdkToThreadMessages([event], false, []);
+    const { messages: result } = sdkToThreadMessages([event], false, []);
     expect(result).toHaveLength(1);
     const msg = at(result, 0);
     const parts = msg.content as unknown as Array<{ type: string }>;

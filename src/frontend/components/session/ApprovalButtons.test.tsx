@@ -29,6 +29,7 @@ function withSessionActions(
     deny: opts.deny ?? vi.fn(),
     pendingApprovals: opts.pendingApprovals ?? [],
     sessionStatus: opts.sessionStatus ?? 'waiting_input',
+    suggestions: [],
   };
   return ({ children }) => (
     <SessionActionsContext.Provider value={value}>

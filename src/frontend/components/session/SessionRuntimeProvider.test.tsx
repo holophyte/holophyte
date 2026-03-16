@@ -22,7 +22,7 @@ vi.mock('@assistant-ui/react', () => {
 
 // Mock sdkToThreadMessages
 vi.mock('@/frontend/lib/sdkToThreadMessages', () => ({
-  sdkToThreadMessages: vi.fn(() => []),
+  sdkToThreadMessages: vi.fn(() => ({ messages: [], suggestions: [] })),
 }));
 
 import { useExternalStoreRuntime } from '@assistant-ui/react';

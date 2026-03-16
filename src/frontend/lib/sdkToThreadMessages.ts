@@ -7,6 +7,12 @@ type ContentPart = Extract<
   readonly unknown[]
 >[number];
 
+export interface SdkConversionResult {
+  messages: ThreadMessageLike[];
+  /** Prompt suggestions emitted by the SDK (most recent last). */
+  suggestions: string[];
+}
+
 /**
  * Transforms an array of SDK events into `ThreadMessageLike[]` for use with
  * `@assistant-ui/react`'s external store runtime.
@@ -21,7 +27,7 @@ export function sdkToThreadMessages(
   events: SDKMessage[],
   isRunning: boolean,
   pendingApprovals: PendingApproval[],
-): ThreadMessageLike[] {
+): SdkConversionResult {
   // Set of requestIds that still need user action
   const unresolvedIds = new Set(
     pendingApprovals.filter((a) => !a.resolved).map((a) => a.requestId),
@@ -59,6 +65,7 @@ export function sdkToThreadMessages(
   }
 
   const messages: ThreadMessageLike[] = [];
+  const suggestions: string[] = [];
 
   // Second pass: build ThreadMessageLike entries
   for (const event of events) {
@@ -145,9 +152,14 @@ export function sdkToThreadMessages(
         role: 'user',
         content: [{ type: 'text', text: userText }],
       });
+    } else if ((event as { type: string }).type === 'prompt_suggestion') {
+      const suggestion = (event as { suggestion?: string }).suggestion;
+      if (suggestion) {
+        suggestions.push(suggestion);
+      }
     }
     // 'result', 'system/init' and other types are ignored
   }
 
-  return messages;
+  return { messages, suggestions };
 }

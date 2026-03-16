@@ -88,6 +88,7 @@ function withIdleSession(children: ReactNode) {
         deny: vi.fn(),
         pendingApprovals: [],
         sessionStatus: 'idle',
+        suggestions: [],
       }}
     >
       {children}
@@ -103,6 +104,7 @@ function withRunningSession(children: ReactNode) {
         deny: vi.fn(),
         pendingApprovals: [],
         sessionStatus: 'running',
+        suggestions: [],
       }}
     >
       {children}

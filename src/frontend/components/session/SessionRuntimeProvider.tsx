@@ -52,7 +52,7 @@ export default function SessionRuntimeProvider({
     }
   }, [events.length, optimisticUserMsg]);
 
-  const sdkMessages = useMemo(
+  const { messages: sdkMessages, suggestions } = useMemo(
     () => sdkToThreadMessages(events, isRunning, pendingApprovals),
     [events, isRunning, pendingApprovals],
   );
@@ -113,6 +113,7 @@ export default function SessionRuntimeProvider({
         deny={deny}
         pendingApprovals={pendingApprovals}
         sessionStatus={sessionStatus}
+        suggestions={suggestions}
       >
         {children}
       </SessionActionsProvider>
