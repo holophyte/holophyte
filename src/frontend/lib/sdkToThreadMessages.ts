@@ -71,6 +71,8 @@ export function sdkToThreadMessages(
   // Second pass: build ThreadMessageLike entries
   for (const event of events) {
     if (event.type === 'assistant') {
+      // A new assistant turn invalidates the previous suggestion
+      latestSuggestion = undefined;
       const msg = event.message as { content?: unknown[] };
       const content = Array.isArray(msg.content) ? msg.content : [];
       const uuid = (event as { uuid?: string }).uuid;

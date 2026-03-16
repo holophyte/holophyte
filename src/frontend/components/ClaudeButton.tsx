@@ -23,6 +23,7 @@ export function ClaudeButton({ task }: ClaudeButtonProps) {
   const createSession = useMutation(api.sessions.create);
   const requestStop = useMutation(api.sessions.requestStop);
   const openSession = useAppStore((s) => s.openSession);
+  const closeSession = useAppStore((s) => s.closeSession);
   const navigate = useNavigate();
   const taskPageMatch = useMatch({
     from: '/repos/$repoId/tasks/$taskId/page',
@@ -61,6 +62,12 @@ export function ClaudeButton({ task }: ClaudeButtonProps) {
       } finally {
         setLoading(false);
       }
+    }
+
+    // Clear stale activeSessionId so SessionPanel shows NoSessionPlaceholder
+    // instead of an unrelated session from a different task
+    if (!task.prompt) {
+      closeSession();
     }
 
     // Navigate to task page (session panel has a chat input for prompt-less launches)
