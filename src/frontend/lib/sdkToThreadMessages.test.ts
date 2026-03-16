@@ -510,9 +510,14 @@ describe('sdkToThreadMessages', () => {
     expect(suggestions).toEqual([]);
   });
 
-  it('keeps only the latest suggestion per turn', () => {
+  it('keeps only the latest suggestion when multiple are emitted per turn', () => {
     const events = [
       assistantEvent('Done!'),
+      {
+        type: 'prompt_suggestion',
+        suggestion: 'First suggestion',
+        uuid: 'ps-3',
+      },
       {
         type: 'prompt_suggestion',
         suggestion: 'Latest suggestion',
