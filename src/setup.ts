@@ -68,14 +68,24 @@ async function selectProvider(): Promise<Provider> {
   console.log('  2) Google');
   process.stdout.write('\nChoice [1]: ');
 
+  let selected: Provider | undefined;
   for await (const line of console) {
     const choice = line.trim() || '1';
-    if (choice === '1' || choice === 'github') return 'github';
-    if (choice === '2' || choice === 'google') return 'google';
+    if (choice === '1' || choice === 'github') {
+      selected = 'github';
+      break;
+    }
+    if (choice === '2' || choice === 'google') {
+      selected = 'google';
+      break;
+    }
     process.stdout.write('Invalid choice. Enter 1 or 2: ');
   }
-
-  return 'github'; // fallback
+  if (!selected) {
+    console.log('Aborted (no input).');
+    process.exit(0);
+  }
+  return selected;
 }
 
 /** Opens a URL in the default browser. */

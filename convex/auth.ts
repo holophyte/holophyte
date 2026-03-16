@@ -39,7 +39,12 @@ export const { auth, signIn, signOut, store, isAuthenticated } = convexAuth({
       if (redirectTo.startsWith('?') || redirectTo.startsWith('/')) {
         return `${baseUrl}${redirectTo}`;
       }
-      if (baseUrl && redirectTo.startsWith(baseUrl)) {
+      if (
+        baseUrl &&
+        (redirectTo === baseUrl ||
+          redirectTo.startsWith(`${baseUrl}/`) ||
+          redirectTo.startsWith(`${baseUrl}?`))
+      ) {
         return redirectTo;
       }
       throw new Error(
