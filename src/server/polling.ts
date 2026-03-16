@@ -2,6 +2,8 @@
 
 import { hostname } from 'node:os';
 import { getActiveSessions } from '@/claude/manager';
+import type { TokenFileData } from './auth-token';
+import { readTokenFile } from './auth-token';
 import { callConvexInternal, queryConvexInternal } from './convex-client';
 import {
   isSubscriptionsActive,
@@ -33,6 +35,7 @@ export const POLL_INTERVAL_MS = 2000;
 let pollTimer: ReturnType<typeof setInterval> | null = null;
 let polling = false;
 let companionUrl: string | undefined;
+let cachedTokenFile: TokenFileData | null | undefined;
 
 export async function companionPoll() {
   if (polling) return; // Skip if previous poll is still running
@@ -60,7 +63,11 @@ export async function companionPoll() {
       if (convexUrl && secret) {
         try {
           stopCompanionSubscriptions();
-          await startCompanionSubscriptions({ convexUrl, secret });
+          await startCompanionSubscriptions({
+            convexUrl,
+            secret,
+            tokenFile: cachedTokenFile,
+          });
         } catch {
           // Best-effort — will retry on next poll cycle
         }
@@ -158,12 +165,22 @@ export async function startCompanion(url: string): Promise<void> {
     // Non-critical — Convex may not be configured yet
   }
 
-  // 3. Start reactive subscriptions for queued/stopped sessions and pending messages
+  // 3. Load user auth token (from `holophyte setup`)
+  cachedTokenFile = await readTokenFile();
+  if (cachedTokenFile) {
+    console.log('Loaded user auth token from', '~/.holophyte/token.json');
+  }
+
+  // 4. Start reactive subscriptions for queued/stopped sessions and pending messages
   const convexUrl = process.env.CONVEX_URL;
   const secret = process.env.INTERNAL_API_SECRET;
   if (convexUrl && secret) {
     try {
-      await startCompanionSubscriptions({ convexUrl, secret });
+      await startCompanionSubscriptions({
+        convexUrl,
+        secret,
+        tokenFile: cachedTokenFile,
+      });
     } catch (err) {
       console.error('Failed to start companion subscriptions:', err);
     }
@@ -173,6 +190,6 @@ export async function startCompanion(url: string): Promise<void> {
     );
   }
 
-  // 4. Start the polling loop (heartbeats only)
+  // 5. Start the polling loop (heartbeats only)
   startCompanionPolling({ url });
 }
