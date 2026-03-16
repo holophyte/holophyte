@@ -17,37 +17,9 @@ import { createFetchToken } from './auth-token';
 import { callConvexInternal, queryConvexInternal } from './convex-client';
 import type { PendingMessage, QueuedSession, StoppedSession } from './polling';
 
-/**
- * Derives the companion auth token using Web Crypto — mirrors the Convex-side derivation
- * in `convex/lib/validateSecret.ts`. Both must be kept in sync; they cannot share a
- * module because Convex and Bun run in separate bundler contexts.
- */
-async function deriveCompanionToken(secret: string): Promise<string> {
-  const enc = new TextEncoder();
-  const key = await crypto.subtle.importKey(
-    'raw',
-    enc.encode(secret),
-    { name: 'HMAC', hash: 'SHA-256' },
-    false,
-    ['sign'],
-  );
-  const sig = await crypto.subtle.sign(
-    'HMAC',
-    key,
-    enc.encode('holophyte-companion-v1'),
-  );
-  return Array.from(new Uint8Array(sig))
-    .map((b) => b.toString(16).padStart(2, '0'))
-    .join('');
-}
-
 let convexClient: ConvexClient | null = null;
-// Prevents two concurrent startCompanionSubscriptions() calls from both passing
-// the convexClient === null check across the async deriveCompanionToken gap.
+// Prevents two concurrent startCompanionSubscriptions() calls from racing.
 let convexClientStarting = false;
-// Set by stopCompanionSubscriptions so that if stop is called while
-// deriveCompanionToken is awaiting, we don't create a zombie ConvexClient.
-let stopRequested = false;
 // Incremented by onError callbacks; reset on each fresh startCompanionSubscriptions.
 // Allows isSubscriptionsActive() to return false when subscriptions have errored,
 // so the retry loop in companionPoll can tear down and reconnect.
@@ -165,43 +137,32 @@ async function handlePendingMessage(msg: PendingMessage): Promise<void> {
 
 export async function startCompanionSubscriptions(opts: {
   convexUrl: string;
-  secret: string;
-  tokenFile?: TokenFileData | null;
+  tokenFile: TokenFileData;
 }): Promise<void> {
   if (convexClient || convexClientStarting) return;
   convexClientStarting = true;
-  stopRequested = false;
   subscriptionErrorCount = 0;
   const gen = ++subscriptionGeneration;
 
   try {
-    const token = await deriveCompanionToken(opts.secret);
-
-    // If stopCompanionSubscriptions() was called while we were awaiting, bail.
-    if (stopRequested) return;
-
     convexClient = new ConvexClient(opts.convexUrl);
 
-    // Set user identity from token file (if available) so Convex knows
-    // which user the companion is acting on behalf of. Skip if the token
-    // was saved for a different deployment to avoid cross-deployment auth.
-    if (opts.tokenFile) {
-      const normalize = (u: string) => u.replace(/\/$/, '');
-      if (normalize(opts.tokenFile.convexUrl) === normalize(opts.convexUrl)) {
-        convexClient.setAuth(createFetchToken(opts.tokenFile));
-        console.log('Companion authenticated as user via stored token');
-      } else {
-        console.error(
-          `Skipping user auth — token is for ${opts.tokenFile.convexUrl}, not ${opts.convexUrl}. Run \`bun run setup\` to re-authenticate.`,
-        );
-      }
+    // Authenticate with JWT — the companion queries gate on ctx.auth.
+    // The token file comes from `holophyte setup` (OAuth flow).
+    const normalize = (u: string) => u.replace(/\/$/, '');
+    if (normalize(opts.tokenFile.convexUrl) !== normalize(opts.convexUrl)) {
+      throw new Error(
+        `Token is for ${opts.tokenFile.convexUrl}, not ${opts.convexUrl}. Run \`bun run setup\` to re-authenticate.`,
+      );
     }
+    convexClient.setAuth(createFetchToken(opts.tokenFile));
+    console.log('Companion authenticated as user via stored token');
 
     // Subscribe to queued sessions — claim and start immediately on update
     unsubscribers.push(
       convexClient.onUpdate(
         api.sessions.companionListQueued,
-        { token },
+        {},
         (queued) => {
           for (const session of queued) {
             void handleQueuedSession(session);
@@ -218,7 +179,7 @@ export async function startCompanionSubscriptions(opts: {
     unsubscribers.push(
       convexClient.onUpdate(
         api.sessions.companionListStopped,
-        { token },
+        {},
         (stopped) => {
           for (const session of stopped) {
             void handleStoppedSession(session);
@@ -235,7 +196,7 @@ export async function startCompanionSubscriptions(opts: {
     unsubscribers.push(
       convexClient.onUpdate(
         api.sessionMessages.companionListPending,
-        { token },
+        {},
         (messages) => {
           for (const msg of messages) {
             void handlePendingMessage(msg);
@@ -269,7 +230,6 @@ export function isSubscriptionsActive(): boolean {
 }
 
 export function stopCompanionSubscriptions(): void {
-  stopRequested = true;
   for (const unsub of unsubscribers) unsub();
   unsubscribers.length = 0;
   subscriptionErrorCount = 0;

@@ -6,8 +6,7 @@ import {
   mutation,
   query,
 } from './_generated/server';
-import { requireOrgMembership, requireRole } from './lib/auth';
-import { validateCompanionToken } from './lib/validateSecret';
+import { requireAuth, requireOrgMembership, requireRole } from './lib/auth';
 import { sessionStatusValidator } from './schema';
 
 /**
@@ -603,17 +602,16 @@ export const listStopped = internalQuery({
 /**
  * Public companion query: returns all queued sessions with repoPath.
  *
- * Same as the internal `listQueued` but accessible to the companion via
- * ConvexClient subscriptions. Validates the companion token derived from
- * INTERNAL_API_SECRET so the raw secret never appears in logs.
+ * Accessible to the companion via ConvexClient subscriptions. Requires JWT
+ * authentication via `ConvexClient.setAuth()` — the companion obtains a
+ * session token during `holophyte setup`.
  *
  * Intentionally not org-scoped — the companion serves all orgs globally.
  */
 export const companionListQueued = query({
-  args: { token: v.string() },
-  handler: async (ctx, args) => {
-    if (!(await validateCompanionToken(args.token)))
-      throw new Error('Unauthorized');
+  args: {},
+  handler: async (ctx) => {
+    await requireAuth(ctx);
     return fetchQueuedSessions(ctx);
   },
 });
@@ -621,17 +619,15 @@ export const companionListQueued = query({
 /**
  * Public companion query: returns `_id` for all sessions with status `stopped`.
  *
- * Same as the internal `listStopped` but accessible to the companion via
- * ConvexClient subscriptions. Returns only `_id` to minimise data in transit.
- * Validates the companion token derived from INTERNAL_API_SECRET.
+ * Accessible to the companion via ConvexClient subscriptions. Returns only
+ * `_id` to minimise data in transit. Requires JWT authentication.
  *
  * Intentionally not org-scoped — the companion serves all orgs globally.
  */
 export const companionListStopped = query({
-  args: { token: v.string() },
-  handler: async (ctx, args) => {
-    if (!(await validateCompanionToken(args.token)))
-      throw new Error('Unauthorized');
+  args: {},
+  handler: async (ctx) => {
+    await requireAuth(ctx);
     const stopped = await ctx.db
       .query('sessions')
       .withIndex('by_status', (q) => q.eq('status', 'stopped'))

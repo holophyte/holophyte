@@ -59,17 +59,17 @@ export async function companionPoll() {
     // doesn't block the startCompanionSubscriptions guard check.
     if (!isSubscriptionsActive()) {
       const convexUrl = process.env.CONVEX_URL;
-      const secret = process.env.INTERNAL_API_SECRET;
-      if (convexUrl && secret) {
+      if (convexUrl) {
         try {
           stopCompanionSubscriptions();
           // Re-read token file in case tokens were rotated since startup
           cachedTokenFile = await readTokenFile();
-          await startCompanionSubscriptions({
-            convexUrl,
-            secret,
-            tokenFile: cachedTokenFile,
-          });
+          if (cachedTokenFile) {
+            await startCompanionSubscriptions({
+              convexUrl,
+              tokenFile: cachedTokenFile,
+            });
+          }
         } catch {
           // Best-effort — will retry on next poll cycle
         }
@@ -175,20 +175,22 @@ export async function startCompanion(url: string): Promise<void> {
 
   // 4. Start reactive subscriptions for queued/stopped sessions and pending messages
   const convexUrl = process.env.CONVEX_URL;
-  const secret = process.env.INTERNAL_API_SECRET;
-  if (convexUrl && secret) {
+  if (convexUrl && cachedTokenFile) {
     try {
       await startCompanionSubscriptions({
         convexUrl,
-        secret,
         tokenFile: cachedTokenFile,
       });
     } catch (err) {
       console.error('Failed to start companion subscriptions:', err);
     }
+  } else if (!convexUrl) {
+    console.error(
+      'CONVEX_URL not set — companion subscriptions unavailable, sessions will not be reactive',
+    );
   } else {
     console.error(
-      'CONVEX_URL or INTERNAL_API_SECRET not set — companion subscriptions unavailable, sessions will not be reactive',
+      'No auth token found — run `bun run setup` to authenticate. Subscriptions will retry when a token is available.',
     );
   }
 

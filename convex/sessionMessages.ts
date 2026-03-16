@@ -6,8 +6,7 @@ import {
   mutation,
   query,
 } from './_generated/server';
-import { requireOrgMembership, requireRole } from './lib/auth';
-import { validateCompanionToken } from './lib/validateSecret';
+import { requireAuth, requireOrgMembership, requireRole } from './lib/auth';
 
 /**
  * Sends a follow-up message to a session.
@@ -90,17 +89,15 @@ export const markConsumed = internalMutation({
 /**
  * Public companion query: returns unconsumed messages for running sessions.
  *
- * Same as the internal `listPending` but accessible to the companion via
- * ConvexClient subscriptions. Validates the companion token derived from
- * INTERNAL_API_SECRET so the raw secret never appears in logs.
+ * Accessible to the companion via ConvexClient subscriptions. Requires JWT
+ * authentication via `ConvexClient.setAuth()`.
  *
  * Intentionally not org-scoped — the companion serves all orgs globally.
  */
 export const companionListPending = query({
-  args: { token: v.string() },
-  handler: async (ctx, args) => {
-    if (!(await validateCompanionToken(args.token)))
-      throw new Error('Unauthorized');
+  args: {},
+  handler: async (ctx) => {
+    await requireAuth(ctx);
     return fetchPendingMessages(ctx);
   },
 });
