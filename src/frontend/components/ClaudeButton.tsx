@@ -42,28 +42,33 @@ export function ClaudeButton({ task }: ClaudeButtonProps) {
   }
 
   const handleLaunch = async () => {
-    if (!task.prompt || !task.repo) return;
-    setLoading(true);
-    setError(null);
-    try {
-      // Create session in Convex with 'queued' status — the companion picks it up
-      const sessionId = await createSession({
-        taskId: task._id,
-        prompt: task.prompt,
-        model,
-      });
-      openSession(sessionId);
-      // Navigate to task page after launching, unless already there
-      if (!taskPageMatch) {
-        void navigate({
-          to: '/repos/$repoId/tasks/$taskId/page',
-          params: { repoId: String(task.repoId), taskId: task._id },
+    if (!task.repo) return;
+
+    // If the task has a prompt, create a session immediately and queue it
+    if (task.prompt) {
+      setLoading(true);
+      setError(null);
+      try {
+        const sessionId = await createSession({
+          taskId: task._id,
+          prompt: task.prompt,
+          model,
         });
+        openSession(sessionId);
+      } catch (err) {
+        setError(String(err));
+        return;
+      } finally {
+        setLoading(false);
       }
-    } catch (err) {
-      setError(String(err));
-    } finally {
-      setLoading(false);
+    }
+
+    // Navigate to task page (session panel has a chat input for prompt-less launches)
+    if (!taskPageMatch) {
+      void navigate({
+        to: '/repos/$repoId/tasks/$taskId/page',
+        params: { repoId: String(task.repoId), taskId: task._id },
+      });
     }
   };
 
@@ -124,7 +129,7 @@ export function ClaudeButton({ task }: ClaudeButtonProps) {
           size="sm"
           className="flex-1"
           onClick={handleLaunch}
-          disabled={!task.prompt || !task.repo || companionState === 'loading'}
+          disabled={!task.repo || companionState === 'loading'}
         >
           <Play className="h-4 w-4 mr-1" />
           Launch Claude Code
