@@ -15,5 +15,41 @@ export const { auth, signIn, signOut, store, isAuthenticated } = convexAuth({
     async afterUserCreatedOrUpdated(ctx, { userId }) {
       await ctx.runMutation(internal.organizations.createPersonal, { userId });
     },
+    async redirect({ redirectTo }) {
+      // Allow localhost redirects for CLI setup (`holophyte setup`).
+      // Validate the URL is well-formed and only targets localhost with a /callback path.
+      if (
+        redirectTo.startsWith('http://localhost:') ||
+        redirectTo.startsWith('http://127.0.0.1:')
+      ) {
+        try {
+          const url = new URL(redirectTo);
+          if (
+            (url.hostname === 'localhost' || url.hostname === '127.0.0.1') &&
+            url.pathname === '/callback'
+          ) {
+            return redirectTo;
+          }
+        } catch {
+          // Malformed localhost URL — fall through to default validation
+        }
+      }
+      // Default behavior: relative paths appended to SITE_URL
+      const baseUrl = (process.env.SITE_URL ?? '').replace(/\/$/, '');
+      if (redirectTo.startsWith('?') || redirectTo.startsWith('/')) {
+        return `${baseUrl}${redirectTo}`;
+      }
+      if (
+        baseUrl &&
+        (redirectTo === baseUrl ||
+          redirectTo.startsWith(`${baseUrl}/`) ||
+          redirectTo.startsWith(`${baseUrl}?`))
+      ) {
+        return redirectTo;
+      }
+      throw new Error(
+        `Invalid redirectTo ${redirectTo} for SITE_URL: ${baseUrl}`,
+      );
+    },
   },
 });

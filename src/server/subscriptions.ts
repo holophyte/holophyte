@@ -12,6 +12,8 @@ import {
   startSession,
   stopSession,
 } from '@/claude/manager';
+import type { TokenFileData } from './auth-token';
+import { createFetchToken } from './auth-token';
 import { callConvexInternal, queryConvexInternal } from './convex-client';
 import type { PendingMessage, QueuedSession, StoppedSession } from './polling';
 
@@ -164,6 +166,7 @@ async function handlePendingMessage(msg: PendingMessage): Promise<void> {
 export async function startCompanionSubscriptions(opts: {
   convexUrl: string;
   secret: string;
+  tokenFile?: TokenFileData | null;
 }): Promise<void> {
   if (convexClient || convexClientStarting) return;
   convexClientStarting = true;
@@ -178,6 +181,21 @@ export async function startCompanionSubscriptions(opts: {
     if (stopRequested) return;
 
     convexClient = new ConvexClient(opts.convexUrl);
+
+    // Set user identity from token file (if available) so Convex knows
+    // which user the companion is acting on behalf of. Skip if the token
+    // was saved for a different deployment to avoid cross-deployment auth.
+    if (opts.tokenFile) {
+      const normalize = (u: string) => u.replace(/\/$/, '');
+      if (normalize(opts.tokenFile.convexUrl) === normalize(opts.convexUrl)) {
+        convexClient.setAuth(createFetchToken(opts.tokenFile));
+        console.log('Companion authenticated as user via stored token');
+      } else {
+        console.error(
+          `Skipping user auth — token is for ${opts.tokenFile.convexUrl}, not ${opts.convexUrl}. Run \`bun run setup\` to re-authenticate.`,
+        );
+      }
+    }
 
     // Subscribe to queued sessions — claim and start immediately on update
     unsubscribers.push(
