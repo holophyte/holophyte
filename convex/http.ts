@@ -515,14 +515,10 @@ http.route({
         return jsonError('url must be a localhost address', 400);
       }
 
-      const org = await ctx.runQuery(internal.organizations.getDefaultOrg, {});
-      if (!org) return jsonError('No organization configured', 500);
-
-      await ctx.runMutation(internal.companion.upsertHeartbeat, {
+      await ctx.runMutation(internal.companion.upsertHeartbeatAllOrgs, {
         activeSessionCount,
         machineId,
         url,
-        orgId: org._id,
       });
       return jsonOk();
     } catch (err) {
