@@ -20,7 +20,6 @@ export default function SessionComposer() {
           <ThreadPrimitive.Suggestion
             prompt={latestSuggestion}
             method="replace"
-            autoSend
             className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-border/60 bg-muted/30 px-3 py-1 text-xs text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
           >
             <span className="truncate">{latestSuggestion}</span>

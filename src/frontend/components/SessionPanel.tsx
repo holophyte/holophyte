@@ -211,6 +211,14 @@ function NoSessionPlaceholder({
   onStart,
 }: NoSessionPlaceholderProps) {
   const [text, setText] = useState(initialPrompt ?? '');
+  const [prevPrompt, setPrevPrompt] = useState(initialPrompt);
+  // Sync text when initialPrompt arrives from async query (first non-empty value)
+  if (initialPrompt !== prevPrompt) {
+    setPrevPrompt(initialPrompt);
+    if (initialPrompt && !text) {
+      setText(initialPrompt);
+    }
+  }
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 

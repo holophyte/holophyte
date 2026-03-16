@@ -64,7 +64,7 @@ export function ClaudeButton({ task }: ClaudeButtonProps) {
     }
 
     // Navigate to task page (session panel has a chat input for prompt-less launches)
-    if (!taskPageMatch) {
+    if (!taskPageMatch || taskPageMatch.params.taskId !== task._id) {
       void navigate({
         to: '/repos/$repoId/tasks/$taskId/page',
         params: { repoId: String(task.repoId), taskId: task._id },
