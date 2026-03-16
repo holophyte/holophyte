@@ -183,10 +183,17 @@ export async function startCompanionSubscriptions(opts: {
     convexClient = new ConvexClient(opts.convexUrl);
 
     // Set user identity from token file (if available) so Convex knows
-    // which user the companion is acting on behalf of.
+    // which user the companion is acting on behalf of. Skip if the token
+    // was saved for a different deployment to avoid cross-deployment auth.
     if (opts.tokenFile) {
-      convexClient.setAuth(createFetchToken(opts.tokenFile));
-      console.log('Companion authenticated as user via stored token');
+      if (opts.tokenFile.convexUrl === opts.convexUrl) {
+        convexClient.setAuth(createFetchToken(opts.tokenFile));
+        console.log('Companion authenticated as user via stored token');
+      } else {
+        console.error(
+          `Skipping user auth — token is for ${opts.tokenFile.convexUrl}, not ${opts.convexUrl}. Run \`bun run setup\` to re-authenticate.`,
+        );
+      }
     }
 
     // Subscribe to queued sessions — claim and start immediately on update
