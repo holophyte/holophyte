@@ -44,11 +44,11 @@ export function ClaudeButton({ task }: ClaudeButtonProps) {
 
   const handleLaunch = async () => {
     if (!task.repo) return;
+    setError(null);
 
     // If the task has a prompt, create a session immediately and queue it
     if (task.prompt) {
       setLoading(true);
-      setError(null);
       try {
         const sessionId = await createSession({
           taskId: task._id,

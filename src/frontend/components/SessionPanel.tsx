@@ -6,6 +6,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { QUEUED_WARNING_THRESHOLD_MS } from '@/constants';
 import { useSession } from '@/frontend/hooks/useSession';
 import { useAppStore } from '@/frontend/stores/app';
+import type { ClaudeModelId } from './ModelPicker';
+import ModelPicker, { DEFAULT_MODEL } from './ModelPicker';
 import SessionDropdown from './SessionDropdown';
 import SessionRuntimeProvider from './session/SessionRuntimeProvider';
 import SessionThread from './session/SessionThread';
@@ -131,12 +133,13 @@ export default function SessionPanel({ taskId }: SessionPanelProps) {
   );
 
   /** Create a brand-new session (used by NoSessionPlaceholder). */
-  const handleNewSession = async (text: string) => {
+  const handleNewSession = async (text: string, model?: string) => {
     if (!task?.repo?.path) return;
     // Create session in Convex with 'queued' status — the companion picks it up
     const newSessionId = await createSession({
       taskId,
       prompt: text,
+      model,
     });
     openSession(newSessionId);
   };
@@ -202,7 +205,7 @@ export default function SessionPanel({ taskId }: SessionPanelProps) {
 interface NoSessionPlaceholderProps {
   taskPath: string;
   initialPrompt?: string;
-  onStart: (text: string) => Promise<void>;
+  onStart: (text: string, model?: string) => Promise<void>;
 }
 
 function NoSessionPlaceholder({
@@ -219,6 +222,7 @@ function NoSessionPlaceholder({
       setText(initialPrompt);
     }
   }
+  const [model, setModel] = useState<ClaudeModelId>(DEFAULT_MODEL);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -227,7 +231,7 @@ function NoSessionPlaceholder({
     setSending(true);
     setError(null);
     try {
-      await onStart(text.trim());
+      await onStart(text.trim(), model);
       setText('');
     } catch {
       setError('Failed to start session. Try again.');
@@ -257,13 +261,16 @@ function NoSessionPlaceholder({
           }}
         />
         {error && <p className="text-xs text-destructive">{error}</p>}
-        <Button
-          className="w-full"
-          disabled={!text.trim() || sending || !taskPath}
-          onClick={() => void handleSend()}
-        >
-          {sending ? 'Starting…' : 'Start session'}
-        </Button>
+        <div className="flex gap-2 items-center">
+          <Button
+            className="flex-1"
+            disabled={!text.trim() || sending || !taskPath}
+            onClick={() => void handleSend()}
+          >
+            {sending ? 'Starting…' : 'Start session'}
+          </Button>
+          <ModelPicker value={model} onChange={setModel} />
+        </div>
       </div>
     </div>
   );
