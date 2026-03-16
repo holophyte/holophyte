@@ -97,12 +97,18 @@ async function main() {
   if (existing) {
     info(`Existing token found at ${getTokenFilePath()}`);
     process.stdout.write('Overwrite? [y/N]: ');
+    let confirmed = false;
     for await (const line of console) {
       if (line.trim().toLowerCase() !== 'y') {
         console.log('Aborted.');
         process.exit(0);
       }
+      confirmed = true;
       break;
+    }
+    if (!confirmed) {
+      console.log('Aborted (no input).');
+      process.exit(0);
     }
   }
 
