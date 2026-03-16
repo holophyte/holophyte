@@ -17,6 +17,7 @@ import { cn } from '@/frontend/lib/utils';
 import { useAppStore } from '@/frontend/stores/app';
 import { AddRepoDialog } from './AddRepoDialog';
 import CompanionStatus from './CompanionStatus';
+import HolophyteIcon from './icons/HolophyteIcon';
 import OrgSwitcher from './OrgSwitcher';
 import UserMenu from './UserMenu';
 import Button from './ui/Button';
@@ -70,7 +71,7 @@ export function Sidebar() {
         data-testid="sidebar-header"
         className="gap-2 font-semibold text-lg"
       >
-        <FolderGit2 className="h-5 w-5" />
+        <HolophyteIcon className="h-7 w-7" />
         Holophyte
       </PageHeader>
       <div className="px-2 py-1">

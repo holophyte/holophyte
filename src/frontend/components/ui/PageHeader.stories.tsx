@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { FolderGit2, Search, X } from 'lucide-react';
+import { Search, X } from 'lucide-react';
+import HolophyteIcon from '../icons/HolophyteIcon';
 import PageHeader from './PageHeader';
 
 const meta = {
@@ -21,7 +22,7 @@ export const WithIcon: Story = {
     className: 'gap-2',
     children: (
       <>
-        <FolderGit2 className="h-5 w-5" />
+        <HolophyteIcon className="h-5 w-5" />
         <span className="text-lg font-semibold">Holophyte</span>
       </>
     ),
