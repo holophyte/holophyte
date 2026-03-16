@@ -460,4 +460,76 @@ describe('sdkToThreadMessages', () => {
     expect(parts.some((p) => p.type === 'tool-call')).toBe(true);
     expect(parts.some((p) => p.type === 'text')).toBe(false);
   });
+
+  // --- Prompt suggestions ---
+
+  it('extracts prompt_suggestion events into suggestions array', () => {
+    const events = [
+      assistantEvent('Done!'),
+      {
+        type: 'prompt_suggestion',
+        suggestion: 'Run the tests',
+        uuid: 'ps-1',
+      },
+    ] as unknown as SDKMessage[];
+    const { suggestions } = sdkToThreadMessages(events, false, []);
+    expect(suggestions).toEqual(['Run the tests']);
+  });
+
+  it('returns empty suggestions when no prompt_suggestion events exist', () => {
+    const events = [assistantEvent('Hello')];
+    const { suggestions } = sdkToThreadMessages(events, false, []);
+    expect(suggestions).toEqual([]);
+  });
+
+  it('clears suggestion when a new user message appears', () => {
+    const events = [
+      assistantEvent('Done!'),
+      {
+        type: 'prompt_suggestion',
+        suggestion: 'Stale suggestion',
+        uuid: 'ps-2',
+      },
+      userTextEvent('Actually do something else'),
+    ] as unknown as SDKMessage[];
+    const { suggestions } = sdkToThreadMessages(events, false, []);
+    expect(suggestions).toEqual([]);
+  });
+
+  it('clears suggestion when a new assistant turn begins', () => {
+    const events = [
+      assistantEvent('Turn 1 done'),
+      {
+        type: 'prompt_suggestion',
+        suggestion: 'Old suggestion',
+        uuid: 'ps-3',
+      },
+      assistantEvent('Turn 2 started'),
+    ] as unknown as SDKMessage[];
+    const { suggestions } = sdkToThreadMessages(events, false, []);
+    expect(suggestions).toEqual([]);
+  });
+
+  it('keeps only the latest suggestion per turn', () => {
+    const events = [
+      assistantEvent('Done!'),
+      {
+        type: 'prompt_suggestion',
+        suggestion: 'Latest suggestion',
+        uuid: 'ps-4',
+      },
+    ] as unknown as SDKMessage[];
+    const { suggestions } = sdkToThreadMessages(events, false, []);
+    expect(suggestions).toHaveLength(1);
+    expect(suggestions[0]).toBe('Latest suggestion');
+  });
+
+  it('ignores prompt_suggestion events with empty suggestion', () => {
+    const events = [
+      assistantEvent('Done!'),
+      { type: 'prompt_suggestion', suggestion: '', uuid: 'ps-5' },
+    ] as unknown as SDKMessage[];
+    const { suggestions } = sdkToThreadMessages(events, false, []);
+    expect(suggestions).toEqual([]);
+  });
 });

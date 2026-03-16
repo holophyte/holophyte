@@ -77,7 +77,29 @@ vi.mock('@assistant-ui/react', () => {
     ),
   };
 
-  return { ComposerPrimitive };
+  const ThreadPrimitive = {
+    Suggestion: ({
+      children,
+      prompt,
+      className,
+    }: {
+      children: ReactNode;
+      prompt: string;
+      method?: string;
+      className?: string;
+    }) => (
+      <button
+        type="button"
+        data-testid="suggestion-chip"
+        data-prompt={prompt}
+        className={className}
+      >
+        {children}
+      </button>
+    ),
+  };
+
+  return { ComposerPrimitive, ThreadPrimitive };
 });
 
 function withIdleSession(children: ReactNode) {
@@ -105,6 +127,25 @@ function withRunningSession(children: ReactNode) {
         pendingApprovals: [],
         sessionStatus: 'running',
         suggestions: [],
+      }}
+    >
+      {children}
+    </SessionActionsContext.Provider>
+  );
+}
+
+function withIdleSessionAndSuggestions(
+  children: ReactNode,
+  suggestions: string[],
+) {
+  return (
+    <SessionActionsContext.Provider
+      value={{
+        approve: vi.fn(),
+        deny: vi.fn(),
+        pendingApprovals: [],
+        sessionStatus: 'idle',
+        suggestions,
       }}
     >
       {children}
@@ -169,6 +210,38 @@ describe('SessionComposer', () => {
       const input = screen.getByTestId('composer-input');
       await user.type(input, 'Hello Claude');
       expect((input as HTMLTextAreaElement).value).toBe('Hello Claude');
+    });
+  });
+
+  describe('prompt suggestions', () => {
+    it('renders a suggestion chip when idle with suggestions', () => {
+      render(
+        withIdleSessionAndSuggestions(<SessionComposer />, ['Run the tests']),
+      );
+      const chip = screen.getByTestId('suggestion-chip');
+      expect(chip).toBeInTheDocument();
+      expect(chip).toHaveAttribute('data-prompt', 'Run the tests');
+    });
+
+    it('shows the most recent suggestion', () => {
+      render(
+        withIdleSessionAndSuggestions(<SessionComposer />, [
+          'Old suggestion',
+          'Latest suggestion',
+        ]),
+      );
+      const chip = screen.getByTestId('suggestion-chip');
+      expect(chip).toHaveAttribute('data-prompt', 'Latest suggestion');
+    });
+
+    it('does not render suggestion chip when no suggestions', () => {
+      render(withIdleSession(<SessionComposer />));
+      expect(screen.queryByTestId('suggestion-chip')).not.toBeInTheDocument();
+    });
+
+    it('does not render suggestion chip when session is running', () => {
+      render(withRunningSession(<SessionComposer />));
+      expect(screen.queryByTestId('suggestion-chip')).not.toBeInTheDocument();
     });
   });
 });

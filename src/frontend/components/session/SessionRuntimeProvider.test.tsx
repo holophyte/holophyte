@@ -26,6 +26,9 @@ vi.mock('@/frontend/lib/sdkToThreadMessages', () => ({
 }));
 
 import { useExternalStoreRuntime } from '@assistant-ui/react';
+import { useContext } from 'react';
+import { sdkToThreadMessages } from '@/frontend/lib/sdkToThreadMessages';
+import { SessionActionsContext } from './SessionActionsContext';
 import SessionRuntimeProvider from './SessionRuntimeProvider';
 
 // ---------------------------------------------------------------------------
@@ -136,6 +139,45 @@ describe('SessionRuntimeProvider', () => {
       const callArg = (useExternalStoreRuntime as ReturnType<typeof vi.fn>).mock
         .calls[0]?.[0];
       expect(callArg.isRunning).toBe(true);
+    });
+  });
+
+  describe('suggestions', () => {
+    function SuggestionConsumer() {
+      const ctx = useContext(SessionActionsContext);
+      return (
+        <div data-testid="suggestions">{JSON.stringify(ctx?.suggestions)}</div>
+      );
+    }
+
+    it('passes suggestions from sdkToThreadMessages through context', () => {
+      (sdkToThreadMessages as ReturnType<typeof vi.fn>).mockReturnValue({
+        messages: [],
+        suggestions: ['Try running tests'],
+      });
+
+      render(
+        <SessionRuntimeProvider {...makeProps()}>
+          <SuggestionConsumer />
+        </SessionRuntimeProvider>,
+      );
+      expect(screen.getByTestId('suggestions').textContent).toBe(
+        '["Try running tests"]',
+      );
+    });
+
+    it('passes empty suggestions when none are available', () => {
+      (sdkToThreadMessages as ReturnType<typeof vi.fn>).mockReturnValue({
+        messages: [],
+        suggestions: [],
+      });
+
+      render(
+        <SessionRuntimeProvider {...makeProps()}>
+          <SuggestionConsumer />
+        </SessionRuntimeProvider>,
+      );
+      expect(screen.getByTestId('suggestions').textContent).toBe('[]');
     });
   });
 });
