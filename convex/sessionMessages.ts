@@ -1,4 +1,5 @@
 import { v } from 'convex/values';
+import type { Id } from './_generated/dataModel';
 import type { QueryCtx } from './_generated/server';
 import {
   internalMutation,
@@ -6,7 +7,12 @@ import {
   mutation,
   query,
 } from './_generated/server';
-import { requireAuth, requireOrgMembership, requireRole } from './lib/auth';
+import {
+  getUserOrgIds,
+  requireAuth,
+  requireOrgMembership,
+  requireRole,
+} from './lib/auth';
 
 /**
  * Sends a follow-up message to a session.
@@ -38,19 +44,31 @@ export const send = mutation({
   },
 });
 
-/** Shared implementation for listPending and companionListPending. */
-async function fetchPendingMessages(ctx: QueryCtx) {
+/**
+ * Shared implementation for listPending and companionListPending.
+ * When `orgIds` is provided, only returns messages for sessions whose repo
+ * belongs to one of those orgs (used by the public companion query).
+ */
+async function fetchPendingMessages(
+  ctx: QueryCtx,
+  orgIds?: Set<Id<'organizations'>>,
+) {
   const running = await ctx.db
     .query('sessions')
     .withIndex('by_status', (q) => q.eq('status', 'running'))
     .collect();
-  const runningIds = new Set(running.map((s) => s._id));
   const result = [];
-  for (const sessionId of runningIds) {
+  for (const session of running) {
+    if (orgIds) {
+      const task = await ctx.db.get(session.taskId);
+      if (!task) continue;
+      const repo = await ctx.db.get(task.repoId);
+      if (!repo || !orgIds.has(repo.orgId)) continue;
+    }
     const messages = await ctx.db
       .query('sessionMessages')
       .withIndex('by_session_pending', (q) =>
-        q.eq('sessionId', sessionId).eq('consumed', false),
+        q.eq('sessionId', session._id).eq('consumed', false),
       )
       .collect();
     result.push(...messages);
@@ -92,12 +110,14 @@ export const markConsumed = internalMutation({
  * Accessible to the companion via ConvexClient subscriptions. Requires JWT
  * authentication via `ConvexClient.setAuth()`.
  *
- * Intentionally not org-scoped — the companion serves all orgs globally.
+ * Scoped to the authenticated user's orgs — the companion can only see
+ * messages for sessions in orgs it is a member of.
  */
 export const companionListPending = query({
   args: {},
   handler: async (ctx) => {
-    await requireAuth(ctx);
-    return fetchPendingMessages(ctx);
+    const userId = await requireAuth(ctx);
+    const orgIds = await getUserOrgIds(ctx, userId);
+    return fetchPendingMessages(ctx, orgIds);
   },
 });

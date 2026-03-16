@@ -145,16 +145,19 @@ export async function startCompanionSubscriptions(opts: {
   const gen = ++subscriptionGeneration;
 
   try {
-    convexClient = new ConvexClient(opts.convexUrl);
-
-    // Authenticate with JWT — the companion queries gate on ctx.auth.
-    // The token file comes from `holophyte setup` (OAuth flow).
+    // Validate token file matches the target deployment before opening a
+    // WebSocket — avoids an unnecessary handshake when the token is stale.
     const normalize = (u: string) => u.replace(/\/$/, '');
     if (normalize(opts.tokenFile.convexUrl) !== normalize(opts.convexUrl)) {
       throw new Error(
         `Token is for ${opts.tokenFile.convexUrl}, not ${opts.convexUrl}. Run \`bun run setup\` to re-authenticate.`,
       );
     }
+
+    convexClient = new ConvexClient(opts.convexUrl);
+
+    // Authenticate with JWT — the companion queries gate on ctx.auth.
+    // The token file comes from `holophyte setup` (OAuth flow).
     convexClient.setAuth(createFetchToken(opts.tokenFile));
     console.log('Companion authenticated as user via stored token');
 

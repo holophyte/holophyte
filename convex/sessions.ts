@@ -1,4 +1,5 @@
 import { v } from 'convex/values';
+import type { Id } from './_generated/dataModel';
 import type { QueryCtx } from './_generated/server';
 import {
   internalMutation,
@@ -6,7 +7,12 @@ import {
   mutation,
   query,
 } from './_generated/server';
-import { requireAuth, requireOrgMembership, requireRole } from './lib/auth';
+import {
+  getUserOrgIds,
+  requireAuth,
+  requireOrgMembership,
+  requireRole,
+} from './lib/auth';
 import { sessionStatusValidator } from './schema';
 
 /**
@@ -454,8 +460,15 @@ export const serverUpdateName = internalMutation({
   },
 });
 
-/** Shared implementation for listQueued and companionListQueued. */
-async function fetchQueuedSessions(ctx: QueryCtx) {
+/**
+ * Shared implementation for listQueued and companionListQueued.
+ * When `orgIds` is provided, only returns sessions whose repo belongs to one
+ * of those orgs (used by the public companion query for cross-org isolation).
+ */
+async function fetchQueuedSessions(
+  ctx: QueryCtx,
+  orgIds?: Set<Id<'organizations'>>,
+) {
   const queued = await ctx.db
     .query('sessions')
     .withIndex('by_status', (q) => q.eq('status', 'queued'))
@@ -466,6 +479,7 @@ async function fetchQueuedSessions(ctx: QueryCtx) {
     if (!task) continue;
     const repo = await ctx.db.get(task.repoId);
     if (!repo) continue;
+    if (orgIds && !orgIds.has(repo.orgId)) continue;
     result.push({ ...session, repoPath: repo.path });
   }
   return result;
@@ -600,19 +614,21 @@ export const listStopped = internalQuery({
 });
 
 /**
- * Public companion query: returns all queued sessions with repoPath.
+ * Public companion query: returns queued sessions with repoPath.
  *
  * Accessible to the companion via ConvexClient subscriptions. Requires JWT
  * authentication via `ConvexClient.setAuth()` — the companion obtains a
  * session token during `holophyte setup`.
  *
- * Intentionally not org-scoped — the companion serves all orgs globally.
+ * Scoped to the authenticated user's orgs — the companion can only see
+ * sessions for orgs it is a member of.
  */
 export const companionListQueued = query({
   args: {},
   handler: async (ctx) => {
-    await requireAuth(ctx);
-    return fetchQueuedSessions(ctx);
+    const userId = await requireAuth(ctx);
+    const orgIds = await getUserOrgIds(ctx, userId);
+    return fetchQueuedSessions(ctx, orgIds);
   },
 });
 
@@ -622,16 +638,26 @@ export const companionListQueued = query({
  * Accessible to the companion via ConvexClient subscriptions. Returns only
  * `_id` to minimise data in transit. Requires JWT authentication.
  *
- * Intentionally not org-scoped — the companion serves all orgs globally.
+ * Scoped to the authenticated user's orgs — the companion can only see
+ * sessions for orgs it is a member of.
  */
 export const companionListStopped = query({
   args: {},
   handler: async (ctx) => {
-    await requireAuth(ctx);
+    const userId = await requireAuth(ctx);
+    const orgIds = await getUserOrgIds(ctx, userId);
     const stopped = await ctx.db
       .query('sessions')
       .withIndex('by_status', (q) => q.eq('status', 'stopped'))
       .collect();
-    return stopped.map((s) => ({ _id: s._id }));
+    const result = [];
+    for (const s of stopped) {
+      const task = await ctx.db.get(s.taskId);
+      if (!task) continue;
+      const repo = await ctx.db.get(task.repoId);
+      if (!repo || !orgIds.has(repo.orgId)) continue;
+      result.push({ _id: s._id });
+    }
+    return result;
   },
 });
