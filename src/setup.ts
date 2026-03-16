@@ -53,7 +53,7 @@ async function loadConfig(): Promise<{ convexUrl: string }> {
   if (!convexUrl)
     die('CONVEX_URL is required. Set it in env or .env.companion');
 
-  return { convexUrl };
+  return { convexUrl: convexUrl.replace(/\/$/, '') };
 }
 
 /** Prompts the user to select an OAuth provider. */
@@ -169,6 +169,7 @@ async function main() {
   });
 
   const callbackUrl = `http://localhost:${callbackServer.port}/callback`;
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
 
   try {
     // Step 1: Initiate OAuth flow
@@ -195,7 +196,6 @@ async function main() {
     // Step 3: Wait for callback (5 minute timeout)
     info('Waiting for authentication...');
     const TIMEOUT_MS = 5 * 60 * 1000;
-    let timeoutId: ReturnType<typeof setTimeout> | undefined;
     const timeout = new Promise<never>((_, reject) => {
       timeoutId = setTimeout(
         () => reject(new Error('OAuth callback timed out after 5 minutes')),
@@ -203,7 +203,6 @@ async function main() {
       );
     });
     const verificationCode = await Promise.race([codePromise, timeout]);
-    if (timeoutId) clearTimeout(timeoutId);
 
     // Step 4: Exchange code for tokens
     info('Exchanging code for tokens...');
@@ -227,6 +226,7 @@ async function main() {
     console.log('\nThe companion will use this token on next startup.');
     console.log('Run `bun run companion` to start the companion.\n');
   } finally {
+    if (timeoutId) clearTimeout(timeoutId);
     await callbackServer.stop();
   }
 }
