@@ -478,7 +478,12 @@ http.route({
     if (authError) return authError;
 
     try {
-      const status = await ctx.runQuery(internal.companion.getLastSeen, {});
+      const org = await ctx.runQuery(internal.organizations.getDefaultOrg, {});
+      if (!org) return jsonError('No organization configured', 500);
+
+      const status = await ctx.runQuery(internal.companion.getLastSeen, {
+        orgId: org._id,
+      });
       return new Response(JSON.stringify(status), {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
@@ -504,10 +509,13 @@ http.route({
 
     try {
       const { activeSessionCount, machineId, url } = body;
-      if (url != null && !/^http:\/\/localhost:\d+$/.test(url)) {
+      // Client-side URL guard — the mutation also validates server-side
+      // in the companion heartbeat mutation (convex/companion.ts)
+      if (url != null && !/^http:\/\/(localhost|127\.0\.0\.1):\d+$/.test(url)) {
         return jsonError('url must be a localhost address', 400);
       }
-      await ctx.runMutation(internal.companion.upsertHeartbeat, {
+
+      await ctx.runMutation(internal.companion.upsertHeartbeatAllOrgs, {
         activeSessionCount,
         machineId,
         url,

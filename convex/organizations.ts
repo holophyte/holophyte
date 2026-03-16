@@ -1,5 +1,10 @@
 import { v } from 'convex/values';
-import { internalMutation, mutation, query } from './_generated/server';
+import {
+  internalMutation,
+  internalQuery,
+  mutation,
+  query,
+} from './_generated/server';
 import { requireAuth, requireOrgMembership, requireRole } from './lib/auth';
 
 export const listByUser = query({
@@ -113,6 +118,23 @@ export const update = mutation({
       updates.slug = slug;
     }
     await ctx.db.patch(args.id, updates);
+  },
+});
+
+/**
+ * Returns the first organization in the deployment (for companion orgId derivation).
+ * Assumes single-org-per-deployment — logs a warning if multiple orgs exist.
+ */
+export const getDefaultOrg = internalQuery({
+  args: {},
+  handler: async (ctx) => {
+    const orgs = await ctx.db.query('organizations').order('asc').take(2);
+    if (orgs.length > 1) {
+      console.warn(
+        'Multiple organizations found; using oldest for companion orgId derivation',
+      );
+    }
+    return orgs[0] ?? null;
   },
 });
 

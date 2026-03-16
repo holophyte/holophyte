@@ -2,6 +2,7 @@ import { Monitor } from 'lucide-react';
 import type { CompanionState } from '@/frontend/hooks/useCompanionStatus';
 import { useCompanionStatus } from '@/frontend/hooks/useCompanionStatus';
 import { cn } from '@/frontend/lib/utils';
+import { useAppStore } from '@/frontend/stores/app';
 import Skeleton from './ui/Skeleton';
 import {
   Tooltip,
@@ -25,7 +26,8 @@ const labels: Record<CompanionState, string> = {
 };
 
 export default function CompanionStatus() {
-  const { state, status } = useCompanionStatus();
+  const selectedOrgId = useAppStore((s) => s.selectedOrgId);
+  const { state, status } = useCompanionStatus(selectedOrgId);
 
   if (state === 'loading') {
     return (
