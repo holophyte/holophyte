@@ -43,7 +43,7 @@ async function loadConfig(): Promise<{ convexUrl: string }> {
           .join('=')
           .trim()
           .replace(/^(['"])(.*)\1$/, '$2');
-        if (key === 'CONVEX_URL' && !convexUrl) convexUrl = value;
+        if (key?.trim() === 'CONVEX_URL' && !convexUrl) convexUrl = value;
       }
     } catch {
       // .env.companion doesn't exist, that's OK
@@ -162,13 +162,15 @@ async function main() {
     // Step 3: Wait for callback (5 minute timeout)
     info('Waiting for authentication...');
     const TIMEOUT_MS = 5 * 60 * 1000;
-    const timeout = new Promise<never>((_, reject) =>
-      setTimeout(
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
+    const timeout = new Promise<never>((_, reject) => {
+      timeoutId = setTimeout(
         () => reject(new Error('OAuth callback timed out after 5 minutes')),
         TIMEOUT_MS,
-      ),
-    );
+      );
+    });
     const verificationCode = await Promise.race([codePromise, timeout]);
+    if (timeoutId) clearTimeout(timeoutId);
 
     // Step 4: Exchange code for tokens
     info('Exchanging code for tokens...');

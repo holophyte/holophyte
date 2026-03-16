@@ -22,12 +22,16 @@ export const { auth, signIn, signOut, store, isAuthenticated } = convexAuth({
         redirectTo.startsWith('http://localhost:') ||
         redirectTo.startsWith('http://127.0.0.1:')
       ) {
-        const url = new URL(redirectTo);
-        if (
-          (url.hostname === 'localhost' || url.hostname === '127.0.0.1') &&
-          url.pathname === '/callback'
-        ) {
-          return redirectTo;
+        try {
+          const url = new URL(redirectTo);
+          if (
+            (url.hostname === 'localhost' || url.hostname === '127.0.0.1') &&
+            url.pathname === '/callback'
+          ) {
+            return redirectTo;
+          }
+        } catch {
+          // Malformed localhost URL — fall through to default validation
         }
       }
       // Default behavior: relative paths appended to SITE_URL
