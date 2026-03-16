@@ -93,6 +93,22 @@ vi.mock('@assistant-ui/react', () => {
         data-testid="suggestion-chip"
         data-prompt={prompt}
         className={className}
+        onClick={() => {
+          // Simulate method="replace": fill the composer input with the prompt
+          _inputValue = prompt;
+          const input = document.querySelector(
+            '[data-testid="composer-input"]',
+          ) as HTMLTextAreaElement | null;
+          if (input) {
+            // Use native setter to trigger React's onChange
+            const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
+              window.HTMLTextAreaElement.prototype,
+              'value',
+            )?.set;
+            nativeInputValueSetter?.call(input, prompt);
+            input.dispatchEvent(new Event('input', { bubbles: true }));
+          }
+        }}
       >
         {children}
       </button>
@@ -254,6 +270,17 @@ describe('SessionComposer', () => {
         </SessionActionsContext.Provider>,
       );
       expect(screen.queryByTestId('suggestion-chip')).not.toBeInTheDocument();
+    });
+
+    it('clicking suggestion chip fills the composer input', async () => {
+      const user = userEvent.setup();
+      render(
+        withIdleSessionAndSuggestions(<SessionComposer />, ['Run the tests']),
+      );
+      const chip = screen.getByTestId('suggestion-chip');
+      await user.click(chip);
+      const input = screen.getByTestId('composer-input') as HTMLTextAreaElement;
+      expect(input.value).toBe('Run the tests');
     });
   });
 });

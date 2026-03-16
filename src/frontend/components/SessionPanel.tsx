@@ -133,7 +133,7 @@ export default function SessionPanel({ taskId }: SessionPanelProps) {
   );
 
   /** Create a brand-new session (used by NoSessionPlaceholder). */
-  const handleNewSession = async (text: string, model?: string) => {
+  const handleNewSession = async (text: string, model?: ClaudeModelId) => {
     if (!task?.repo?.path) return;
     // Create session in Convex with 'queued' status — the companion picks it up
     const newSessionId = await createSession({
@@ -205,7 +205,7 @@ export default function SessionPanel({ taskId }: SessionPanelProps) {
 interface NoSessionPlaceholderProps {
   taskPath: string;
   initialPrompt?: string;
-  onStart: (text: string, model?: string) => Promise<void>;
+  onStart: (text: string, model?: ClaudeModelId) => Promise<void>;
 }
 
 function NoSessionPlaceholder({
