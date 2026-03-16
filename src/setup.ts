@@ -84,7 +84,7 @@ function openBrowser(url: string) {
     process.platform === 'darwin'
       ? ['open', url]
       : process.platform === 'win32'
-        ? ['cmd', '/c', 'start', url]
+        ? ['cmd', '/c', 'start', '""', url]
         : ['xdg-open', url];
   Bun.spawn(cmd, { stdout: 'ignore', stderr: 'ignore' });
 }
@@ -129,8 +129,12 @@ async function main() {
         if (error) {
           const desc = url.searchParams.get('error_description') ?? error;
           rejectCode(new Error(`OAuth denied: ${desc}`));
+          const safeDesc = desc
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;');
           return new Response(
-            `<html><body><h2>Authentication failed</h2><p>${desc}</p><p>You can close this tab.</p></body></html>`,
+            `<html><body><h2>Authentication failed</h2><p>${safeDesc}</p><p>You can close this tab.</p></body></html>`,
             { headers: { 'Content-Type': 'text/html' } },
           );
         }

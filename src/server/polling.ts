@@ -63,6 +63,8 @@ export async function companionPoll() {
       if (convexUrl && secret) {
         try {
           stopCompanionSubscriptions();
+          // Re-read token file in case tokens were rotated since startup
+          cachedTokenFile = await readTokenFile();
           await startCompanionSubscriptions({
             convexUrl,
             secret,
