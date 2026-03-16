@@ -24,6 +24,7 @@
     "worktree:create": "scripts/worktree-create.sh",
     "pr-comments": "scripts/pr-comments.sh",
     "storybook": "storybook dev -p 6006",
+    "setup": "bun run src/setup.ts",
     "companion": "bun --no-env-file --env-file=.env.companion run src/companion.ts",
     "companion:preview": "scripts/companion-preview.sh",
     "build-storybook": "storybook build",
