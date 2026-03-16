@@ -113,14 +113,27 @@ async function main() {
   info(`Provider: ${provider}`);
 
   // Start ephemeral HTTP server to receive the OAuth callback
-  const { promise: codePromise, resolve: resolveCode } =
-    Promise.withResolvers<string>();
+  const {
+    promise: codePromise,
+    resolve: resolveCode,
+    reject: rejectCode,
+  } = Promise.withResolvers<string>();
 
   const callbackServer = Bun.serve({
     port: 0, // ephemeral port
     fetch(req: Request) {
       const url = new URL(req.url);
       if (url.pathname === '/callback') {
+        // Handle OAuth error (user denied access)
+        const error = url.searchParams.get('error');
+        if (error) {
+          const desc = url.searchParams.get('error_description') ?? error;
+          rejectCode(new Error(`OAuth denied: ${desc}`));
+          return new Response(
+            `<html><body><h2>Authentication failed</h2><p>${desc}</p><p>You can close this tab.</p></body></html>`,
+            { headers: { 'Content-Type': 'text/html' } },
+          );
+        }
         const code = url.searchParams.get('code');
         if (code) {
           resolveCode(code);
@@ -194,7 +207,7 @@ async function main() {
     console.log('\nThe companion will use this token on next startup.');
     console.log('Run `bun run companion` to start the companion.\n');
   } finally {
-    callbackServer.stop();
+    await callbackServer.stop();
   }
 }
 

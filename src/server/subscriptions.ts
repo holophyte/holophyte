@@ -186,7 +186,8 @@ export async function startCompanionSubscriptions(opts: {
     // which user the companion is acting on behalf of. Skip if the token
     // was saved for a different deployment to avoid cross-deployment auth.
     if (opts.tokenFile) {
-      if (opts.tokenFile.convexUrl === opts.convexUrl) {
+      const normalize = (u: string) => u.replace(/\/$/, '');
+      if (normalize(opts.tokenFile.convexUrl) === normalize(opts.convexUrl)) {
         convexClient.setAuth(createFetchToken(opts.tokenFile));
         console.log('Companion authenticated as user via stored token');
       } else {
