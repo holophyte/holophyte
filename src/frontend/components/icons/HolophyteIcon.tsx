@@ -1,6 +1,10 @@
 import type { SVGProps } from 'react';
 
-export default function HolophyteIcon(props: SVGProps<SVGSVGElement>) {
+interface HolophyteIconProps extends SVGProps<SVGSVGElement> {
+  children?: React.ReactNode;
+}
+
+export default function HolophyteIcon(props: HolophyteIconProps) {
   return (
     <svg
       viewBox="0 0 512 512"
