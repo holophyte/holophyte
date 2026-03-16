@@ -190,6 +190,7 @@ export default function SessionPanel({ taskId }: SessionPanelProps) {
         ) : (
           <NoSessionPlaceholder
             taskPath={task?.repo?.path ?? ''}
+            initialPrompt={task?.prompt ?? ''}
             onStart={handleNewSession}
           />
         )}
@@ -200,14 +201,16 @@ export default function SessionPanel({ taskId }: SessionPanelProps) {
 
 interface NoSessionPlaceholderProps {
   taskPath: string;
+  initialPrompt?: string;
   onStart: (text: string) => Promise<void>;
 }
 
 function NoSessionPlaceholder({
   taskPath,
+  initialPrompt,
   onStart,
 }: NoSessionPlaceholderProps) {
-  const [text, setText] = useState('');
+  const [text, setText] = useState(initialPrompt ?? '');
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
