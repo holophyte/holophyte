@@ -5,6 +5,8 @@ const sidebars: SidebarsConfig = {
     'intro',
     'architecture',
     'sessions',
+    'companion',
+    'convex',
     'local-development',
     {
       type: 'category',
