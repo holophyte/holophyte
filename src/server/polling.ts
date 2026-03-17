@@ -36,6 +36,7 @@ let pollTimer: ReturnType<typeof setInterval> | null = null;
 let polling = false;
 let companionUrl: string | undefined;
 let cachedTokenFile: TokenFileData | null | undefined;
+let heartbeatFailureLogged = false;
 
 export async function companionPoll() {
   if (polling) return; // Skip if previous poll is still running
@@ -70,8 +71,8 @@ export async function companionPoll() {
               tokenFile: cachedTokenFile,
             });
           }
-        } catch {
-          // Best-effort — will retry on next poll cycle
+        } catch (err) {
+          console.error('Failed to restart companion subscriptions:', err);
         }
       }
     }
@@ -83,8 +84,11 @@ export async function companionPoll() {
         machineId: MACHINE_ID,
         url: companionUrl,
       });
-    } catch {
-      // Best-effort — don't log every failure
+    } catch (err) {
+      if (!heartbeatFailureLogged) {
+        heartbeatFailureLogged = true;
+        console.error('Companion heartbeat failed:', err);
+      }
     }
   } catch (err) {
     // Don't log transient failures (noisy during startup or when Convex is unavailable)
