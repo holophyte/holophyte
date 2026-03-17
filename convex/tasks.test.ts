@@ -356,6 +356,144 @@ describe('tasks.get', () => {
   });
 });
 
+describe('tasks.countArchived', () => {
+  it('returns 0 when no tasks are archived', async () => {
+    const t = convexTest(schema);
+    const { authed, orgId, repoId } = await setupRepoEnv(t);
+
+    await authed.mutation(api.tasks.create, { repoId, title: 'Active task' });
+
+    const count = await authed.query(api.tasks.countArchived, { orgId });
+    expect(count).toBe(0);
+  });
+
+  it('counts archived tasks across org', async () => {
+    const t = convexTest(schema);
+    const { authed, orgId, repoId } = await setupRepoEnv(t);
+
+    const id1 = await authed.mutation(api.tasks.create, {
+      repoId,
+      title: 'Task 1',
+    });
+    const id2 = await authed.mutation(api.tasks.create, {
+      repoId,
+      title: 'Task 2',
+    });
+    await authed.mutation(api.tasks.create, { repoId, title: 'Task 3' });
+
+    // Archive two tasks
+    await authed.mutation(api.tasks.move, {
+      id: id1,
+      status: TaskStatus.Archived,
+      position: 0,
+    });
+    await authed.mutation(api.tasks.move, {
+      id: id2,
+      status: TaskStatus.Archived,
+      position: 0,
+    });
+
+    const count = await authed.query(api.tasks.countArchived, { orgId });
+    expect(count).toBe(2);
+  });
+
+  it('counts archived tasks scoped to a repo', async () => {
+    const t = convexTest(schema);
+    const { authed, orgId, repoId } = await setupRepoEnv(t);
+
+    // Create a second repo
+    const repoId2 = await authed.mutation(api.repos.create, {
+      name: 'other-repo',
+      path: '/tmp/other-repo',
+      orgId,
+    });
+
+    const id1 = await authed.mutation(api.tasks.create, {
+      repoId,
+      title: 'Repo1 task',
+    });
+    const id2 = await authed.mutation(api.tasks.create, {
+      repoId: repoId2,
+      title: 'Repo2 task',
+    });
+
+    await authed.mutation(api.tasks.move, {
+      id: id1,
+      status: TaskStatus.Archived,
+      position: 0,
+    });
+    await authed.mutation(api.tasks.move, {
+      id: id2,
+      status: TaskStatus.Archived,
+      position: 0,
+    });
+
+    // Scoped to repo1 — should be 1
+    const count1 = await authed.query(api.tasks.countArchived, {
+      orgId,
+      repoId,
+    });
+    expect(count1).toBe(1);
+
+    // Org-wide — should be 2
+    const countAll = await authed.query(api.tasks.countArchived, { orgId });
+    expect(countAll).toBe(2);
+  });
+
+  it('excludes private archived tasks from other users', async () => {
+    const t = convexTest(schema);
+    const { authed: creator, orgId, repoId } = await setupRepoEnv(t);
+    const { userId: otherId, authed: otherMember } = await setupUser(
+      t,
+      'Other',
+    );
+
+    // Add other user as member
+    await t.run(async (ctx) => {
+      await ctx.db.insert('memberships', {
+        userId: otherId,
+        orgId,
+        role: 'member',
+      });
+    });
+
+    // Creator archives a private task
+    const privateId = await creator.mutation(api.tasks.create, {
+      repoId,
+      title: 'Private archived',
+      private: true,
+    });
+    await creator.mutation(api.tasks.move, {
+      id: privateId,
+      status: TaskStatus.Archived,
+      position: 0,
+    });
+
+    // Creator archives a public task
+    const publicId = await creator.mutation(api.tasks.create, {
+      repoId,
+      title: 'Public archived',
+    });
+    await creator.mutation(api.tasks.move, {
+      id: publicId,
+      status: TaskStatus.Archived,
+      position: 0,
+    });
+
+    // Creator sees both
+    const creatorCount = await creator.query(api.tasks.countArchived, {
+      orgId,
+    });
+    expect(creatorCount).toBe(2);
+
+    // Other member sees only the public one
+    const otherCount = await otherMember.query(api.tasks.countArchived, {
+      orgId,
+    });
+    expect(otherCount).toBe(1);
+  });
+});
+
 describe('tasks - org scoping through repo', () => {
   it('cannot create tasks in repos of other orgs', async () => {
     const t = convexTest(schema);

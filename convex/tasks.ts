@@ -102,12 +102,13 @@ export const countArchived = query({
     const { userId } = await requireOrgMembership(ctx, args.orgId);
     let tasks: Doc<'tasks'>[];
     if (args.repoId) {
-      const repo = await ctx.db.get(args.repoId);
+      const repoId = args.repoId;
+      const repo = await ctx.db.get(repoId);
       if (!repo || repo.orgId !== args.orgId) return 0;
       tasks = await ctx.db
         .query('tasks')
         .withIndex('by_repo_status', (q) =>
-          q.eq('repoId', args.repoId!).eq('status', TaskStatus.Archived),
+          q.eq('repoId', repoId).eq('status', TaskStatus.Archived),
         )
         .collect();
     } else {
