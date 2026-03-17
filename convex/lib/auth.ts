@@ -40,6 +40,18 @@ export function requireRole(
   }
 }
 
+/** Returns the set of org IDs the authenticated user belongs to. */
+export async function getUserOrgIds(
+  ctx: QueryCtx | MutationCtx,
+  userId: Id<'users'>,
+): Promise<Set<Id<'organizations'>>> {
+  const memberships = await ctx.db
+    .query('memberships')
+    .withIndex('by_user', (q) => q.eq('userId', userId))
+    .collect();
+  return new Set(memberships.map((m) => m.orgId));
+}
+
 /** Resolve orgId from a task ID via its repo. */
 export async function getOrgIdFromTask(
   ctx: QueryCtx | MutationCtx,

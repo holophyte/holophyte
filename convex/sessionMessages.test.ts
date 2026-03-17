@@ -131,6 +131,66 @@ describe('sessionMessages.listPending', () => {
   });
 });
 
+describe('sessionMessages.companionListPending', () => {
+  it('returns unconsumed messages for running sessions when authenticated', async () => {
+    const t = convexTest(schema);
+    const { authed, sessionId } = await setupSessionEnv(t);
+
+    await t.run(async (ctx) => {
+      await ctx.db.patch(sessionId, { status: 'running' });
+    });
+
+    await authed.mutation(api.sessionMessages.send, {
+      sessionId,
+      text: 'Pending message',
+    });
+
+    const pending = await authed.query(
+      api.sessionMessages.companionListPending,
+      {},
+    );
+    expect(pending).toHaveLength(1);
+    expect(pending[0]?.text).toBe('Pending message');
+  });
+
+  it('throws when unauthenticated', async () => {
+    const t = convexTest(schema);
+
+    await expect(
+      t.query(api.sessionMessages.companionListPending, {}),
+    ).rejects.toThrow('Not authenticated');
+  });
+
+  it('does not return messages from other orgs', async () => {
+    const t = convexTest(schema);
+    const { authed, sessionId } = await setupSessionEnv(t);
+
+    // Create a running session with a pending message in the owner's org
+    await t.run(async (ctx) => {
+      await ctx.db.patch(sessionId, { status: 'running' });
+    });
+    await authed.mutation(api.sessionMessages.send, {
+      sessionId,
+      text: 'Secret message',
+    });
+
+    // Create a second user with their own org
+    const { userId: otherUserId } = await setupUser(t, 'Other User');
+    const otherAuthed = t.withIdentity({ subject: `${otherUserId}|s3` });
+    await otherAuthed.mutation(api.organizations.create, {
+      name: 'Other Org',
+      slug: 'other-org',
+    });
+
+    // Other user should see no pending messages (session belongs to different org)
+    const pending = await otherAuthed.query(
+      api.sessionMessages.companionListPending,
+      {},
+    );
+    expect(pending).toHaveLength(0);
+  });
+});
+
 describe('sessionMessages.markConsumed', () => {
   it('sets consumed to true', async () => {
     const t = convexTest(schema);

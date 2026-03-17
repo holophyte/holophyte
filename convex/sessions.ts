@@ -1,4 +1,5 @@
 import { v } from 'convex/values';
+import type { Id } from './_generated/dataModel';
 import type { QueryCtx } from './_generated/server';
 import {
   internalMutation,
@@ -6,8 +7,12 @@ import {
   mutation,
   query,
 } from './_generated/server';
-import { requireOrgMembership, requireRole } from './lib/auth';
-import { validateCompanionToken } from './lib/validateSecret';
+import {
+  getUserOrgIds,
+  requireAuth,
+  requireOrgMembership,
+  requireRole,
+} from './lib/auth';
 import { sessionStatusValidator } from './schema';
 
 /**
@@ -455,8 +460,15 @@ export const serverUpdateName = internalMutation({
   },
 });
 
-/** Shared implementation for listQueued and companionListQueued. */
-async function fetchQueuedSessions(ctx: QueryCtx) {
+/**
+ * Shared implementation for listQueued and companionListQueued.
+ * When `orgIds` is provided, only returns sessions whose repo belongs to one
+ * of those orgs (used by the public companion query for cross-org isolation).
+ */
+async function fetchQueuedSessions(
+  ctx: QueryCtx,
+  orgIds?: Set<Id<'organizations'>>,
+) {
   const queued = await ctx.db
     .query('sessions')
     .withIndex('by_status', (q) => q.eq('status', 'queued'))
@@ -467,6 +479,7 @@ async function fetchQueuedSessions(ctx: QueryCtx) {
     if (!task) continue;
     const repo = await ctx.db.get(task.repoId);
     if (!repo) continue;
+    if (orgIds && !orgIds.has(repo.orgId)) continue;
     result.push({ ...session, repoPath: repo.path });
   }
   return result;
@@ -601,41 +614,55 @@ export const listStopped = internalQuery({
 });
 
 /**
- * Public companion query: returns all queued sessions with repoPath.
+ * Public companion query: returns queued sessions with repoPath.
  *
- * Same as the internal `listQueued` but accessible to the companion via
- * ConvexClient subscriptions. Validates the companion token derived from
- * INTERNAL_API_SECRET so the raw secret never appears in logs.
+ * Accessible to the companion via ConvexClient subscriptions. Requires JWT
+ * authentication via `ConvexClient.setAuth()` — the companion obtains a
+ * session token during `holophyte setup`.
  *
- * Intentionally not org-scoped — the companion serves all orgs globally.
+ * Scoped to the authenticated user's orgs — the companion can only see
+ * sessions for orgs it is a member of.
  */
 export const companionListQueued = query({
-  args: { token: v.string() },
-  handler: async (ctx, args) => {
-    if (!(await validateCompanionToken(args.token)))
-      throw new Error('Unauthorized');
-    return fetchQueuedSessions(ctx);
+  args: {},
+  handler: async (ctx) => {
+    const userId = await requireAuth(ctx);
+    const orgIds = await getUserOrgIds(ctx, userId);
+    return fetchQueuedSessions(ctx, orgIds);
   },
 });
 
 /**
  * Public companion query: returns `_id` for all sessions with status `stopped`.
  *
- * Same as the internal `listStopped` but accessible to the companion via
- * ConvexClient subscriptions. Returns only `_id` to minimise data in transit.
- * Validates the companion token derived from INTERNAL_API_SECRET.
+ * Accessible to the companion via ConvexClient subscriptions. Returns only
+ * `_id` to minimise data in transit. Requires JWT authentication.
  *
- * Intentionally not org-scoped — the companion serves all orgs globally.
+ * Scoped to the authenticated user's orgs — the companion can only see
+ * sessions for orgs it is a member of.
+ *
+ * Note: org filtering requires O(N×2) DB reads (task + repo per session).
+ * Acceptable because `serverMarkStoppedAsIdle` drains stopped sessions on
+ * startup, keeping N small. If stopped sessions accumulate, consider a
+ * compound index on `(status, orgId)` to filter earlier.
  */
 export const companionListStopped = query({
-  args: { token: v.string() },
-  handler: async (ctx, args) => {
-    if (!(await validateCompanionToken(args.token)))
-      throw new Error('Unauthorized');
+  args: {},
+  handler: async (ctx) => {
+    const userId = await requireAuth(ctx);
+    const orgIds = await getUserOrgIds(ctx, userId);
     const stopped = await ctx.db
       .query('sessions')
       .withIndex('by_status', (q) => q.eq('status', 'stopped'))
       .collect();
-    return stopped.map((s) => ({ _id: s._id }));
+    const result = [];
+    for (const s of stopped) {
+      const task = await ctx.db.get(s.taskId);
+      if (!task) continue;
+      const repo = await ctx.db.get(task.repoId);
+      if (!repo || !orgIds.has(repo.orgId)) continue;
+      result.push({ _id: s._id });
+    }
+    return result;
   },
 });

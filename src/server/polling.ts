@@ -36,6 +36,7 @@ let pollTimer: ReturnType<typeof setInterval> | null = null;
 let polling = false;
 let companionUrl: string | undefined;
 let cachedTokenFile: TokenFileData | null | undefined;
+let heartbeatFailureLogged = false;
 
 export async function companionPoll() {
   if (polling) return; // Skip if previous poll is still running
@@ -59,19 +60,19 @@ export async function companionPoll() {
     // doesn't block the startCompanionSubscriptions guard check.
     if (!isSubscriptionsActive()) {
       const convexUrl = process.env.CONVEX_URL;
-      const secret = process.env.INTERNAL_API_SECRET;
-      if (convexUrl && secret) {
+      if (convexUrl) {
         try {
           stopCompanionSubscriptions();
           // Re-read token file in case tokens were rotated since startup
           cachedTokenFile = await readTokenFile();
-          await startCompanionSubscriptions({
-            convexUrl,
-            secret,
-            tokenFile: cachedTokenFile,
-          });
-        } catch {
-          // Best-effort — will retry on next poll cycle
+          if (cachedTokenFile) {
+            await startCompanionSubscriptions({
+              convexUrl,
+              tokenFile: cachedTokenFile,
+            });
+          }
+        } catch (err) {
+          console.error('Failed to restart companion subscriptions:', err);
         }
       }
     }
@@ -83,8 +84,12 @@ export async function companionPoll() {
         machineId: MACHINE_ID,
         url: companionUrl,
       });
-    } catch {
-      // Best-effort — don't log every failure
+      heartbeatFailureLogged = false;
+    } catch (err) {
+      if (!heartbeatFailureLogged) {
+        heartbeatFailureLogged = true;
+        console.error('Companion heartbeat failed:', err);
+      }
     }
   } catch (err) {
     // Don't log transient failures (noisy during startup or when Convex is unavailable)
@@ -111,6 +116,7 @@ export function stopCompanionPolling() {
   }
   stopCompanionSubscriptions();
   companionUrl = undefined;
+  heartbeatFailureLogged = false;
 }
 
 // How recently a companion heartbeat must be to indicate an active instance.
@@ -175,20 +181,22 @@ export async function startCompanion(url: string): Promise<void> {
 
   // 4. Start reactive subscriptions for queued/stopped sessions and pending messages
   const convexUrl = process.env.CONVEX_URL;
-  const secret = process.env.INTERNAL_API_SECRET;
-  if (convexUrl && secret) {
+  if (convexUrl && cachedTokenFile) {
     try {
       await startCompanionSubscriptions({
         convexUrl,
-        secret,
         tokenFile: cachedTokenFile,
       });
     } catch (err) {
       console.error('Failed to start companion subscriptions:', err);
     }
+  } else if (!convexUrl) {
+    console.error(
+      'CONVEX_URL not set — companion subscriptions unavailable, sessions will not be reactive',
+    );
   } else {
     console.error(
-      'CONVEX_URL or INTERNAL_API_SECRET not set — companion subscriptions unavailable, sessions will not be reactive',
+      'No auth token found — run `bun run setup` to authenticate. Subscriptions will retry when a token is available.',
     );
   }
 

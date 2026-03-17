@@ -679,6 +679,110 @@ describe('sessions.reapStaleSessions', () => {
   });
 });
 
+describe('sessions.companionListQueued', () => {
+  it('returns queued sessions when authenticated', async () => {
+    const t = convexTest(schema);
+    const { authed, taskId } = await setupTaskEnv(t);
+
+    const sessionId = await authed.mutation(api.sessions.create, { taskId });
+
+    const queued = await authed.query(api.sessions.companionListQueued, {});
+    expect(queued).toHaveLength(1);
+    expect(queued[0]?._id).toBe(sessionId);
+    expect(queued[0]?.repoPath).toBe('/tmp/test-repo');
+  });
+
+  it('throws when unauthenticated', async () => {
+    const t = convexTest(schema);
+
+    await expect(t.query(api.sessions.companionListQueued, {})).rejects.toThrow(
+      'Not authenticated',
+    );
+  });
+
+  it('does not return sessions from other orgs', async () => {
+    const t = convexTest(schema);
+    const { authed, taskId } = await setupTaskEnv(t);
+
+    // Create a session in the owner's org
+    await authed.mutation(api.sessions.create, { taskId });
+
+    // Create a second user with their own org
+    const { authed: otherAuthed } = await setupUser(t, 'Other User');
+    const otherOrgId = await otherAuthed.mutation(api.organizations.create, {
+      name: 'Other Org',
+      slug: 'other-org',
+    });
+    const otherRepoId = await otherAuthed.mutation(api.repos.create, {
+      name: 'other-repo',
+      path: '/tmp/other-repo',
+      orgId: otherOrgId,
+    });
+    const otherTaskId = await otherAuthed.mutation(api.tasks.create, {
+      repoId: otherRepoId,
+      title: 'Other Task',
+    });
+    await otherAuthed.mutation(api.sessions.create, { taskId: otherTaskId });
+
+    // Other user should only see their own org's sessions
+    const queued = await otherAuthed.query(
+      api.sessions.companionListQueued,
+      {},
+    );
+    expect(queued).toHaveLength(1);
+    expect(queued[0]?.repoPath).toBe('/tmp/other-repo');
+  });
+});
+
+describe('sessions.companionListStopped', () => {
+  it('returns stopped sessions when authenticated', async () => {
+    const t = convexTest(schema);
+    const { authed, taskId } = await setupTaskEnv(t);
+
+    const sessionId = await authed.mutation(api.sessions.create, { taskId });
+    await t.run(async (ctx) => {
+      await ctx.db.patch(sessionId, { status: 'stopped' });
+    });
+
+    const stopped = await authed.query(api.sessions.companionListStopped, {});
+    expect(stopped).toHaveLength(1);
+    expect(stopped[0]?._id).toBe(sessionId);
+  });
+
+  it('throws when unauthenticated', async () => {
+    const t = convexTest(schema);
+
+    await expect(
+      t.query(api.sessions.companionListStopped, {}),
+    ).rejects.toThrow('Not authenticated');
+  });
+
+  it('does not return sessions from other orgs', async () => {
+    const t = convexTest(schema);
+    const { authed, taskId } = await setupTaskEnv(t);
+
+    // Create a stopped session in owner's org
+    const sessionId = await authed.mutation(api.sessions.create, { taskId });
+    await t.run(async (ctx) => {
+      await ctx.db.patch(sessionId, { status: 'stopped' });
+    });
+
+    // Create a second user with their own org — no sessions
+    const { authed: otherAuthed } = await setupUser(t, 'Other User');
+    await otherAuthed.mutation(api.organizations.create, {
+      name: 'Other Org',
+      slug: 'other-org',
+    });
+
+    // Other user should see no stopped sessions (they're in a different org)
+    const stopped = await otherAuthed.query(
+      api.sessions.companionListStopped,
+      {},
+    );
+    expect(stopped).toHaveLength(0);
+  });
+});
+
 describe('sessions.serverMarkStoppedAsIdle', () => {
   it('transitions all stopped sessions to idle on startup', async () => {
     const t = convexTest(schema);
