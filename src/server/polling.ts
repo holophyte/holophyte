@@ -84,6 +84,7 @@ export async function companionPoll() {
         machineId: MACHINE_ID,
         url: companionUrl,
       });
+      heartbeatFailureLogged = false;
     } catch (err) {
       if (!heartbeatFailureLogged) {
         heartbeatFailureLogged = true;
@@ -115,6 +116,7 @@ export function stopCompanionPolling() {
   }
   stopCompanionSubscriptions();
   companionUrl = undefined;
+  heartbeatFailureLogged = false;
 }
 
 // How recently a companion heartbeat must be to indicate an active instance.
