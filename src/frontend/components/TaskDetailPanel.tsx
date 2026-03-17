@@ -4,7 +4,7 @@ import { PRIORITY_CONFIG, TaskPriority, TaskStatus } from '@convex/schema';
 import { useNavigate, useParams } from '@tanstack/react-router';
 import { useMutation, useQuery } from 'convex/react';
 import type { FunctionReturnType } from 'convex/server';
-import { ChevronDown, Maximize2, X } from 'lucide-react';
+import { Archive, ChevronDown, Maximize2, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import {
   dateInputToTimestamp,
@@ -130,6 +130,7 @@ export function TaskDetailContent({
 }: TaskDetailContentProps) {
   const navigate = useNavigate();
   const updateTask = useMutation(api.tasks.update);
+  const moveTask = useMutation(api.tasks.move);
   const removeTask = useMutation(api.tasks.remove);
 
   const [prevTaskId, setPrevTaskId] = useState(task._id);
@@ -181,6 +182,18 @@ export function TaskDetailContent({
 
   const handleSavePrompt = async () => {
     await updateTask({ id: task._id, prompt: prompt.trim() });
+  };
+
+  const handleArchive = async () => {
+    await moveTask({
+      id: task._id,
+      status: TaskStatus.Archived,
+      position: 0,
+    });
+    void navigate({
+      to: '/repos/$repoId',
+      params: { repoId: String(task.repoId) },
+    });
   };
 
   const handleDelete = async () => {
@@ -416,6 +429,12 @@ export function TaskDetailContent({
       </div>
       {showDelete && (
         <div className="border-t p-4 flex items-center gap-2">
+          {task.status !== TaskStatus.Archived && (
+            <Button size="sm" variant="outline" onClick={handleArchive}>
+              <Archive className="h-3.5 w-3.5 mr-1.5" />
+              Archive
+            </Button>
+          )}
           <Button size="sm" variant="destructive" onClick={handleDelete}>
             Delete
           </Button>

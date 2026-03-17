@@ -96,6 +96,40 @@ export const listArchived = query({
   },
 });
 
+export const countArchived = query({
+  args: { repoId: v.optional(v.id('repos')), orgId: v.id('organizations') },
+  handler: async (ctx, args) => {
+    const { userId } = await requireOrgMembership(ctx, args.orgId);
+    let tasks: Doc<'tasks'>[];
+    if (args.repoId) {
+      const repo = await ctx.db.get(args.repoId);
+      if (!repo || repo.orgId !== args.orgId) return 0;
+      tasks = await ctx.db
+        .query('tasks')
+        .withIndex('by_repo_status', (q) =>
+          q.eq('repoId', args.repoId!).eq('status', TaskStatus.Archived),
+        )
+        .collect();
+    } else {
+      const repos = await ctx.db
+        .query('repos')
+        .withIndex('by_org', (q) => q.eq('orgId', args.orgId))
+        .collect();
+      tasks = [];
+      for (const repo of repos) {
+        const repoTasks = await ctx.db
+          .query('tasks')
+          .withIndex('by_repo_status', (q) =>
+            q.eq('repoId', repo._id).eq('status', TaskStatus.Archived),
+          )
+          .collect();
+        tasks.push(...repoTasks);
+      }
+    }
+    return filterPrivate(tasks, userId).length;
+  },
+});
+
 export const get = query({
   args: { id: v.id('tasks') },
   handler: async (ctx, args) => {

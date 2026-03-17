@@ -172,6 +172,13 @@ export function KanbanBoard() {
     return filtered.sort((a, b) => a.position - b.position);
   };
 
+  const archivedCount = useQuery(
+    api.tasks.countArchived,
+    selectedOrgId
+      ? { orgId: selectedOrgId, repoId: selectedRepoId ?? undefined }
+      : 'skip',
+  );
+
   const archiveAllDone = useMutation(api.tasks.archiveAllDone);
 
   const handleArchiveAll = async () => {
@@ -206,6 +213,11 @@ export function KanbanBoard() {
           >
             <Archive className="h-4 w-4 mr-1" />
             Archive
+            {archivedCount != null && archivedCount > 0 && (
+              <span className="ml-1.5 bg-muted text-muted-foreground text-xs rounded-full px-1.5 py-0.5 leading-none">
+                {archivedCount}
+              </span>
+            )}
           </Button>
         </div>
       </PageHeader>

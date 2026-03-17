@@ -33,4 +33,4 @@ function PopoverContent({
   );
 }
 
-export { Popover, PopoverTrigger, PopoverContent, PopoverAnchor, PopoverClose };
+export { Popover, PopoverAnchor, PopoverClose, PopoverContent, PopoverTrigger };

@@ -2,7 +2,7 @@ import { api } from '@convex/_generated/api';
 import type { Id } from '@convex/_generated/dataModel';
 import { TaskStatus } from '@convex/schema';
 import { useMutation, useQuery } from 'convex/react';
-import { ArrowRight, Tag, Trash2, X } from 'lucide-react';
+import { Archive, ArrowRight, Tag, Trash2, X } from 'lucide-react';
 import { useState } from 'react';
 import { cn } from '@/frontend/lib/utils';
 import { useAppStore } from '@/frontend/stores/app';
@@ -92,6 +92,15 @@ export default function BulkActionBar({ allTasks }: BulkActionBarProps) {
               {col.label}
             </button>
           ))}
+          <div className="border-t my-1" />
+          <button
+            type="button"
+            onClick={() => handleMove(TaskStatus.Archived)}
+            className="w-full flex items-center gap-2 text-left px-3 py-1.5 text-sm rounded hover:bg-muted transition-colors text-muted-foreground"
+          >
+            <Archive className="h-3.5 w-3.5" />
+            Archive
+          </button>
         </PopoverContent>
       </Popover>
 
