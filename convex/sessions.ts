@@ -640,6 +640,11 @@ export const companionListQueued = query({
  *
  * Scoped to the authenticated user's orgs — the companion can only see
  * sessions for orgs it is a member of.
+ *
+ * Note: org filtering requires O(N×2) DB reads (task + repo per session).
+ * Acceptable because `serverMarkStoppedAsIdle` drains stopped sessions on
+ * startup, keeping N small. If stopped sessions accumulate, consider a
+ * compound index on `(status, orgId)` to filter earlier.
  */
 export const companionListStopped = query({
   args: {},
