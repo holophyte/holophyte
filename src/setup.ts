@@ -29,6 +29,42 @@ function success(msg: string) {
   console.log(`\x1b[32m✔\x1b[0m ${msg}`);
 }
 
+/**
+ * Reads a single line from stdin without closing the stream.
+ * Using `for await (const line of console)` closes the iterator on `break`,
+ * making subsequent reads return EOF. This uses the raw stream reader instead.
+ */
+let _stdinReader: ReadableStreamDefaultReader<Uint8Array> | null = null;
+const decoder = new TextDecoder();
+let stdinBuffer = '';
+
+function getStdinReader() {
+  if (!_stdinReader) _stdinReader = Bun.stdin.stream().getReader();
+  return _stdinReader;
+}
+
+async function readLine(): Promise<string | null> {
+  while (true) {
+    const newlineIdx = stdinBuffer.indexOf('\n');
+    if (newlineIdx !== -1) {
+      const line = stdinBuffer.slice(0, newlineIdx).replace(/\r$/, '');
+      stdinBuffer = stdinBuffer.slice(newlineIdx + 1);
+      return line;
+    }
+    const { done, value } = await getStdinReader().read();
+    if (done) {
+      stdinBuffer += decoder.decode(); // flush pending bytes
+      if (stdinBuffer.length > 0) {
+        const remaining = stdinBuffer;
+        stdinBuffer = '';
+        return remaining;
+      }
+      return null;
+    }
+    stdinBuffer += decoder.decode(value, { stream: true });
+  }
+}
+
 /** Reads CONVEX_URL from env or .env.companion. */
 async function loadConfig(): Promise<{ convexUrl: string }> {
   let convexUrl = process.env.CONVEX_URL;
@@ -68,24 +104,17 @@ async function selectProvider(): Promise<Provider> {
   console.log('  2) Google');
   process.stdout.write('\nChoice [1]: ');
 
-  let selected: Provider | undefined;
-  for await (const line of console) {
+  while (true) {
+    const line = await readLine();
+    if (line === null) {
+      console.log('Aborted (no input).');
+      process.exit(0);
+    }
     const choice = line.trim() || '1';
-    if (choice === '1' || choice === 'github') {
-      selected = 'github';
-      break;
-    }
-    if (choice === '2' || choice === 'google') {
-      selected = 'google';
-      break;
-    }
+    if (choice === '1' || choice === 'github') return 'github';
+    if (choice === '2' || choice === 'google') return 'google';
     process.stdout.write('Invalid choice. Enter 1 or 2: ');
   }
-  if (!selected) {
-    console.log('Aborted (no input).');
-    process.exit(0);
-  }
-  return selected;
 }
 
 /** Opens a URL in the default browser. */
@@ -107,17 +136,9 @@ async function main() {
   if (existing) {
     info(`Existing token found at ${getTokenFilePath()}`);
     process.stdout.write('Overwrite? [y/N]: ');
-    let confirmed = false;
-    for await (const line of console) {
-      if (line.trim().toLowerCase() !== 'y') {
-        console.log('Aborted.');
-        process.exit(0);
-      }
-      confirmed = true;
-      break;
-    }
-    if (!confirmed) {
-      console.log('Aborted (no input).');
+    const answer = await readLine();
+    if (answer === null || answer.trim().toLowerCase() !== 'y') {
+      console.log('Aborted.');
       process.exit(0);
     }
   }
@@ -228,6 +249,7 @@ async function main() {
   } finally {
     if (timeoutId) clearTimeout(timeoutId);
     await callbackServer.stop();
+    if (_stdinReader) await _stdinReader.cancel();
   }
 }
 

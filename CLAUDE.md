@@ -106,7 +106,16 @@ scripts/                   → Shared shell scripts (convex-local, dev-local, wo
 - Indexes named descriptively: `by_repo_status`, `by_task`, `by_path`
 - Import generated types: `import type { Doc, Id } from "@convex/_generated/dataModel"`
 - Convex URL is served via `/api/config` endpoint because browser bundles can't access env vars
-- Schema changes that conflict with existing data block deployment. To fix: temporarily remove `schema.ts`, deploy with `--typecheck=disable`, clear data, restore schema.
+- **Adding fields to existing tables**: Use `v.optional()` in the schema to avoid blocking deploys, even if the field is logically required. Mark with a `// required` comment to distinguish from truly optional fields. Enforce the requirement in `args` validators and always set the field in mutations. New tables should use required fields since there's no existing data to conflict with.
+  ```typescript
+  // schema.ts
+  orgId: v.optional(v.id('organizations')), // required — added to existing table
+
+  // mutations — args validator enforces the requirement
+  args: { orgId: v.id('organizations') }
+  ```
+- **Schema tightening**: Optionally tighten `v.optional()` → required in a follow-up once all docs have the field. Verify with a one-off query before deploying.
+- **Dev escape hatch**: If a local Convex backend gets into a broken state, you can temporarily remove `schema.ts`, deploy with `--typecheck=disable`, clear data, and restore. Never use this on prod.
 
 **Local-first development:**
 - Development uses local Convex backends — each workspace (main repo + worktrees) gets its own isolated instance
