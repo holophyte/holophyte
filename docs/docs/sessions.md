@@ -1,5 +1,5 @@
 ---
-sidebar_position: 2
+sidebar_position: 3
 title: Sessions
 ---
 
@@ -10,19 +10,24 @@ Sessions are the core unit of interaction in Holophyte. Each session is a conver
 ## Lifecycle
 
 ```
-running  →  idle
-              ↓
-           (deleted)
-running  →  failed
-              ↓
-           (resumable)
+queued  →  running  →  idle
+                         ↓
+                      (resumable)
+           running  →  failed
+                         ↓
+                      (resumable)
+           running  →  stopped  →  idle
 ```
 
 | Status | Meaning |
 |--------|---------|
+| `queued` | Session created by the frontend, waiting for the companion to pick it up and spawn an SDK process. |
 | `running` | A turn is currently in progress — Claude is working or waiting for a tool approval. An SDK process is alive and consuming backend resources. |
 | `idle` | The turn completed. The SDK process has exited. No resources consumed. The session exists in Convex and can be resumed at any time. |
+| `stopped` | User requested the session be stopped. The companion will abort the SDK process and transition to `idle`. |
 | `failed` | The SDK process crashed or returned an error result. Still resumable — resuming starts a new turn with the prior conversation context. |
+
+The frontend also derives a `waiting_input` status (not stored in Convex) when there are unresolved tool-use approval requests and the backend status is `running`.
 
 There is no "archived" or "completed" terminal state. A session you are done with simply sits idle. If you later want to follow up, resume it.
 
@@ -43,26 +48,22 @@ When a task page loads and its most recent session is idle, `SessionPanel` loads
 ### Session Resume Flow
 
 1. Frontend reads the `sdkSessionId` from the Convex session record (available via `useSession` → `sdkSessionId`).
-2. Frontend POSTs to `POST /api/sessions/start` with `resumeSdkSessionId` set to the captured `sdkSessionId`.
-3. Server calls `queryConvexInternal` to get the next `batchIndex` for appending new events after the existing history.
-4. Server spawns a new SDK process with `options.resume = resumeSdkSessionId`.
-5. Frontend calls `reconnectWs()` to reconnect the WebSocket to the newly started server-side session.
+2. Frontend calls `queueResume` mutation with the session ID and new prompt. This sets the session status back to `queued` with `sdkSessionId` preserved.
+3. Companion's reactive subscription detects the queued session and claims it.
+4. Companion spawns a new SDK process with `options.resume = sdkSessionId` and the new prompt.
+5. Frontend's `useQuery` subscriptions automatically pick up the new events and status changes — no reconnection needed.
 6. Conversation continues seamlessly — the SDK reloads prior context from its own storage.
 
 ### batchIndex Continuation
 
-Events are persisted in numbered batches (`batchIndex`). On resume, the server fetches `nextBatchIndex` from Convex so new events sort after the previous session's history — preventing ordering gaps in the event log across resume boundaries.
-
-### reconnectWs
-
-`useSession` exposes a `reconnectWs()` callback. Calling it increments an internal `wsConnectKey` state value, which triggers the `useEffect` to close the current WebSocket and open a new one to the same session ID. This is used immediately after submitting a resume request so the WebSocket connects to the newly spawned server-side session rather than getting "Session not found".
+Events are persisted in numbered batches (`batchIndex`). On resume, the companion fetches `nextBatchIndex` from Convex so new events sort after the previous session's history — preventing ordering gaps in the event log across resume boundaries.
 
 ## Session List per Task
 
 Each task can have multiple sessions. A dropdown at the top of `SessionPanel` shows all sessions for the current task, sorted by `lastActivityAt` descending (most recently active first). Each entry shows:
 
 - **Name** — first 30 characters of the initial prompt (auto-truncated with `…`)
-- **Status** — `running`, `idle`, or `failed`
+- **Status** — `queued`, `running`, `idle`, or `failed`
 - **Last activity** — relative timestamp ("just now", "2 h ago", "yesterday")
 
 ## Concurrent Session Limits
@@ -86,46 +87,44 @@ The indicators update in real time via Convex reactivity.
 
 ## Persistence and Event History
 
-All SDK events are persisted to the `sessionEvents` table in Convex in batches (flushed every 5 seconds or when the buffer reaches 200 events). On page refresh or reconnect, `useSession` replays the persisted event history from Convex so the full conversation is always visible.
+All SDK events are persisted to the `sessionEvents` table in Convex in batches (flushed every 5 seconds or when the buffer reaches 200 events). On page refresh, `useSession` loads the full event history from Convex so the conversation is always visible.
 
-The `useSession` hook merges two sources of events, deduplicating by UUID:
+The `useSession` hook subscribes to `sessionEvents.getBySession` via Convex's reactive `useQuery`. As the companion flushes new event batches, the query automatically updates and the UI renders the latest events. No WebSocket or manual polling is needed — Convex reactivity handles real-time delivery.
 
-1. **Persisted batches** from Convex (`sessionEvents.getBySession`) — ordered by `batchIndex`.
-2. **Live WebSocket events** — the un-flushed tail and any events received in real time.
+## Real-time Communication
 
-This ensures a reconnecting client always sees the complete history even if some events were recently flushed.
+All communication between the frontend and the session happens through **Convex mutations and reactive queries** — there is no WebSocket connection between the browser and the companion server.
 
-## WebSocket Protocol
+### Frontend → Session (via Convex mutations)
 
-Connect to `ws[s]://<host>/ws/session/:sessionId` to receive real-time session events.
+| Action | Mutation | Description |
+|--------|----------|-------------|
+| Create session | `sessions.create` | Inserts a `queued` session record with the prompt |
+| Resume session | `sessions.queueResume` | Re-queues an `idle` session with a new prompt |
+| Stop session | `sessions.requestStop` | Sets status to `stopped` for the companion to pick up |
+| Approve tool | `pendingApprovals.resolve` | Marks approval as resolved with `approved: true` |
+| Deny tool | `pendingApprovals.resolve` | Marks approval as resolved with `approved: false` and optional deny message |
+| Send message | `sessionMessages.send` | Inserts a message for the companion to deliver to the running SDK process |
 
-### Server → Client Messages
+### Session → Frontend (via Convex reactive queries)
 
-| Message type | Fields | Description |
-|---|---|---|
-| `event` | `sessionId`, `event: SDKMessage` | An SDK event (assistant turn, tool call, result, etc.) |
-| `permission` | `sessionId`, `requestId`, `tool`, `input` | A tool-use approval request that requires user action |
-| `status` | `sessionId`, `status: 'running' \| 'idle' \| 'failed'` | Session lifecycle state change |
-| `error` | `sessionId`, `message` | Unrecoverable error; session will not proceed |
+| Data | Query | Description |
+|------|-------|-------------|
+| Session status | `sessions.get` | Status, `sdkSessionId`, `lastHeartbeat`, model, permission mode |
+| Conversation | `sessionEvents.getBySession` | All event batches ordered by `batchIndex` |
+| Tool approvals | `pendingApprovals.getBySession` | Pending and resolved approval records |
 
-On connect, the server immediately replays any buffered (un-flushed) events and any outstanding permission prompts so late-connecting clients see the full in-progress state.
-
-### Client → Server Messages
-
-| Message type | Fields | Description |
-|---|---|---|
-| `approve` | `requestId` | Approve a pending tool-use request |
-| `deny` | `requestId`, `message?` | Deny a pending tool-use request; optional `message` is shown to Claude |
-
-Permission responses can also be sent via `POST /api/sessions/:id/respond`.
-
-### Derived Status: `waiting_input`
-
-The frontend `useSession` hook derives a fourth status not present in the backend: `waiting_input`. This is set when there are unresolved `PendingApproval` entries and the session is not yet `idle` or `failed`. It overrides a backend `running` status in the UI, signaling that user action is required before Claude can proceed.
+The companion writes to these tables via internal HTTP endpoints, and the frontend's `useQuery` subscriptions pick up changes in real time.
 
 ## Stop
 
-Stopping a running session (`POST /api/sessions/:id/stop`) sets `stoppedByUser = true` on the in-memory session and aborts the SDK controller. The cleanup path in `consumeIterator` detects this flag and transitions the session to `idle` rather than `failed` — so the session remains resumable. Stop does not delete the session or its history.
+Stopping a running session works through Convex:
+
+1. Frontend calls `sessions.requestStop` mutation, which sets the session status to `stopped`.
+2. Companion's reactive subscription detects the `stopped` status.
+3. Companion sets `stoppedByUser = true` on the in-memory session and aborts the SDK controller.
+4. The cleanup path in `consumeIterator` detects the `stoppedByUser` flag and transitions the session to `idle` rather than `failed` — so the session remains resumable.
+5. Stop does not delete the session or its history.
 
 ## Error Handling on Resume
 
@@ -138,13 +137,16 @@ Relevant fields on the `sessions` table:
 | Field | Type | Description |
 |-------|------|-------------|
 | `taskId` | `Id<'tasks'>` | Owning task |
-| `status` | `'running' \| 'idle' \| 'failed'` | Current lifecycle state |
+| `status` | `'queued' \| 'running' \| 'idle' \| 'stopped' \| 'failed'` | Current lifecycle state |
 | `startedAt` | `number` | Unix ms when the session was first created |
-| `lastActivityAt` | `number` | Unix ms of most recent message sent or received; used as sort key |
+| `lastActivityAt` | `number?` | Unix ms of most recent message sent or received; used as sort key |
 | `sdkSessionId` | `string?` | Opaque ID from the Claude Agent SDK `system/init` event; passed as `resume` to continue the conversation |
 | `name` | `string?` | Display name — first 30 chars of the initial prompt |
 | `model` | `string?` | Claude model used for this session |
 | `permissionMode` | `string?` | `'default' \| 'safe-auto' \| 'bypass'` |
+| `queuedPrompt` | `string?` | Stored when `status='queued'` so the companion can read the prompt on claim |
+| `endedAt` | `number?` | Unix ms when the session completed or failed |
+| `lastHeartbeat` | `number?` | Updated every companion poll cycle for active sessions; used for liveness detection |
 
 ## Key Queries
 
