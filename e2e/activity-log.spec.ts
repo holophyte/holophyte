@@ -23,6 +23,27 @@ async function goToActivity(page: import('@playwright/test').Page) {
   });
 }
 
+async function createTask(
+  page: import('@playwright/test').Page,
+  title: string,
+) {
+  const todoColumn = page
+    .locator('[role="group"]')
+    .filter({ hasText: 'To Do' });
+  await todoColumn.locator('button', { hasText: 'Add' }).click();
+  await expect(page.locator('[role="dialog"]')).toBeVisible({ timeout: 5000 });
+  await page.locator('#task-title').fill(title);
+  await page
+    .locator('[role="dialog"]')
+    .locator('button', { hasText: 'Create' })
+    .click();
+  await expect(page.locator('[role="dialog"]')).toBeHidden({ timeout: 5000 });
+  // Wait for the task card to appear on the board
+  await expect(page.locator('[data-task-id]', { hasText: title })).toBeVisible({
+    timeout: 10000,
+  });
+}
+
 test.describe('Activity Log', () => {
   test.beforeEach(async ({ page }) => {
     await waitForApp(page);
@@ -51,29 +72,76 @@ test.describe('Activity Log', () => {
   test('creating a task adds an entry to the activity log', async ({
     page,
   }) => {
-    // First, select the e2e repo and create a task
     await selectRepo(page);
     const taskTitle = `E2E Activity ${Date.now()}`;
+    await createTask(page, taskTitle);
 
-    const todoColumn = page
-      .locator('[role="group"]')
-      .filter({ hasText: 'To Do' });
-    await todoColumn.locator('button', { hasText: 'Add' }).click();
-    await expect(page.locator('[role="dialog"]')).toBeVisible({
-      timeout: 5000,
-    });
-    await page.locator('#task-title').fill(taskTitle);
-    await page
-      .locator('[role="dialog"]')
-      .locator('button', { hasText: 'Create' })
-      .click();
-    await expect(page.locator('[role="dialog"]')).toBeHidden({ timeout: 5000 });
-
-    // Now navigate to the Activity page
     await goToActivity(page);
-
-    // The activity log should contain a "created a task" entry
     await expect(page.locator('text=created a task')).toBeVisible({
+      timeout: 10000,
+    });
+  });
+
+  test('moving a task logs status change', async ({ page }) => {
+    await selectRepo(page);
+    const taskTitle = `E2E Move ${Date.now()}`;
+    await createTask(page, taskTitle);
+
+    // Drag the task from To Do to In Progress
+    const taskCard = page
+      .locator('[data-task-id]', { hasText: taskTitle })
+      .first();
+    const targetColumn = page.locator(
+      '[role="group"][aria-label="In Progress column"]',
+    );
+    await taskCard.dragTo(targetColumn);
+
+    // Verify the task now appears in the In Progress column
+    await expect(
+      targetColumn.locator('[data-task-id]', { hasText: taskTitle }),
+    ).toBeVisible({ timeout: 10000 });
+
+    // Check the activity log for the move entry
+    await goToActivity(page);
+    await expect(
+      page.locator('text=moved a task from todo to in_progress'),
+    ).toBeVisible({ timeout: 10000 });
+  });
+
+  test('changing labels on a task logs label change', async ({ page }) => {
+    await selectRepo(page);
+    const taskTitle = `E2E Labels ${Date.now()}`;
+    await createTask(page, taskTitle);
+
+    // Click the task card to navigate to the detail panel
+    const taskCard = page
+      .locator('[data-task-id]', { hasText: taskTitle })
+      .first();
+    await taskCard.click();
+
+    // Wait for the detail panel to load (title input with the task title)
+    await expect(page.locator('input[placeholder="Task title"]')).toBeVisible({
+      timeout: 10000,
+    });
+
+    // Open the Tags popover
+    const tagsButton = page.locator('button', { hasText: 'Tags' });
+    await tagsButton.click();
+
+    // Click "Create new tag" to make a label
+    const labelName = `e2e-label-${Date.now()}`;
+    await page.locator('button', { hasText: 'Create new tag' }).click();
+    await page.locator('input[placeholder="Tag name"]').fill(labelName);
+    await page.locator('button', { hasText: 'Add' }).click();
+
+    // The new label should now appear as a pill on the task
+    await expect(page.locator(`text=${labelName}`)).toBeVisible({
+      timeout: 10000,
+    });
+
+    // Check the activity log for the label change entry
+    await goToActivity(page);
+    await expect(page.locator('text=changed labels on a task')).toBeVisible({
       timeout: 10000,
     });
   });
