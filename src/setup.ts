@@ -47,7 +47,15 @@ async function readLine(): Promise<string | null> {
       return line;
     }
     const { done, value } = await stdinReader.read();
-    if (done) return null;
+    if (done) {
+      stdinBuffer += decoder.decode(); // flush pending bytes
+      if (stdinBuffer.length > 0) {
+        const remaining = stdinBuffer;
+        stdinBuffer = '';
+        return remaining;
+      }
+      return null;
+    }
     stdinBuffer += decoder.decode(value, { stream: true });
   }
 }
