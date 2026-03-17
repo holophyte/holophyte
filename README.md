@@ -25,8 +25,8 @@ cat > .dev-ports << 'EOF'
 DEV_PORT=8080
 CONVEX_CLOUD_PORT=3210
 CONVEX_SITE_PORT=3211
-CONVEX_TEAM=ko-vial
-CONVEX_PROJECT=holophyte
+CONVEX_TEAM=<your-convex-team>
+CONVEX_PROJECT=<your-convex-project>
 EOF
 
 # Start app server + local Convex backend
