@@ -249,7 +249,7 @@ async function main() {
   } finally {
     if (timeoutId) clearTimeout(timeoutId);
     await callbackServer.stop();
-    if (_stdinReader) _stdinReader.cancel();
+    if (_stdinReader) await _stdinReader.cancel();
   }
 }
 
