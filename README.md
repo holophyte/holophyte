@@ -14,47 +14,13 @@ The frontend is a React SPA that talks exclusively to [Convex](https://convex.de
 
 [Bun](https://bun.sh/) &middot; [React 19](https://react.dev/) &middot; [Convex](https://convex.dev/) &middot; [Claude Agent SDK](https://github.com/anthropics/claude-agent-sdk) &middot; [TanStack Router](https://tanstack.com/router) &middot; [assistant-ui](https://www.assistant-ui.com/) &middot; [Tailwind CSS v4](https://tailwindcss.com/) &middot; [Radix UI](https://www.radix-ui.com/) &middot; [Biome](https://biomejs.dev/)
 
-## Quick Start
+## Getting Started
 
-```bash
-# Install dependencies
-bun install
-
-# Create .dev-ports (required for local development)
-cat > .dev-ports << 'EOF'
-DEV_PORT=8080
-CONVEX_CLOUD_PORT=3210
-CONVEX_SITE_PORT=3211
-CONVEX_TEAM=<your-convex-team>
-CONVEX_PROJECT=<your-convex-project>
-EOF
-
-# Start app server + local Convex backend
-bun run dev:local
-```
-
-The app will be available at `http://localhost:8080`.
-
-## Commands
-
-```bash
-bun run dev              # App server only (port 8080)
-bun run dev:local        # App server + local Convex backend
-bun run dev:all          # App server + cloud Convex dev
-bun run test             # Unit tests (Vitest)
-bun run test:e2e         # E2E tests (Playwright, self-contained)
-bun run check            # Lint + typecheck + test
-bun run lint:fix         # Auto-fix lint issues (Biome)
-bun run worktree:create  # Create isolated worktree for parallel development
-bun run docs:dev         # Docusaurus docs server
-bun run storybook        # Storybook dev server
-```
+Setup instructions coming soon — some infrastructure is still in flux. In the meantime, see [CLAUDE.md](CLAUDE.md) for development guidelines and architecture details.
 
 ## Documentation
 
-See [CLAUDE.md](CLAUDE.md) for detailed development guidelines, architecture, and conventions.
-
-Run `bun run docs:dev` for the full Docusaurus documentation site covering architecture, sessions, testing, and local development.
+Run `bun run docs:dev` for the full Docusaurus documentation site covering architecture, sessions, testing, and local development. See [CLAUDE.md](CLAUDE.md) for development guidelines.
 
 ## License
 
