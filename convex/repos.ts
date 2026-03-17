@@ -2,6 +2,7 @@ import { v } from 'convex/values';
 import { mutation, query } from './_generated/server';
 import { requireOrgMembership, requireRole } from './lib/auth';
 
+/** List all repos in an organization. Requires org membership. */
 export const list = query({
   args: { orgId: v.id('organizations') },
   handler: async (ctx, args) => {
@@ -13,6 +14,7 @@ export const list = query({
   },
 });
 
+/** Get a single repo by ID. Returns `null` if not found. Requires org membership. */
 export const get = query({
   args: { id: v.id('repos') },
   handler: async (ctx, args) => {
@@ -23,6 +25,7 @@ export const get = query({
   },
 });
 
+/** Create a new repo. Throws if a repo already exists at the given path. Requires `member` role. */
 export const create = mutation({
   args: {
     name: v.string(),
@@ -48,6 +51,7 @@ export const create = mutation({
   },
 });
 
+/** Rename a repo. Requires `member` role. */
 export const update = mutation({
   args: {
     id: v.id('repos'),
@@ -62,6 +66,11 @@ export const update = mutation({
   },
 });
 
+/**
+ * Delete a repo and cascade-delete all associated data:
+ * tasks → sessions, subtasks, prompt history → prompt templates.
+ * Requires `admin` role.
+ */
 export const remove = mutation({
   args: { id: v.id('repos') },
   handler: async (ctx, args) => {

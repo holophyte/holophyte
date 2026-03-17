@@ -3,10 +3,20 @@ import type { Id } from '@convex/_generated/dataModel';
 import { useQuery } from 'convex/react';
 import { useSyncExternalStore } from 'react';
 
+/** Heartbeat age below which the companion is considered connected. */
 const STALE_THRESHOLD_MS = 30_000;
+/** Heartbeat age above which the companion is considered offline (5 minutes). */
 const OFFLINE_THRESHOLD_MS = 5 * 60_000;
+/** How often the shared clock ticks to re-evaluate companion state. */
 const TICK_INTERVAL_MS = 5_000;
 
+/**
+ * Derived companion connection state based on heartbeat age.
+ * - `loading`: query hasn't resolved yet
+ * - `connected`: heartbeat received within {@link STALE_THRESHOLD_MS}
+ * - `stale`: heartbeat older than stale threshold but within offline threshold
+ * - `offline`: no heartbeat or older than {@link OFFLINE_THRESHOLD_MS}
+ */
 export type CompanionState = 'loading' | 'connected' | 'stale' | 'offline';
 
 function deriveState(
@@ -47,6 +57,11 @@ function getSnapshot() {
   return now;
 }
 
+/**
+ * React hook that returns the companion server's connection state for an org.
+ * Uses a shared 5-second clock via `useSyncExternalStore` to periodically
+ * re-derive state from the last heartbeat timestamp without per-component timers.
+ */
 export function useCompanionStatus(
   orgId: Id<'organizations'> | null | undefined,
 ) {

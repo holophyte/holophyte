@@ -16,6 +16,7 @@ function requirePrivateOwnership(task: Doc<'tasks'>, userId: Id<'users'>) {
   }
 }
 
+/** List tasks for a repo, excluding archived unless `includeArchived` is set. Filters out private tasks not owned by the caller. */
 export const listByRepo = query({
   args: { repoId: v.id('repos'), includeArchived: v.optional(v.boolean()) },
   handler: async (ctx, args) => {
@@ -32,6 +33,7 @@ export const listByRepo = query({
   },
 });
 
+/** List tasks across all repos in an org. Used by the "All Tasks" view. */
 export const listAll = query({
   args: {
     orgId: v.id('organizations'),
@@ -58,6 +60,7 @@ export const listAll = query({
   },
 });
 
+/** List archived tasks, optionally scoped to a single repo. Sorted by archive date descending. */
 export const listArchived = query({
   args: { repoId: v.optional(v.id('repos')), orgId: v.id('organizations') },
   handler: async (ctx, args) => {
@@ -96,6 +99,7 @@ export const listArchived = query({
   },
 });
 
+/** Get a single task with its repo, resolved labels, and subtask counts. Returns `null` if not found or private. */
 export const get = query({
   args: { id: v.id('tasks') },
   handler: async (ctx, args) => {
@@ -127,6 +131,7 @@ export const get = query({
   },
 });
 
+/** Create a new task at the end of the target status column (defaults to Backlog). Records prompt history if a prompt is provided. */
 export const create = mutation({
   args: {
     repoId: v.id('repos'),
@@ -177,6 +182,7 @@ export const create = mutation({
   },
 });
 
+/** Update task fields. Records prompt history when the prompt changes. Only the task creator can toggle the private flag. */
 export const update = mutation({
   args: {
     id: v.id('tasks'),
@@ -237,6 +243,7 @@ export const update = mutation({
   },
 });
 
+/** Move a task to a different status column and position. Handles time tracking when entering/leaving `in_progress` and sets `archivedAt` when archiving. */
 export const move = mutation({
   args: {
     id: v.id('tasks'),
@@ -286,6 +293,7 @@ export const move = mutation({
   },
 });
 
+/** Change a task's position within its current column (drag-and-drop reorder). */
 export const reorder = mutation({
   args: {
     id: v.id('tasks'),
@@ -306,6 +314,7 @@ export const reorder = mutation({
   },
 });
 
+/** Restore an archived task back to the Done column. */
 export const unarchive = mutation({
   args: { id: v.id('tasks') },
   handler: async (ctx, args) => {
@@ -335,6 +344,7 @@ export const unarchive = mutation({
   },
 });
 
+/** Archive all tasks in the Done column for a repo. Skips private tasks not owned by the caller. */
 export const archiveAllDone = mutation({
   args: { repoId: v.id('repos') },
   handler: async (ctx, args) => {
@@ -360,6 +370,7 @@ export const archiveAllDone = mutation({
   },
 });
 
+/** List in-progress and in-review tasks across all org repos, with running session indicator. Used by the sidebar active tasks panel. */
 export const listActive = query({
   args: { orgId: v.id('organizations') },
   handler: async (ctx, args) => {
@@ -401,6 +412,7 @@ export const listActive = query({
   },
 });
 
+/** Delete a task and cascade-delete its sessions, subtasks, and prompt history. Requires `admin` role. */
 export const remove = mutation({
   args: { id: v.id('tasks') },
   handler: async (ctx, args) => {
@@ -438,6 +450,7 @@ export const remove = mutation({
   },
 });
 
+/** Move multiple tasks to a target status. Handles time tracking, archive timestamps, and per-repo position ordering. All tasks must belong to the same org. */
 export const bulkMove = mutation({
   args: {
     ids: v.array(v.id('tasks')),
@@ -533,6 +546,7 @@ export const bulkMove = mutation({
   },
 });
 
+/** Delete multiple tasks with cascade cleanup. All tasks must belong to the same org. Requires `admin` role. */
 export const bulkDelete = mutation({
   args: { ids: v.array(v.id('tasks')) },
   handler: async (ctx, args) => {
@@ -583,6 +597,7 @@ export const bulkDelete = mutation({
   },
 });
 
+/** Add or remove a label from multiple tasks. Validates the label belongs to the same org. */
 export const bulkToggleLabel = mutation({
   args: {
     ids: v.array(v.id('tasks')),

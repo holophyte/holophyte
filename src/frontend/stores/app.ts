@@ -2,6 +2,7 @@ import type { Id } from '@convex/_generated/dataModel';
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
+/** Available color themes, defined in `src/frontend/styles.css` as CSS `@theme` blocks. */
 export type ThemeName =
   | 'neon'
   | 'flora'
@@ -25,6 +26,11 @@ export const VALID_THEMES: ThemeName[] = [
 
 export const DEFAULT_THEME: ThemeName = 'neon';
 
+/**
+ * Global UI state managed by Zustand. Persists layout preferences
+ * (collapsed panels, theme, last-used repo) to localStorage under `"holophyte-app"`.
+ * Transient state (selected org, active session, search/filter, bulk selection) is not persisted.
+ */
 interface AppState {
   selectedOrgId: Id<'organizations'> | null;
   backlogCollapsed: boolean;

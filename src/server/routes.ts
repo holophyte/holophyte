@@ -1,6 +1,13 @@
+/**
+ * Local-only HTTP route handlers for the companion server.
+ *
+ * These routes require access to the local machine (filesystem, macOS dialogs)
+ * and cannot run in Convex. CORS is restricted to `ALLOWED_ORIGIN` when set.
+ */
 import { exists } from 'node:fs/promises';
 import { basename } from 'node:path';
 
+/** Build CORS headers that only allow the origin specified in `ALLOWED_ORIGIN` env var. Returns `Vary: Origin` always for caching correctness. */
 function corsOriginHeaders(req?: Request): Record<string, string> {
   const allowedOrigin = process.env.ALLOWED_ORIGIN ?? '';
   const requestOrigin = req?.headers.get('Origin') ?? '';
@@ -13,6 +20,7 @@ function corsOriginHeaders(req?: Request): Record<string, string> {
   return headers;
 }
 
+/** CORS preflight handler for the directory picker endpoint. */
 export function handlePickDirectoryCors(req: Request): Response {
   return new Response(null, {
     status: 204,
@@ -25,6 +33,11 @@ export function handlePickDirectoryCors(req: Request): Response {
   });
 }
 
+/**
+ * Open a native macOS folder picker dialog and return the selected path.
+ * Returns `{ cancelled: true }` if the user dismisses the dialog,
+ * or `{ path, name, isGitRepo }` on success. macOS-only (501 on other platforms).
+ */
 export async function handlePickDirectory(req: Request): Promise<Response> {
   const headers = corsOriginHeaders(req);
   try {
@@ -69,6 +82,11 @@ export async function handlePickDirectory(req: Request): Promise<Response> {
   }
 }
 
+/**
+ * Proxy `/api/auth/*` requests to Convex's site URL for OAuth callback handling.
+ * GitHub/Google redirect to the app port, and this forwards the request to
+ * Convex HTTP actions to complete the OAuth flow.
+ */
 export async function handleAuthProxy(req: Request): Promise<Response> {
   const convexSiteUrl = process.env.CONVEX_SITE_URL;
   if (!convexSiteUrl) {

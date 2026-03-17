@@ -1,3 +1,10 @@
+/**
+ * Holophyte companion server entry point.
+ *
+ * Serves the SPA frontend via Bun.serve() with HMR, proxies OAuth callbacks
+ * to Convex, exposes the native directory picker, and starts the companion
+ * polling loop that manages Claude Code SDK sessions.
+ */
 import homepage from '../public/index.html';
 import { startCompanion, stopCompanionPolling } from './server/polling';
 import {

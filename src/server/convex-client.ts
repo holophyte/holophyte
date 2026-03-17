@@ -3,6 +3,10 @@
 /** Whether a startup warning about missing config has already been logged. */
 let configWarningLogged = false;
 
+/**
+ * Read `CONVEX_SITE_URL` and `INTERNAL_API_SECRET` from env.
+ * Returns `null` (with a one-time warning) if either is missing.
+ */
 export function getConvexConfig() {
   const baseUrl = process.env.CONVEX_SITE_URL;
   const secret = process.env.INTERNAL_API_SECRET;
@@ -51,6 +55,11 @@ export async function callConvexInternal(
   return true;
 }
 
+/**
+ * Calls a Convex HTTP action and parses the JSON response.
+ * Unlike {@link callConvexInternal}, this returns the deserialized body.
+ * Throws if config is missing or on HTTP errors.
+ */
 export async function queryConvexInternal<T>(
   path: string,
   body: Record<string, unknown>,

@@ -1,3 +1,11 @@
+/**
+ * Internal HTTP endpoints for the companion server.
+ *
+ * All routes are authenticated via `INTERNAL_API_SECRET` (Bearer token).
+ * They proxy requests to internal Convex mutations/queries so the companion
+ * can manage sessions, heartbeats, approvals, and events without direct
+ * database access.
+ */
 import { httpRouter } from 'convex/server';
 import { internal } from './_generated/api';
 import { httpAction } from './_generated/server';

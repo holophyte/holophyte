@@ -11,6 +11,7 @@ import {
   stopCompanionSubscriptions,
 } from './subscriptions';
 
+/** A session waiting to be picked up by the companion. Contains the prompt and SDK config. */
 export interface QueuedSession {
   _id: string;
   queuedPrompt?: string;
@@ -20,10 +21,12 @@ export interface QueuedSession {
   repoPath: string;
 }
 
+/** A session the user has requested to stop. The companion will terminate its SDK process. */
 export interface StoppedSession {
   _id: string;
 }
 
+/** A follow-up message from the user waiting to be delivered to a running SDK session. */
 export interface PendingMessage {
   _id: string;
   sessionId: string;
@@ -37,6 +40,11 @@ let polling = false;
 let companionUrl: string | undefined;
 let cachedTokenFile: TokenFileData | null | undefined;
 
+/**
+ * Single poll cycle. Sends session heartbeats, retries subscription setup
+ * if disconnected, and sends the companion-level heartbeat. Guarded against
+ * concurrent execution via the `polling` flag.
+ */
 export async function companionPoll() {
   if (polling) return; // Skip if previous poll is still running
   polling = true;
@@ -96,6 +104,7 @@ export async function companionPoll() {
   }
 }
 
+/** Start the recurring poll timer. No-op if already running. */
 export function startCompanionPolling(opts?: { url?: string }) {
   if (pollTimer) return;
   if (opts?.url) companionUrl = opts.url;
@@ -104,6 +113,7 @@ export function startCompanionPolling(opts?: { url?: string }) {
   void companionPoll();
 }
 
+/** Stop the poll timer and tear down companion subscriptions. */
 export function stopCompanionPolling() {
   if (pollTimer) {
     clearInterval(pollTimer);
