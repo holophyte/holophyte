@@ -4,6 +4,7 @@ import { TaskStatus } from '@convex/schema';
 import { useMatch, useNavigate, useParams } from '@tanstack/react-router';
 import { useMutation, useQuery } from 'convex/react';
 import {
+  Activity,
   Eye,
   FolderGit2,
   LayoutDashboard,
@@ -43,6 +44,7 @@ export function Sidebar() {
   const selectedTaskId = (params.taskId as Id<'tasks'> | undefined) ?? null;
   const homeMatch = useMatch({ from: '/', shouldThrow: false });
   const seedsMatch = useMatch({ from: '/seeds', shouldThrow: false });
+  const activityMatch = useMatch({ from: '/activity', shouldThrow: false });
   const [addRepoOpen, setAddRepoOpen] = useState(false);
 
   const handleRemove = async (e: React.MouseEvent, repoId: Id<'repos'>) => {
@@ -94,6 +96,14 @@ export function Sidebar() {
         >
           <Lightbulb className="h-4 w-4" />
           Seed Box
+        </Button>
+        <Button
+          variant={activityMatch ? 'secondary' : 'ghost'}
+          className="w-full justify-start gap-2"
+          onClick={() => void navigate({ to: '/activity' })}
+        >
+          <Activity className="h-4 w-4" />
+          Activity
         </Button>
       </div>
 

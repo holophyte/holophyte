@@ -1,5 +1,6 @@
 import { v } from 'convex/values';
 import { mutation, query } from './_generated/server';
+import { logActivity } from './activityLog';
 import { requireOrgMembership, requireRole } from './lib/auth';
 
 export const list = query({
@@ -30,7 +31,7 @@ export const create = mutation({
     orgId: v.id('organizations'),
   },
   handler: async (ctx, args) => {
-    const { membership } = await requireOrgMembership(ctx, args.orgId);
+    const { userId, membership } = await requireOrgMembership(ctx, args.orgId);
     requireRole(membership, 'member');
     const existing = await ctx.db
       .query('repos')
@@ -39,12 +40,21 @@ export const create = mutation({
     if (existing) {
       throw new Error(`Repo already exists at ${args.path}`);
     }
-    return await ctx.db.insert('repos', {
+    const repoId = await ctx.db.insert('repos', {
       name: args.name,
       path: args.path,
       createdAt: Date.now(),
       orgId: args.orgId,
     });
+    await logActivity(ctx, {
+      orgId: args.orgId,
+      userId,
+      action: 'repo.created',
+      entityType: 'repo',
+      entityId: repoId,
+      metadata: { name: args.name, path: args.path },
+    });
+    return repoId;
   },
 });
 
@@ -67,8 +77,9 @@ export const remove = mutation({
   handler: async (ctx, args) => {
     const repo = await ctx.db.get(args.id);
     if (!repo) throw new Error('Repo not found');
-    const { membership } = await requireOrgMembership(ctx, repo.orgId);
+    const { userId, membership } = await requireOrgMembership(ctx, repo.orgId);
     requireRole(membership, 'admin');
+    const repoName = repo.name;
     const tasks = await ctx.db
       .query('tasks')
       .withIndex('by_repo_status', (q) => q.eq('repoId', args.id))
@@ -97,5 +108,13 @@ export const remove = mutation({
       .collect();
     for (const tmpl of templates) await ctx.db.delete(tmpl._id);
     await ctx.db.delete(args.id);
+    await logActivity(ctx, {
+      orgId: repo.orgId,
+      userId,
+      action: 'repo.deleted',
+      entityType: 'repo',
+      entityId: args.id,
+      metadata: { name: repoName },
+    });
   },
 });

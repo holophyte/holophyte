@@ -4,6 +4,7 @@ import {
   createRouter,
 } from '@tanstack/react-router';
 import RootLayout from './layouts/RootLayout';
+import ActivityRoute from './routes/ActivityRoute';
 import BoardRoute from './routes/BoardRoute';
 import HomeRoute from './routes/HomeRoute';
 import SeedsRoute from './routes/SeedsRoute';
@@ -42,10 +43,17 @@ const seedsRoute = createRoute({
   component: SeedsRoute,
 });
 
+const activityRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/activity',
+  component: ActivityRoute,
+});
+
 const routeTree = rootRoute.addChildren([
   homeRoute,
   boardRoute.addChildren([taskDetailRoute.addChildren([taskPageRoute])]),
   seedsRoute,
+  activityRoute,
 ]);
 
 export const router = createRouter({ routeTree });

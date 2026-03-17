@@ -1,6 +1,7 @@
 import { v } from 'convex/values';
 import type { Doc, Id } from './_generated/dataModel';
 import { mutation, query } from './_generated/server';
+import { logActivity } from './activityLog';
 import { requireOrgMembership, requireRole } from './lib/auth';
 import { priorityValidator, TaskStatus, taskStatusValidator } from './schema';
 
@@ -173,6 +174,15 @@ export const create = mutation({
       private: args.private,
     });
 
+    await logActivity(ctx, {
+      orgId: repo.orgId,
+      userId,
+      action: 'task.created',
+      entityType: 'task',
+      entityId: taskId,
+      metadata: { status: targetStatus, repoId: args.repoId },
+    });
+
     return taskId;
   },
 });
@@ -213,7 +223,59 @@ export const update = mutation({
     if (clearDueAt) updates.dueAt = undefined;
     if (fields.priority !== undefined) updates.priority = fields.priority;
     if (fields.private !== undefined) updates.private = fields.private;
+
+    // Detect label changes before patching
+    const oldLabelIds = task.labelIds ?? [];
+    const newLabelIds = fields.labelIds;
+    const labelsChanged =
+      newLabelIds !== undefined &&
+      (oldLabelIds.length !== newLabelIds.length ||
+        oldLabelIds.some((id, i) => id !== newLabelIds[i]));
+
     await ctx.db.patch(id, updates);
+
+    // Log field updates (excluding labelIds — logged separately)
+    const changedFields = (
+      [
+        'title',
+        'description',
+        'prompt',
+        'priority',
+        'dueAt',
+        'private',
+      ] as const
+    ).filter((f) => {
+      if (f === 'dueAt' && clearDueAt) return true;
+      return fields[f] !== undefined;
+    });
+    if (changedFields.length > 0) {
+      await logActivity(ctx, {
+        orgId: repo.orgId,
+        userId,
+        action: 'task.updated',
+        entityType: 'task',
+        entityId: id,
+        metadata: { fields: changedFields },
+      });
+    }
+
+    // Log label changes
+    if (labelsChanged && newLabelIds) {
+      const oldSet = new Set(oldLabelIds);
+      const newSet = new Set(newLabelIds);
+      const added = newLabelIds.filter((lid) => !oldSet.has(lid));
+      const removed = oldLabelIds.filter((lid) => !newSet.has(lid));
+      if (added.length > 0 || removed.length > 0) {
+        await logActivity(ctx, {
+          orgId: repo.orgId,
+          userId,
+          action: 'task.labels_changed',
+          entityType: 'task',
+          entityId: id,
+          metadata: { added, removed },
+        });
+      }
+    }
 
     // Record prompt history when prompt changes (including clears)
     if (fields.prompt !== undefined) {
@@ -283,6 +345,29 @@ export const move = mutation({
     }
 
     await ctx.db.patch(args.id, updates);
+
+    // Log move / archive
+    if (task.status !== args.status) {
+      if (args.status === TaskStatus.Archived) {
+        await logActivity(ctx, {
+          orgId: repo.orgId,
+          userId,
+          action: 'task.archived',
+          entityType: 'task',
+          entityId: args.id,
+          metadata: { title: task.title },
+        });
+      } else {
+        await logActivity(ctx, {
+          orgId: repo.orgId,
+          userId,
+          action: 'task.moved',
+          entityType: 'task',
+          entityId: args.id,
+          metadata: { from: task.status, to: args.status },
+        });
+      }
+    }
   },
 });
 
@@ -332,6 +417,15 @@ export const unarchive = mutation({
       archivedAt: undefined,
       updatedAt: Date.now(),
     });
+
+    await logActivity(ctx, {
+      orgId: repo.orgId,
+      userId,
+      action: 'task.unarchived',
+      entityType: 'task',
+      entityId: args.id,
+      metadata: { title: task.title },
+    });
   },
 });
 
@@ -349,12 +443,25 @@ export const archiveAllDone = mutation({
       )
       .collect();
     const now = Date.now();
+    let archivedCount = 0;
     for (const task of doneTasks) {
       if (task.private && task.createdBy !== userId) continue;
       await ctx.db.patch(task._id, {
         status: TaskStatus.Archived,
         archivedAt: now,
         updatedAt: now,
+      });
+      archivedCount++;
+    }
+
+    if (archivedCount > 0) {
+      await logActivity(ctx, {
+        orgId: repo.orgId,
+        userId,
+        action: 'task.all_done_archived',
+        entityType: 'task',
+        entityId: args.repoId,
+        metadata: { count: archivedCount },
       });
     }
   },
@@ -408,8 +515,12 @@ export const remove = mutation({
     if (!task) throw new Error('Task not found');
     const repo = await ctx.db.get(task.repoId);
     if (!repo) throw new Error('Repo not found');
-    const { membership } = await requireOrgMembership(ctx, repo.orgId);
+    const { userId, membership } = await requireOrgMembership(ctx, repo.orgId);
     requireRole(membership, 'admin');
+
+    // Capture title before deletion
+    const title = task.title;
+
     // Delete sessions
     const sessions = await ctx.db
       .query('sessions')
@@ -435,6 +546,15 @@ export const remove = mutation({
       await ctx.db.delete(entry._id);
     }
     await ctx.db.delete(args.id);
+
+    await logActivity(ctx, {
+      orgId: repo.orgId,
+      userId,
+      action: 'task.deleted',
+      entityType: 'task',
+      entityId: args.id,
+      metadata: { title },
+    });
   },
 });
 
@@ -462,6 +582,8 @@ export const bulkMove = mutation({
     // Track max position per repo so tasks land in correct repo-scoped order
     const maxPositionByRepo = new Map<string, number>();
     const now = Date.now();
+    let movedCount = 0;
+    let fromStatus: string | undefined;
 
     for (const id of args.ids) {
       const task = await ctx.db.get(id);
@@ -472,6 +594,8 @@ export const bulkMove = mutation({
       if (!repo || repo.orgId !== orgId) continue;
       if (task.private && task.createdBy !== userId) continue;
       if (task.status === args.status) continue;
+
+      if (!fromStatus) fromStatus = task.status;
 
       // Compute max position scoped to (repoId, status)
       const repoKey = task.repoId;
@@ -529,6 +653,22 @@ export const bulkMove = mutation({
       }
 
       await ctx.db.patch(id, updates);
+      movedCount++;
+    }
+
+    if (movedCount > 0) {
+      await logActivity(ctx, {
+        orgId,
+        userId,
+        action: 'task.bulk_moved',
+        entityType: 'task',
+        entityId: orgId,
+        metadata: {
+          count: movedCount,
+          from: fromStatus,
+          to: args.status,
+        },
+      });
     }
   },
 });
@@ -544,10 +684,14 @@ export const bulkDelete = mutation({
     if (!firstTask) throw new Error('Task not found');
     const firstRepo = await ctx.db.get(firstTask.repoId);
     if (!firstRepo) throw new Error('Repo not found');
-    const { membership } = await requireOrgMembership(ctx, firstRepo.orgId);
+    const { userId, membership } = await requireOrgMembership(
+      ctx,
+      firstRepo.orgId,
+    );
     requireRole(membership, 'admin');
     const orgId = firstRepo.orgId;
 
+    let deletedCount = 0;
     for (const id of args.ids) {
       const task = await ctx.db.get(id);
       if (!task) continue;
@@ -579,6 +723,18 @@ export const bulkDelete = mutation({
         await ctx.db.delete(entry._id);
       }
       await ctx.db.delete(id);
+      deletedCount++;
+    }
+
+    if (deletedCount > 0) {
+      await logActivity(ctx, {
+        orgId,
+        userId,
+        action: 'task.bulk_deleted',
+        entityType: 'task',
+        entityId: orgId,
+        metadata: { count: deletedCount },
+      });
     }
   },
 });

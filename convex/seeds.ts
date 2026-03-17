@@ -1,5 +1,6 @@
 import { v } from 'convex/values';
 import { mutation, query } from './_generated/server';
+import { logActivity } from './activityLog';
 import { requireOrgMembership, requireRole } from './lib/auth';
 import { TaskStatus } from './schema';
 
@@ -21,15 +22,24 @@ export const create = mutation({
     orgId: v.id('organizations'),
   },
   handler: async (ctx, args) => {
-    const { membership } = await requireOrgMembership(ctx, args.orgId);
+    const { userId, membership } = await requireOrgMembership(ctx, args.orgId);
     requireRole(membership, 'member');
-    return await ctx.db.insert('seeds', {
+    const seedId = await ctx.db.insert('seeds', {
       title: args.title,
       description: args.description ?? '',
       status: 'active',
       createdAt: Date.now(),
       orgId: args.orgId,
     });
+    await logActivity(ctx, {
+      orgId: args.orgId,
+      userId,
+      action: 'seed.created',
+      entityType: 'seed',
+      entityId: seedId,
+      metadata: { title: args.title },
+    });
+    return seedId;
   },
 });
 
@@ -58,9 +68,18 @@ export const remove = mutation({
   handler: async (ctx, args) => {
     const seed = await ctx.db.get(args.id);
     if (!seed) throw new Error('Seed not found');
-    const { membership } = await requireOrgMembership(ctx, seed.orgId);
+    const { userId, membership } = await requireOrgMembership(ctx, seed.orgId);
     requireRole(membership, 'admin');
+    const title = seed.title;
     await ctx.db.delete(args.id);
+    await logActivity(ctx, {
+      orgId: seed.orgId,
+      userId,
+      action: 'seed.deleted',
+      entityType: 'seed',
+      entityId: args.id,
+      metadata: { title },
+    });
   },
 });
 
@@ -109,6 +128,15 @@ export const plant = mutation({
     await ctx.db.patch(args.id, {
       status: 'planted',
       plantedToTaskId: taskId,
+    });
+
+    await logActivity(ctx, {
+      orgId: repo.orgId,
+      userId,
+      action: 'seed.planted',
+      entityType: 'seed',
+      entityId: args.id,
+      metadata: { repoId: args.repoId, taskId },
     });
 
     return taskId;

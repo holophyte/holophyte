@@ -57,6 +57,31 @@ export const PRIORITY_CONFIG: Record<
   [TaskPriority.Urgent]: { label: 'Urgent', color: '#ef4444' },
 };
 
+export const activityActionValidator = v.union(
+  // Tasks
+  v.literal('task.created'),
+  v.literal('task.moved'),
+  v.literal('task.archived'),
+  v.literal('task.unarchived'),
+  v.literal('task.deleted'),
+  v.literal('task.updated'),
+  v.literal('task.labels_changed'),
+  v.literal('task.bulk_moved'),
+  v.literal('task.bulk_deleted'),
+  v.literal('task.all_done_archived'),
+  // Seeds
+  v.literal('seed.created'),
+  v.literal('seed.planted'),
+  v.literal('seed.deleted'),
+  // Labels
+  v.literal('label.created'),
+  v.literal('label.updated'),
+  v.literal('label.deleted'),
+  // Repos
+  v.literal('repo.created'),
+  v.literal('repo.deleted'),
+);
+
 export const roleValidator = v.union(
   v.literal('owner'),
   v.literal('admin'),
@@ -223,6 +248,23 @@ export default defineSchema({
     ),
     batchIndex: v.number(),
   }).index('by_session_batch', ['sessionId', 'batchIndex']),
+
+  activityLog: defineTable({
+    orgId: v.id('organizations'),
+    userId: v.id('users'),
+    action: activityActionValidator,
+    entityType: v.union(
+      v.literal('task'),
+      v.literal('seed'),
+      v.literal('label'),
+      v.literal('repo'),
+    ),
+    entityId: v.string(),
+    metadata: v.optional(v.string()),
+    createdAt: v.number(),
+  })
+    .index('by_org', ['orgId', 'createdAt'])
+    .index('by_entity', ['entityType', 'entityId', 'createdAt']),
 
   companion: defineTable({
     orgId: v.id('organizations'),
