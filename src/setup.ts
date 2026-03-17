@@ -34,19 +34,24 @@ function success(msg: string) {
  * Using `for await (const line of console)` closes the iterator on `break`,
  * making subsequent reads return EOF. This uses the raw stream reader instead.
  */
-const stdinReader = Bun.stdin.stream().getReader();
+let _stdinReader: ReadableStreamDefaultReader<Uint8Array> | null = null;
 const decoder = new TextDecoder();
 let stdinBuffer = '';
+
+function getStdinReader() {
+  if (!_stdinReader) _stdinReader = Bun.stdin.stream().getReader();
+  return _stdinReader;
+}
 
 async function readLine(): Promise<string | null> {
   while (true) {
     const newlineIdx = stdinBuffer.indexOf('\n');
     if (newlineIdx !== -1) {
-      const line = stdinBuffer.slice(0, newlineIdx);
+      const line = stdinBuffer.slice(0, newlineIdx).replace(/\r$/, '');
       stdinBuffer = stdinBuffer.slice(newlineIdx + 1);
       return line;
     }
-    const { done, value } = await stdinReader.read();
+    const { done, value } = await getStdinReader().read();
     if (done) {
       stdinBuffer += decoder.decode(); // flush pending bytes
       if (stdinBuffer.length > 0) {
