@@ -5,7 +5,7 @@ import {
   mutation,
   query,
 } from './_generated/server';
-import { requireAuth, requireOrgMembership } from './lib/auth';
+import { requireOrgMembership, requireSessionOwnership } from './lib/auth';
 
 /** Server-side mutation for batched event persistence. */
 export const insertBatch = internalMutation({
@@ -58,7 +58,7 @@ export const companionInsertBatch = mutation({
     batchIndex: v.number(),
   },
   handler: async (ctx, args) => {
-    await requireAuth(ctx);
+    await requireSessionOwnership(ctx, args.sessionId);
     await ctx.db.insert('sessionEvents', {
       sessionId: args.sessionId,
       events: args.events,
@@ -71,7 +71,7 @@ export const companionInsertBatch = mutation({
 export const companionGetNextBatchIndex = query({
   args: { sessionId: v.id('sessions') },
   handler: async (ctx, args) => {
-    await requireAuth(ctx);
+    await requireSessionOwnership(ctx, args.sessionId);
     const lastBatch = await ctx.db
       .query('sessionEvents')
       .withIndex('by_session_batch', (q) => q.eq('sessionId', args.sessionId))

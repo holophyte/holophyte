@@ -207,7 +207,7 @@ export async function startCompanionSubscriptions(): Promise<void> {
   );
 
   subscriptionsActive = true;
-  console.log('Companion authenticated as user via stored token');
+  console.log('Companion subscriptions started');
 }
 
 /**

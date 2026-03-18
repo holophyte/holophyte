@@ -88,9 +88,11 @@ export async function companionPoll() {
     }
 
     // 3. Send companion-level heartbeat (every cycle, even with zero sessions)
-    if (client) {
+    // Re-fetch client — step 2 may have closed and re-created it.
+    const heartbeatClient = getConvexClient();
+    if (heartbeatClient) {
       try {
-        await client.mutation(api.companion.companionHeartbeat, {
+        await heartbeatClient.mutation(api.companion.companionHeartbeat, {
           activeSessionCount: getActiveSessions().length,
           machineId: MACHINE_ID,
           url: companionUrl,

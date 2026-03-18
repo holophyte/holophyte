@@ -63,3 +63,19 @@ export async function getOrgIdFromTask(
   if (!repo) throw new Error('Repo not found');
   return repo.orgId;
 }
+
+/**
+ * Verifies the authenticated user owns the session (via session → task → repo → org).
+ * Throws if the session doesn't exist or the user isn't a member of its org.
+ */
+export async function requireSessionOwnership(
+  ctx: QueryCtx | MutationCtx,
+  sessionId: Id<'sessions'>,
+) {
+  const userId = await requireAuth(ctx);
+  const session = await ctx.db.get(sessionId);
+  if (!session) throw new Error('Session not found');
+  const orgId = await getOrgIdFromTask(ctx, session.taskId);
+  await requireOrgMembership(ctx, orgId);
+  return { userId, session };
+}

@@ -5,7 +5,11 @@ import {
   mutation,
   query,
 } from './_generated/server';
-import { requireAuth, requireOrgMembership, requireRole } from './lib/auth';
+import {
+  requireOrgMembership,
+  requireRole,
+  requireSessionOwnership,
+} from './lib/auth';
 
 // ── Internal functions (companion via HTTP) ─────────────────────────
 
@@ -105,7 +109,7 @@ export const companionCreate = mutation({
     input: v.string(),
   },
   handler: async (ctx, args) => {
-    await requireAuth(ctx);
+    await requireSessionOwnership(ctx, args.sessionId);
     await ctx.db.insert('pendingApprovals', {
       sessionId: args.sessionId,
       requestId: args.requestId,
@@ -121,7 +125,7 @@ export const companionCreate = mutation({
 export const companionListResolvedUnconsumed = query({
   args: { sessionId: v.id('sessions') },
   handler: async (ctx, args) => {
-    await requireAuth(ctx);
+    await requireSessionOwnership(ctx, args.sessionId);
     const approvals = await ctx.db
       .query('pendingApprovals')
       .withIndex('by_session_unresolved', (q) =>
@@ -136,9 +140,10 @@ export const companionListResolvedUnconsumed = query({
 export const companionMarkConsumed = mutation({
   args: { id: v.id('pendingApprovals') },
   handler: async (ctx, args) => {
-    await requireAuth(ctx);
     const approval = await ctx.db.get(args.id);
     if (!approval) return;
+    // Verify caller owns the approval's session
+    await requireSessionOwnership(ctx, approval.sessionId);
     await ctx.db.patch(args.id, { consumed: true });
   },
 });
@@ -147,7 +152,7 @@ export const companionMarkConsumed = mutation({
 export const companionDenyAll = mutation({
   args: { sessionId: v.id('sessions') },
   handler: async (ctx, args) => {
-    await requireAuth(ctx);
+    await requireSessionOwnership(ctx, args.sessionId);
     const unresolved = await ctx.db
       .query('pendingApprovals')
       .withIndex('by_session_unresolved', (q) =>

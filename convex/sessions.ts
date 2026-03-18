@@ -12,6 +12,7 @@ import {
   requireAuth,
   requireOrgMembership,
   requireRole,
+  requireSessionOwnership,
 } from './lib/auth';
 import { sessionStatusValidator } from './schema';
 
@@ -704,9 +705,8 @@ async function markStoppedAsIdleImpl(
 export const companionClaimQueued = mutation({
   args: { id: v.id('sessions') },
   handler: async (ctx, args) => {
-    await requireAuth(ctx);
-    const session = await ctx.db.get(args.id);
-    if (!session || session.status !== 'queued') return { ok: false };
+    const { session } = await requireSessionOwnership(ctx, args.id);
+    if (session.status !== 'queued') return { ok: false };
     await ctx.db.patch(args.id, {
       status: 'running',
       lastActivityAt: Date.now(),
@@ -725,9 +725,7 @@ export const companionUpdateStatus = mutation({
     status: sessionStatusValidator,
   },
   handler: async (ctx, args) => {
-    await requireAuth(ctx);
-    const session = await ctx.db.get(args.id);
-    if (!session) throw new Error('Session not found');
+    await requireSessionOwnership(ctx, args.id);
     await ctx.db.patch(args.id, {
       status: args.status,
       lastActivityAt: Date.now(),
@@ -768,13 +766,18 @@ export const companionMarkStoppedAsIdle = mutation({
 export const companionBatchHeartbeat = mutation({
   args: { sessionIds: v.array(v.id('sessions')) },
   handler: async (ctx, args) => {
-    await requireAuth(ctx);
+    const userId = await requireAuth(ctx);
+    const orgIds = await getUserOrgIds(ctx, userId);
     const now = Date.now();
     for (const id of args.sessionIds) {
       const session = await ctx.db.get(id);
-      if (session) {
-        await ctx.db.patch(id, { lastHeartbeat: now });
-      }
+      if (!session) continue;
+      // Verify session belongs to caller's org
+      const task = await ctx.db.get(session.taskId);
+      if (!task) continue;
+      const repo = await ctx.db.get(task.repoId);
+      if (!repo || !orgIds.has(repo.orgId)) continue;
+      await ctx.db.patch(id, { lastHeartbeat: now });
     }
   },
 });
@@ -791,16 +794,14 @@ export const companionUpdateSdkSessionId = mutation({
     permissionMode: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    await requireAuth(ctx);
-    const session = await ctx.db.get(args.id);
-    if (!session) throw new Error('Session not found');
-    const updates: Record<string, unknown> = {
+    await requireSessionOwnership(ctx, args.id);
+    await ctx.db.patch(args.id, {
       sdkSessionId: args.sdkSessionId,
-    };
-    if (args.model !== undefined) updates.model = args.model;
-    if (args.permissionMode !== undefined)
-      updates.permissionMode = args.permissionMode;
-    await ctx.db.patch(args.id, updates);
+      ...(args.model !== undefined && { model: args.model }),
+      ...(args.permissionMode !== undefined && {
+        permissionMode: args.permissionMode,
+      }),
+    });
   },
 });
 
@@ -811,9 +812,7 @@ export const companionUpdateSdkSessionId = mutation({
 export const companionUpdateActivity = mutation({
   args: { id: v.id('sessions') },
   handler: async (ctx, args) => {
-    await requireAuth(ctx);
-    const session = await ctx.db.get(args.id);
-    if (!session) throw new Error('Session not found');
+    await requireSessionOwnership(ctx, args.id);
     await ctx.db.patch(args.id, { lastActivityAt: Date.now() });
   },
 });
@@ -828,9 +827,7 @@ export const companionUpdateName = mutation({
     name: v.string(),
   },
   handler: async (ctx, args) => {
-    await requireAuth(ctx);
-    const session = await ctx.db.get(args.id);
-    if (!session) throw new Error('Session not found');
+    await requireSessionOwnership(ctx, args.id);
     await ctx.db.patch(args.id, { name: args.name });
   },
 });

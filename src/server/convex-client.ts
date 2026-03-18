@@ -31,6 +31,11 @@ export function initCompanionClients(
     );
   }
 
+  // Close existing clients to avoid leaking WebSocket connections
+  if (convexClient) {
+    convexClient.close().catch(console.error);
+  }
+
   // WebSocket client — subscriptions + mutations
   convexClient = new ConvexClient(convexUrl);
   convexClient.setAuth(createFetchToken(tokenFile));
@@ -38,6 +43,8 @@ export function initCompanionClients(
   // HTTP client — one-shot queries
   httpClient = new ConvexHttpClient(convexUrl);
   httpClient.setAuth(tokenFile.token);
+
+  console.log('Companion authenticated as user via stored token');
 }
 
 /** Returns the WebSocket-based ConvexClient for subscriptions and mutations. */
