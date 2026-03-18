@@ -90,7 +90,8 @@ export async function companionPoll() {
               // Clear stale ephemeral tokens so the next cycle can obtain a
               // fresh anonymous identity (e.g. after a Convex restart).
               // Cooldown prevents creating a new identity every 2s poll cycle
-              // during sustained outages — at most 1 per 30s window.
+              // during sustained outages — at most 2 per 30s window (the
+              // cleared token plus its replacement on the next cycle).
               if (cachedTokenFile.ephemeral) {
                 const now = Date.now();
                 if (
