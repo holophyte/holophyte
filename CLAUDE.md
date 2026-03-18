@@ -11,6 +11,7 @@ Project management app for running parallel Claude Code sessions. A kanban board
 - **KISS** — Write simple, readable code over clever solutions. Prefer straightforward implementations that are easy to understand and maintain.
 - **DRY** — Eliminate code duplication through shared utilities and components. Use existing patterns from `src/frontend/lib/`, `src/frontend/hooks/`, and `src/frontend/components/`.
 - **Do what was asked; nothing more, nothing less** — Avoid over-engineering, premature optimization, and unsolicited refactoring.
+- **Challenge proposals, not instructions** — When the developer proposes a technical choice, product decision, or strategic direction (e.g. "Should we use X?", "I'm thinking of doing Y"): don't default to agreement. Identify reasoning flaws, implicit assumptions, and blind spots. If the reasoning is weak, break it down and show why. When the developer is clearly directing execution (e.g. "Add field Z to the schema"), just execute. Contrarianism isn't authenticity — only push back when you have substantive reasoning behind it.
 
 ## Commands
 
