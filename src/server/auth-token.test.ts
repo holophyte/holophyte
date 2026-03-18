@@ -24,6 +24,7 @@ import {
   getTokenFilePath,
   readTokenFile,
   refreshAuthToken,
+  signInAnonymous,
   type TokenFileData,
   writeTokenFile,
 } from './auth-token';
@@ -265,6 +266,96 @@ describe('refreshAuthToken', () => {
       'https://example.convex.cloud',
       'refresh',
     );
+
+    expect(result).toBeNull();
+  });
+});
+
+describe('signInAnonymous', () => {
+  let fetchSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    fetchSpy = vi.spyOn(globalThis, 'fetch');
+  });
+
+  afterEach(() => {
+    fetchSpy.mockRestore();
+  });
+
+  it('calls the correct Convex API endpoint with anonymous provider', async () => {
+    fetchSpy.mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          value: {
+            tokens: { token: 'anon-jwt', refreshToken: 'anon-refresh' },
+          },
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      ),
+    );
+
+    await signInAnonymous('http://localhost:3210');
+
+    expect(fetchSpy).toHaveBeenCalledWith(
+      'http://localhost:3210/api/action',
+      expect.objectContaining({
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          path: 'auth:signIn',
+          args: { provider: 'anonymous' },
+          format: 'json',
+        }),
+      }),
+    );
+  });
+
+  it('returns TokenFileData on success', async () => {
+    fetchSpy.mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          value: {
+            tokens: { token: 'anon-jwt', refreshToken: 'anon-refresh' },
+          },
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      ),
+    );
+
+    const result = await signInAnonymous('http://localhost:3210');
+
+    expect(result).toEqual({
+      convexUrl: 'http://localhost:3210',
+      token: 'anon-jwt',
+      refreshToken: 'anon-refresh',
+    });
+  });
+
+  it('returns null when the response is not ok', async () => {
+    fetchSpy.mockResolvedValue(new Response(null, { status: 500 }));
+
+    const result = await signInAnonymous('http://localhost:3210');
+
+    expect(result).toBeNull();
+  });
+
+  it('returns null when tokens are missing from the response', async () => {
+    fetchSpy.mockResolvedValue(
+      new Response(JSON.stringify({ value: {} }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+
+    const result = await signInAnonymous('http://localhost:3210');
+
+    expect(result).toBeNull();
+  });
+
+  it('returns null when fetch throws', async () => {
+    fetchSpy.mockRejectedValue(new Error('Connection refused'));
+
+    const result = await signInAnonymous('http://localhost:3210');
 
     expect(result).toBeNull();
   });

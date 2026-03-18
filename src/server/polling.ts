@@ -3,7 +3,7 @@
 import { hostname } from 'node:os';
 import { getActiveSessions } from '@/claude/manager';
 import type { TokenFileData } from './auth-token';
-import { readTokenFile } from './auth-token';
+import { readTokenFile, signInAnonymous } from './auth-token';
 import { callConvexInternal, queryConvexInternal } from './convex-client';
 import {
   isSubscriptionsActive,
@@ -65,6 +65,9 @@ export async function companionPoll() {
           stopCompanionSubscriptions();
           // Re-read token file in case tokens were rotated since startup
           cachedTokenFile = await readTokenFile();
+          if (!cachedTokenFile && process.env.ALLOW_ANONYMOUS_AUTH === '1') {
+            cachedTokenFile = await signInAnonymous(convexUrl);
+          }
           if (cachedTokenFile) {
             await startCompanionSubscriptions({
               convexUrl,
@@ -179,8 +182,20 @@ export async function startCompanion(url: string): Promise<void> {
     console.log('Loaded user auth token from', '~/.holophyte/token.json');
   }
 
-  // 4. Start reactive subscriptions for queued/stopped sessions and pending messages
+  // If no token file, try anonymous auth (local dev / E2E)
   const convexUrl = process.env.CONVEX_URL;
+  if (
+    !cachedTokenFile &&
+    process.env.ALLOW_ANONYMOUS_AUTH === '1' &&
+    convexUrl
+  ) {
+    cachedTokenFile = await signInAnonymous(convexUrl);
+    if (cachedTokenFile) {
+      console.log('Companion authenticated anonymously (local dev mode)');
+    }
+  }
+
+  // 4. Start reactive subscriptions for queued/stopped sessions and pending messages
   if (convexUrl && cachedTokenFile) {
     try {
       await startCompanionSubscriptions({

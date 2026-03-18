@@ -104,6 +104,43 @@ export async function refreshAuthToken(
 }
 
 /**
+ * Signs in anonymously to get a valid JWT.
+ * Used as a fallback when no token file exists and ALLOW_ANONYMOUS_AUTH is enabled
+ * (local dev / E2E tests with ephemeral Convex instances).
+ *
+ * Does NOT write to disk — anonymous tokens are ephemeral.
+ */
+export async function signInAnonymous(
+  convexUrl: string,
+): Promise<TokenFileData | null> {
+  try {
+    const res = await fetch(`${convexUrl}/api/action`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        path: 'auth:signIn',
+        args: { provider: 'anonymous' },
+        format: 'json',
+      }),
+    });
+    if (!res.ok) {
+      console.error(`Anonymous sign-in failed (${res.status})`);
+      return null;
+    }
+    const result = await res.json();
+    if (!result?.value?.tokens) {
+      console.error('Anonymous sign-in returned no tokens');
+      return null;
+    }
+    const { token, refreshToken } = result.value.tokens;
+    return { convexUrl, token, refreshToken };
+  } catch (err) {
+    console.error('Anonymous sign-in error:', err);
+    return null;
+  }
+}
+
+/**
  * Creates an AuthTokenFetcher compatible with ConvexClient.setAuth().
  * Handles token refresh when forceRefreshToken is true.
  */
