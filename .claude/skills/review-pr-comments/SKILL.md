@@ -28,7 +28,7 @@ If `$ARGUMENTS` contains a PR number, use that directly.
 
 ### 2. Fetch Comments
 
-Fetch Greptile review comments using the script:
+Fetch review bot comments (Greptile + CodeRabbit) using the script:
 ```bash
 bun run pr-comments -- <PR_NUMBER>
 ```
@@ -77,11 +77,17 @@ For each comment to address:
 4. Show the diff
 5. Ask for confirmation before moving to next comment
 
+**For comments that won't result in code changes** (intentional design decisions, already handled differently, disagree with the suggestion, etc.), reply to the review thread on GitHub explaining why:
+```bash
+gh api repos/{owner}/{repo}/pulls/<PR>/comments/<COMMENT_ID>/replies -f body="<explanation>"
+```
+This keeps the reviewer thread from being left hanging and documents the reasoning.
+
 ### 6. Resolve Conversations
 
-After all comments have been addressed (code changes made and confirmed), resolve the Greptile review threads on GitHub:
+After all comments have been addressed or replied to, resolve the review bot threads on GitHub **before pushing the fix commit** — threads must still be unresolved for the script to find them:
 ```bash
 bun run pr-comments -- --resolve <PR_NUMBER>
 ```
 
-This clicks "Resolve conversation" on all Greptile threads via the GitHub GraphQL API.
+This calls the GitHub GraphQL `resolveReviewThread` mutation on all unresolved threads from Greptile and CodeRabbit.
