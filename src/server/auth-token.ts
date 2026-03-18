@@ -102,7 +102,15 @@ export async function refreshAuthToken(
       console.error('Auth token refresh returned no tokens');
       return null;
     }
-    return result.value.tokens;
+    const tokens = result.value.tokens;
+    if (
+      typeof tokens.token !== 'string' ||
+      typeof tokens.refreshToken !== 'string'
+    ) {
+      console.error('Auth token refresh returned invalid token fields');
+      return null;
+    }
+    return { token: tokens.token, refreshToken: tokens.refreshToken };
   } catch (err) {
     console.error('Auth token refresh error:', err);
     return null;
@@ -181,13 +189,13 @@ export function createFetchToken(
 
         currentToken = result.token;
         currentRefreshToken = result.refreshToken;
-        // Keep tokenData in sync so callers holding a reference see
-        // the rotated values (matters for ephemeral tokens that skip disk).
-        tokenData.token = currentToken;
-        tokenData.refreshToken = currentRefreshToken;
 
-        // Persist updated tokens (skip for ephemeral/anonymous tokens)
-        if (!isEphemeral) {
+        if (isEphemeral) {
+          // Keep tokenData in sync so callers holding a reference see
+          // the rotated values (ephemeral tokens skip disk persistence).
+          tokenData.token = currentToken;
+          tokenData.refreshToken = currentRefreshToken;
+        } else {
           await writeTokenFile({
             convexUrl: tokenData.convexUrl,
             token: currentToken,

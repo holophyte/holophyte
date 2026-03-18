@@ -244,7 +244,7 @@ export async function startCompanion(url: string): Promise<void> {
     );
   } else if (process.env.ALLOW_ANONYMOUS_AUTH === '1') {
     console.error(
-      'No auth token found and anonymous sign-in failed — check that the Convex deployment has an anonymous provider configured.',
+      'No auth token found and anonymous sign-in failed — ensure ALLOW_ANONYMOUS_AUTH=1 is set on the Convex deployment and the anonymous provider is configured.',
     );
   } else {
     console.error(
