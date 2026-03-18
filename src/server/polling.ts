@@ -1,10 +1,17 @@
 // ── Companion polling ────────────────────────────────────────────────
 
 import { hostname } from 'node:os';
+import { api } from '@convex/_generated/api';
+import type { Id } from '@convex/_generated/dataModel';
 import { getActiveSessions } from '@/claude/manager';
 import type { TokenFileData } from './auth-token';
 import { readTokenFile } from './auth-token';
-import { callConvexInternal, queryConvexInternal } from './convex-client';
+import {
+  closeCompanionClients,
+  getConvexClient,
+  getConvexHttpClient,
+  initCompanionClients,
+} from './convex-client';
 import {
   isSubscriptionsActive,
   startCompanionSubscriptions,
@@ -12,7 +19,7 @@ import {
 } from './subscriptions';
 
 export interface QueuedSession {
-  _id: string;
+  _id: Id<'sessions'>;
   queuedPrompt?: string;
   sdkSessionId?: string;
   model?: string;
@@ -21,12 +28,12 @@ export interface QueuedSession {
 }
 
 export interface StoppedSession {
-  _id: string;
+  _id: Id<'sessions'>;
 }
 
 export interface PendingMessage {
-  _id: string;
-  sessionId: string;
+  _id: Id<'sessionMessages'>;
+  sessionId: Id<'sessions'>;
   text: string;
 }
 
@@ -43,33 +50,36 @@ export async function companionPoll() {
   polling = true;
 
   try {
+    const client = getConvexClient();
+
     // 1. Send heartbeat for all active sessions
-    const activeIds = getActiveSessions();
-    if (activeIds.length > 0) {
-      try {
-        await callConvexInternal('/api/internal/sessions/batchHeartbeat', {
-          sessionIds: activeIds,
-        });
-      } catch (err) {
-        console.error('Failed to send batch heartbeat:', err);
+    if (client) {
+      const activeIds = getActiveSessions();
+      if (activeIds.length > 0) {
+        try {
+          await client.mutation(api.sessions.companionBatchHeartbeat, {
+            sessionIds: activeIds as Id<'sessions'>[],
+          });
+        } catch (err) {
+          console.error('Failed to send batch heartbeat:', err);
+        }
       }
     }
 
     // 2. Retry subscription setup if not active (startup failure or subscription error).
-    // stopCompanionSubscriptions() is called first so an errored-but-non-null client
-    // doesn't block the startCompanionSubscriptions guard check.
+    // stopCompanionSubscriptions() is called first so errored subscriptions
+    // don't block the startCompanionSubscriptions guard check.
     if (!isSubscriptionsActive()) {
       const convexUrl = process.env.CONVEX_URL;
       if (convexUrl) {
         try {
           stopCompanionSubscriptions();
+          closeCompanionClients();
           // Re-read token file in case tokens were rotated since startup
           cachedTokenFile = await readTokenFile();
           if (cachedTokenFile) {
-            await startCompanionSubscriptions({
-              convexUrl,
-              tokenFile: cachedTokenFile,
-            });
+            initCompanionClients(convexUrl, cachedTokenFile);
+            await startCompanionSubscriptions();
           }
         } catch (err) {
           console.error('Failed to restart companion subscriptions:', err);
@@ -78,17 +88,19 @@ export async function companionPoll() {
     }
 
     // 3. Send companion-level heartbeat (every cycle, even with zero sessions)
-    try {
-      await callConvexInternal('/api/internal/companion/heartbeat', {
-        activeSessionCount: activeIds.length,
-        machineId: MACHINE_ID,
-        url: companionUrl,
-      });
-      heartbeatFailureLogged = false;
-    } catch (err) {
-      if (!heartbeatFailureLogged) {
-        heartbeatFailureLogged = true;
-        console.error('Companion heartbeat failed:', err);
+    if (client) {
+      try {
+        await client.mutation(api.companion.companionHeartbeat, {
+          activeSessionCount: getActiveSessions().length,
+          machineId: MACHINE_ID,
+          url: companionUrl,
+        });
+        heartbeatFailureLogged = false;
+      } catch (err) {
+        if (!heartbeatFailureLogged) {
+          heartbeatFailureLogged = true;
+          console.error('Companion heartbeat failed:', err);
+        }
       }
     }
   } catch (err) {
@@ -115,6 +127,7 @@ export function stopCompanionPolling() {
     pollTimer = null;
   }
   stopCompanionSubscriptions();
+  closeCompanionClients();
   companionUrl = undefined;
   heartbeatFailureLogged = false;
 }
@@ -124,71 +137,29 @@ const DUPLICATE_THRESHOLD_MS = 10_000;
 
 /**
  * Full companion startup sequence:
- *   1. Detect duplicate instances (exit if another companion is active)
- *   2. Clean up stale/stopped sessions from a prior crash
- *   3. Start the polling loop
+ *   1. Load user auth token
+ *   2. Initialize authenticated Convex clients
+ *   3. Detect duplicate instances (exit if another companion is active)
+ *   4. Clean up stale/stopped sessions from a prior crash
+ *   5. Start reactive subscriptions
+ *   6. Start the polling loop
  *
  * All Convex calls are non-fatal — missing config is silently skipped.
  */
 export async function startCompanion(url: string): Promise<void> {
-  // 1. Duplicate check
-  // Note: this is an advisory check — two companions starting simultaneously
-  // within POLL_INTERVAL_MS of each other can both pass before either has
-  // written its first heartbeat (TOCTOU). This is acceptable; the window is
-  // narrow and the scenario is unlikely in practice.
-  try {
-    const status = await queryConvexInternal<{
-      lastSeen: number;
-      machineId?: string;
-    } | null>('/api/internal/companion/status', {});
-    const now = Date.now();
-    if (
-      status &&
-      now - status.lastSeen < DUPLICATE_THRESHOLD_MS &&
-      status.machineId !== MACHINE_ID
-    ) {
-      const secondsAgo = Math.round((now - status.lastSeen) / 1000);
-      console.error(
-        `Error: Another companion is already connected to this deployment (last seen ${secondsAgo}s ago).\n` +
-          `Stop it first, or check your CONVEX_DEPLOYMENT config.`,
-      );
-      process.exit(1);
-    }
-  } catch {
-    // Skip if Convex is not configured yet
-  }
-
-  // 2. Clean up sessions left in inconsistent states from a prior crash or
-  //    companion outage:
-  //      - 'running' → 'idle': process died without finalising the turn
-  //      - 'stopped' → 'idle': stop request was never processed
-  try {
-    await callConvexInternal('/api/internal/sessions/markStaleRunning', {});
-  } catch {
-    // Non-critical — Convex may not be configured yet
-  }
-  try {
-    await callConvexInternal('/api/internal/sessions/markStoppedAsIdle', {});
-  } catch {
-    // Non-critical — Convex may not be configured yet
-  }
-
-  // 3. Load user auth token (from `holophyte setup`)
+  // 1. Load user auth token (from `holophyte setup`)
   cachedTokenFile = await readTokenFile();
   if (cachedTokenFile) {
     console.log('Loaded user auth token from', '~/.holophyte/token.json');
   }
 
-  // 4. Start reactive subscriptions for queued/stopped sessions and pending messages
+  // 2. Initialize authenticated Convex clients
   const convexUrl = process.env.CONVEX_URL;
   if (convexUrl && cachedTokenFile) {
     try {
-      await startCompanionSubscriptions({
-        convexUrl,
-        tokenFile: cachedTokenFile,
-      });
+      initCompanionClients(convexUrl, cachedTokenFile);
     } catch (err) {
-      console.error('Failed to start companion subscriptions:', err);
+      console.error('Failed to initialize Convex clients:', err);
     }
   } else if (!convexUrl) {
     console.error(
@@ -200,6 +171,57 @@ export async function startCompanion(url: string): Promise<void> {
     );
   }
 
-  // 5. Start the polling loop (heartbeats only)
+  // 3. Duplicate check
+  // Note: this is an advisory check — two companions starting simultaneously
+  // within POLL_INTERVAL_MS of each other can both pass before either has
+  // written its first heartbeat (TOCTOU). This is acceptable; the window is
+  // narrow and the scenario is unlikely in practice.
+  const httpClient = getConvexHttpClient();
+  if (httpClient) {
+    try {
+      const status = await httpClient.query(api.companion.companionGetStatus);
+      const now = Date.now();
+      if (
+        status &&
+        now - status.lastSeen < DUPLICATE_THRESHOLD_MS &&
+        status.machineId !== MACHINE_ID
+      ) {
+        const secondsAgo = Math.round((now - status.lastSeen) / 1000);
+        console.error(
+          `Error: Another companion is already connected to this deployment (last seen ${secondsAgo}s ago).\n` +
+            `Stop it first, or check your CONVEX_DEPLOYMENT config.`,
+        );
+        process.exit(1);
+      }
+    } catch {
+      // Skip if Convex is not configured yet
+    }
+  }
+
+  // 4. Clean up sessions left in inconsistent states from a prior crash
+  const client = getConvexClient();
+  if (client) {
+    try {
+      await client.mutation(api.sessions.companionMarkStaleRunning, {});
+    } catch {
+      // Non-critical — Convex may not be configured yet
+    }
+    try {
+      await client.mutation(api.sessions.companionMarkStoppedAsIdle, {});
+    } catch {
+      // Non-critical — Convex may not be configured yet
+    }
+  }
+
+  // 5. Start reactive subscriptions for queued/stopped sessions and pending messages
+  if (getConvexClient()) {
+    try {
+      await startCompanionSubscriptions();
+    } catch (err) {
+      console.error('Failed to start companion subscriptions:', err);
+    }
+  }
+
+  // 6. Start the polling loop (heartbeats only)
   startCompanionPolling({ url });
 }
