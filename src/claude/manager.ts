@@ -188,7 +188,6 @@ async function flushEvents(session: Session): Promise<void> {
   session.flushing = true;
   const events = [...session.eventBuffer];
   session.eventBuffer = [];
-  const batchIndex = session.batchIndex++;
 
   try {
     const client = getConvexClient();
@@ -196,6 +195,7 @@ async function flushEvents(session: Session): Promise<void> {
       session.eventBuffer.unshift(...events);
       return;
     }
+    const batchIndex = session.batchIndex++;
     await client.mutation(api.sessionEvents.companionInsertBatch, {
       sessionId: session.convexSessionId as Id<'sessions'>,
       events,

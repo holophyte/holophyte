@@ -74,7 +74,8 @@ export async function getConvexHttpClient(): Promise<ConvexHttpClient | null> {
   if (!httpClient || !fetchToken) return null;
   // Get the latest token (already refreshed by ConvexClient if needed)
   const token = await fetchToken({ forceRefreshToken: false });
-  if (token) httpClient.setAuth(token);
+  if (!token) return null;
+  httpClient.setAuth(token);
   return httpClient;
 }
 

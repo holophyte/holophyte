@@ -155,56 +155,62 @@ export async function startCompanionSubscriptions(): Promise<void> {
   subscriptionErrorCount = 0;
   const gen = ++subscriptionGeneration;
 
-  // Subscribe to queued sessions — claim and start immediately on update
-  unsubscribers.push(
-    client.onUpdate(
-      api.sessions.companionListQueued,
-      {},
-      (queued) => {
-        for (const session of queued) {
-          void handleQueuedSession(session);
-        }
-      },
-      (err) => {
-        if (gen === subscriptionGeneration) subscriptionErrorCount++;
-        console.error('companionListQueued subscription error:', err);
-      },
-    ),
-  );
+  try {
+    // Subscribe to queued sessions — claim and start immediately on update
+    unsubscribers.push(
+      client.onUpdate(
+        api.sessions.companionListQueued,
+        {},
+        (queued) => {
+          for (const session of queued) {
+            void handleQueuedSession(session);
+          }
+        },
+        (err) => {
+          if (gen === subscriptionGeneration) subscriptionErrorCount++;
+          console.error('companionListQueued subscription error:', err);
+        },
+      ),
+    );
 
-  // Subscribe to stopped sessions — abort or transition to idle immediately
-  unsubscribers.push(
-    client.onUpdate(
-      api.sessions.companionListStopped,
-      {},
-      (stopped) => {
-        for (const session of stopped) {
-          void handleStoppedSession(session);
-        }
-      },
-      (err) => {
-        if (gen === subscriptionGeneration) subscriptionErrorCount++;
-        console.error('companionListStopped subscription error:', err);
-      },
-    ),
-  );
+    // Subscribe to stopped sessions — abort or transition to idle immediately
+    unsubscribers.push(
+      client.onUpdate(
+        api.sessions.companionListStopped,
+        {},
+        (stopped) => {
+          for (const session of stopped) {
+            void handleStoppedSession(session);
+          }
+        },
+        (err) => {
+          if (gen === subscriptionGeneration) subscriptionErrorCount++;
+          console.error('companionListStopped subscription error:', err);
+        },
+      ),
+    );
 
-  // Subscribe to pending messages — deliver immediately on update
-  unsubscribers.push(
-    client.onUpdate(
-      api.sessionMessages.companionListPending,
-      {},
-      (messages) => {
-        for (const msg of messages) {
-          void handlePendingMessage(msg);
-        }
-      },
-      (err) => {
-        if (gen === subscriptionGeneration) subscriptionErrorCount++;
-        console.error('companionListPending subscription error:', err);
-      },
-    ),
-  );
+    // Subscribe to pending messages — deliver immediately on update
+    unsubscribers.push(
+      client.onUpdate(
+        api.sessionMessages.companionListPending,
+        {},
+        (messages) => {
+          for (const msg of messages) {
+            void handlePendingMessage(msg);
+          }
+        },
+        (err) => {
+          if (gen === subscriptionGeneration) subscriptionErrorCount++;
+          console.error('companionListPending subscription error:', err);
+        },
+      ),
+    );
+  } catch (err) {
+    // Roll back partial registrations so the retry loop can start clean
+    stopCompanionSubscriptions();
+    throw err;
+  }
 
   subscriptionsActive = true;
   console.log('Companion subscriptions started');
