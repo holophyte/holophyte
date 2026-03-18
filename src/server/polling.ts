@@ -63,8 +63,12 @@ export async function companionPoll() {
       if (convexUrl) {
         try {
           stopCompanionSubscriptions();
-          // Re-read token file in case tokens were rotated since startup
-          cachedTokenFile = await readTokenFile();
+          // Re-read token file in case tokens were rotated since startup.
+          // If we already have an in-memory token (e.g. anonymous), keep it
+          // to avoid creating a new anonymous identity every retry cycle.
+          if (!cachedTokenFile?.ephemeral) {
+            cachedTokenFile = await readTokenFile();
+          }
           if (!cachedTokenFile && process.env.ALLOW_ANONYMOUS_AUTH === '1') {
             cachedTokenFile = await signInAnonymous(convexUrl);
           }

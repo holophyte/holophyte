@@ -328,6 +328,7 @@ describe('signInAnonymous', () => {
       convexUrl: 'http://localhost:3210',
       token: 'anon-jwt',
       refreshToken: 'anon-refresh',
+      ephemeral: true,
     });
   });
 
@@ -525,5 +526,21 @@ describe('createFetchToken', () => {
     expect(fetchSpy).toHaveBeenCalledTimes(2);
     expect(token1).toBe('first-jwt');
     expect(token2).toBe('second-jwt');
+  });
+
+  it('does not persist tokens to disk when ephemeral is true', async () => {
+    const newTokens = { token: 'new-jwt', refreshToken: 'new-refresh' };
+    fetchSpy.mockResolvedValue(
+      new Response(JSON.stringify({ value: { tokens: newTokens } }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+
+    const fetchToken = createFetchToken(validTokenData, { ephemeral: true });
+    await fetchToken({ forceRefreshToken: true });
+
+    expect(writeFile).not.toHaveBeenCalled();
+    expect(rename).not.toHaveBeenCalled();
   });
 });

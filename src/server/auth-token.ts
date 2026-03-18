@@ -12,6 +12,8 @@ export interface TokenFileData {
   convexUrl: string;
   token: string;
   refreshToken: string;
+  /** True for anonymous tokens — should not be persisted to disk. */
+  ephemeral?: boolean;
 }
 
 const TOKEN_DIR = join(homedir(), '.holophyte');
@@ -133,7 +135,11 @@ export async function signInAnonymous(
       return null;
     }
     const { token, refreshToken } = result.value.tokens;
-    return { convexUrl, token, refreshToken };
+    if (typeof token !== 'string' || typeof refreshToken !== 'string') {
+      console.error('Anonymous sign-in returned invalid token fields');
+      return null;
+    }
+    return { convexUrl, token, refreshToken, ephemeral: true };
   } catch (err) {
     console.error('Anonymous sign-in error:', err);
     return null;
@@ -143,9 +149,13 @@ export async function signInAnonymous(
 /**
  * Creates an AuthTokenFetcher compatible with ConvexClient.setAuth().
  * Handles token refresh when forceRefreshToken is true.
+ *
+ * When `ephemeral` is true, refreshed tokens are NOT persisted to disk.
+ * Used for anonymous auth tokens that should not overwrite the user's token file.
  */
 export function createFetchToken(
   tokenData: TokenFileData,
+  opts?: { ephemeral?: boolean },
 ): (args: { forceRefreshToken: boolean }) => Promise<string | null> {
   let currentToken = tokenData.token;
   let currentRefreshToken = tokenData.refreshToken;
@@ -168,12 +178,14 @@ export function createFetchToken(
         currentToken = result.token;
         currentRefreshToken = result.refreshToken;
 
-        // Persist updated tokens
-        await writeTokenFile({
-          convexUrl: tokenData.convexUrl,
-          token: currentToken,
-          refreshToken: currentRefreshToken,
-        });
+        // Persist updated tokens (skip for ephemeral/anonymous tokens)
+        if (!opts?.ephemeral) {
+          await writeTokenFile({
+            convexUrl: tokenData.convexUrl,
+            token: currentToken,
+            refreshToken: currentRefreshToken,
+          });
+        }
 
         return currentToken;
       } finally {
