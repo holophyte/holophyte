@@ -375,14 +375,19 @@ export async function startSession(opts: {
 
       // Write approval request to Convex
       const approvalClient = getConvexClient();
-      if (approvalClient) {
-        await approvalClient.mutation(api.pendingApprovals.companionCreate, {
-          sessionId: session.convexSessionId as Id<'sessions'>,
-          requestId,
-          tool: toolName,
-          input: JSON.stringify(input),
-        });
+      if (!approvalClient) {
+        return {
+          behavior: 'deny' as const,
+          message: 'Convex client unavailable — cannot request approval',
+          toolUseID: toolOpts.toolUseID,
+        };
       }
+      await approvalClient.mutation(api.pendingApprovals.companionCreate, {
+        sessionId: session.convexSessionId as Id<'sessions'>,
+        requestId,
+        tool: toolName,
+        input: JSON.stringify(input),
+      });
 
       // Poll Convex for resolution
       return new Promise<PermissionResult>((resolve) => {

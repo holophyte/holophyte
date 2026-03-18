@@ -9,6 +9,7 @@ import {
 } from './_generated/server';
 import {
   getUserOrgIds,
+  getUserWritableOrgIds,
   requireAuth,
   requireOrgMembership,
   requireRole,
@@ -741,7 +742,7 @@ export const companionMarkStaleRunning = mutation({
   args: {},
   handler: async (ctx) => {
     const userId = await requireAuth(ctx);
-    const orgIds = await getUserOrgIds(ctx, userId);
+    const orgIds = await getUserWritableOrgIds(ctx, userId);
     return markStaleRunningImpl(ctx, orgIds);
   },
 });
@@ -754,7 +755,7 @@ export const companionMarkStoppedAsIdle = mutation({
   args: {},
   handler: async (ctx) => {
     const userId = await requireAuth(ctx);
-    const orgIds = await getUserOrgIds(ctx, userId);
+    const orgIds = await getUserWritableOrgIds(ctx, userId);
     return markStoppedAsIdleImpl(ctx, orgIds);
   },
 });
@@ -767,12 +768,12 @@ export const companionBatchHeartbeat = mutation({
   args: { sessionIds: v.array(v.id('sessions')) },
   handler: async (ctx, args) => {
     const userId = await requireAuth(ctx);
-    const orgIds = await getUserOrgIds(ctx, userId);
+    const orgIds = await getUserWritableOrgIds(ctx, userId);
     const now = Date.now();
     for (const id of args.sessionIds) {
       const session = await ctx.db.get(id);
       if (!session) continue;
-      // Verify session belongs to caller's org
+      // Verify session belongs to caller's org (member+ role)
       const task = await ctx.db.get(session.taskId);
       if (!task) continue;
       const repo = await ctx.db.get(task.repoId);

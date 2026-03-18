@@ -7,7 +7,12 @@ import {
   mutation,
   query,
 } from './_generated/server';
-import { getUserOrgIds, requireAuth, requireOrgMembership } from './lib/auth';
+import {
+  getUserOrgIds,
+  getUserWritableOrgIds,
+  requireAuth,
+  requireOrgMembership,
+} from './lib/auth';
 
 const LOCALHOST_URL_RE = /^http:\/\/(localhost|127\.0\.0\.1):\d+$/;
 
@@ -182,7 +187,7 @@ export const companionHeartbeat = mutation({
   },
   handler: async (ctx, args) => {
     const userId = await requireAuth(ctx);
-    const orgIds = await getUserOrgIds(ctx, userId);
+    const orgIds = await getUserWritableOrgIds(ctx, userId);
     await upsertHeartbeatForOrgs(ctx, [...orgIds], args);
   },
 });
