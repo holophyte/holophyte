@@ -24,7 +24,6 @@ if (isPreview && !process.env.CONVEX_IS_PREVIEW_CMD) {
     );
     process.exit(1);
   }
-
   // Sanitize branch name for preview identifier (e.g. feat/foo → feat-foo-a1b2c3d).
   // Append a short hash to avoid collisions (feat/auth-flow vs feat-auth-flow).
   const suffix = createHash('sha1').update(branch).digest('hex').slice(0, 7);
