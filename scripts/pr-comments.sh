@@ -11,8 +11,8 @@ set -euo pipefail
 #   bun run pr-comments -- --resolve         # resolve all review bot threads
 #   bun run pr-comments -- --resolve 42      # resolve threads on specific PR
 
-# Review bots to track
-BOT_LOGINS=("greptile-apps[bot]" "coderabbitai[bot]")
+# Review bots to track (bare login — GraphQL omits [bot] suffix)
+BOT_LOGINS=("greptile-apps" "coderabbitai")
 
 POLL=false
 RESOLVE=false
@@ -70,7 +70,7 @@ build_login_filter() {
   local filter=""
   for login in "${BOT_LOGINS[@]}"; do
     [ -n "$filter" ] && filter="$filter or "
-    filter="${filter}${path} == \"$login\""
+    filter="${filter}(${path} | startswith(\"$login\"))"
   done
   echo "$filter"
 }
