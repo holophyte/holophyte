@@ -56,21 +56,20 @@ if [ -z "$PR_NUMBER" ]; then
   echo "Detected PR #$PR_NUMBER for branch $BRANCH"
 fi
 
-# Build jq filter for bot logins
-bot_filter() {
+# Build jq select filter for bot logins at a given path
+build_login_filter() {
+  local path="$1"
   local filter=""
   for login in "${BOT_LOGINS[@]}"; do
-    if [ -n "$filter" ]; then
-      filter="$filter or "
-    fi
-    filter="$filter.user.login == \"$login\""
+    [ -n "$filter" ] && filter="$filter or "
+    filter="${filter}${path} == \"$login\""
   done
   echo "$filter"
 }
 
 fetch_review_comments() {
-  gh api "repos/$OWNER_REPO/pulls/$PR_NUMBER/comments" \
-    --jq ".[] | select($(bot_filter)) | {id: .id, path: .path, line: (.line // .original_line // \"\"), body: .body, author: .user.login}"
+  gh api --paginate "repos/$OWNER_REPO/pulls/$PR_NUMBER/comments" \
+    --jq ".[] | select($(build_login_filter ".user.login")) | {id: .id, path: .path, line: (.line // .original_line // \"\"), body: .body, author: .user.login}"
 }
 
 format_comments() {
@@ -81,22 +80,13 @@ format_comments() {
   fi
 
   echo "$comments" | jq -r '
-    "=== Comment #\(.id) ===\nFile: \(.path):\(.line)\nBody: \(.body)\n"
+    "=== Comment #\(.id) [\(.author)] ===\nFile: \(.path):\(.line)\nBody: \(.body)\n"
   '
 }
 
 resolve_threads() {
   local owner="${OWNER_REPO%%/*}"
   local repo="${OWNER_REPO##*/}"
-
-  # Build GraphQL jq filter for bot logins
-  local jq_bot_filter=""
-  for login in "${BOT_LOGINS[@]}"; do
-    if [ -n "$jq_bot_filter" ]; then
-      jq_bot_filter="$jq_bot_filter or "
-    fi
-    jq_bot_filter="$jq_bot_filter.comments.nodes[0].author.login == \"$login\""
-  done
 
   local threads
   threads=$(gh api graphql -f query="
@@ -115,7 +105,7 @@ resolve_threads() {
         }
       }
     }
-  " --jq ".data.repository.pullRequest.reviewThreads.nodes[] | select(.isResolved == false) | select($jq_bot_filter) | .id")
+  " --jq ".data.repository.pullRequest.reviewThreads.nodes[] | select(.isResolved == false) | select($(build_login_filter ".comments.nodes[0].author.login")) | .id")
 
   if [ -z "$threads" ]; then
     echo "No unresolved review bot threads on PR #$PR_NUMBER"
