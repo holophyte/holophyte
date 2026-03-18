@@ -40,6 +40,8 @@ let heartbeatFailureLogged = false;
 // Tracks when an ephemeral token was last cleared after a subscription failure.
 // Prevents creating a new anonymous identity every 2s poll cycle during outages,
 // while still allowing replacement after a cooldown (e.g. Convex restart).
+// At most 2 new identities per 30s window: the one cleared on first failure
+// and a replacement obtained on the next cycle, kept for the rest of the window.
 let ephemeralClearedAt: number | null = null;
 const EPHEMERAL_CLEAR_COOLDOWN_MS = 30_000;
 
@@ -147,6 +149,7 @@ export function stopCompanionPolling() {
   }
   stopCompanionSubscriptions();
   companionUrl = undefined;
+  cachedTokenFile = undefined;
   heartbeatFailureLogged = false;
   ephemeralClearedAt = null;
 }
