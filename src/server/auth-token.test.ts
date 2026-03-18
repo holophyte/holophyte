@@ -537,7 +537,8 @@ describe('createFetchToken', () => {
       }),
     );
 
-    const fetchToken = createFetchToken(validTokenData, { ephemeral: true });
+    const ephemeralToken = { ...validTokenData, ephemeral: true as const };
+    const fetchToken = createFetchToken(ephemeralToken);
     await fetchToken({ forceRefreshToken: true });
 
     expect(writeFile).not.toHaveBeenCalled();
@@ -553,8 +554,8 @@ describe('createFetchToken', () => {
       }),
     );
 
-    const tokenData = { ...validTokenData };
-    const fetchToken = createFetchToken(tokenData, { ephemeral: true });
+    const tokenData = { ...validTokenData, ephemeral: true as const };
+    const fetchToken = createFetchToken(tokenData);
     await fetchToken({ forceRefreshToken: true });
 
     expect(tokenData.token).toBe('rotated-jwt');

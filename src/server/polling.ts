@@ -37,6 +37,11 @@ let polling = false;
 let companionUrl: string | undefined;
 let cachedTokenFile: TokenFileData | null | undefined;
 let heartbeatFailureLogged = false;
+// Tracks when an ephemeral token was last cleared after a subscription failure.
+// Prevents creating a new anonymous identity every 2s poll cycle during outages,
+// while still allowing replacement after a cooldown (e.g. Convex restart).
+let ephemeralClearedAt: number | null = null;
+const EPHEMERAL_CLEAR_COOLDOWN_MS = 30_000;
 
 export async function companionPoll() {
   if (polling) return; // Skip if previous poll is still running
@@ -78,11 +83,21 @@ export async function companionPoll() {
                 convexUrl,
                 tokenFile: cachedTokenFile,
               });
+              ephemeralClearedAt = null;
             } catch (subErr) {
-              // If an ephemeral token was rejected, clear it so the next
-              // retry cycle obtains a fresh anonymous identity.
+              // Clear stale ephemeral tokens so the next cycle can obtain a
+              // fresh anonymous identity (e.g. after a Convex restart).
+              // Cooldown prevents creating a new identity every 2s poll cycle
+              // during sustained outages — at most 1 per 30s window.
               if (cachedTokenFile.ephemeral) {
-                cachedTokenFile = null;
+                const now = Date.now();
+                if (
+                  !ephemeralClearedAt ||
+                  now - ephemeralClearedAt > EPHEMERAL_CLEAR_COOLDOWN_MS
+                ) {
+                  cachedTokenFile = null;
+                  ephemeralClearedAt = now;
+                }
               }
               throw subErr;
             }
@@ -133,6 +148,7 @@ export function stopCompanionPolling() {
   stopCompanionSubscriptions();
   companionUrl = undefined;
   heartbeatFailureLogged = false;
+  ephemeralClearedAt = null;
 }
 
 // How recently a companion heartbeat must be to indicate an active instance.

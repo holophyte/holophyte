@@ -158,11 +158,7 @@ export async function startCompanionSubscriptions(opts: {
 
     // Authenticate with JWT — the companion queries gate on ctx.auth.
     // The token file comes from `holophyte setup` (OAuth flow).
-    convexClient.setAuth(
-      createFetchToken(opts.tokenFile, {
-        ephemeral: opts.tokenFile.ephemeral,
-      }),
-    );
+    convexClient.setAuth(createFetchToken(opts.tokenFile));
     console.log(
       opts.tokenFile.ephemeral
         ? 'Companion authenticated anonymously'

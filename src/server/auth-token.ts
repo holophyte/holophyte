@@ -53,7 +53,11 @@ export async function readTokenFile(): Promise<TokenFileData | null> {
       console.error('Token file has malformed convexUrl');
       return null;
     }
-    return data as TokenFileData;
+    return {
+      convexUrl: data.convexUrl,
+      token: data.token,
+      refreshToken: data.refreshToken,
+    };
   } catch {
     return null;
   }
@@ -150,13 +154,13 @@ export async function signInAnonymous(
  * Creates an AuthTokenFetcher compatible with ConvexClient.setAuth().
  * Handles token refresh when forceRefreshToken is true.
  *
- * When `ephemeral` is true, refreshed tokens are NOT persisted to disk.
+ * When `tokenData.ephemeral` is true, refreshed tokens are NOT persisted to disk.
  * Used for anonymous auth tokens that should not overwrite the user's token file.
  */
 export function createFetchToken(
   tokenData: TokenFileData,
-  opts?: { ephemeral?: boolean },
 ): (args: { forceRefreshToken: boolean }) => Promise<string | null> {
+  const isEphemeral = tokenData.ephemeral ?? false;
   let currentToken = tokenData.token;
   let currentRefreshToken = tokenData.refreshToken;
   let refreshPromise: Promise<string | null> | null = null;
@@ -183,7 +187,7 @@ export function createFetchToken(
         tokenData.refreshToken = currentRefreshToken;
 
         // Persist updated tokens (skip for ephemeral/anonymous tokens)
-        if (!opts?.ephemeral) {
+        if (!isEphemeral) {
           await writeTokenFile({
             convexUrl: tokenData.convexUrl,
             token: currentToken,
