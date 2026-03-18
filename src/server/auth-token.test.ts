@@ -543,4 +543,21 @@ describe('createFetchToken', () => {
     expect(writeFile).not.toHaveBeenCalled();
     expect(rename).not.toHaveBeenCalled();
   });
+
+  it('syncs rotated tokens back to tokenData on refresh', async () => {
+    const newTokens = { token: 'rotated-jwt', refreshToken: 'rotated-refresh' };
+    fetchSpy.mockResolvedValue(
+      new Response(JSON.stringify({ value: { tokens: newTokens } }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+
+    const tokenData = { ...validTokenData };
+    const fetchToken = createFetchToken(tokenData, { ephemeral: true });
+    await fetchToken({ forceRefreshToken: true });
+
+    expect(tokenData.token).toBe('rotated-jwt');
+    expect(tokenData.refreshToken).toBe('rotated-refresh');
+  });
 });

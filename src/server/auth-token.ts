@@ -177,6 +177,10 @@ export function createFetchToken(
 
         currentToken = result.token;
         currentRefreshToken = result.refreshToken;
+        // Keep tokenData in sync so callers holding a reference see
+        // the rotated values (matters for ephemeral tokens that skip disk).
+        tokenData.token = currentToken;
+        tokenData.refreshToken = currentRefreshToken;
 
         // Persist updated tokens (skip for ephemeral/anonymous tokens)
         if (!opts?.ephemeral) {

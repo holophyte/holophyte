@@ -73,10 +73,19 @@ export async function companionPoll() {
             cachedTokenFile = await signInAnonymous(convexUrl);
           }
           if (cachedTokenFile) {
-            await startCompanionSubscriptions({
-              convexUrl,
-              tokenFile: cachedTokenFile,
-            });
+            try {
+              await startCompanionSubscriptions({
+                convexUrl,
+                tokenFile: cachedTokenFile,
+              });
+            } catch (subErr) {
+              // If an ephemeral token was rejected, clear it so the next
+              // retry cycle obtains a fresh anonymous identity.
+              if (cachedTokenFile.ephemeral) {
+                cachedTokenFile = null;
+              }
+              throw subErr;
+            }
           }
         } catch (err) {
           console.error('Failed to restart companion subscriptions:', err);
@@ -212,6 +221,10 @@ export async function startCompanion(url: string): Promise<void> {
   } else if (!convexUrl) {
     console.error(
       'CONVEX_URL not set — companion subscriptions unavailable, sessions will not be reactive',
+    );
+  } else if (process.env.ALLOW_ANONYMOUS_AUTH === '1') {
+    console.error(
+      'No auth token found and anonymous sign-in failed — check that the Convex deployment has an anonymous provider configured.',
     );
   } else {
     console.error(
