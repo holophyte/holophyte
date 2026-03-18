@@ -95,10 +95,14 @@ async function handleStoppedSession(session: StoppedSession): Promise<void> {
   if (inFlightClaims.has(session._id)) return;
 
   const client = getConvexClient();
+  const local = getSession(session._id);
+
+  // Nothing to do if the session isn't running locally and we can't reach Convex
+  if (!local && !client) return;
 
   inFlightStops.add(session._id);
   try {
-    if (getSession(session._id)) {
+    if (local) {
       stopSession(session._id);
       // Hold the lock until the session is cleaned up so that subscription
       // re-evaluations triggered by heartbeats don't call stopSession() again.

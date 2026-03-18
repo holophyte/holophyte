@@ -41,6 +41,7 @@ export function initCompanionClients(
   if (convexClient) {
     convexClient.close().catch(console.error);
   }
+  httpClient = null;
 
   // Shared token fetcher — ConvexClient's periodic refresh updates the
   // token in the closure; getConvexHttpClient() re-sets it before each use.
