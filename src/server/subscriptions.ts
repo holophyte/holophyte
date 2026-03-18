@@ -159,7 +159,11 @@ export async function startCompanionSubscriptions(opts: {
     // Authenticate with JWT — the companion queries gate on ctx.auth.
     // The token file comes from `holophyte setup` (OAuth flow).
     convexClient.setAuth(createFetchToken(opts.tokenFile));
-    console.log('Companion authenticated as user via stored token');
+    console.log(
+      opts.tokenFile.ephemeral
+        ? 'Companion authenticated anonymously'
+        : 'Companion authenticated as user via stored token',
+    );
 
     // Subscribe to queued sessions — claim and start immediately on update
     unsubscribers.push(
