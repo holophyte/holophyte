@@ -4,7 +4,10 @@ import type {
   SDKUserMessage,
 } from '@anthropic-ai/claude-agent-sdk';
 import { query as sdkQuery } from '@anthropic-ai/claude-agent-sdk';
+import { api } from '@convex/_generated/api';
+import type { Id } from '@convex/_generated/dataModel';
 import { DEFAULT_MODEL } from '@/constants';
+import { getConvexClient, getConvexHttpClient } from '@/server/convex-client';
 
 /** Permission mode for a session's canUseTool behavior. */
 export type PermissionMode = 'default' | 'safe-auto' | 'bypass';
@@ -152,76 +155,6 @@ class SdkMessageChannel implements AsyncIterable<SDKUserMessage> {
   }
 }
 
-/** Call a Convex HTTP action endpoint with Bearer auth. */
-let managerConfigWarningLogged = false;
-function getConvexConfig(): { baseUrl: string; secret: string } | null {
-  const baseUrl = process.env.CONVEX_SITE_URL;
-  const secret = process.env.INTERNAL_API_SECRET;
-  if (!baseUrl || !secret) {
-    if (!managerConfigWarningLogged) {
-      const missing = [
-        !baseUrl && 'CONVEX_SITE_URL',
-        !secret && 'INTERNAL_API_SECRET',
-      ].filter(Boolean);
-      console.error(
-        `WARNING: ${missing.join(', ')} not set — session data will not be persisted to Convex`,
-      );
-      managerConfigWarningLogged = true;
-    }
-    return null;
-  }
-  return { baseUrl, secret };
-}
-
-async function callConvexInternal(
-  path: string,
-  body: Record<string, unknown>,
-): Promise<boolean> {
-  const config = getConvexConfig();
-  if (!config) return false;
-  const { baseUrl, secret } = config;
-
-  const res = await fetch(`${baseUrl}${path}`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${secret}`,
-    },
-    body: JSON.stringify(body),
-  });
-
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`Convex HTTP action failed (${res.status}): ${text}`);
-  }
-  return true;
-}
-
-async function queryConvexInternal<T>(
-  path: string,
-  body: Record<string, unknown>,
-): Promise<T | null> {
-  const config = getConvexConfig();
-  if (!config) return null;
-  const { baseUrl, secret } = config;
-
-  const res = await fetch(`${baseUrl}${path}`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${secret}`,
-    },
-    body: JSON.stringify(body),
-  });
-
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`Convex HTTP action failed (${res.status}): ${text}`);
-  }
-
-  return (await res.json()) as T;
-}
-
 function shouldAutoApprove(
   session: Session,
   toolName: string,
@@ -258,17 +191,16 @@ async function flushEvents(session: Session): Promise<void> {
   const batchIndex = session.batchIndex++;
 
   try {
-    const persisted = await callConvexInternal(
-      '/api/internal/sessionEvents/insertBatch',
-      {
-        sessionId: session.convexSessionId,
-        events,
-        batchIndex,
-      },
-    );
-    if (!persisted) {
+    const client = getConvexClient();
+    if (!client) {
       session.eventBuffer.unshift(...events);
+      return;
     }
+    await client.mutation(api.sessionEvents.companionInsertBatch, {
+      sessionId: session.convexSessionId as Id<'sessions'>,
+      events,
+      batchIndex,
+    });
   } catch (err) {
     console.error('Failed to flush events to Convex:', err);
     // Re-add events to buffer on failure so they're not lost
@@ -375,10 +307,12 @@ export async function startSession(opts: {
   let initialBatchIndex = 0;
   if (opts.resumeSdkSessionId) {
     try {
-      const result = await queryConvexInternal<{
-        nextBatchIndex: number;
-      }>('/api/internal/sessionEvents/getNextBatchIndex', { sessionId });
-      if (!result) throw new Error('Convex not configured');
+      const httpClient = getConvexHttpClient();
+      if (!httpClient) throw new Error('Convex client not initialized');
+      const result = await httpClient.query(
+        api.sessionEvents.companionGetNextBatchIndex,
+        { sessionId: sessionId as Id<'sessions'> },
+      );
       initialBatchIndex = result.nextBatchIndex;
     } catch (err) {
       console.error('Failed to fetch next batch index:', err);
@@ -404,10 +338,13 @@ export async function startSession(opts: {
   const sessionName =
     opts.prompt.slice(0, 30).trim() + (opts.prompt.length > 30 ? '…' : '');
   try {
-    await callConvexInternal('/api/internal/sessions/updateName', {
-      id: sessionId,
-      name: sessionName,
-    });
+    const client = getConvexClient();
+    if (client) {
+      await client.mutation(api.sessions.companionUpdateName, {
+        id: sessionId as Id<'sessions'>,
+        name: sessionName,
+      });
+    }
   } catch (err) {
     console.error('Failed to set session name:', err);
   }
@@ -437,31 +374,40 @@ export async function startSession(opts: {
       }
 
       // Write approval request to Convex
-      await callConvexInternal('/api/internal/pendingApprovals/create', {
-        sessionId: session.convexSessionId,
-        requestId,
-        tool: toolName,
-        input: JSON.stringify(input),
-      });
+      const approvalClient = getConvexClient();
+      if (approvalClient) {
+        await approvalClient.mutation(api.pendingApprovals.companionCreate, {
+          sessionId: session.convexSessionId as Id<'sessions'>,
+          requestId,
+          tool: toolName,
+          input: JSON.stringify(input),
+        });
+      }
 
       // Poll Convex for resolution
       return new Promise<PermissionResult>((resolve) => {
         const intervalId = setInterval(async () => {
           try {
-            const resolved = await queryConvexInternal<
-              Array<{ _id: string; requestId: string; approved: boolean }>
-            >('/api/internal/pendingApprovals/listResolvedUnconsumed', {
-              sessionId: session.convexSessionId,
-            });
+            const approvalHttpClient = getConvexHttpClient();
+            if (!approvalHttpClient) return;
+            const resolved = await approvalHttpClient.query(
+              api.pendingApprovals.companionListResolvedUnconsumed,
+              {
+                sessionId: session.convexSessionId as Id<'sessions'>,
+              },
+            );
 
             const match = resolved?.find((r) => r.requestId === requestId);
             if (match) {
               clearInterval(intervalId);
               try {
-                await callConvexInternal(
-                  '/api/internal/pendingApprovals/markConsumed',
-                  { id: match._id },
-                );
+                const markClient = getConvexClient();
+                if (markClient) {
+                  await markClient.mutation(
+                    api.pendingApprovals.companionMarkConsumed,
+                    { id: match._id },
+                  );
+                }
               } catch (err) {
                 console.error('Failed to mark approval consumed:', err);
               }
@@ -550,15 +496,15 @@ async function consumeIterator(
         );
 
         try {
-          await callConvexInternal(
-            '/api/internal/sessions/updateSdkSessionId',
-            {
-              id: session.convexSessionId,
+          const sdkClient = getConvexClient();
+          if (sdkClient) {
+            await sdkClient.mutation(api.sessions.companionUpdateSdkSessionId, {
+              id: session.convexSessionId as Id<'sessions'>,
               sdkSessionId: session.sdkSessionId,
               model: session.model,
               permissionMode: session.permissionMode,
-            },
-          );
+            });
+          }
         } catch (err) {
           console.error('Failed to persist SDK session ID:', err);
         }
@@ -578,11 +524,16 @@ async function consumeIterator(
 
       // Update lastActivityAt on significant events
       if (event.type === 'result' || event.type === 'assistant') {
-        callConvexInternal('/api/internal/sessions/updateActivity', {
-          id: session.convexSessionId,
-        }).catch((err) => {
-          console.error('Failed to update session activity:', err);
-        });
+        const activityClient = getConvexClient();
+        if (activityClient) {
+          activityClient
+            .mutation(api.sessions.companionUpdateActivity, {
+              id: session.convexSessionId as Id<'sessions'>,
+            })
+            .catch((err: unknown) => {
+              console.error('Failed to update session activity:', err);
+            });
+        }
       }
     }
   } catch (err) {
@@ -599,19 +550,25 @@ async function consumeIterator(
 
     // Deny all pending Convex approvals
     try {
-      await callConvexInternal('/api/internal/pendingApprovals/denyAll', {
-        sessionId: session.convexSessionId,
-      });
+      const denyClient = getConvexClient();
+      if (denyClient) {
+        await denyClient.mutation(api.pendingApprovals.companionDenyAll, {
+          sessionId: session.convexSessionId as Id<'sessions'>,
+        });
+      }
     } catch (err) {
       console.error('Failed to deny remaining approvals:', err);
     }
 
     // Update session status in Convex
     try {
-      await callConvexInternal('/api/internal/sessions/updateStatus', {
-        id: session.convexSessionId,
-        status: finalStatus,
-      });
+      const statusClient = getConvexClient();
+      if (statusClient) {
+        await statusClient.mutation(api.sessions.companionUpdateStatus, {
+          id: session.convexSessionId as Id<'sessions'>,
+          status: finalStatus,
+        });
+      }
     } catch (err) {
       console.error('Failed to update session status in Convex:', err);
     }
