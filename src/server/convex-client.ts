@@ -5,6 +5,8 @@
 // - ConvexHttpClient (HTTP) — for one-shot queries
 //
 // Both are authenticated with the same JWT from the user's token file.
+// The token fetcher is shared so the HTTP client picks up tokens
+// refreshed by the WebSocket client.
 
 import { ConvexClient, ConvexHttpClient } from 'convex/browser';
 import type { TokenFileData } from './auth-token';
@@ -12,6 +14,10 @@ import { createFetchToken } from './auth-token';
 
 let convexClient: ConvexClient | null = null;
 let httpClient: ConvexHttpClient | null = null;
+/** Shared token fetcher — ConvexClient refreshes it, httpClient reads it. */
+let fetchToken:
+  | ((args: { forceRefreshToken: boolean }) => Promise<string | null>)
+  | null = null;
 
 /**
  * Creates and authenticates both Convex clients.
@@ -36,11 +42,15 @@ export function initCompanionClients(
     convexClient.close().catch(console.error);
   }
 
-  // WebSocket client — subscriptions + mutations
-  convexClient = new ConvexClient(convexUrl);
-  convexClient.setAuth(createFetchToken(tokenFile));
+  // Shared token fetcher — ConvexClient's periodic refresh updates the
+  // token in the closure; getConvexHttpClient() re-sets it before each use.
+  fetchToken = createFetchToken(tokenFile);
 
-  // HTTP client — one-shot queries
+  // WebSocket client — subscriptions + mutations (auto-refreshes tokens)
+  convexClient = new ConvexClient(convexUrl);
+  convexClient.setAuth(fetchToken);
+
+  // HTTP client — one-shot queries (token refreshed before each use)
   httpClient = new ConvexHttpClient(convexUrl);
   httpClient.setAuth(tokenFile.token);
 
@@ -52,8 +62,19 @@ export function getConvexClient(): ConvexClient | null {
   return convexClient;
 }
 
-/** Returns the HTTP-based ConvexHttpClient for one-shot queries. */
-export function getConvexHttpClient(): ConvexHttpClient | null {
+/**
+ * Returns the HTTP-based ConvexHttpClient for one-shot queries.
+ *
+ * Refreshes the auth token from the shared fetcher before returning, so
+ * tokens refreshed by the WebSocket client are picked up automatically.
+ * ConvexHttpClient.setAuth() only takes a string (no fetcher callback),
+ * so we bridge the gap here.
+ */
+export async function getConvexHttpClient(): Promise<ConvexHttpClient | null> {
+  if (!httpClient || !fetchToken) return null;
+  // Get the latest token (already refreshed by ConvexClient if needed)
+  const token = await fetchToken({ forceRefreshToken: false });
+  if (token) httpClient.setAuth(token);
   return httpClient;
 }
 
@@ -62,4 +83,5 @@ export function closeCompanionClients(): void {
   convexClient?.close().catch(console.error);
   convexClient = null;
   httpClient = null;
+  fetchToken = null;
 }

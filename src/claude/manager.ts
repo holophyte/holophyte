@@ -307,7 +307,7 @@ export async function startSession(opts: {
   let initialBatchIndex = 0;
   if (opts.resumeSdkSessionId) {
     try {
-      const httpClient = getConvexHttpClient();
+      const httpClient = await getConvexHttpClient();
       if (!httpClient) throw new Error('Convex client not initialized');
       const result = await httpClient.query(
         api.sessionEvents.companionGetNextBatchIndex,
@@ -388,7 +388,7 @@ export async function startSession(opts: {
       return new Promise<PermissionResult>((resolve) => {
         const intervalId = setInterval(async () => {
           try {
-            const approvalHttpClient = getConvexHttpClient();
+            const approvalHttpClient = await getConvexHttpClient();
             if (!approvalHttpClient) return;
             const resolved = await approvalHttpClient.query(
               api.pendingApprovals.companionListResolvedUnconsumed,

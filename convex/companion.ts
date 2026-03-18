@@ -188,23 +188,30 @@ export const companionHeartbeat = mutation({
 });
 
 /**
- * Returns the most recent companion heartbeat for the user's first org.
+ * Returns the most recent companion heartbeat across all of the user's orgs.
  * Public equivalent of the `/api/internal/companion/status` HTTP endpoint.
+ *
+ * Checks every org the user belongs to and returns the most recently seen
+ * heartbeat, so the duplicate-instance check works correctly for multi-org users.
  */
 export const companionGetStatus = query({
   args: {},
   handler: async (ctx) => {
     const userId = await requireAuth(ctx);
     const orgIds = await getUserOrgIds(ctx, userId);
-    const firstOrgId = [...orgIds][0];
-    if (!firstOrgId) return null;
-    const record = await ctx.db
-      .query('companion')
-      .withIndex('by_org_last_seen', (q) => q.eq('orgId', firstOrgId))
-      .order('desc')
-      .first();
-    return record
-      ? { lastSeen: record.lastSeen, machineId: record.machineId }
-      : null;
+    if (orgIds.size === 0) return null;
+
+    let latest: { lastSeen: number; machineId?: string } | null = null;
+    for (const orgId of orgIds) {
+      const record = await ctx.db
+        .query('companion')
+        .withIndex('by_org_last_seen', (q) => q.eq('orgId', orgId))
+        .order('desc')
+        .first();
+      if (record && (!latest || record.lastSeen > latest.lastSeen)) {
+        latest = { lastSeen: record.lastSeen, machineId: record.machineId };
+      }
+    }
+    return latest;
   },
 });

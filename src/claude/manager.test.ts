@@ -13,7 +13,7 @@ const mockQuery = vi.fn().mockResolvedValue(undefined);
 
 vi.mock('@/server/convex-client', () => ({
   getConvexClient: vi.fn(() => ({ mutation: mockMutation })),
-  getConvexHttpClient: vi.fn(() => ({ query: mockQuery })),
+  getConvexHttpClient: vi.fn(async () => ({ query: mockQuery })),
 }));
 
 import { query as mockSdkQuery } from '@anthropic-ai/claude-agent-sdk';

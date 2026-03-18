@@ -178,7 +178,7 @@ export async function startCompanion(url: string): Promise<void> {
   // within POLL_INTERVAL_MS of each other can both pass before either has
   // written its first heartbeat (TOCTOU). This is acceptable; the window is
   // narrow and the scenario is unlikely in practice.
-  const httpClient = getConvexHttpClient();
+  const httpClient = await getConvexHttpClient();
   if (httpClient) {
     try {
       const status = await httpClient.query(api.companion.companionGetStatus);
