@@ -151,6 +151,7 @@ export async function startCompanionSubscriptions(): Promise<void> {
     );
   }
   if (subscriptionsActive) return;
+  subscriptionsActive = true; // Claim slot synchronously to block concurrent callers
 
   subscriptionErrorCount = 0;
   const gen = ++subscriptionGeneration;
@@ -212,7 +213,6 @@ export async function startCompanionSubscriptions(): Promise<void> {
     throw err;
   }
 
-  subscriptionsActive = true;
   console.log('Companion subscriptions started');
 }
 
