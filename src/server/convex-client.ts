@@ -55,7 +55,11 @@ export function initCompanionClients(
   httpClient = new ConvexHttpClient(convexUrl);
   httpClient.setAuth(tokenFile.token);
 
-  console.log('Companion authenticated as user via stored token');
+  console.log(
+    tokenFile.ephemeral
+      ? 'Companion authenticated anonymously'
+      : 'Companion authenticated as user via stored token',
+  );
 }
 
 /** Returns the WebSocket-based ConvexClient for subscriptions and mutations. */
