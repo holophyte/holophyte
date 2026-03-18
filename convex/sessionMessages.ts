@@ -121,3 +121,17 @@ export const companionListPending = query({
     return fetchPendingMessages(ctx, orgIds);
   },
 });
+
+/**
+ * Marks a session message as consumed.
+ * Public equivalent of {@link markConsumed} — authenticated via JWT.
+ */
+export const companionMarkConsumed = mutation({
+  args: { id: v.id('sessionMessages') },
+  handler: async (ctx, args) => {
+    await requireAuth(ctx);
+    const msg = await ctx.db.get(args.id);
+    if (!msg) return;
+    await ctx.db.patch(args.id, { consumed: true });
+  },
+});
