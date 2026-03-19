@@ -20,6 +20,7 @@ export const upsertHeartbeat = internalMutation({
   args: {
     activeSessionCount: v.number(),
     machineId: v.optional(v.string()),
+    instanceId: v.optional(v.string()),
     url: v.optional(v.string()),
     orgId: v.id('organizations'),
   },
@@ -30,11 +31,11 @@ export const upsertHeartbeat = internalMutation({
       );
     }
 
-    // Upsert by (orgId, machineId) so multiple companions can coexist across orgs
+    // Upsert by (orgId, instanceId) so each process gets its own row
     const existing = await ctx.db
       .query('companion')
-      .withIndex('by_org_machine', (q) =>
-        q.eq('orgId', args.orgId).eq('machineId', args.machineId),
+      .withIndex('by_org_instance', (q) =>
+        q.eq('orgId', args.orgId).eq('instanceId', args.instanceId),
       )
       .first();
 
@@ -43,6 +44,7 @@ export const upsertHeartbeat = internalMutation({
         lastSeen: Date.now(),
         activeSessionCount: args.activeSessionCount,
         ...(args.machineId !== undefined && { machineId: args.machineId }),
+        ...(args.instanceId !== undefined && { instanceId: args.instanceId }),
         ...(args.url !== undefined && { url: args.url }),
       });
     } else {
@@ -51,6 +53,7 @@ export const upsertHeartbeat = internalMutation({
         lastSeen: Date.now(),
         activeSessionCount: args.activeSessionCount,
         machineId: args.machineId,
+        instanceId: args.instanceId,
         url: args.url,
       });
     }
@@ -65,6 +68,7 @@ export const upsertHeartbeatAllOrgs = internalMutation({
   args: {
     activeSessionCount: v.number(),
     machineId: v.optional(v.string()),
+    instanceId: v.optional(v.string()),
     url: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
@@ -78,8 +82,8 @@ export const upsertHeartbeatAllOrgs = internalMutation({
     for (const org of orgs) {
       const existing = await ctx.db
         .query('companion')
-        .withIndex('by_org_machine', (q) =>
-          q.eq('orgId', org._id).eq('machineId', args.machineId),
+        .withIndex('by_org_instance', (q) =>
+          q.eq('orgId', org._id).eq('instanceId', args.instanceId),
         )
         .first();
 
@@ -88,6 +92,7 @@ export const upsertHeartbeatAllOrgs = internalMutation({
           lastSeen: Date.now(),
           activeSessionCount: args.activeSessionCount,
           ...(args.machineId !== undefined && { machineId: args.machineId }),
+          ...(args.instanceId !== undefined && { instanceId: args.instanceId }),
           ...(args.url !== undefined && { url: args.url }),
         });
       } else {
@@ -96,6 +101,7 @@ export const upsertHeartbeatAllOrgs = internalMutation({
           lastSeen: Date.now(),
           activeSessionCount: args.activeSessionCount,
           machineId: args.machineId,
+          instanceId: args.instanceId,
           url: args.url,
         });
       }
@@ -112,7 +118,11 @@ export const getLastSeen = internalQuery({
       .order('desc')
       .first();
     return record
-      ? { lastSeen: record.lastSeen, machineId: record.machineId }
+      ? {
+          lastSeen: record.lastSeen,
+          machineId: record.machineId,
+          instanceId: record.instanceId,
+        }
       : null;
   },
 });
@@ -137,6 +147,7 @@ async function upsertHeartbeatForOrgs(
   args: {
     activeSessionCount: number;
     machineId?: string;
+    instanceId?: string;
     url?: string;
   },
 ) {
@@ -149,8 +160,8 @@ async function upsertHeartbeatForOrgs(
   for (const orgId of orgIds) {
     const existing = await ctx.db
       .query('companion')
-      .withIndex('by_org_machine', (q) =>
-        q.eq('orgId', orgId).eq('machineId', args.machineId),
+      .withIndex('by_org_instance', (q) =>
+        q.eq('orgId', orgId).eq('instanceId', args.instanceId),
       )
       .first();
 
@@ -159,6 +170,7 @@ async function upsertHeartbeatForOrgs(
         lastSeen: Date.now(),
         activeSessionCount: args.activeSessionCount,
         ...(args.machineId !== undefined && { machineId: args.machineId }),
+        ...(args.instanceId !== undefined && { instanceId: args.instanceId }),
         ...(args.url !== undefined && { url: args.url }),
       });
     } else {
@@ -167,6 +179,7 @@ async function upsertHeartbeatForOrgs(
         lastSeen: Date.now(),
         activeSessionCount: args.activeSessionCount,
         machineId: args.machineId,
+        instanceId: args.instanceId,
         url: args.url,
       });
     }
@@ -183,6 +196,7 @@ export const companionHeartbeat = mutation({
   args: {
     activeSessionCount: v.number(),
     machineId: v.optional(v.string()),
+    instanceId: v.optional(v.string()),
     url: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
@@ -206,7 +220,11 @@ export const companionGetStatus = query({
     const orgIds = await getUserOrgIds(ctx, userId);
     if (orgIds.size === 0) return null;
 
-    let latest: { lastSeen: number; machineId?: string } | null = null;
+    let latest: {
+      lastSeen: number;
+      machineId?: string;
+      instanceId?: string;
+    } | null = null;
     for (const orgId of orgIds) {
       const record = await ctx.db
         .query('companion')
@@ -214,7 +232,11 @@ export const companionGetStatus = query({
         .order('desc')
         .first();
       if (record && (!latest || record.lastSeen > latest.lastSeen)) {
-        latest = { lastSeen: record.lastSeen, machineId: record.machineId };
+        latest = {
+          lastSeen: record.lastSeen,
+          machineId: record.machineId,
+          instanceId: record.instanceId,
+        };
       }
     }
     return latest;
