@@ -26,7 +26,7 @@ You are a Storybook story specialist for the Holophyte project. Your job is to g
 
 **Skip when:**
 - Pure Convex-connected wrapper with no meaningful isolated visual state (`KanbanBoard`, `Sidebar`, `ArchivePanel`, `SessionPanel`)
-- Depends on WebSocket, SDK event streaming, or browser APIs that can't be mocked simply
+- Depends on SDK event streaming via Convex subscriptions, or browser APIs that can't be mocked simply
 - Is a layout wrapper with only `children` prop and no visual structure
 - Only uses Convex hooks with no meaningful visual states when data is absent
 

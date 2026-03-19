@@ -39,7 +39,7 @@ For each task:
 
 Based on which layers the feature touches, recommend which specialist implementers to spawn:
 - `frontend-implementer` — React components, hooks, Zustand stores, Tailwind styles
-- `backend-implementer` — Bun.serve() routes, WebSocket, Claude Agent SDK
+- `backend-implementer` — Bun.serve() routes, Claude Agent SDK, companion polling
 - `convex-implementer` — schema, queries, mutations, actions in `convex/`
 - `devops-implementer` — scripts, CI/CD, deployment, config
 - `general-implementer` — simple features or single-layer changes
