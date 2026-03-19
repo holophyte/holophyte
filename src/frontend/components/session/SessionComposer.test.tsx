@@ -8,7 +8,9 @@ import { SessionActionsContext } from './SessionActionsContext';
 // Mocks
 // ---------------------------------------------------------------------------
 
-// Mock ComposerPrimitive from @assistant-ui/react
+const mockSetText = vi.fn();
+
+// Mock ComposerPrimitive and useComposerRuntime from @assistant-ui/react
 // These simulate the real primitives with enough fidelity to test behavior
 vi.mock('@assistant-ui/react', () => {
   // Shared state for simulating composer input across the mocked primitives
@@ -77,7 +79,10 @@ vi.mock('@assistant-ui/react', () => {
     ),
   };
 
-  return { ComposerPrimitive };
+  return {
+    ComposerPrimitive,
+    useComposerRuntime: () => ({ setText: mockSetText }),
+  };
 });
 
 function withIdleSession(children: ReactNode) {
@@ -88,6 +93,7 @@ function withIdleSession(children: ReactNode) {
         deny: vi.fn(),
         pendingApprovals: [],
         sessionStatus: 'idle',
+        promptSuggestion: null,
       }}
     >
       {children}
@@ -103,6 +109,7 @@ function withRunningSession(children: ReactNode) {
         deny: vi.fn(),
         pendingApprovals: [],
         sessionStatus: 'running',
+        promptSuggestion: null,
       }}
     >
       {children}
@@ -167,6 +174,74 @@ describe('SessionComposer', () => {
       const input = screen.getByTestId('composer-input');
       await user.type(input, 'Hello Claude');
       expect((input as HTMLTextAreaElement).value).toBe('Hello Claude');
+    });
+  });
+
+  describe('suggestion chip', () => {
+    it('renders chip when session is idle and promptSuggestion is non-null', () => {
+      render(
+        <SessionActionsContext.Provider
+          value={{
+            approve: vi.fn(),
+            deny: vi.fn(),
+            pendingApprovals: [],
+            sessionStatus: 'idle',
+            promptSuggestion: 'Run the test suite',
+          }}
+        >
+          <SessionComposer />
+        </SessionActionsContext.Provider>,
+      );
+      expect(screen.getByText('Run the test suite')).toBeInTheDocument();
+    });
+
+    it('does NOT render chip when session is running (even with non-empty suggestion)', () => {
+      render(
+        <SessionActionsContext.Provider
+          value={{
+            approve: vi.fn(),
+            deny: vi.fn(),
+            pendingApprovals: [],
+            sessionStatus: 'running',
+            promptSuggestion: 'Run the test suite',
+          }}
+        >
+          <SessionComposer />
+        </SessionActionsContext.Provider>,
+      );
+      expect(screen.queryByText('Run the test suite')).not.toBeInTheDocument();
+    });
+
+    it('does NOT render chip when promptSuggestion is null', () => {
+      render(withIdleSession(<SessionComposer />));
+      // no chip button beyond the send button
+      const buttons = screen.getAllByRole('button');
+      // Only the send button should be present
+      expect(buttons).toHaveLength(1);
+      expect(screen.getByTestId('composer-send')).toBeInTheDocument();
+    });
+
+    it('clicking chip calls setText with the suggestion text', async () => {
+      const user = userEvent.setup();
+      mockSetText.mockClear();
+      render(
+        <SessionActionsContext.Provider
+          value={{
+            approve: vi.fn(),
+            deny: vi.fn(),
+            pendingApprovals: [],
+            sessionStatus: 'idle',
+            promptSuggestion: 'Run the test suite',
+          }}
+        >
+          <SessionComposer />
+        </SessionActionsContext.Provider>,
+      );
+      const chip = screen
+        .getByText('Run the test suite')
+        .closest('button') as HTMLElement;
+      await user.click(chip);
+      expect(mockSetText).toHaveBeenCalledWith('Run the test suite');
     });
   });
 });
