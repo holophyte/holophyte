@@ -90,8 +90,12 @@ export async function companionPoll() {
           // Re-read token file in case tokens were rotated since startup.
           // If we already have an in-memory token (e.g. anonymous), keep it
           // to avoid creating a new anonymous identity every retry cycle.
+          let tokenStatus: 'missing' | 'invalid' | 'ok' = cachedTokenFile
+            ? 'ok'
+            : 'missing';
           if (!cachedTokenFile?.ephemeral && deployment) {
             const result = await readTokenFile(deployment);
+            tokenStatus = result.status;
             cachedTokenFile = result.status === 'ok' ? result.data : null;
             if (result.status === 'invalid') {
               console.error(
@@ -99,12 +103,23 @@ export async function companionPoll() {
               );
             }
           }
-          if (!cachedTokenFile && process.env.ALLOW_ANONYMOUS_AUTH === '1') {
+          // Only fall back to anonymous auth when the token is missing, not
+          // when it's invalid (corrupt token should surface as an error).
+          if (
+            tokenStatus === 'missing' &&
+            !cachedTokenFile &&
+            process.env.ALLOW_ANONYMOUS_AUTH === '1'
+          ) {
             cachedTokenFile = await signInAnonymous(convexUrl);
           }
-          if (cachedTokenFile && deployment) {
+          // Ephemeral tokens don't need a deployment key (never persisted).
+          if (cachedTokenFile && (deployment || cachedTokenFile.ephemeral)) {
             try {
-              initCompanionClients(convexUrl, cachedTokenFile, deployment);
+              initCompanionClients(
+                convexUrl,
+                cachedTokenFile,
+                deployment ?? '',
+              );
               await startCompanionSubscriptions();
               ephemeralClearedAt = null;
             } catch (subErr) {
@@ -199,8 +214,10 @@ export async function startCompanion(url: string): Promise<void> {
   const deployment = getDeployment();
 
   // 1. Load user auth token (from `holophyte setup`)
+  let tokenStatus: 'missing' | 'invalid' | 'ok' = 'missing';
   if (deployment) {
     const result = await readTokenFile(deployment);
+    tokenStatus = result.status;
     if (result.status === 'ok') {
       cachedTokenFile = result.data;
       console.log(`Loaded user auth token for deployment ${deployment}`);
@@ -214,9 +231,10 @@ export async function startCompanion(url: string): Promise<void> {
   }
 
   // Anonymous auth fallback (still part of step 1 — obtaining a token)
-  // If no token file, try anonymous auth (local dev / E2E)
+  // Only fall back when the token is missing, not when it's corrupt.
   const convexUrl = process.env.CONVEX_URL;
   if (
+    tokenStatus === 'missing' &&
     !cachedTokenFile &&
     process.env.ALLOW_ANONYMOUS_AUTH === '1' &&
     convexUrl
@@ -228,9 +246,14 @@ export async function startCompanion(url: string): Promise<void> {
   }
 
   // 2. Initialize authenticated Convex clients
-  if (convexUrl && cachedTokenFile && deployment) {
+  // Ephemeral tokens don't need a deployment key (never persisted to disk).
+  if (
+    convexUrl &&
+    cachedTokenFile &&
+    (deployment || cachedTokenFile.ephemeral)
+  ) {
     try {
-      initCompanionClients(convexUrl, cachedTokenFile, deployment);
+      initCompanionClients(convexUrl, cachedTokenFile, deployment ?? '');
     } catch (err) {
       console.error('Failed to initialize Convex clients:', err);
     }
@@ -238,7 +261,7 @@ export async function startCompanion(url: string): Promise<void> {
     console.error(
       'CONVEX_URL not set — companion subscriptions unavailable, sessions will not be reactive',
     );
-  } else if (!deployment) {
+  } else if (!deployment && !cachedTokenFile?.ephemeral) {
     console.error(
       'CONVEX_DEPLOYMENT not set — companion cannot authenticate. Ensure convex dev is running.',
     );

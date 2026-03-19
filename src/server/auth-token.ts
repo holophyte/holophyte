@@ -121,9 +121,17 @@ async function migrateLegacyTokenFile(
       refreshToken: d.refreshToken as string,
     };
 
-    // Write to new format and remove legacy file
+    // Write to new format
     await writeTokenFile(deployment, tokenData);
-    await unlink(LEGACY_TOKEN_FILE);
+
+    // Best-effort delete legacy file — don't fail the migration if this throws
+    try {
+      await unlink(LEGACY_TOKEN_FILE);
+    } catch {
+      console.error(
+        'Could not delete legacy ~/.holophyte/token.json — ignoring',
+      );
+    }
     console.log('Migrated ~/.holophyte/token.json → tokens.json');
 
     return { status: 'ok', data: tokenData };
@@ -168,14 +176,19 @@ export async function readTokenFile(
       return { status: 'invalid', reason: 'Token file contains invalid JSON' };
     }
 
-    if (typeof allTokens !== 'object' || allTokens === null) {
+    if (
+      typeof allTokens !== 'object' ||
+      allTokens === null ||
+      Array.isArray(allTokens)
+    ) {
       return { status: 'invalid', reason: 'Token file is not a JSON object' };
     }
 
-    const entry = (allTokens as Record<string, unknown>)[deployment];
-    if (!entry) {
+    const tokens = allTokens as Record<string, unknown>;
+    if (!Object.hasOwn(tokens, deployment)) {
       return { status: 'missing' };
     }
+    const entry = tokens[deployment];
 
     // Validate entry shape
     if (typeof entry !== 'object' || entry === null) {
@@ -230,7 +243,15 @@ export async function writeTokenFile(
   try {
     const file = Bun.file(TOKENS_FILE);
     if (await file.exists()) {
-      allTokens = (await file.json()) as TokensFile;
+      const parsed = await file.json();
+      if (
+        typeof parsed === 'object' &&
+        parsed !== null &&
+        !Array.isArray(parsed)
+      ) {
+        allTokens = parsed as TokensFile;
+      }
+      // If parsed is not a plain object (e.g. array), start fresh
     }
   } catch {
     // Start fresh if file is corrupt
