@@ -53,7 +53,7 @@ the feature spans multiple PRs and you need to preserve context across sessions.
 
 Spawn the `critic` agent to adversarially review the plan:
 
-> Review the implementation plan at `.autopilot/plan-<branch>.md` for this feature. Look for wrong assumptions, missed edge cases, simpler approaches, missing failure modes, and scope creep.
+> The feature being built is: `<$ARGUMENTS>`. Review the implementation plan at `.autopilot/plan-<branch>.md` for this feature. Look for wrong assumptions, missed edge cases, simpler approaches, missing failure modes, and scope creep.
 
 If the critic finds **critical** issues (missed failure modes, wrong assumptions, simpler approaches that invalidate the plan), revise the plan before proceeding. Address **concerns** if valid. **Questions** are worth considering but don't block progress.
 
@@ -119,6 +119,7 @@ Spawn support agents as needed (all ephemeral):
 
 Spawn reviewers in parallel:
 
+> Use the `code-reviewer` subagent to review all changes on the branch (`git diff main...HEAD`)
 > Use the `security-reviewer` subagent to audit the current changes
 > Use the `a11y-reviewer` subagent to audit accessibility of any new/changed UI components
 
@@ -126,10 +127,10 @@ Optionally spawn the `critic` agent for a second adversarial review of the imple
 
 Fix any critical issues found.
 
-### 9. Agent-Driven Verification
+### 9. Exploratory Verification
 
-Verify the change works end-to-end before creating the PR. Use whatever tools and approaches make sense for the change — examples include but aren't limited to:
-- Running tests (`bun run test`, `bun run test:e2e:isolated`)
+Verify the change works end-to-end beyond what automated tests cover. Step 10 runs lint, typecheck, unit tests, and E2E — do **not** duplicate those here. Focus on manual/exploratory checks:
+
 - Using Playwright MCP to browse the UI and verify flows work visually
 - Curling API endpoints to check responses
 - Reading logs or Convex dashboard output
