@@ -1,12 +1,12 @@
 ---
 name: autopilot-team
-description: Implement a feature using an agent team with parallel implementer, reviewer, and tester
+description: Implement a feature using ephemeral agent teams with parallel per-task subagents, critic review, and verification
 user-invocable: true
 ---
 
 # Autopilot Team
 
-Like `/autopilot`, but spawns a coordinated agent team for complex features that
+Like `/autopilot`, but uses ephemeral per-task subagents for complex features that
 benefit from parallel work and independent perspectives.
 
 Use this for larger features that touch multiple files or modules. For smaller,
@@ -42,61 +42,113 @@ Wait for the researcher to finish before proceeding to step 3.
 Spawn the `planner` agent to design the implementation based on research findings.
 Pass the feature description from `$ARGUMENTS` as context.
 
-Wait for the planner to finish. Review `.autopilot/plan-<branch>.md` and the tasks — adjust if needed before spawning the team.
+Wait for the planner to finish. Review `.autopilot/plan-<branch>.md` — adjust if needed.
+
+The plan should also group tasks by independence: which can parallelize vs which have dependencies.
 
 **Note:** `.autopilot/` is gitignored — do not commit research or plan files unless
 the feature spans multiple PRs and you need to preserve context across sessions.
 
-### 4. Spawn the Team
+### 4. Critic Review
 
-Based on the planner's recommendation in `.autopilot/plan-<branch>.md`, choose which
-implementers and support agents to spawn. **Not every role is needed every time** —
-spawn only what the feature requires.
+Spawn the `critic` agent to adversarially review the plan:
 
-Each sub-agent should determine the current branch with `git branch --show-current`
-to resolve the `<branch>` placeholder in file paths.
+> Review the implementation plan at `.autopilot/plan-<branch>.md` for this feature. Look for wrong assumptions, missed edge cases, simpler approaches, missing failure modes, and scope creep.
 
-#### Implementer Specialists (pick based on plan)
+If the critic finds **critical** issues (missed failure modes, wrong assumptions, simpler approaches that invalidate the plan), revise the plan before proceeding. Address **concerns** if valid. **Questions** are worth considering but don't block progress.
 
-- **`frontend-implementer`** — spawn when tasks touch `src/frontend/`
-- **`backend-implementer`** — spawn when tasks touch `src/server.ts` or `src/claude/`
-- **`convex-implementer`** — spawn when tasks touch `convex/`
-- **`devops-implementer`** — spawn when tasks touch infra, CI/CD, scripts, or config
-- **`general-implementer`** — spawn for simple features or when one agent can handle it all
+### 5. Execute Tasks (Ephemeral Model)
 
-#### Support Agents (always spawn reviewer; others as needed)
+For each task group from the plan:
 
-- **`reviewer`** (always spawn) — continuous code review, messages implementers with categorized issues
-- **`tester`** (spawn when new logic is added) — writes Vitest unit tests, messages implementers on failure
-- **`e2e-tester`** (spawn when UI behavior changes) — writes Playwright E2E tests, messages implementers on failure
-- **`documenter`** (spawn when new public APIs or components are added) — Storybook, TSDoc, Docusaurus, DRY extraction
+1. **Identify independent tasks** that can run in parallel (no shared file ownership, no data dependencies)
+2. **Spawn implementers in parallel** — one ephemeral agent per task, each with a focused prompt:
 
-### 5. Coordinate
+   ```
+   Implement the following task from the plan at `.autopilot/plan-<branch>.md`:
 
-As team lead:
+   **Task:** <task description from plan>
+   **Files to modify:** <file list from plan>
+   **Dependencies completed:** <list of prior tasks already done>
+   **Constraints:** <relevant constraints from plan>
 
-- Monitor teammate progress via the task list
-- Redirect teammates if they go off-track
-- Resolve conflicts if teammates disagree
-- When all tasks are complete, ask the reviewer for a final review
-- When the reviewer approves, proceed to step 6
+   Follow CLAUDE.md conventions. Commit atomically when done.
+   Do not modify files outside your assigned scope.
 
-### 6. Quality Checks
+   After implementing, if your task adds user-facing behavior:
+   - Write E2E tests for the new/changed flows
+   - If skipping E2E, state why in your completion message
 
-After all teammates finish:
+   After implementing, if your task adds new exports or components:
+   - Write unit tests for new logic
+   - Add TSDoc comments to new exported functions/interfaces
+   ```
+
+   Choose the right specialist for each task:
+   - **`frontend-implementer`** — tasks touching `src/frontend/`
+   - **`backend-implementer`** — tasks touching `src/server.ts` or `src/claude/`
+   - **`convex-implementer`** — tasks touching `convex/`
+   - **`devops-implementer`** — tasks touching infra, CI/CD, scripts, or config
+   - **`general-implementer`** — simple tasks or single-layer changes
+
+3. **Wait for all to complete**
+4. **Spawn `code-reviewer`** to review the batch's changes
+5. **Fix critical issues** — spawn a fresh implementer for fixes if needed
+6. **Proceed to next dependent task group**
+
+### 6. Simplify Pass
+
+Spawn a fresh `code-simplifier` agent to clean up all changed code:
+
+> Review the changes on this branch (`git diff main...HEAD`) for code quality, duplication, and simplification opportunities. Fix any issues found.
+
+This cleans up implementation before reviewers see it.
+
+### 7. Documentation & Testing
+
+Spawn support agents as needed (all ephemeral):
+
+- **`test-writer`** — for new exports that need unit tests (if applicable)
+- **`e2e-tester`** — for UI behavior changes (if applicable). If skipping E2E, state why.
+- **`storybook-writer`** — for new reusable UI components (if applicable)
+- **`doc-writer`** — for doc-worthy changes (if applicable). If skipping docs, state why.
+
+### 8. Final Review
+
+Spawn reviewers in parallel:
+
+> Use the `security-reviewer` subagent to audit the current changes
+> Use the `a11y-reviewer` subagent to audit accessibility of any new/changed UI components
+> Optionally spawn the `critic` agent for a second adversarial review of the implementation
+
+Fix any critical issues found.
+
+### 9. Agent-Driven Verification
+
+Verify the change works end-to-end before creating the PR. Use whatever tools and approaches make sense for the change — examples include but aren't limited to:
+- Running tests (`bun run test`, `bun run test:e2e:isolated`)
+- Using Playwright MCP to browse the UI and verify flows work visually
+- Curling API endpoints to check responses
+- Reading logs or Convex dashboard output
+- Running the app and exercising the changed behavior
+- Checking database state after mutations
+
+Use your judgment about what verification is appropriate. The goal is to confirm the change actually works, not just that tests pass.
+
+### 10. Quality Checks
 
 ```bash
 bun run lint:fix
 bunx tsc --noEmit
 bun run test
-bun run test:e2e
+bun run test:e2e:isolated
 timeout 60000 bun run build-storybook
 cd docs && bunx docusaurus build
 ```
 
 Fix any remaining issues. Use the `test-fixer` subagent if tests fail.
 
-### 7. Commit and Push
+### 11. Commit and Push
 
 **Commit atomically** — each commit should be one logical change (e.g., schema
 change, then backend handler, then frontend component). Don't batch unrelated
@@ -109,7 +161,7 @@ git commit -m "<conventional commit message>"
 git push -u origin $(git branch --show-current)
 ```
 
-### 8. Create PR
+### 12. Create PR
 
 ```bash
 gh pr create --title "<type>: <description>" --body "<summary of changes>"
@@ -117,7 +169,7 @@ gh pr create --title "<type>: <description>" --body "<summary of changes>"
 
 Use a conventional prefix in the title (`feat:`, `fix:`, `refactor:`, etc.).
 
-### 9. PR Review Loop
+### 13. PR Review Loop
 
 Wait for all PR checks (including review bots) to complete, then iterate on comments:
 
@@ -138,13 +190,20 @@ Wait for all PR checks (including review bots) to complete, then iterate on comm
 5. **Repeat** from step 1 (max 3 iterations)
 6. **Exit** when no new comments appear or max iterations reached
 
-### 10. Summary
+### 14. Summary
 
 When exiting, display:
-- Teammates spawned and their roles (including which specialist implementers were chosen and why)
-- Tasks completed by each teammate
-- E2E tests written by E2E Tester
-- Stories and docs created by Documenter
+- Tasks completed and which specialist implementer handled each
+- Subagents spawned per task (implementer type, reviewer, support agents)
+- Critic findings addressed (from step 4 and optional step 8)
 - Review iterations with review bots
 - Comments addressed vs dismissed
 - Final PR URL
+
+#### Manual Testing
+
+Include a checklist of what the user should verify manually:
+- Visual design quality (spacing, alignment, colors, responsiveness)
+- UX feel (animations, transitions, loading states, focus behavior)
+- Edge cases with real data (large datasets, empty states, concurrent users)
+- Any flows that depend on external services (OAuth, Convex dashboard, etc.)

@@ -2,7 +2,7 @@
 name: planner
 description: Reads research findings and writes an implementation plan with tasks and team composition. Writes to .autopilot/plan-<branch>.md.
 tools: Read, Write, Grep, Glob, Bash
-model: sonnet
+model: opus
 ---
 
 You are the implementation planner for the Holophyte project. Your job is to read research findings and design an implementation plan.
