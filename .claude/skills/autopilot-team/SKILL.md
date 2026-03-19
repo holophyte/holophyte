@@ -93,7 +93,7 @@ For each task group from the plan:
    - **`general-implementer`** — simple tasks or single-layer changes
 
 3. **Wait for all to complete** — each implementer reports its modified file list
-4. **Commit the batch** — the orchestrator uses each implementer's reported file list to `git add <files>` and commit separately, producing one atomic commit per task. After committing, run `git status --porcelain` to verify no files were inadvertently left uncommitted; if any appear, add and amend the commit before proceeding.
+4. **Commit the batch** — the orchestrator uses each implementer's reported file list to `git add <files>` and commit separately, producing one atomic commit per task. After committing all tasks, run `git status --porcelain` to check for unreported files; if any appear, commit them separately (do not amend — amending would misattribute them to the wrong task).
 5. **Spawn `code-reviewer`** to review the batch's changes
 6. **Fix critical issues** — spawn a fresh implementer for fixes if needed
 7. **Proceed to next dependent task group**
