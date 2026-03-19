@@ -45,6 +45,8 @@ Grouped by date, following [Keep a Changelog](https://keepachangelog.com/) categ
 
 ### Added
 - Detect and reject duplicate companion instances (#154)
+
+### Changed
 - Remove homeDir from frontend config (#152)
 
 ### Fixed
