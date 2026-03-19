@@ -187,7 +187,7 @@ Fix any failures before proceeding.
 
 ### 9. Exploratory Verification
 
-Verify the change works end-to-end beyond what automated tests cover. Step 8 already ran lint, typecheck, unit tests, and E2E — do **not** re-run those here. Focus on manual/exploratory checks:
+Verify the change works end-to-end beyond what automated tests cover. Steps 5 and 8 already ran lint, typecheck, unit tests, and E2E — do **not** re-run those here. Focus on manual/exploratory checks:
 
 - Using Playwright MCP to browse the UI and verify flows work visually
 - Curling API endpoints to check responses
