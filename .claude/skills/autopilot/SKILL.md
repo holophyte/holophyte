@@ -62,7 +62,7 @@ Do NOT use EnterPlanMode — write the plan file, then proceed.
 **Note:** `.autopilot/` is gitignored — do not commit research or plan files unless
 the feature spans multiple PRs and you need to preserve context across sessions.
 
-### 3.5. Critic Review
+### 4. Critic Review
 
 Spawn the `critic` agent to adversarially review the plan before implementation:
 
@@ -70,7 +70,7 @@ Spawn the `critic` agent to adversarially review the plan before implementation:
 
 If the critic finds **critical** issues (missed failure modes, wrong assumptions, simpler approaches that invalidate the plan), revise the plan before proceeding. Address **concerns** if they're valid. **Questions** are worth considering but don't block progress.
 
-### 4. Implement the Feature
+### 5. Implement the Feature
 
 Implement the feature described in `$ARGUMENTS`, following `.autopilot/plan-<branch>.md`.
 
@@ -90,7 +90,7 @@ bun run test
 - If tests fail, use the `test-fixer` subagent to analyze and fix failures
 - Fix lint/type errors directly
 
-### 4.5. Simplify Pass
+### 6. Simplify Pass
 
 Spawn a fresh `code-simplifier` agent to review changed code for reuse, quality, and efficiency:
 
@@ -98,7 +98,7 @@ Spawn a fresh `code-simplifier` agent to review changed code for reuse, quality,
 
 This cleans up the implementation before reviewers see it — so they're reviewing the best version, not flagging issues that simplify would have caught.
 
-### 5. Self-Review with Subagents
+### 7. Self-Review with Subagents
 
 Before committing, run reviewers in parallel:
 
@@ -111,7 +111,7 @@ Before committing, run reviewers in parallel:
 - **Suggestions** are optional — skip unless clearly beneficial
 - Run quality checks again if changes were made
 
-### 5.5. Documentation, Testing, and Accessibility for New Code
+### 8. Documentation, Testing, and Accessibility for New Code
 
 Check for new and changed files on the branch:
 
@@ -123,7 +123,7 @@ git diff main...HEAD --name-only                     # all changed files
 For each new file:
 - **New reusable UI components or components with multiple visual states** → use the `storybook-writer` subagent to generate a co-located `.stories.tsx`. Skip Storybook for page-level layouts, data-coupled feature components that need extensive Convex mocking, and thin wrappers with no visual complexity.
 - **New `.ts`/`.tsx` exports** → use the `test-writer` subagent to generate co-located tests
-- **New/changed UI components** → use the `a11y-reviewer` subagent to audit accessibility (already done in step 5 — review results here)
+- **New/changed UI components** → use the `a11y-reviewer` subagent to audit accessibility (already done in step 7 — review results here)
 - Add TSDoc `/** */` comments to all new exported functions and interfaces
 
 Skip Storybook/test generation if no new files were added (only modifications to existing files).
@@ -146,7 +146,7 @@ If writing E2E tests, use the `test-writer` subagent:
 > - Scope dialog assertions to `[role="dialog"]` to avoid strict mode collisions
 > - Use `{ exact: true }` for ambiguous text matches
 > - Each test run gets a fresh Convex database — no cleanup needed, but use unique names (e.g. `Date.now()`) to avoid collisions within a run
-> - Do NOT start Convex or the dev server — `bun run test:e2e` handles the full lifecycle
+> - Do NOT start Convex or the dev server manually — `bun run test:e2e:isolated` handles the full lifecycle
 > Review existing specs in `e2e/` for reference patterns.
 
 #### Docusaurus Documentation
@@ -185,7 +185,7 @@ cd docs && bunx docusaurus build
 
 Fix any failures before proceeding.
 
-### 5.75. Agent-Driven Verification
+### 9. Agent-Driven Verification
 
 Verify the change works end-to-end before creating the PR. Use whatever tools and approaches make sense for the change — examples include but aren't limited to:
 - Running tests (`bun run test`, `bun run test:e2e:isolated`)
@@ -197,7 +197,7 @@ Verify the change works end-to-end before creating the PR. Use whatever tools an
 
 Use your judgment about what verification is appropriate. The goal is to confirm the change actually works, not just that tests pass.
 
-### 6. Commit and Push
+### 10. Commit and Push
 
 ```bash
 git add <relevant files>
@@ -205,7 +205,7 @@ git commit -m "<conventional commit message>"
 git push -u origin $(git branch --show-current)
 ```
 
-### 7. Create or Update PR
+### 11. Create or Update PR
 
 Check if a PR already exists for this branch:
 
@@ -216,7 +216,7 @@ gh pr list --head $(git branch --show-current) --json number --jq '.[0].number'
 - If no PR exists, create one with `gh pr create` — use a conventional prefix in the title (e.g., `feat: add drag reordering to kanban columns`)
 - If PR exists, it's already updated by the push
 
-### 8. Poll for PR Review
+### 12. Poll for PR Review
 
 Wait for all PR checks to complete, then fetch new comments:
 
@@ -228,7 +228,7 @@ This uses `gh pr checks --watch` to block until all checks finish, then shows an
 
 - If no new comments after checks complete, exit successfully — review bots found nothing to flag
 
-### 9. Triage Comments
+### 13. Triage Comments
 
 Read the output from the polling script. Categorize each new comment:
 
@@ -242,7 +242,7 @@ Read the output from the polling script. Categorize each new comment:
 - False positives or misunderstandings of intent
 - Suggestions that would over-engineer the solution
 
-### 10. Address Comments
+### 14. Address Comments
 
 For each actionable comment:
 1. Read the file at the referenced line
@@ -259,7 +259,7 @@ gh api repos/{owner}/{repo}/pulls/<PR>/comments/<COMMENT_ID>/replies \
   -f body="<reply>"
 ```
 
-### 11. Push and Loop
+### 15. Push and Loop
 
 After addressing all comments:
 
@@ -277,9 +277,9 @@ git commit -m "fix: address review feedback"
 git push
 ```
 
-Return to **Step 8** for the next round.
+Return to **Step 12** for the next round.
 
-### 12. Exit Conditions
+### 16. Exit Conditions
 
 Stop the loop when any of these are true:
 
@@ -287,7 +287,7 @@ Stop the loop when any of these are true:
 - **Max 3 iterations** — report remaining unresolved comments to the user
 - **Quality checks fail after 2 retries** — stop and report the errors
 
-### 13. Summary
+### 17. Summary
 
 When exiting, display:
 - Total iterations completed

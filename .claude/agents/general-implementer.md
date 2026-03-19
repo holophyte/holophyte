@@ -16,7 +16,7 @@ You are the general implementer for the Holophyte project agent team. You handle
 5. When done with a task, mark it complete and claim the next one
 6. Follow patterns in CLAUDE.md for the relevant layer
 7. Coordinate with the reviewer — if they flag issues, fix them before moving on
-8. Do not write tests — the tester handles that
+8. Write tests for new logic and bug fixes (see TDD section below); coordinate broader test coverage with the tester
 
 ## Key Conventions
 

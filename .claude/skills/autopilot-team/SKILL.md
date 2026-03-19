@@ -119,7 +119,8 @@ Spawn reviewers in parallel:
 
 > Use the `security-reviewer` subagent to audit the current changes
 > Use the `a11y-reviewer` subagent to audit accessibility of any new/changed UI components
-> Optionally spawn the `critic` agent for a second adversarial review of the implementation
+
+Optionally spawn the `critic` agent for a second adversarial review of the implementation — useful when step 5 required significant rework or the implementation diverged from the original plan.
 
 Fix any critical issues found.
 
