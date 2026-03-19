@@ -66,7 +66,7 @@ the feature spans multiple PRs and you need to preserve context across sessions.
 
 Spawn the `critic` agent to adversarially review the plan before implementation:
 
-> Review the implementation plan at `.autopilot/plan-<branch>.md` for this feature. Look for wrong assumptions, missed edge cases, simpler approaches, missing failure modes, and scope creep.
+> The feature being built is: `<$ARGUMENTS>`. Review the implementation plan at `.autopilot/plan-<branch>.md` for this feature. Look for wrong assumptions, missed edge cases, simpler approaches, missing failure modes, and scope creep.
 
 If the critic finds **critical** issues (missed failure modes, wrong assumptions, simpler approaches that invalidate the plan), revise the plan before proceeding. Address **concerns** if they're valid. **Questions** are worth considering but don't block progress.
 
@@ -102,9 +102,9 @@ This cleans up the implementation before reviewers see it — so they're reviewi
 
 Before committing, run reviewers in parallel:
 
-> Use the code-reviewer subagent to review the current changes
-> Use the security-reviewer subagent to audit the current changes
-> Use the a11y-reviewer subagent to audit accessibility of any new/changed UI components
+> Use the `code-reviewer` subagent to review the current changes
+> Use the `security-reviewer` subagent to audit the current changes
+> Use the `a11y-reviewer` subagent to audit accessibility of any new/changed UI components
 
 - Fix any **critical** issues from any reviewer (including critical a11y issues)
 - Evaluate **warnings** and fix if valid
@@ -185,10 +185,10 @@ cd docs && bunx docusaurus build
 
 Fix any failures before proceeding.
 
-### 9. Agent-Driven Verification
+### 9. Exploratory Verification
 
-Verify the change works end-to-end before creating the PR. Use whatever tools and approaches make sense for the change — examples include but aren't limited to:
-- Running tests (`bun run test`, `bun run test:e2e:isolated`)
+Verify the change works end-to-end beyond what automated tests cover. Step 8 already ran lint, typecheck, unit tests, and E2E — do **not** re-run those here. Focus on manual/exploratory checks:
+
 - Using Playwright MCP to browse the UI and verify flows work visually
 - Curling API endpoints to check responses
 - Reading logs or Convex dashboard output
