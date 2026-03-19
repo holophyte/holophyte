@@ -96,6 +96,7 @@ function withSessionActions(
         deny: vi.fn(),
         pendingApprovals: [],
         sessionStatus,
+        promptSuggestion: null,
       }}
     >
       {children}

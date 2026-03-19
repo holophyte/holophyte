@@ -10,7 +10,10 @@ import type {
   PendingApproval,
   SessionStatus,
 } from '@/frontend/hooks/useSession';
-import { sdkToThreadMessages } from '@/frontend/lib/sdkToThreadMessages';
+import {
+  extractPromptSuggestion,
+  sdkToThreadMessages,
+} from '@/frontend/lib/sdkToThreadMessages';
 import { SessionActionsProvider } from './SessionActionsContext';
 
 interface SessionRuntimeProviderProps {
@@ -55,6 +58,11 @@ export default function SessionRuntimeProvider({
   const sdkMessages = useMemo(
     () => sdkToThreadMessages(events, isRunning, pendingApprovals),
     [events, isRunning, pendingApprovals],
+  );
+
+  const promptSuggestion = useMemo(
+    () => extractPromptSuggestion(events),
+    [events],
   );
 
   // Merge SDK messages with the optimistic user message (if any).
@@ -113,6 +121,7 @@ export default function SessionRuntimeProvider({
         deny={deny}
         pendingApprovals={pendingApprovals}
         sessionStatus={sessionStatus}
+        promptSuggestion={promptSuggestion}
       >
         {children}
       </SessionActionsProvider>

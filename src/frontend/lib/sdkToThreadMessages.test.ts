@@ -1,7 +1,10 @@
 import type { SDKMessage } from '@anthropic-ai/claude-agent-sdk';
 import { describe, expect, it } from 'vitest';
 import type { PendingApproval } from '@/frontend/hooks/useSession';
-import { sdkToThreadMessages } from './sdkToThreadMessages';
+import {
+  extractPromptSuggestion,
+  sdkToThreadMessages,
+} from './sdkToThreadMessages';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -431,5 +434,72 @@ describe('sdkToThreadMessages', () => {
     const parts = msg.content as unknown as Array<{ type: string }>;
     expect(parts.some((p) => p.type === 'tool-call')).toBe(true);
     expect(parts.some((p) => p.type === 'text')).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// extractPromptSuggestion
+// ---------------------------------------------------------------------------
+
+function promptSuggestionEvent(suggestion: string): SDKMessage {
+  return { type: 'prompt_suggestion', suggestion } as unknown as SDKMessage;
+}
+
+describe('extractPromptSuggestion', () => {
+  it('returns suggestion text when the last event is a prompt_suggestion', () => {
+    const events = [userTextEvent('hi'), promptSuggestionEvent('What next?')];
+    expect(extractPromptSuggestion(events)).toBe('What next?');
+  });
+
+  it('returns null when a user event comes after the last prompt_suggestion', () => {
+    const events = [promptSuggestionEvent('Try this'), userTextEvent('ok')];
+    expect(extractPromptSuggestion(events)).toBeNull();
+  });
+
+  it('returns null when an assistant event comes after the last prompt_suggestion', () => {
+    const events = [promptSuggestionEvent('Try this'), assistantEvent('Sure!')];
+    expect(extractPromptSuggestion(events)).toBeNull();
+  });
+
+  it('returns null for an empty event array', () => {
+    expect(extractPromptSuggestion([])).toBeNull();
+  });
+
+  it('returns null when no prompt_suggestion events exist', () => {
+    const events = [userTextEvent('hello'), assistantEvent('Hello back!')];
+    expect(extractPromptSuggestion(events)).toBeNull();
+  });
+
+  it('returns the latest suggestion when multiple prompt_suggestion events appear in one turn', () => {
+    const events = [
+      userTextEvent('go'),
+      promptSuggestionEvent('first'),
+      promptSuggestionEvent('second'),
+    ];
+    // Reverse scan encounters 'second' first
+    expect(extractPromptSuggestion(events)).toBe('second');
+  });
+
+  it('ignores empty suggestion strings and returns an earlier non-empty one', () => {
+    const events = [
+      userTextEvent('go'),
+      promptSuggestionEvent('fallback'),
+      promptSuggestionEvent('   '),
+    ];
+    expect(extractPromptSuggestion(events)).toBe('fallback');
+  });
+
+  it('returns null for a whitespace-only suggestion with no other suggestions in the turn', () => {
+    const events = [userTextEvent('go'), promptSuggestionEvent('   ')];
+    expect(extractPromptSuggestion(events)).toBeNull();
+  });
+
+  it('returns suggestion that appears after a user turn but before the next assistant event', () => {
+    const events = [
+      assistantEvent('I can help.'),
+      userTextEvent('Continue?'),
+      promptSuggestionEvent('Next step'),
+    ];
+    expect(extractPromptSuggestion(events)).toBe('Next step');
   });
 });
