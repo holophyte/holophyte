@@ -155,8 +155,8 @@ Fix any remaining issues. Use the `test-fixer` subagent if tests fail.
 
 **Commit atomically** — each commit should be one logical change (e.g., schema
 change, then backend handler, then frontend component). Don't batch unrelated
-changes into a single commit. Implementers should commit their own work as they
-complete each task, not save everything for one big commit at the end.
+changes into a single commit. The orchestrator stages and commits each task's
+reported file list after parallel tasks complete (see step 5).
 
 ```bash
 git add <relevant files>

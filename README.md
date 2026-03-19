@@ -84,7 +84,7 @@ bun run convex:dev       # Start cloud Convex dev server
 bun run convex:local     # Start local Convex backend (reads .dev-ports)
 bun run test             # Run unit tests (vitest)
 bun run test:ui          # Vitest UI dashboard
-bun run test:e2e         # Playwright E2E tests (requires convex:dev running)
+bun run test:e2e         # Playwright E2E tests (ephemeral Convex, fully self-contained)
 bun run lint             # Biome check
 bun run lint:fix         # Biome auto-fix
 bun run check            # lint + typecheck + test (all-in-one)
@@ -157,7 +157,8 @@ bunx vitest run path   # Run specific test file
 
 **E2E Tests (Playwright):**
 ```bash
-bun run test:e2e       # Requires convex:dev running separately
+bun run test:e2e          # Ephemeral Convex — do NOT have convex:local running
+bun run test:e2e:isolated # E2E in a temp worktree — safe to run alongside dev Convex
 ```
 
 ## Git Workflow
