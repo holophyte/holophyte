@@ -211,7 +211,7 @@ function isInstanceAlive(instanceId: string): boolean {
   if (separatorIdx === -1) return true; // Malformed — assume alive
   const staleHost = instanceId.slice(0, separatorIdx);
   const stalePid = Number(instanceId.slice(separatorIdx + 1));
-  if (Number.isNaN(stalePid)) return true; // Malformed — assume alive
+  if (Number.isNaN(stalePid) || stalePid <= 0) return true; // Malformed — assume alive
 
   // Different machine — can't check, assume alive
   if (staleHost !== MACHINE_ID) return true;
