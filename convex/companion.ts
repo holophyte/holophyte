@@ -131,11 +131,18 @@ export const getStatus = query({
   args: { orgId: v.id('organizations') },
   handler: async (ctx, args) => {
     await requireOrgMembership(ctx, args.orgId);
-    return await ctx.db
+    const record = await ctx.db
       .query('companion')
       .withIndex('by_org_last_seen', (q) => q.eq('orgId', args.orgId))
       .order('desc')
       .first();
+    if (!record) return null;
+    return {
+      lastSeen: record.lastSeen,
+      activeSessionCount: record.activeSessionCount,
+      machineId: record.machineId,
+      url: record.url,
+    };
   },
 });
 
@@ -196,7 +203,7 @@ export const companionHeartbeat = mutation({
   args: {
     activeSessionCount: v.number(),
     machineId: v.optional(v.string()),
-    instanceId: v.optional(v.string()),
+    instanceId: v.string(),
     url: v.optional(v.string()),
   },
   handler: async (ctx, args) => {

@@ -508,7 +508,7 @@ http.route({
     if (body instanceof Response) return body;
 
     try {
-      const { activeSessionCount, machineId, url } = body;
+      const { activeSessionCount, machineId, instanceId, url } = body;
       // Client-side URL guard — the mutation also validates server-side
       // in the companion heartbeat mutation (convex/companion.ts)
       if (url != null && !/^http:\/\/(localhost|127\.0\.0\.1):\d+$/.test(url)) {
@@ -518,6 +518,7 @@ http.route({
       await ctx.runMutation(internal.companion.upsertHeartbeatAllOrgs, {
         activeSessionCount,
         machineId,
+        instanceId,
         url,
       });
       return jsonOk();
