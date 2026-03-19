@@ -191,7 +191,7 @@ export async function startCompanion(url: string): Promise<void> {
     console.log('Loaded user auth token from', '~/.holophyte/token.json');
   }
 
-  // 2. Anonymous auth fallback + Convex client initialization
+  // Anonymous auth fallback (still part of step 1 — obtaining a token)
   // If no token file, try anonymous auth (local dev / E2E)
   const convexUrl = process.env.CONVEX_URL;
   if (
@@ -205,7 +205,7 @@ export async function startCompanion(url: string): Promise<void> {
     }
   }
 
-  // 4. Start reactive subscriptions for queued/stopped sessions and pending messages
+  // 2. Initialize authenticated Convex clients
   if (convexUrl && cachedTokenFile) {
     try {
       initCompanionClients(convexUrl, cachedTokenFile);
