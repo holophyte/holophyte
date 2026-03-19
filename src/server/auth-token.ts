@@ -1,10 +1,10 @@
 // ── Auth token file utilities ────────────────────────────────────────
 //
-// Reads/writes the user auth token stored by `holophyte setup`.
-// The companion uses this to authenticate as the logged-in user
-// via ConvexClient.setAuth().
+// Reads/writes user auth tokens stored by `holophyte setup`.
+// Tokens are keyed by CONVEX_DEPLOYMENT in ~/.holophyte/tokens.json
+// so multiple environments (local, dev, prod) can coexist.
 
-import { mkdir, rename, writeFile } from 'node:fs/promises';
+import { mkdir, rename, unlink, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 
@@ -16,66 +16,246 @@ export interface TokenFileData {
   ephemeral?: boolean;
 }
 
-const TOKEN_DIR = join(homedir(), '.holophyte');
-const TOKEN_FILE = join(TOKEN_DIR, 'token.json');
-
-export function getTokenFilePath(): string {
-  return TOKEN_FILE;
+/** On-disk entry in tokens.json — extends TokenFileData with metadata. */
+export interface TokenEntry {
+  environment: string;
+  convexUrl: string;
+  token: string;
+  refreshToken: string;
+  updatedAt: string;
 }
 
-/** Reads the token file. Returns null if missing or invalid. */
-export async function readTokenFile(): Promise<TokenFileData | null> {
+/** Deployment-keyed map stored in tokens.json. */
+export type TokensFile = Record<string, TokenEntry>;
+
+/** Discriminated result from readTokenFile — distinguishes missing vs corrupt. */
+export type TokenReadResult =
+  | { status: 'missing' }
+  | { status: 'invalid'; reason: string }
+  | { status: 'ok'; data: TokenFileData };
+
+const TOKEN_DIR = join(homedir(), '.holophyte');
+/** Legacy single-token file path (pre-migration). */
+const LEGACY_TOKEN_FILE = join(TOKEN_DIR, 'token.json');
+/** Current deployment-keyed token file path. */
+const TOKENS_FILE = join(TOKEN_DIR, 'tokens.json');
+
+export function getTokensFilePath(): string {
+  return TOKENS_FILE;
+}
+
+/**
+ * Derives a human-readable environment label from a CONVEX_DEPLOYMENT value.
+ *
+ * Deployment format:
+ * - `prod:handsome-marmot-XXX` → "production"
+ * - `dev:some-name` → "development"
+ * - `local-ko_vial-holophyte-9133` → "local"
+ */
+export function deriveEnvironment(deployment: string): string {
+  if (deployment.startsWith('prod:')) return 'production';
+  if (deployment.startsWith('dev:')) return 'development';
+  if (deployment.startsWith('local-') || deployment.startsWith('local:'))
+    return 'local';
+  return 'unknown';
+}
+
+/** Validates that a convexUrl is HTTPS or localhost. Returns a reason string on failure. */
+function validateConvexUrl(convexUrl: string): string | null {
   try {
-    const file = Bun.file(TOKEN_FILE);
-    if (!(await file.exists())) return null;
-    const data = await file.json();
+    const url = new URL(convexUrl);
     if (
-      typeof data?.convexUrl !== 'string' ||
-      typeof data?.token !== 'string' ||
-      typeof data?.refreshToken !== 'string'
+      url.protocol !== 'https:' &&
+      url.hostname !== 'localhost' &&
+      url.hostname !== '127.0.0.1'
     ) {
-      return null;
+      return 'convexUrl must be HTTPS or localhost';
     }
-    // Validate convexUrl is a well-formed HTTPS URL (or localhost for dev)
-    try {
-      const url = new URL(data.convexUrl);
-      if (
-        url.protocol !== 'https:' &&
-        url.hostname !== 'localhost' &&
-        url.hostname !== '127.0.0.1'
-      ) {
-        console.error(
-          'Token file has invalid convexUrl — must be HTTPS or localhost',
-        );
-        return null;
-      }
-    } catch {
-      console.error('Token file has malformed convexUrl');
-      return null;
-    }
-    return {
-      convexUrl: data.convexUrl,
-      token: data.token,
-      refreshToken: data.refreshToken,
-    };
-  } catch {
     return null;
+  } catch {
+    return 'convexUrl is malformed';
   }
 }
 
-/** Writes the token file atomically with restricted permissions (0600). */
-export async function writeTokenFile(data: TokenFileData): Promise<void> {
+/**
+ * Silently migrates legacy `token.json` into `tokens.json` under the
+ * given deployment key, then deletes the legacy file.
+ */
+async function migrateLegacyTokenFile(
+  deployment: string,
+): Promise<TokenReadResult> {
+  try {
+    const legacyFile = Bun.file(LEGACY_TOKEN_FILE);
+    let data: unknown;
+    try {
+      data = await legacyFile.json();
+    } catch {
+      return {
+        status: 'invalid',
+        reason: 'Legacy token file contains invalid JSON',
+      };
+    }
+
+    if (
+      typeof data !== 'object' ||
+      data === null ||
+      typeof (data as Record<string, unknown>).convexUrl !== 'string' ||
+      typeof (data as Record<string, unknown>).token !== 'string' ||
+      typeof (data as Record<string, unknown>).refreshToken !== 'string'
+    ) {
+      return {
+        status: 'invalid',
+        reason: 'Legacy token file is missing required fields',
+      };
+    }
+
+    const d = data as Record<string, string>;
+    const urlError = validateConvexUrl(d.convexUrl as string);
+    if (urlError) {
+      return { status: 'invalid', reason: `Legacy token: ${urlError}` };
+    }
+
+    const tokenData: TokenFileData = {
+      convexUrl: d.convexUrl as string,
+      token: d.token as string,
+      refreshToken: d.refreshToken as string,
+    };
+
+    // Write to new format and remove legacy file
+    await writeTokenFile(deployment, tokenData);
+    await unlink(LEGACY_TOKEN_FILE);
+    console.log('Migrated ~/.holophyte/token.json → tokens.json');
+
+    return { status: 'ok', data: tokenData };
+  } catch {
+    return {
+      status: 'invalid',
+      reason: 'Failed to migrate legacy token file',
+    };
+  }
+}
+
+/**
+ * Reads the token for a specific deployment from tokens.json.
+ *
+ * Returns a discriminated result:
+ * - `{ status: 'missing' }` — no entry for this deployment
+ * - `{ status: 'invalid', reason }` — entry exists but is corrupt
+ * - `{ status: 'ok', data }` — valid token data
+ *
+ * On first call, migrates legacy token.json if it exists.
+ */
+export async function readTokenFile(
+  deployment: string,
+): Promise<TokenReadResult> {
+  try {
+    const tokensFile = Bun.file(TOKENS_FILE);
+
+    // Check for legacy migration
+    if (!(await tokensFile.exists())) {
+      const legacyFile = Bun.file(LEGACY_TOKEN_FILE);
+      if (await legacyFile.exists()) {
+        return migrateLegacyTokenFile(deployment);
+      }
+      return { status: 'missing' };
+    }
+
+    // Read tokens.json
+    let allTokens: unknown;
+    try {
+      allTokens = await tokensFile.json();
+    } catch {
+      return { status: 'invalid', reason: 'Token file contains invalid JSON' };
+    }
+
+    if (typeof allTokens !== 'object' || allTokens === null) {
+      return { status: 'invalid', reason: 'Token file is not a JSON object' };
+    }
+
+    const entry = (allTokens as Record<string, unknown>)[deployment];
+    if (!entry) {
+      return { status: 'missing' };
+    }
+
+    // Validate entry shape
+    if (typeof entry !== 'object' || entry === null) {
+      return {
+        status: 'invalid',
+        reason: `Entry for ${deployment} is not an object`,
+      };
+    }
+
+    const e = entry as Record<string, unknown>;
+    if (
+      typeof e.convexUrl !== 'string' ||
+      typeof e.token !== 'string' ||
+      typeof e.refreshToken !== 'string'
+    ) {
+      return {
+        status: 'invalid',
+        reason: `Entry for ${deployment} is missing required fields`,
+      };
+    }
+
+    const urlError = validateConvexUrl(e.convexUrl as string);
+    if (urlError) {
+      return { status: 'invalid', reason: urlError };
+    }
+
+    return {
+      status: 'ok',
+      data: {
+        convexUrl: e.convexUrl as string,
+        token: e.token as string,
+        refreshToken: e.refreshToken as string,
+      },
+    };
+  } catch {
+    return { status: 'invalid', reason: 'Failed to read token file' };
+  }
+}
+
+/**
+ * Writes a token entry for the given deployment to tokens.json.
+ * Reads existing entries and merges, then writes atomically.
+ */
+export async function writeTokenFile(
+  deployment: string,
+  data: TokenFileData,
+): Promise<void> {
   await mkdir(TOKEN_DIR, { recursive: true, mode: 0o700 });
-  // Write to a temp file with restricted permissions, then atomically rename
-  const tmpFile = `${TOKEN_FILE}.tmp`;
-  await writeFile(tmpFile, JSON.stringify(data, null, 2), { mode: 0o600 });
-  await rename(tmpFile, TOKEN_FILE);
+
+  // Read existing tokens map
+  let allTokens: TokensFile = {};
+  try {
+    const file = Bun.file(TOKENS_FILE);
+    if (await file.exists()) {
+      allTokens = (await file.json()) as TokensFile;
+    }
+  } catch {
+    // Start fresh if file is corrupt
+  }
+
+  // Update the entry for this deployment
+  allTokens[deployment] = {
+    environment: deriveEnvironment(deployment),
+    convexUrl: data.convexUrl,
+    token: data.token,
+    refreshToken: data.refreshToken,
+    updatedAt: new Date().toISOString(),
+  };
+
+  // Atomic write
+  const tmpFile = `${TOKENS_FILE}.tmp`;
+  await writeFile(tmpFile, JSON.stringify(allTokens, null, 2), {
+    mode: 0o600,
+  });
+  await rename(tmpFile, TOKENS_FILE);
 }
 
 /**
  * Refreshes the auth token using the stored refresh token.
  * Calls the Convex `auth:signIn` action with the refresh token.
- * Updates the token file with the new tokens.
  *
  * Returns the new JWT or null if refresh failed.
  */
@@ -166,6 +346,7 @@ export async function signInAnonymous(
  * Used for anonymous auth tokens that should not overwrite the user's token file.
  */
 export function createFetchToken(
+  deployment: string,
   tokenData: TokenFileData,
 ): (args: { forceRefreshToken: boolean }) => Promise<string | null> {
   const isEphemeral = tokenData.ephemeral ?? false;
@@ -196,7 +377,7 @@ export function createFetchToken(
           tokenData.token = currentToken;
           tokenData.refreshToken = currentRefreshToken;
         } else {
-          await writeTokenFile({
+          await writeTokenFile(deployment, {
             convexUrl: tokenData.convexUrl,
             token: currentToken,
             refreshToken: currentRefreshToken,
