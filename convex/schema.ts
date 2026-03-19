@@ -233,7 +233,7 @@ export default defineSchema({
     url: v.optional(v.string()),
   })
     .index('by_org', ['orgId'])
-    .index('by_org_machine', ['orgId', 'machineId'])
+    .index('by_org_machine', ['orgId', 'machineId']) // kept for rollback path
     .index('by_org_instance', ['orgId', 'instanceId'])
     .index('by_org_last_seen', ['orgId', 'lastSeen']),
 });

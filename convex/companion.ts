@@ -20,7 +20,7 @@ export const upsertHeartbeat = internalMutation({
   args: {
     activeSessionCount: v.number(),
     machineId: v.optional(v.string()),
-    instanceId: v.optional(v.string()),
+    instanceId: v.string(),
     url: v.optional(v.string()),
     orgId: v.id('organizations'),
   },
@@ -68,7 +68,7 @@ export const upsertHeartbeatAllOrgs = internalMutation({
   args: {
     activeSessionCount: v.number(),
     machineId: v.optional(v.string()),
-    instanceId: v.optional(v.string()),
+    instanceId: v.string(),
     url: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
@@ -154,7 +154,7 @@ async function upsertHeartbeatForOrgs(
   args: {
     activeSessionCount: number;
     machineId?: string;
-    instanceId?: string;
+    instanceId: string;
     url?: string;
   },
 ) {

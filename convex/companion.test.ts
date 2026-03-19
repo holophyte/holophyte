@@ -223,6 +223,7 @@ describe('upsertHeartbeat (internal) — upserts by instanceId', () => {
       t.mutation(internal.companion.upsertHeartbeat, {
         orgId,
         activeSessionCount: 1,
+        instanceId: 'evil-instance',
         url: 'https://evil.example.com',
       }),
     ).rejects.toThrow('Companion URL must be http://localhost');

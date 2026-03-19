@@ -241,6 +241,7 @@ export async function startCompanion(url: string): Promise<void> {
       if (
         status &&
         now - status.lastSeen < DUPLICATE_THRESHOLD_MS &&
+        status.instanceId !== undefined &&
         status.instanceId !== INSTANCE_ID
       ) {
         const secondsAgo = Math.round((now - status.lastSeen) / 1000);
