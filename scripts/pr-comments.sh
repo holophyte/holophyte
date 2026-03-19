@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Fetch and display review bot comments on a GitHub PR (Greptile + CodeRabbit)
+# Fetch and display review bot comments on a GitHub PR
 # Usage:
 #   bun run pr-comments                      # show unresolved comments (auto-detect PR)
 #   bun run pr-comments -- 42                # show unresolved comments on PR #42

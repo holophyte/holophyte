@@ -28,7 +28,7 @@ If `$ARGUMENTS` contains a PR number, use that directly.
 
 ### 2. Fetch Comments
 
-Fetch review bot comments (Greptile + CodeRabbit) using the script:
+Fetch review bot comments using the script:
 ```bash
 bun run pr-comments -- <PR_NUMBER>
 ```
@@ -90,4 +90,4 @@ After all comments have been addressed or replied to, resolve the review bot thr
 bun run pr-comments -- --resolve <PR_NUMBER>
 ```
 
-This calls the GitHub GraphQL `resolveReviewThread` mutation on all unresolved threads from Greptile and CodeRabbit.
+This calls the GitHub GraphQL `resolveReviewThread` mutation on all unresolved threads from review bots.

@@ -39,7 +39,7 @@ Scripts in `scripts/` are shared shell scripts:
 - `convex-local.sh` — start local Convex backend
 - `dev-local.sh` — start app server + local Convex
 - `worktree-create.sh` — create worktree with isolated local Convex
-- `pr-comments.sh` — show Greptile PR comments
+- `pr-comments.sh` — show review bot PR comments
 
 ## Worktree Considerations
 

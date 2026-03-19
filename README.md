@@ -90,7 +90,7 @@ bun run lint:fix         # Biome auto-fix
 bun run check            # lint + typecheck + test (all-in-one)
 bun run convex:deploy    # Deploy Convex to production
 bun run worktree:create <name>  # Create worktree with isolated local Convex
-bun run pr-comments      # Show Greptile PR comments (--poll for polling)
+bun run pr-comments      # Show review bot PR comments (--poll for polling)
 bun run storybook        # Start Storybook dev server (port 6006)
 bun run docs:dev         # Start Docusaurus docs server
 ```
