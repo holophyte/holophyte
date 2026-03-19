@@ -32,6 +32,7 @@ export const upsertHeartbeat = internalMutation({
     }
 
     // Upsert by (orgId, instanceId) so each process gets its own row
+    const now = Date.now();
     const existing = await ctx.db
       .query('companion')
       .withIndex('by_org_instance', (q) =>
@@ -41,22 +42,25 @@ export const upsertHeartbeat = internalMutation({
 
     if (existing) {
       await ctx.db.patch(existing._id, {
-        lastSeen: Date.now(),
+        lastSeen: now,
         activeSessionCount: args.activeSessionCount,
         ...(args.machineId !== undefined && { machineId: args.machineId }),
-        ...(args.instanceId !== undefined && { instanceId: args.instanceId }),
+        instanceId: args.instanceId,
         ...(args.url !== undefined && { url: args.url }),
       });
     } else {
       await ctx.db.insert('companion', {
         orgId: args.orgId,
-        lastSeen: Date.now(),
+        lastSeen: now,
         activeSessionCount: args.activeSessionCount,
         machineId: args.machineId,
         instanceId: args.instanceId,
         url: args.url,
       });
     }
+
+    // Clean up stale rows from previous instances for this org
+    await purgeStaleCompanionRows(ctx, args.orgId, now);
   },
 });
 
@@ -78,6 +82,7 @@ export const upsertHeartbeatAllOrgs = internalMutation({
       );
     }
 
+    const now = Date.now();
     const orgs = await ctx.db.query('organizations').collect();
     for (const org of orgs) {
       const existing = await ctx.db
@@ -89,22 +94,24 @@ export const upsertHeartbeatAllOrgs = internalMutation({
 
       if (existing) {
         await ctx.db.patch(existing._id, {
-          lastSeen: Date.now(),
+          lastSeen: now,
           activeSessionCount: args.activeSessionCount,
           ...(args.machineId !== undefined && { machineId: args.machineId }),
-          ...(args.instanceId !== undefined && { instanceId: args.instanceId }),
+          instanceId: args.instanceId,
           ...(args.url !== undefined && { url: args.url }),
         });
       } else {
         await ctx.db.insert('companion', {
           orgId: org._id,
-          lastSeen: Date.now(),
+          lastSeen: now,
           activeSessionCount: args.activeSessionCount,
           machineId: args.machineId,
           instanceId: args.instanceId,
           url: args.url,
         });
       }
+
+      await purgeStaleCompanionRows(ctx, org._id, now);
     }
   },
 });
@@ -146,6 +153,33 @@ export const getStatus = query({
   },
 });
 
+// ── Cleanup ──────────────────────────────────────────────────────────
+
+/** Max age before a companion row is considered stale and eligible for deletion. */
+const STALE_THRESHOLD_MS = 60_000;
+
+/**
+ * Delete companion rows for the given org where `lastSeen` is older than the
+ * stale threshold. Runs inline during heartbeat upserts so rows from previous
+ * process restarts don't accumulate unboundedly.
+ */
+async function purgeStaleCompanionRows(
+  ctx: MutationCtx,
+  orgId: Id<'organizations'>,
+  now: number,
+) {
+  const cutoff = now - STALE_THRESHOLD_MS;
+  const staleRows = await ctx.db
+    .query('companion')
+    .withIndex('by_org_last_seen', (q) =>
+      q.eq('orgId', orgId).lt('lastSeen', cutoff),
+    )
+    .collect();
+  for (const row of staleRows) {
+    await ctx.db.delete(row._id);
+  }
+}
+
 // ── Shared helper ────────────────────────────────────────────────────
 
 async function upsertHeartbeatForOrgs(
@@ -164,6 +198,7 @@ async function upsertHeartbeatForOrgs(
     );
   }
 
+  const now = Date.now();
   for (const orgId of orgIds) {
     const existing = await ctx.db
       .query('companion')
@@ -174,22 +209,24 @@ async function upsertHeartbeatForOrgs(
 
     if (existing) {
       await ctx.db.patch(existing._id, {
-        lastSeen: Date.now(),
+        lastSeen: now,
         activeSessionCount: args.activeSessionCount,
         ...(args.machineId !== undefined && { machineId: args.machineId }),
-        ...(args.instanceId !== undefined && { instanceId: args.instanceId }),
+        instanceId: args.instanceId,
         ...(args.url !== undefined && { url: args.url }),
       });
     } else {
       await ctx.db.insert('companion', {
         orgId,
-        lastSeen: Date.now(),
+        lastSeen: now,
         activeSessionCount: args.activeSessionCount,
         machineId: args.machineId,
         instanceId: args.instanceId,
         url: args.url,
       });
     }
+
+    await purgeStaleCompanionRows(ctx, orgId, now);
   }
 }
 
