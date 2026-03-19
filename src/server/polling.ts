@@ -176,6 +176,30 @@ export function stopCompanionPolling() {
 const DUPLICATE_THRESHOLD_MS = 10_000;
 
 /**
+ * Checks whether the process behind a stale heartbeat is still alive.
+ * On the same machine, uses `process.kill(pid, 0)` to probe the PID.
+ * Cross-machine heartbeats are always treated as alive (can't probe remotely).
+ */
+function isInstanceAlive(instanceId: string): boolean {
+  const separatorIdx = instanceId.lastIndexOf(':');
+  if (separatorIdx === -1) return true; // Malformed — assume alive
+  const staleHost = instanceId.slice(0, separatorIdx);
+  const stalePid = Number(instanceId.slice(separatorIdx + 1));
+  if (Number.isNaN(stalePid)) return true; // Malformed — assume alive
+
+  // Different machine — can't check, assume alive
+  if (staleHost !== MACHINE_ID) return true;
+
+  // Same machine — check if the PID is still running
+  try {
+    process.kill(stalePid, 0);
+    return true; // Process exists
+  } catch {
+    return false; // Process is dead
+  }
+}
+
+/**
  * Full companion startup sequence:
  *   1. Load user auth token
  *   2. Initialize authenticated Convex clients
@@ -242,7 +266,8 @@ export async function startCompanion(url: string): Promise<void> {
         status &&
         now - status.lastSeen < DUPLICATE_THRESHOLD_MS &&
         status.instanceId !== undefined &&
-        status.instanceId !== INSTANCE_ID
+        status.instanceId !== INSTANCE_ID &&
+        isInstanceAlive(status.instanceId)
       ) {
         const secondsAgo = Math.round((now - status.lastSeen) / 1000);
         console.error(
