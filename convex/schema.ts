@@ -229,9 +229,11 @@ export default defineSchema({
     lastSeen: v.number(),
     activeSessionCount: v.number(),
     machineId: v.optional(v.string()),
+    instanceId: v.optional(v.string()), // required — added to existing table
     url: v.optional(v.string()),
   })
     .index('by_org', ['orgId'])
     .index('by_org_machine', ['orgId', 'machineId'])
+    .index('by_org_instance', ['orgId', 'instanceId'])
     .index('by_org_last_seen', ['orgId', 'lastSeen']),
 });
