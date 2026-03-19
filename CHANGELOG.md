@@ -3,6 +3,121 @@
 All notable changes to this project will be documented in this file.
 Grouped by date, following [Keep a Changelog](https://keepachangelog.com/) categories.
 
+## 2026-03-18
+
+### Added
+- Migrate companion to JWT-authenticated Convex mutations (#172)
+- Anonymous auth fallback for companion (#175)
+
+### Changed
+- Generalize PR review tooling for multiple review bots (#173)
+- Add critical thinking principle to CLAUDE.md (#171)
+
+### Chores
+- Generalize review bot references (#179)
+
+## 2026-03-17
+
+### Added
+- Companion JWT auth — authenticate ConvexClient with user session token (#166)
+
+### Fixed
+- Prevent stdin stream closure between setup prompts (#167)
+
+## 2026-03-16
+
+### Added
+- Holophyte setup — OAuth flow for companion authentication (#165)
+- Replace FolderGit2 with custom Holophyte SVG icon (#163)
+
+### Fixed
+- Scope companion table by orgId (#161)
+
+## 2026-03-13
+
+### Added
+- Migrate companion from polling to Convex WebSocket subscriptions (#155)
+
+### Fixed
+- Detect and recover from errored subscriptions (#159)
+
+## 2026-03-12
+
+### Added
+- Detect and reject duplicate companion instances (#154)
+- Remove homeDir from frontend config (#152)
+
+### Fixed
+- Use dynamic port assignment for companion server (#153)
+- Route directory picker to local companion from Vercel frontend (#148)
+
+## 2026-03-09
+
+### Added
+- Convex preview deployments for Vercel preview builds (#144)
+
+### Fixed
+- Use fs.exists() for .git detection in directory picker (#141)
+
+### Chores
+- Add .vercel to .gitignore (#146)
+
+## 2026-03-07
+
+### Fixed
+- Prevent tooltip from auto-opening in Add Repo dialog (#137)
+- Strip trailing slash from CONVEX_URL and add cursor-pointer to buttons (#135)
+
+### Chores
+- Bump claude-agent-sdk to 0.2.71 + strip inherited env vars (#136)
+- Load .env.companion for companion script (#140)
+
+## 2026-03-06
+
+### Fixed
+- dev:local and dev:all startup issues (#134)
+- Kill entire process group on dev-local exit (#133)
+
+### Docs
+- Update vercel deployment plan with Phase 3 completion (#132)
+
+## 2026-03-04
+
+### Added
+- Headless companion entry point (#122)
+
+### Fixed
+- Static build config + companion status indicator (#128)
+
+### Docs
+- Update vercel deployment plan with Phase 0-2 completion notes (#127)
+
+## 2026-03-03
+
+### Added
+- Add static build pipeline for Vercel deployment (#121)
+
+## 2026-03-02
+
+### Added
+- Stream SDK events live via WebSocket for resumed sessions (#120)
+
+## 2026-03-01
+
+### Refactored
+- Extract autopilot agents to reusable .claude/agents/ definitions (#118)
+
+### Docs
+- Replace boilerplate intro with actionable purpose statement in CLAUDE.md (#119)
+
+## 2026-02-28
+
+### Added
+- Implement message delivery to running SDK sessions (#116)
+
+### Docs
+- Update README to reflect Claude Agent SDK architecture (#117)
+
 ## 2026-02-27
 
 ### Added
