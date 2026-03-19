@@ -52,6 +52,10 @@ let heartbeatFailureLogged = false;
 let ephemeralClearedAt: number | null = null;
 const EPHEMERAL_CLEAR_COOLDOWN_MS = 30_000;
 
+function getDeployment(): string | undefined {
+  return process.env.CONVEX_DEPLOYMENT;
+}
+
 export async function companionPoll() {
   if (polling) return; // Skip if previous poll is still running
   polling = true;
@@ -78,6 +82,7 @@ export async function companionPoll() {
     // don't block the startCompanionSubscriptions guard check.
     if (!isSubscriptionsActive()) {
       const convexUrl = process.env.CONVEX_URL;
+      const deployment = getDeployment();
       if (convexUrl) {
         try {
           stopCompanionSubscriptions();
@@ -85,15 +90,21 @@ export async function companionPoll() {
           // Re-read token file in case tokens were rotated since startup.
           // If we already have an in-memory token (e.g. anonymous), keep it
           // to avoid creating a new anonymous identity every retry cycle.
-          if (!cachedTokenFile?.ephemeral) {
-            cachedTokenFile = await readTokenFile();
+          if (!cachedTokenFile?.ephemeral && deployment) {
+            const result = await readTokenFile(deployment);
+            cachedTokenFile = result.status === 'ok' ? result.data : null;
+            if (result.status === 'invalid') {
+              console.error(
+                `Token file invalid for ${deployment}: ${result.reason}`,
+              );
+            }
           }
           if (!cachedTokenFile && process.env.ALLOW_ANONYMOUS_AUTH === '1') {
             cachedTokenFile = await signInAnonymous(convexUrl);
           }
-          if (cachedTokenFile) {
+          if (cachedTokenFile && deployment) {
             try {
-              initCompanionClients(convexUrl, cachedTokenFile);
+              initCompanionClients(convexUrl, cachedTokenFile, deployment);
               await startCompanionSubscriptions();
               ephemeralClearedAt = null;
             } catch (subErr) {
@@ -185,10 +196,21 @@ const DUPLICATE_THRESHOLD_MS = 10_000;
  * All Convex calls are non-fatal — missing config is silently skipped.
  */
 export async function startCompanion(url: string): Promise<void> {
+  const deployment = getDeployment();
+
   // 1. Load user auth token (from `holophyte setup`)
-  cachedTokenFile = await readTokenFile();
-  if (cachedTokenFile) {
-    console.log('Loaded user auth token from', '~/.holophyte/token.json');
+  if (deployment) {
+    const result = await readTokenFile(deployment);
+    if (result.status === 'ok') {
+      cachedTokenFile = result.data;
+      console.log(`Loaded user auth token for deployment ${deployment}`);
+    } else if (result.status === 'invalid') {
+      console.error(`Token file invalid for ${deployment}: ${result.reason}`);
+    }
+  } else {
+    console.error(
+      'CONVEX_DEPLOYMENT not set — cannot read deployment-specific token',
+    );
   }
 
   // Anonymous auth fallback (still part of step 1 — obtaining a token)
@@ -206,15 +228,19 @@ export async function startCompanion(url: string): Promise<void> {
   }
 
   // 2. Initialize authenticated Convex clients
-  if (convexUrl && cachedTokenFile) {
+  if (convexUrl && cachedTokenFile && deployment) {
     try {
-      initCompanionClients(convexUrl, cachedTokenFile);
+      initCompanionClients(convexUrl, cachedTokenFile, deployment);
     } catch (err) {
       console.error('Failed to initialize Convex clients:', err);
     }
   } else if (!convexUrl) {
     console.error(
       'CONVEX_URL not set — companion subscriptions unavailable, sessions will not be reactive',
+    );
+  } else if (!deployment) {
+    console.error(
+      'CONVEX_DEPLOYMENT not set — companion cannot authenticate. Ensure convex dev is running.',
     );
   } else if (process.env.ALLOW_ANONYMOUS_AUTH === '1') {
     console.error(
