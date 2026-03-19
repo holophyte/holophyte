@@ -38,6 +38,7 @@ export interface PendingMessage {
 }
 
 const MACHINE_ID = process.env.MACHINE_ID ?? hostname();
+const INSTANCE_ID = `${MACHINE_ID}:${process.pid}`;
 export const POLL_INTERVAL_MS = 2000;
 let pollTimer: ReturnType<typeof setInterval> | null = null;
 let polling = false;
@@ -155,6 +156,7 @@ export async function companionPoll() {
         await heartbeatClient.mutation(api.companion.companionHeartbeat, {
           activeSessionCount: getActiveSessions().length,
           machineId: MACHINE_ID,
+          instanceId: INSTANCE_ID,
           url: companionUrl,
         });
         heartbeatFailureLogged = false;
@@ -198,6 +200,33 @@ export function stopCompanionPolling() {
 
 // How recently a companion heartbeat must be to indicate an active instance.
 const DUPLICATE_THRESHOLD_MS = 10_000;
+
+/**
+ * Checks whether the process behind a stale heartbeat is still alive.
+ * On the same machine, uses `process.kill(pid, 0)` to probe the PID.
+ * Cross-machine heartbeats are always treated as alive (can't probe remotely).
+ */
+function isInstanceAlive(instanceId: string): boolean {
+  const separatorIdx = instanceId.lastIndexOf(':');
+  if (separatorIdx === -1) return true; // Malformed — assume alive
+  const staleHost = instanceId.slice(0, separatorIdx);
+  const stalePid = Number(instanceId.slice(separatorIdx + 1));
+  if (Number.isNaN(stalePid) || stalePid <= 0) return true; // Malformed — assume alive
+
+  // Different machine — can't check, assume alive
+  if (staleHost !== MACHINE_ID) return true;
+
+  // Same machine — check if the PID is still running
+  try {
+    process.kill(stalePid, 0);
+    return true; // Process exists
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === 'ESRCH') {
+      return false; // Process definitively gone
+    }
+    return true; // EPERM or other — process likely still alive
+  }
+}
 
 /**
  * Full companion startup sequence:
@@ -288,7 +317,9 @@ export async function startCompanion(url: string): Promise<void> {
       if (
         status &&
         now - status.lastSeen < DUPLICATE_THRESHOLD_MS &&
-        status.machineId !== MACHINE_ID
+        status.instanceId !== undefined &&
+        status.instanceId !== INSTANCE_ID &&
+        isInstanceAlive(status.instanceId)
       ) {
         const secondsAgo = Math.round((now - status.lastSeen) / 1000);
         console.error(
