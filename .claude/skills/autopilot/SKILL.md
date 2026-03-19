@@ -134,7 +134,7 @@ Write E2E tests for this change. If skipping, state the reason.
 
 Valid skip reasons: backend-only change, config-only change, test-only change, no new user-facing behavior.
 
-If writing E2E tests, use the `test-writer` subagent:
+If writing E2E tests, use the `e2e-tester` subagent:
 
 > Write Playwright E2E tests for the new/changed user-facing features on this branch.
 > Tests go in `e2e/` directory with pattern `*.spec.ts`.

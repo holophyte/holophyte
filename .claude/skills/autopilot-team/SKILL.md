@@ -72,7 +72,7 @@ For each task group from the plan:
    **Dependencies completed:** <list of prior tasks already done>
    **Constraints:** <relevant constraints from plan>
 
-   Follow CLAUDE.md conventions. Commit atomically when done.
+   Follow CLAUDE.md conventions. Stage your changes with `git add` when done but DO NOT commit — the orchestrator handles commits after all parallel tasks complete to avoid git lock conflicts.
    Do not modify files outside your assigned scope.
 
    After implementing, if your task adds user-facing behavior:
@@ -92,9 +92,10 @@ For each task group from the plan:
    - **`general-implementer`** — simple tasks or single-layer changes
 
 3. **Wait for all to complete**
-4. **Spawn `code-reviewer`** to review the batch's changes
-5. **Fix critical issues** — spawn a fresh implementer for fixes if needed
-6. **Proceed to next dependent task group**
+4. **Commit the batch** — the orchestrator commits each implementer's staged changes as separate atomic commits (one per task) to avoid git lock conflicts from parallel commits
+5. **Spawn `code-reviewer`** to review the batch's changes
+6. **Fix critical issues** — spawn a fresh implementer for fixes if needed
+7. **Proceed to next dependent task group**
 
 ### 6. Simplify Pass
 

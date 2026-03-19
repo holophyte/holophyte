@@ -33,7 +33,7 @@ Spawn the `researcher` agent to explore the codebase:
 
 ### 3. Design
 
-Present **1-3 approaches** with trade-offs. For each approach:
+Read `.autopilot/research-<branch>.md` (written by the researcher in step 2) and present **1-3 approaches** with trade-offs. For each approach:
 
 - **Files to modify** — which files change and roughly how
 - **Data model changes** — new tables, fields, indexes (if any)

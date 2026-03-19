@@ -73,7 +73,7 @@ Prefer TDD when adding **new logic** (utility functions, business logic, Convex 
 5. Refactor while keeping tests green
 
 **Skip TDD for:**
-- React component rendering and UI layout (write E2E tests after implementation as verification instead)
+- HTTP route handlers and WebSocket message handling (write integration tests after implementation as verification instead)
 - Configuration/wiring changes (imports, exports, route registration)
 - Prototyping or exploratory work
 - Generated code (Convex codegen, etc.)
