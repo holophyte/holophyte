@@ -64,7 +64,7 @@ For each task group from the plan:
 1. **Identify independent tasks** that can run in parallel (no shared file ownership, no data dependencies)
 2. **Spawn implementers in parallel** — one ephemeral agent per task, each with a focused prompt:
 
-   ```
+   ```text
    Implement the following task from the plan at `.autopilot/plan-<branch>.md`:
 
    **Task:** <task description from plan>
@@ -93,7 +93,7 @@ For each task group from the plan:
    - **`general-implementer`** — simple tasks or single-layer changes
 
 3. **Wait for all to complete** — each implementer reports its modified file list
-4. **Commit the batch** — the orchestrator uses each implementer's reported file list to `git add <files>` and commit separately, producing one atomic commit per task
+4. **Commit the batch** — the orchestrator uses each implementer's reported file list to `git add <files>` and commit separately, producing one atomic commit per task. After committing, run `git status --porcelain` to verify no files were inadvertently left uncommitted; if any appear, add and amend the commit before proceeding.
 5. **Spawn `code-reviewer`** to review the batch's changes
 6. **Fix critical issues** — spawn a fresh implementer for fixes if needed
 7. **Proceed to next dependent task group**
@@ -155,8 +155,9 @@ Fix any remaining issues. Use the `test-fixer` subagent if tests fail.
 
 **Commit atomically** — each commit should be one logical change (e.g., schema
 change, then backend handler, then frontend component). Don't batch unrelated
-changes into a single commit. The orchestrator stages and commits each task's
-reported file list after parallel tasks complete (see step 5).
+changes into a single commit. Task-implementation commits were created in step 5;
+this step commits any remaining changes from the simplify pass (step 6),
+documentation & testing (step 7), and review fixes (step 8).
 
 ```bash
 git add <relevant files>

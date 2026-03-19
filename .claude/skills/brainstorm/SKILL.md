@@ -25,7 +25,7 @@ If something is genuinely unclear, ask **one** clarifying question. Wait for the
 
 ### 2. Research
 
-Spawn the `researcher` agent to explore the codebase:
+Spawn the `researcher` agent to explore the codebase. Pass the feature description from `$ARGUMENTS` as context. Ask it to find:
 - Existing patterns that this feature should follow or extend
 - Related features that solve similar problems
 - Constraints from the schema, API surface, or frontend state model
