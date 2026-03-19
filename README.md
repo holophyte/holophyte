@@ -157,8 +157,8 @@ bunx vitest run path   # Run specific test file
 
 **E2E Tests (Playwright):**
 ```bash
-bun run test:e2e          # Ephemeral Convex — do NOT have convex:local running
-bun run test:e2e:isolated # E2E in a temp worktree — safe to run alongside dev Convex
+bun run test:e2e          # Ephemeral Convex — stop convex:local first
+bun run test:e2e:isolated # Ephemeral Convex in a temp worktree — won't conflict with dev Convex
 ```
 
 ## Git Workflow
