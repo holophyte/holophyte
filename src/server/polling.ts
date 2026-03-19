@@ -38,6 +38,7 @@ export interface PendingMessage {
 }
 
 const MACHINE_ID = process.env.MACHINE_ID ?? hostname();
+const INSTANCE_ID = `${MACHINE_ID}:${process.pid}`;
 export const POLL_INTERVAL_MS = 2000;
 let pollTimer: ReturnType<typeof setInterval> | null = null;
 let polling = false;
@@ -129,6 +130,7 @@ export async function companionPoll() {
         await heartbeatClient.mutation(api.companion.companionHeartbeat, {
           activeSessionCount: getActiveSessions().length,
           machineId: MACHINE_ID,
+          instanceId: INSTANCE_ID,
           url: companionUrl,
         });
         heartbeatFailureLogged = false;
@@ -239,7 +241,7 @@ export async function startCompanion(url: string): Promise<void> {
       if (
         status &&
         now - status.lastSeen < DUPLICATE_THRESHOLD_MS &&
-        status.machineId !== MACHINE_ID
+        status.instanceId !== INSTANCE_ID
       ) {
         const secondsAgo = Math.round((now - status.lastSeen) / 1000);
         console.error(
