@@ -6,9 +6,10 @@ vi.mock('node:fs/promises', () => ({
   mkdir: vi.fn().mockResolvedValue(undefined),
   writeFile: vi.fn().mockResolvedValue(undefined),
   rename: vi.fn().mockResolvedValue(undefined),
+  unlink: vi.fn().mockResolvedValue(undefined),
 }));
 
-import { mkdir, rename, writeFile } from 'node:fs/promises';
+import { mkdir, rename, unlink, writeFile } from 'node:fs/promises';
 
 // Set up Bun global mock before importing the module
 const mockBunFile = vi.fn();
@@ -21,13 +22,16 @@ vi.stubGlobal('Bun', {
 
 import {
   createFetchToken,
-  getTokenFilePath,
+  deriveEnvironment,
+  getTokensFilePath,
   readTokenFile,
   refreshAuthToken,
   signInAnonymous,
   type TokenFileData,
   writeTokenFile,
 } from './auth-token';
+
+const TEST_DEPLOYMENT = 'prod:handsome-marmot-123';
 
 const validTokenData: TokenFileData = {
   convexUrl: 'https://example.convex.cloud',
@@ -45,10 +49,47 @@ function makeMockFile(options: {
   };
 }
 
-describe('getTokenFilePath', () => {
-  it('returns a path ending in .holophyte/token.json', () => {
-    const path = getTokenFilePath();
-    expect(path).toMatch(/\.holophyte[/\\]token\.json$/);
+/**
+ * Sets up mockBunFile to return different mock files based on the path.
+ * Matches on filename suffix (e.g. 'tokens.json', 'token.json').
+ */
+function setupMockFiles(
+  files: Record<string, ReturnType<typeof makeMockFile>>,
+) {
+  mockBunFile.mockImplementation((path: string) => {
+    for (const [suffix, mock] of Object.entries(files)) {
+      if (path.endsWith(suffix)) return mock;
+    }
+    return makeMockFile({ exists: false });
+  });
+}
+
+describe('getTokensFilePath', () => {
+  it('returns a path ending in .holophyte/tokens.json', () => {
+    const path = getTokensFilePath();
+    expect(path).toMatch(/\.holophyte[/\\]tokens\.json$/);
+  });
+});
+
+describe('deriveEnvironment', () => {
+  it('returns "production" for prod: prefix', () => {
+    expect(deriveEnvironment('prod:handsome-marmot-123')).toBe('production');
+  });
+
+  it('returns "development" for dev: prefix', () => {
+    expect(deriveEnvironment('dev:some-name')).toBe('development');
+  });
+
+  it('returns "local" for local- prefix', () => {
+    expect(deriveEnvironment('local-ko_vial-holophyte-9133')).toBe('local');
+  });
+
+  it('returns "local" for local: prefix', () => {
+    expect(deriveEnvironment('local:something')).toBe('local');
+  });
+
+  it('returns "unknown" for unrecognized prefixes', () => {
+    expect(deriveEnvironment('staging:foo')).toBe('unknown');
   });
 });
 
@@ -56,87 +97,172 @@ describe('readTokenFile', () => {
   beforeEach(() => {
     mockBunFile.mockReset();
     mockBunWrite.mockReset().mockResolvedValue(undefined);
+    vi.mocked(mkdir).mockReset().mockResolvedValue(undefined);
+    vi.mocked(writeFile).mockReset().mockResolvedValue(undefined);
+    vi.mocked(rename).mockReset().mockResolvedValue(undefined);
+    vi.mocked(unlink).mockReset().mockResolvedValue(undefined);
   });
 
-  it('returns null when file does not exist', async () => {
-    mockBunFile.mockReturnValue(makeMockFile({ exists: false }));
+  it('returns missing when neither tokens.json nor token.json exists', async () => {
+    setupMockFiles({
+      'tokens.json': makeMockFile({ exists: false }),
+      'token.json': makeMockFile({ exists: false }),
+    });
 
-    const result = await readTokenFile();
+    const result = await readTokenFile(TEST_DEPLOYMENT);
 
-    expect(result).toBeNull();
+    expect(result).toEqual({ status: 'missing' });
   });
 
-  it('returns null for invalid JSON (throws during parse)', async () => {
-    mockBunFile.mockReturnValue(
-      makeMockFile({
+  it('returns invalid when tokens.json contains bad JSON', async () => {
+    setupMockFiles({
+      'tokens.json': makeMockFile({
         exists: true,
         json: vi.fn().mockRejectedValue(new SyntaxError('Unexpected token')),
       }),
-    );
+    });
 
-    const result = await readTokenFile();
+    const result = await readTokenFile(TEST_DEPLOYMENT);
 
-    expect(result).toBeNull();
+    expect(result).toEqual({
+      status: 'invalid',
+      reason: 'Token file contains invalid JSON',
+    });
   });
 
-  it('returns null when JSON is missing required fields', async () => {
-    mockBunFile.mockReturnValue(
-      makeMockFile({
+  it('returns missing when tokens.json exists but has no entry for the deployment', async () => {
+    setupMockFiles({
+      'tokens.json': makeMockFile({
         exists: true,
-        json: vi.fn().mockResolvedValue({ convexUrl: 'https://example.com' }),
+        json: vi.fn().mockResolvedValue({ 'other-deployment': {} }),
       }),
-    );
+    });
 
-    const result = await readTokenFile();
+    const result = await readTokenFile(TEST_DEPLOYMENT);
 
-    expect(result).toBeNull();
+    expect(result).toEqual({ status: 'missing' });
   });
 
-  it('returns null when token field is not a string', async () => {
-    mockBunFile.mockReturnValue(
-      makeMockFile({
-        exists: true,
-        json: vi.fn().mockResolvedValue({
-          convexUrl: 'https://example.com',
-          token: 42,
-          refreshToken: 'refresh',
-        }),
-      }),
-    );
-
-    const result = await readTokenFile();
-
-    expect(result).toBeNull();
-  });
-
-  it('returns null when convexUrl is not HTTPS or localhost', async () => {
-    mockBunFile.mockReturnValue(
-      makeMockFile({
+  it('returns invalid when the deployment entry is missing required fields', async () => {
+    setupMockFiles({
+      'tokens.json': makeMockFile({
         exists: true,
         json: vi.fn().mockResolvedValue({
-          convexUrl: 'http://evil.com',
-          token: 'jwt',
-          refreshToken: 'refresh',
+          [TEST_DEPLOYMENT]: { convexUrl: 'https://example.com' },
         }),
       }),
-    );
+    });
 
-    const result = await readTokenFile();
+    const result = await readTokenFile(TEST_DEPLOYMENT);
 
-    expect(result).toBeNull();
+    expect(result).toEqual({
+      status: 'invalid',
+      reason: `Entry for ${TEST_DEPLOYMENT} is missing required fields`,
+    });
   });
 
-  it('returns parsed data for a valid token file', async () => {
-    mockBunFile.mockReturnValue(
-      makeMockFile({
+  it('returns invalid when convexUrl is not HTTPS or localhost', async () => {
+    setupMockFiles({
+      'tokens.json': makeMockFile({
         exists: true,
-        json: vi.fn().mockResolvedValue({ ...validTokenData }),
+        json: vi.fn().mockResolvedValue({
+          [TEST_DEPLOYMENT]: {
+            convexUrl: 'http://evil.com',
+            token: 'jwt',
+            refreshToken: 'refresh',
+          },
+        }),
       }),
-    );
+    });
 
-    const result = await readTokenFile();
+    const result = await readTokenFile(TEST_DEPLOYMENT);
 
-    expect(result).toEqual(validTokenData);
+    expect(result).toEqual({
+      status: 'invalid',
+      reason: 'convexUrl must be HTTPS or localhost',
+    });
+  });
+
+  it('returns ok with parsed data for a valid entry', async () => {
+    setupMockFiles({
+      'tokens.json': makeMockFile({
+        exists: true,
+        json: vi.fn().mockResolvedValue({
+          [TEST_DEPLOYMENT]: {
+            ...validTokenData,
+            environment: 'production',
+            updatedAt: '2026-03-18T00:00:00Z',
+          },
+        }),
+      }),
+    });
+
+    const result = await readTokenFile(TEST_DEPLOYMENT);
+
+    expect(result).toEqual({ status: 'ok', data: validTokenData });
+  });
+
+  it('accepts localhost convexUrl for local deployments', async () => {
+    const localDeployment = 'local-ko_vial-holophyte-9133';
+    const localTokenData = {
+      convexUrl: 'http://127.0.0.1:3210',
+      token: 'local-jwt',
+      refreshToken: 'local-refresh',
+    };
+
+    setupMockFiles({
+      'tokens.json': makeMockFile({
+        exists: true,
+        json: vi.fn().mockResolvedValue({
+          [localDeployment]: {
+            ...localTokenData,
+            environment: 'local',
+            updatedAt: '2026-03-18T00:00:00Z',
+          },
+        }),
+      }),
+    });
+
+    const result = await readTokenFile(localDeployment);
+
+    expect(result).toEqual({ status: 'ok', data: localTokenData });
+  });
+
+  describe('legacy migration', () => {
+    it('migrates token.json into tokens.json when tokens.json does not exist', async () => {
+      setupMockFiles({
+        'tokens.json': makeMockFile({ exists: false }),
+        'token.json': makeMockFile({
+          exists: true,
+          json: vi.fn().mockResolvedValue({ ...validTokenData }),
+        }),
+      });
+
+      const result = await readTokenFile(TEST_DEPLOYMENT);
+
+      expect(result).toEqual({ status: 'ok', data: validTokenData });
+      // Should have written tokens.json
+      expect(writeFile).toHaveBeenCalled();
+      // Should have deleted legacy file
+      expect(unlink).toHaveBeenCalled();
+    });
+
+    it('returns invalid when legacy token.json has bad data', async () => {
+      setupMockFiles({
+        'tokens.json': makeMockFile({ exists: false }),
+        'token.json': makeMockFile({
+          exists: true,
+          json: vi.fn().mockResolvedValue({ convexUrl: 'https://example.com' }),
+        }),
+      });
+
+      const result = await readTokenFile(TEST_DEPLOYMENT);
+
+      expect(result).toEqual({
+        status: 'invalid',
+        reason: 'Legacy token file is missing required fields',
+      });
+    });
   });
 });
 
@@ -149,18 +275,12 @@ describe('writeTokenFile', () => {
     vi.mocked(rename).mockReset().mockResolvedValue(undefined);
   });
 
-  it('writes the correct JSON to a temp file', async () => {
-    await writeTokenFile(validTokenData);
-
-    expect(writeFile).toHaveBeenCalledWith(
-      `${getTokenFilePath()}.tmp`,
-      JSON.stringify(validTokenData, null, 2),
-      { mode: 0o600 },
-    );
-  });
-
   it('creates the token directory with recursive flag and 0700', async () => {
-    await writeTokenFile(validTokenData);
+    setupMockFiles({
+      'tokens.json': makeMockFile({ exists: false }),
+    });
+
+    await writeTokenFile(TEST_DEPLOYMENT, validTokenData);
 
     expect(mkdir).toHaveBeenCalledWith(expect.stringMatching(/\.holophyte$/), {
       recursive: true,
@@ -168,12 +288,76 @@ describe('writeTokenFile', () => {
     });
   });
 
+  it('writes a deployment-keyed entry with environment and updatedAt', async () => {
+    setupMockFiles({
+      'tokens.json': makeMockFile({ exists: false }),
+    });
+
+    await writeTokenFile(TEST_DEPLOYMENT, validTokenData);
+
+    const writtenJson = vi.mocked(writeFile).mock.calls[0]?.[1] as string;
+    const parsed = JSON.parse(writtenJson);
+    expect(parsed[TEST_DEPLOYMENT]).toMatchObject({
+      environment: 'production',
+      convexUrl: validTokenData.convexUrl,
+      token: validTokenData.token,
+      refreshToken: validTokenData.refreshToken,
+    });
+    expect(parsed[TEST_DEPLOYMENT].updatedAt).toBeDefined();
+  });
+
+  it('merges with existing entries when tokens.json already has data', async () => {
+    const existingEntry = {
+      'other-deployment': {
+        environment: 'local',
+        convexUrl: 'http://localhost:3210',
+        token: 'other-jwt',
+        refreshToken: 'other-refresh',
+        updatedAt: '2026-01-01T00:00:00Z',
+      },
+    };
+
+    setupMockFiles({
+      'tokens.json': makeMockFile({
+        exists: true,
+        json: vi.fn().mockResolvedValue(existingEntry),
+      }),
+    });
+
+    await writeTokenFile(TEST_DEPLOYMENT, validTokenData);
+
+    const writtenJson = vi.mocked(writeFile).mock.calls[0]?.[1] as string;
+    const parsed = JSON.parse(writtenJson);
+    // Existing entry preserved
+    expect(parsed['other-deployment']).toBeDefined();
+    // New entry added
+    expect(parsed[TEST_DEPLOYMENT]).toBeDefined();
+  });
+
   it('atomically renames temp file to final path', async () => {
-    await writeTokenFile(validTokenData);
+    setupMockFiles({
+      'tokens.json': makeMockFile({ exists: false }),
+    });
+
+    await writeTokenFile(TEST_DEPLOYMENT, validTokenData);
 
     expect(rename).toHaveBeenCalledWith(
-      `${getTokenFilePath()}.tmp`,
-      getTokenFilePath(),
+      `${getTokensFilePath()}.tmp`,
+      getTokensFilePath(),
+    );
+  });
+
+  it('writes with restricted permissions (0600)', async () => {
+    setupMockFiles({
+      'tokens.json': makeMockFile({ exists: false }),
+    });
+
+    await writeTokenFile(TEST_DEPLOYMENT, validTokenData);
+
+    expect(writeFile).toHaveBeenCalledWith(
+      `${getTokensFilePath()}.tmp`,
+      expect.any(String),
+      { mode: 0o600 },
     );
   });
 });
@@ -367,6 +551,7 @@ describe('createFetchToken', () => {
 
   beforeEach(() => {
     fetchSpy = vi.spyOn(globalThis, 'fetch');
+    mockBunFile.mockReset();
     vi.mocked(writeFile).mockReset().mockResolvedValue(undefined);
     vi.mocked(rename).mockReset().mockResolvedValue(undefined);
     vi.mocked(mkdir).mockReset().mockResolvedValue(undefined);
@@ -377,7 +562,7 @@ describe('createFetchToken', () => {
   });
 
   it('returns current token when forceRefreshToken is false', async () => {
-    const fetchToken = createFetchToken(validTokenData);
+    const fetchToken = createFetchToken(TEST_DEPLOYMENT, validTokenData);
 
     const token = await fetchToken({ forceRefreshToken: false });
 
@@ -397,7 +582,12 @@ describe('createFetchToken', () => {
       }),
     );
 
-    const fetchToken = createFetchToken(validTokenData);
+    // Mock for writeTokenFile's read of existing tokens.json
+    setupMockFiles({
+      'tokens.json': makeMockFile({ exists: false }),
+    });
+
+    const fetchToken = createFetchToken(TEST_DEPLOYMENT, validTokenData);
     const token = await fetchToken({ forceRefreshToken: true });
 
     expect(fetchSpy).toHaveBeenCalledTimes(1);
@@ -416,7 +606,11 @@ describe('createFetchToken', () => {
       }),
     );
 
-    const fetchToken = createFetchToken(validTokenData);
+    setupMockFiles({
+      'tokens.json': makeMockFile({ exists: false }),
+    });
+
+    const fetchToken = createFetchToken(TEST_DEPLOYMENT, validTokenData);
     await fetchToken({ forceRefreshToken: true });
 
     // After refresh, forceRefreshToken:false should return the new token
@@ -447,7 +641,11 @@ describe('createFetchToken', () => {
         }),
     );
 
-    const fetchToken = createFetchToken(validTokenData);
+    setupMockFiles({
+      'tokens.json': makeMockFile({ exists: false }),
+    });
+
+    const fetchToken = createFetchToken(TEST_DEPLOYMENT, validTokenData);
 
     // Fire two concurrent refresh calls
     const [result1, result2] = await Promise.all([
@@ -461,7 +659,7 @@ describe('createFetchToken', () => {
     expect(result2).toBe('refreshed-jwt');
   });
 
-  it('persists updated tokens to the token file after a successful refresh', async () => {
+  it('persists updated tokens to tokens.json after a successful refresh', async () => {
     const newTokens = { token: 'new-jwt', refreshToken: 'new-refresh' };
     fetchSpy.mockResolvedValue(
       new Response(JSON.stringify({ value: { tokens: newTokens } }), {
@@ -470,28 +668,34 @@ describe('createFetchToken', () => {
       }),
     );
 
-    const fetchToken = createFetchToken(validTokenData);
+    setupMockFiles({
+      'tokens.json': makeMockFile({ exists: false }),
+    });
+
+    const fetchToken = createFetchToken(TEST_DEPLOYMENT, validTokenData);
     await fetchToken({ forceRefreshToken: true });
 
+    // Should have written to tokens.json.tmp
     expect(writeFile).toHaveBeenCalledWith(
-      `${getTokenFilePath()}.tmp`,
-      JSON.stringify(
-        {
-          convexUrl: validTokenData.convexUrl,
-          token: 'new-jwt',
-          refreshToken: 'new-refresh',
-        },
-        null,
-        2,
-      ),
+      `${getTokensFilePath()}.tmp`,
+      expect.any(String),
       { mode: 0o600 },
     );
+
+    // Verify the written content contains the deployment-keyed entry
+    const writtenJson = vi.mocked(writeFile).mock.calls[0]?.[1] as string;
+    const parsed = JSON.parse(writtenJson);
+    expect(parsed[TEST_DEPLOYMENT]).toMatchObject({
+      convexUrl: validTokenData.convexUrl,
+      token: 'new-jwt',
+      refreshToken: 'new-refresh',
+    });
   });
 
   it('returns null when refresh fails', async () => {
     fetchSpy.mockResolvedValue(new Response(null, { status: 500 }));
 
-    const fetchToken = createFetchToken(validTokenData);
+    const fetchToken = createFetchToken(TEST_DEPLOYMENT, validTokenData);
     const token = await fetchToken({ forceRefreshToken: true });
 
     expect(token).toBeNull();
@@ -518,7 +722,11 @@ describe('createFetchToken', () => {
         }),
       );
 
-    const fetchToken = createFetchToken(validTokenData);
+    setupMockFiles({
+      'tokens.json': makeMockFile({ exists: false }),
+    });
+
+    const fetchToken = createFetchToken(TEST_DEPLOYMENT, validTokenData);
 
     const token1 = await fetchToken({ forceRefreshToken: true });
     const token2 = await fetchToken({ forceRefreshToken: true });
@@ -538,7 +746,7 @@ describe('createFetchToken', () => {
     );
 
     const ephemeralToken = { ...validTokenData, ephemeral: true as const };
-    const fetchToken = createFetchToken(ephemeralToken);
+    const fetchToken = createFetchToken(TEST_DEPLOYMENT, ephemeralToken);
     await fetchToken({ forceRefreshToken: true });
 
     expect(writeFile).not.toHaveBeenCalled();
@@ -555,7 +763,7 @@ describe('createFetchToken', () => {
     );
 
     const tokenData = { ...validTokenData, ephemeral: true as const };
-    const fetchToken = createFetchToken(tokenData);
+    const fetchToken = createFetchToken(TEST_DEPLOYMENT, tokenData);
     await fetchToken({ forceRefreshToken: true });
 
     expect(tokenData.token).toBe('rotated-jwt');
