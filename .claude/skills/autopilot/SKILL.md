@@ -181,7 +181,7 @@ Wait for all PR checks to complete, then fetch new comments:
 bun run pr-comments -- --poll <PR_NUMBER>
 ```
 
-This uses `gh pr checks --watch` to block until all checks finish, then shows any new PR comments.
+This uses `gh pr checks --watch` to block until all checks finish, then shows any new review bot comments.
 
 - If no new comments after checks complete, exit successfully — review bots found nothing to flag
 

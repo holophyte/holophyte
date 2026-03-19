@@ -125,7 +125,7 @@ Wait for all PR checks (including review bots) to complete, then iterate on comm
    ```bash
    bun run pr-comments -- --poll <PR_NUMBER>
    ```
-   This uses `gh pr checks --watch` to block until all checks finish, then shows any new PR comments.
+   This uses `gh pr checks --watch` to block until all checks finish, then shows any new review bot comments.
 2. **Triage new comments** as:
    - **Actionable** (bugs, security, clear quality issues) — fix the code, reply with explanation
    - **Dismissable** (style conflicts, false positives, over-engineering) — reply explaining why
