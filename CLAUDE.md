@@ -4,7 +4,7 @@ The role of this file is to describe common mistakes and confusion points that a
 
 ## What is Holophyte?
 
-Project management app for running parallel Claude Code sessions. A kanban board UI lets you create tasks with prompts, launch Claude Code sessions via the Agent SDK per task, and stream structured events to the browser via WebSocket.
+Project management app for running parallel Claude Code sessions. A kanban board UI lets you create tasks with prompts, launch Claude Code sessions via the Agent SDK per task, and stream structured events to the browser via Convex real-time queries.
 
 ## Development Principles
 
@@ -39,7 +39,7 @@ Single test file: `bunx vitest run src/claude/manager.test.ts`
 
 Use **Bun** for everything — never Node.js, npm, vite, or express. Bun auto-loads `.env` files.
 
-- `Bun.serve()` for HTTP + WebSocket (not express)
+- `Bun.serve()` for HTTP (not express)
 - `Bun.file()` over `node:fs` readFile/writeFile
 - `Bun.$\`cmd\`` over execa
 - `bun install`, `bun run`, `bunx` over npm/yarn/pnpm equivalents
@@ -73,26 +73,27 @@ Strict mode with additional checks:
 ## Architecture
 
 ```
-src/server.ts              → Bun.serve() with routes + WebSocket handler
+src/server.ts              → Bun.serve() with routes (auth proxy, directory picker, config)
 src/claude/manager.ts      → Claude Agent SDK session management (spawn/stop/approve)
+src/server/polling.ts      → Companion polling logic (reads from Convex, processes sessions)
 src/frontend/index.tsx     → React entry, Convex client setup
 src/frontend/App.tsx       → Main layout: Sidebar | KanbanBoard + SessionPanel | TaskDetailPanel
 src/frontend/stores/app.ts → Zustand store (selected repo/task, session state)
-src/frontend/hooks/        → useSession (WebSocket + SDK event state)
+src/frontend/hooks/        → useSession (Convex real-time subscriptions for session events)
 src/frontend/components/   → UI components (Kanban*, Task*, Session*, Sidebar, dialogs)
 src/frontend/components/ui → Radix UI primitives (Button, Dialog, Input, etc.)
-convex/schema.ts           → Data model: repos, tasks, sessions
-convex/{repos,tasks,sessions}.ts → Convex queries and mutations
+convex/schema.ts           → Data model (14 tables + auth tables)
+convex/*.ts                → Convex queries and mutations
 scripts/                   → Shared shell scripts (convex-local, dev-local, worktree-create, pr-comments)
 .githooks/pre-commit       → Pre-commit hook (codegen + stage + lint + typecheck)
 ```
 
 **Data flow for SDK sessions:**
-1. Frontend POSTs to `/api/sessions/start` with taskId + prompt + model
-2. Server spawns Claude Code via Claude Agent SDK (`@anthropic-ai/claude-agent-sdk`)
-3. Frontend opens WebSocket to `/ws/session/:sessionId`
-4. SDK events → `consumeIterator()` → WebSocket → SessionPanel conversation UI in browser
-5. User approvals → WebSocket → `respondToApproval()` → SDK resumes
+1. Frontend calls Convex mutation `api.sessions.create` with taskId + prompt + model
+2. Companion process spawns Claude Code via Claude Agent SDK (`@anthropic-ai/claude-agent-sdk`)
+3. SDK events are persisted to Convex `sessionEvents` table via `consumeIterator()` → `bufferEvent()` → Convex mutations
+4. Frontend subscribes to session events via `useSession()` hook using Convex real-time queries
+5. User approvals resolve via Convex mutation `api.pendingApprovals.resolve()` → companion reads and resumes SDK
 
 **Frontend ↔ backend communication:** Frontend communicates with the backend through Convex mutations/queries — no direct fetch() calls to localhost. The companion process polls Convex for work via internal HTTP endpoints. When adding new features that need backend interaction, create a Convex mutation and call it from the frontend with useMutation/useAction. The exception is operations that require local machine access (directory picker, filesystem operations, etc.) — those go through the companion's local API.
 
@@ -100,8 +101,8 @@ scripts/                   → Shared shell scripts (convex-local, dev-local, wo
 
 ## Convex (Real-time Database)
 
-- Three tables: `repos`, `tasks` (with kanban statuses), `sessions`
-- Repo/task deletions cascade manually (repo → tasks → sessions)
+- Multi-tenant with orgs; repos scoped to `orgId`; tasks/sessions cascade through repo
+- Repo/task/session deletions cascade manually
 - All functions use object-style with `args` (validated with `v` from `convex/values`) and `handler`
 - Timestamps stored as `v.number()` using `Date.now()`
 - Indexes named descriptively: `by_repo_status`, `by_task`, `by_path`
@@ -138,7 +139,7 @@ scripts/                   → Shared shell scripts (convex-local, dev-local, wo
 
 ## Frontend Patterns
 
-- **Minimize `useEffect`** — Follow [You Might Not Need an Effect](https://react.dev/learn/you-might-not-need-an-effect). Only use `useEffect` for synchronizing with external systems (WebSocket, DOM APIs, timers, keyboard listeners). Do NOT use `useEffect` for:
+- **Minimize `useEffect`** — Follow [You Might Not Need an Effect](https://react.dev/learn/you-might-not-need-an-effect). Only use `useEffect` for synchronizing with external systems (DOM APIs, timers, keyboard listeners). Do NOT use `useEffect` for:
   - **Deriving state**: Compute during render or use `useMemo` instead of `setState` inside an effect
   - **Event responses**: Put logic in the event handler that triggers it, not in an effect that watches for the result
   - **Resetting state on prop change**: Use the `key` prop to reset component state instead of `useEffect` + `setState`
@@ -231,7 +232,7 @@ Server configuration lives in environment variables with sensible defaults:
 
 - **`convex/_generated/` is committed** — Convex codegen can't run in CI/Vercel, so generated types are checked into git. The pre-commit hook auto-runs codegen and stages the output. If you change `convex/schema.ts` or Convex functions, the hook keeps `_generated/` in sync.
 - Bun.serve() route handlers need explicit `Request` type annotation in strict mode
-- Bun.serve() generic `<WsData>` types the `ws.data` object
+- Bun.serve() generic type parameter types the server's context data
 - Biome doesn't understand CSS `theme()` function — use `var()` instead
 - `useSemanticElements` biome rule is set to "warn" (kanban board needs div-based drag-drop)
 - `bunfig.toml` configures `bun-plugin-tailwind` under `[serve.static]`

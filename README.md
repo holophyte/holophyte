@@ -2,13 +2,13 @@
 
 **Project management app for running parallel Claude Code sessions.**
 
-Holophyte is a kanban board application that lets you create tasks with prompts, launch Claude Code sessions via the Agent SDK per task, and stream structured events to your browser via WebSocket in real-time.
+Holophyte is a kanban board application that lets you create tasks with prompts, launch Claude Code sessions via the Agent SDK per task, and stream structured events to your browser via Convex real-time queries.
 
 ## Features
 
 - **Kanban Board UI** — Organize tasks across customizable workflow states
 - **Session Per Task** — Each task spawns its own Claude Code session via the Agent SDK
-- **Real-time Streaming** — WebSocket-powered structured SDK events rendered in an assistant-ui conversation UI
+- **Real-time Streaming** — Convex-powered structured SDK events rendered in an assistant-ui conversation UI
 - **Real-time Database** — Convex provides instant synchronization across all clients
 - **Parallel Development** — Git worktrees for isolated feature branches with per-workspace local Convex backends
 
@@ -16,7 +16,7 @@ Holophyte is a kanban board application that lets you create tasks with prompts,
 
 - **Runtime:** [Bun](https://bun.sh/) — Fast JavaScript runtime with native TypeScript support
 - **Frontend:** [React 19](https://react.dev/) + [Zustand](https://zustand.docs.pmnd.rs/) (state management)
-- **Backend:** Bun.serve() with routes + WebSocket handler
+- **Backend:** Bun.serve() with routes + companion polling
 - **Database:** [Convex](https://convex.dev/) — Real-time database with automatic synchronization
 - **Sessions:** [Claude Agent SDK](https://github.com/anthropics/claude-agent-sdk) (`@anthropic-ai/claude-agent-sdk`) + [assistant-ui](https://www.assistant-ui.com/)
 - **Styling:** [Tailwind CSS v4](https://tailwindcss.com/) (CSS-first config)
@@ -84,7 +84,7 @@ bun run convex:dev       # Start cloud Convex dev server
 bun run convex:local     # Start local Convex backend (reads .dev-ports)
 bun run test             # Run unit tests (vitest)
 bun run test:ui          # Vitest UI dashboard
-bun run test:e2e         # Playwright E2E tests (requires convex:dev running)
+bun run test:e2e         # Playwright E2E tests (ephemeral Convex, fully self-contained)
 bun run lint             # Biome check
 bun run lint:fix         # Biome auto-fix
 bun run check            # lint + typecheck + test (all-in-one)
@@ -99,7 +99,7 @@ bun run docs:dev         # Start Docusaurus docs server
 
 ```
 ├── src/
-│   ├── server.ts              # Bun.serve() with routes + WebSocket handler
+│   ├── server.ts              # Bun.serve() with routes (auth, config, directory picker)
 │   ├── claude/
 │   │   └── manager.ts         # Claude Agent SDK session management (spawn/stop/approve)
 │   └── frontend/
@@ -110,7 +110,7 @@ bun run docs:dev         # Start Docusaurus docs server
 │       ├── components/        # UI components (Kanban*, Task*, Session*, Sidebar, etc.)
 │       └── components/ui/     # Radix UI primitives
 ├── convex/
-│   ├── schema.ts              # Data model: repos, tasks, sessions
+│   ├── schema.ts              # Data model (multi-tenant with orgs)
 │   └── *.ts                   # Convex queries and mutations
 ├── scripts/                   # Shell scripts (worktree, dev, etc.)
 └── .githooks/                 # Git hooks (pre-commit)
@@ -120,19 +120,15 @@ bun run docs:dev         # Start Docusaurus docs server
 
 ### Data Flow for SDK Sessions
 
-1. Frontend POSTs to `/api/sessions/start` with `taskId` + `prompt` + `model`
-2. Server spawns Claude Code via Claude Agent SDK (`@anthropic-ai/claude-agent-sdk`)
-3. Frontend opens WebSocket to `/ws/session/:sessionId`
-4. SDK events → `consumeIterator()` → WebSocket → SessionPanel conversation UI in browser
-5. User approvals → WebSocket → `respondToApproval()` → SDK resumes
+1. Frontend calls Convex mutation `api.sessions.create` with `taskId` + `prompt` + `model`
+2. Companion process spawns Claude Code via Claude Agent SDK (`@anthropic-ai/claude-agent-sdk`)
+3. SDK events are persisted to Convex `sessionEvents` table via `consumeIterator()` → `bufferEvent()` → Convex mutations
+4. Frontend subscribes to session events via `useSession()` hook using Convex real-time queries
+5. User approvals resolve via Convex mutation `api.pendingApprovals.resolve()` → companion reads and resumes SDK
 
 ### Database Schema
 
-Convex provides real-time synchronization with three main tables:
-
-- **repos** — Git repositories
-- **tasks** — Kanban tasks (with status, prompt, assigned repo)
-- **sessions** — Active Claude Code terminal sessions per task
+Convex provides real-time synchronization with multi-tenant tables scoped to organizations. Key tables include repos, tasks, sessions, session events, pending approvals, labels, subtasks, and more — see `convex/schema.ts` for the full schema.
 
 ## Development Principles
 
@@ -161,7 +157,8 @@ bunx vitest run path   # Run specific test file
 
 **E2E Tests (Playwright):**
 ```bash
-bun run test:e2e       # Requires convex:dev running separately
+bun run test:e2e          # Ephemeral Convex — stop convex:local first
+bun run test:e2e:isolated # Ephemeral Convex in a temp worktree — won't conflict with dev Convex
 ```
 
 ## Git Workflow

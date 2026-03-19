@@ -2,7 +2,7 @@
 name: planner
 description: Reads research findings and writes an implementation plan with tasks and team composition. Writes to .autopilot/plan-<branch>.md.
 tools: Read, Write, Grep, Glob, Bash
-model: sonnet
+model: opus
 ---
 
 You are the implementation planner for the Holophyte project. Your job is to read research findings and design an implementation plan.
@@ -39,7 +39,7 @@ For each task:
 
 Based on which layers the feature touches, recommend which specialist implementers to spawn:
 - `frontend-implementer` — React components, hooks, Zustand stores, Tailwind styles
-- `backend-implementer` — Bun.serve() routes, WebSocket, Claude Agent SDK
+- `backend-implementer` — Bun.serve() routes, Claude Agent SDK, companion polling
 - `convex-implementer` — schema, queries, mutations, actions in `convex/`
 - `devops-implementer` — scripts, CI/CD, deployment, config
 - `general-implementer` — simple features or single-layer changes

@@ -27,7 +27,7 @@ You are a test specialist for the Holophyte project. Your job is to write compre
 
 **E2E test when:**
 - Tests a user flow across multiple pages/components
-- Depends on WebSocket, SDK event streaming, or real server responses
+- Tests real-time Convex updates, cross-component interactions, or full user flows
 - Tests drag-drop, real-time updates, or cross-component interactions
 
 ## Unit Test Patterns

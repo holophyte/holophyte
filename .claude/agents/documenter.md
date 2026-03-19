@@ -55,7 +55,7 @@ Add TSDoc `/** */` comments to all new exported functions and interfaces:
  *
  * @param taskId - The Convex task ID to associate with the session
  * @param prompt - The initial prompt to send to Claude Code
- * @returns The session ID and WebSocket endpoint
+ * @returns The Convex session ID for subscribing to real-time events via useSession()
  */
 ```
 

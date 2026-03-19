@@ -14,7 +14,7 @@ You are the devops implementer for the Holophyte project agent team. Your domain
 3. Read `.autopilot/plan-<branch>.md` for implementation guidance (using the branch name as suffix)
 4. Claim infrastructure tasks from the task list
 5. Implement following the patterns below
-6. Do not write tests — the tester handles that
+6. Write tests for new logic and bug fixes (see TDD section below); coordinate broader test coverage with the tester
 7. Coordinate with the reviewer — fix issues they flag before moving on
 
 ## Conventions
@@ -46,3 +46,31 @@ Scripts in `scripts/` are shared shell scripts:
 - Each worktree gets its own `.dev-ports` with auto-assigned ports
 - `CONVEX_DEPLOYMENT` names are unique per workspace
 - `convex-local.sh` validates that `CONVEX_URL` ports match `.dev-ports`
+
+## Test-Driven Development
+
+Prefer TDD when adding **new logic** (utility functions, script behavior with clear inputs/outputs) or **fixing bugs**:
+
+1. Write a failing test first — describe the desired behavior
+2. Verify the test fails — run it. If it passes, the test is wrong
+3. Implement the minimal code to make it pass
+4. Verify it passes
+5. Refactor while keeping tests green
+
+**Skip TDD for:**
+- Configuration/wiring changes (imports, exports, route registration)
+- Shell scripts (test manually instead)
+- Prototyping or exploratory work
+
+This is guidance, not a mandate. Use judgment.
+
+## Verification Before Completion
+
+Before marking any task complete:
+
+1. Run all relevant checks (lint, typecheck, tests)
+2. Read the actual output — don't assume success from no errors
+3. Test the original requirement — does it solve what was asked?
+4. Fresh run — don't trust cached results
+
+Never claim something works without evidence from a fresh run.

@@ -15,6 +15,21 @@ comments until resolved.
 
 ## Process
 
+### 0. Evaluate Complexity (Optional Brainstorm Gate)
+
+Before starting, assess whether the feature needs design discussion:
+
+**Use `/brainstorm` first if:**
+- New data model or schema changes with multiple valid approaches
+- New system boundary (new API endpoint, new Convex action/mutation, new external integration)
+- The feature description is ambiguous or underspecified
+- Multiple architectural approaches exist with meaningful trade-offs
+
+**Skip and proceed to step 1 if:**
+- The approach is obvious from existing patterns
+- The user has given specific, detailed instructions
+- It's a bug fix, refactor, or enhancement to existing behavior
+
 ### 1. Set Up Worktree (if needed)
 
 If not already on a feature branch, create a worktree to avoid disrupting current work:
@@ -47,7 +62,15 @@ Do NOT use EnterPlanMode — write the plan file, then proceed.
 **Note:** `.autopilot/` is gitignored — do not commit research or plan files unless
 the feature spans multiple PRs and you need to preserve context across sessions.
 
-### 4. Implement the Feature
+### 4. Critic Review
+
+Spawn the `critic` agent to adversarially review the plan before implementation:
+
+> Review the implementation plan at `.autopilot/plan-<branch>.md` for this feature. Look for wrong assumptions, missed edge cases, simpler approaches, missing failure modes, and scope creep.
+
+If the critic finds **critical** issues (missed failure modes, wrong assumptions, simpler approaches that invalidate the plan), revise the plan before proceeding. Address **concerns** if they're valid. **Questions** are worth considering but don't block progress.
+
+### 5. Implement the Feature
 
 Implement the feature described in `$ARGUMENTS`, following `.autopilot/plan-<branch>.md`.
 
@@ -67,7 +90,15 @@ bun run test
 - If tests fail, use the `test-fixer` subagent to analyze and fix failures
 - Fix lint/type errors directly
 
-### 5. Self-Review with Subagents
+### 6. Simplify Pass
+
+Spawn a fresh `code-simplifier` agent to review changed code for reuse, quality, and efficiency:
+
+> Review the changes on this branch (`git diff main...HEAD`) for code quality, duplication, and simplification opportunities. Fix any issues found.
+
+This cleans up the implementation before reviewers see it — so they're reviewing the best version, not flagging issues that simplify would have caught.
+
+### 7. Self-Review with Subagents
 
 Before committing, run reviewers in parallel:
 
@@ -80,7 +111,7 @@ Before committing, run reviewers in parallel:
 - **Suggestions** are optional — skip unless clearly beneficial
 - Run quality checks again if changes were made
 
-### 5.5. Documentation, Testing, and Accessibility for New Code
+### 8. Documentation, Testing, and Accessibility for New Code
 
 Check for new and changed files on the branch:
 
@@ -92,14 +123,18 @@ git diff main...HEAD --name-only                     # all changed files
 For each new file:
 - **New reusable UI components or components with multiple visual states** → use the `storybook-writer` subagent to generate a co-located `.stories.tsx`. Skip Storybook for page-level layouts, data-coupled feature components that need extensive Convex mocking, and thin wrappers with no visual complexity.
 - **New `.ts`/`.tsx` exports** → use the `test-writer` subagent to generate co-located tests
-- **New/changed UI components** → use the `a11y-reviewer` subagent to audit accessibility (already done in step 3 — review results here)
+- **New/changed UI components** → use the `a11y-reviewer` subagent to audit accessibility (already done in step 7 — review results here)
 - Add TSDoc `/** */` comments to all new exported functions and interfaces
 
 Skip Storybook/test generation if no new files were added (only modifications to existing files).
 
-#### E2E Tests for New User-Facing Features
+#### E2E Tests
 
-If the changes add or modify user-facing behavior (new UI flows, new pages, new dialogs, changed interactions), write E2E tests using the `test-writer` subagent:
+Write E2E tests for this change. If skipping, state the reason.
+
+Valid skip reasons: backend-only change, config-only change, test-only change, no new user-facing behavior.
+
+If writing E2E tests, use the `e2e-tester` subagent:
 
 > Write Playwright E2E tests for the new/changed user-facing features on this branch.
 > Tests go in `e2e/` directory with pattern `*.spec.ts`.
@@ -111,20 +146,14 @@ If the changes add or modify user-facing behavior (new UI flows, new pages, new 
 > - Scope dialog assertions to `[role="dialog"]` to avoid strict mode collisions
 > - Use `{ exact: true }` for ambiguous text matches
 > - Each test run gets a fresh Convex database — no cleanup needed, but use unique names (e.g. `Date.now()`) to avoid collisions within a run
-> - Do NOT start Convex or the dev server — `bun run test:e2e` handles the full lifecycle
+> - Do NOT start Convex or the dev server manually — `bun run test:e2e:isolated` handles the full lifecycle
 > Review existing specs in `e2e/` for reference patterns.
 
-Run E2E tests to verify:
+#### Docusaurus Documentation
 
-```bash
-bun run test:e2e
-```
+Evaluate docs and state your decision. If skipping, explain why.
 
-Skip E2E test generation for non-UI changes (backend-only, config, tests, docs).
-
-#### Docusaurus Documentation Evaluation
-
-Evaluate whether the changes warrant updating Docusaurus docs. The changes are **doc-worthy** if ANY of these are true:
+The changes are **doc-worthy** if ANY of these are true:
 
 - New public hook, utility, or API endpoint was added
 - New component with non-trivial behavior or complex props was added
@@ -132,29 +161,43 @@ Evaluate whether the changes warrant updating Docusaurus docs. The changes are *
 - New Convex table, query, or mutation was added
 - New agent, skill, or automation pattern was introduced
 
-The changes are **NOT doc-worthy** if ALL of these are true:
-
-- Bug fix or minor refactor with no API surface change
-- Internal implementation detail changed (no public-facing impact)
-- Style-only or config-only changes
-- Test-only or story-only additions
-
 If doc-worthy, use the `doc-writer` subagent:
 
 > Review the changes on this branch (`git diff main...HEAD --name-only`) and update the relevant Docusaurus documentation in `docs/docs/`. Only update pages that are affected by the changes — do not regenerate unrelated docs. Add TSDoc comments to any new exported functions/interfaces that lack them. Verify with `cd docs && bunx docusaurus build`.
+
+#### Pre-Commit Verification Checklist
+
+Before proceeding to commit, verify:
+- [ ] E2E tests: written, or reason for skipping stated
+- [ ] Documentation: updated, or reason for skipping stated
+- [ ] All quality checks pass (lint, typecheck, tests, E2E)
+
+Use `bun run test:e2e:isolated` to run E2E tests without stopping the dev Convex backend — this runs in a temp worktree and avoids port conflicts.
 
 After generating stories, tests, and docs, verify:
 
 ```bash
 bunx vitest run
-bun run test:e2e
+bun run test:e2e:isolated
 timeout 60000 bun run build-storybook
 cd docs && bunx docusaurus build
 ```
 
 Fix any failures before proceeding.
 
-### 6. Commit and Push
+### 9. Agent-Driven Verification
+
+Verify the change works end-to-end before creating the PR. Use whatever tools and approaches make sense for the change — examples include but aren't limited to:
+- Running tests (`bun run test`, `bun run test:e2e:isolated`)
+- Using Playwright MCP to browse the UI and verify flows work visually
+- Curling API endpoints to check responses
+- Reading logs or Convex dashboard output
+- Running the app and exercising the changed behavior
+- Checking database state after mutations
+
+Use your judgment about what verification is appropriate. The goal is to confirm the change actually works, not just that tests pass.
+
+### 10. Commit and Push
 
 ```bash
 git add <relevant files>
@@ -162,7 +205,7 @@ git commit -m "<conventional commit message>"
 git push -u origin $(git branch --show-current)
 ```
 
-### 7. Create or Update PR
+### 11. Create or Update PR
 
 Check if a PR already exists for this branch:
 
@@ -173,7 +216,7 @@ gh pr list --head $(git branch --show-current) --json number --jq '.[0].number'
 - If no PR exists, create one with `gh pr create` — use a conventional prefix in the title (e.g., `feat: add drag reordering to kanban columns`)
 - If PR exists, it's already updated by the push
 
-### 8. Poll for PR Review
+### 12. Poll for PR Review
 
 Wait for all PR checks to complete, then fetch new comments:
 
@@ -185,7 +228,7 @@ This uses `gh pr checks --watch` to block until all checks finish, then shows an
 
 - If no new comments after checks complete, exit successfully — review bots found nothing to flag
 
-### 9. Triage Comments
+### 13. Triage Comments
 
 Read the output from the polling script. Categorize each new comment:
 
@@ -199,7 +242,7 @@ Read the output from the polling script. Categorize each new comment:
 - False positives or misunderstandings of intent
 - Suggestions that would over-engineer the solution
 
-### 10. Address Comments
+### 14. Address Comments
 
 For each actionable comment:
 1. Read the file at the referenced line
@@ -216,7 +259,7 @@ gh api repos/{owner}/{repo}/pulls/<PR>/comments/<COMMENT_ID>/replies \
   -f body="<reply>"
 ```
 
-### 11. Push and Loop
+### 15. Push and Loop
 
 After addressing all comments:
 
@@ -234,9 +277,9 @@ git commit -m "fix: address review feedback"
 git push
 ```
 
-Return to **Step 8** for the next round.
+Return to **Step 12** for the next round.
 
-### 12. Exit Conditions
+### 16. Exit Conditions
 
 Stop the loop when any of these are true:
 
@@ -244,10 +287,18 @@ Stop the loop when any of these are true:
 - **Max 3 iterations** — report remaining unresolved comments to the user
 - **Quality checks fail after 2 retries** — stop and report the errors
 
-### 13. Summary
+### 17. Summary
 
 When exiting, display:
 - Total iterations completed
 - Comments addressed (with links) vs dismissed (with reasons)
 - Any unresolved comments remaining
 - Final PR URL
+
+#### Manual Testing
+
+Include a checklist of what the user should verify manually:
+- Visual design quality (spacing, alignment, colors, responsiveness)
+- UX feel (animations, transitions, loading states, focus behavior)
+- Edge cases with real data (large datasets, empty states, concurrent users)
+- Any flows that depend on external services (OAuth, Convex dashboard, etc.)

@@ -26,7 +26,7 @@ Add `/** */` JSDoc/TSDoc to exported functions, interfaces, and types that lack 
  *
  * @param taskId - The Convex task ID to associate with the session
  * @param prompt - The initial prompt to send to Claude Code
- * @returns The session ID and WebSocket endpoint for real-time event streaming
+ * @returns The Convex session ID for subscribing to real-time events via useSession()
  */
 export function startSession(taskId: string, prompt: string): Session { ... }
 ```
