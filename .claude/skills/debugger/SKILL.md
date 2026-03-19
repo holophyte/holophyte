@@ -38,8 +38,8 @@ Trace data flow **backward** from the failure point.
 
 Form a **specific** hypothesis about the root cause.
 
-- "The WebSocket closes before the approval response is sent because X"
-- Not: "Something is wrong with the WebSocket"
+- "The Convex mutation fails because the session doc is missing the `status` field after the schema migration"
+- Not: "Something is wrong with the session"
 
 Test your hypothesis with **minimal, reversible changes**:
 - Add a log statement or console.log — not a fix
@@ -72,7 +72,7 @@ Watch for these anti-patterns in yourself:
 
 - `bun run --watch` swallows subprocess stderr — use `bun src/server.ts` directly for SDK debugging
 - Check Convex dashboard for function errors (queries, mutations, actions)
-- For WebSocket issues, check **both** server logs and browser console
+- For real-time data issues, check **both** Convex dashboard logs and browser console
 - For E2E failures, check if `convex:local` is running (conflicts with test ephemeral Convex)
 - For auth issues, verify `ALLOW_ANONYMOUS_AUTH=1` is set and URL includes `?auth`
 - SDK sessions: strip `CLAUDECODE` env var from child processes — see `manager.ts`

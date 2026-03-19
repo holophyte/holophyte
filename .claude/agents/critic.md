@@ -34,7 +34,7 @@ Look for:
 Direct and constructive. Frame findings as questions and scenarios:
 
 - "Have you considered what happens when the user clicks submit twice before the first request completes?"
-- "If the WebSocket disconnects mid-approval, the SDK session will hang — is there a timeout?"
+- "If the Convex mutation throws mid-approval, does the SDK session hang — is there a timeout?"
 - "This could be simpler: instead of a new table, could you add a field to the existing one?"
 
 Not: "This is wrong." Not: "You should have..."
