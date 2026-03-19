@@ -8,7 +8,7 @@
 import { api } from '@convex/_generated/api';
 import { ConvexHttpClient } from 'convex/browser';
 import {
-  getTokenFilePath,
+  getTokensFilePath,
   readTokenFile,
   writeTokenFile,
 } from './server/auth-token';
@@ -65,12 +65,16 @@ async function readLine(): Promise<string | null> {
   }
 }
 
-/** Reads CONVEX_URL from env or .env.companion. */
-async function loadConfig(): Promise<{ convexUrl: string }> {
+/** Reads CONVEX_URL and CONVEX_DEPLOYMENT from env or .env.companion. */
+async function loadConfig(): Promise<{
+  convexUrl: string;
+  deployment: string;
+}> {
   let convexUrl = process.env.CONVEX_URL;
+  let deployment = process.env.CONVEX_DEPLOYMENT;
 
   // Fall back to .env.companion
-  if (!convexUrl) {
+  if (!convexUrl || !deployment) {
     try {
       const envFile = await Bun.file('.env.companion').text();
       for (const line of envFile.split('\n')) {
@@ -80,6 +84,8 @@ async function loadConfig(): Promise<{ convexUrl: string }> {
           .trim()
           .replace(/^(['"])(.*)\1$/, '$2');
         if (key?.trim() === 'CONVEX_URL' && !convexUrl) convexUrl = value;
+        if (key?.trim() === 'CONVEX_DEPLOYMENT' && !deployment)
+          deployment = value;
       }
     } catch {
       // .env.companion doesn't exist, that's OK
@@ -88,8 +94,12 @@ async function loadConfig(): Promise<{ convexUrl: string }> {
 
   if (!convexUrl)
     die('CONVEX_URL is required. Set it in env or .env.companion');
+  if (!deployment)
+    die(
+      'CONVEX_DEPLOYMENT is required. Run `convex dev` first or set it in env.',
+    );
 
-  return { convexUrl: convexUrl.replace(/\/$/, '') };
+  return { convexUrl: convexUrl.replace(/\/$/, ''), deployment };
 }
 
 /** Prompts the user to select an OAuth provider. */
@@ -131,20 +141,26 @@ function openBrowser(url: string) {
 async function main() {
   console.log('\n\x1b[1mHolophyte Setup\x1b[0m — Companion Authentication\n');
 
-  // Check for existing token
-  const existing = await readTokenFile();
-  if (existing) {
-    info(`Existing token found at ${getTokenFilePath()}`);
+  // Load config first so we know which deployment to check/write
+  const { convexUrl, deployment } = await loadConfig();
+  info(`Convex URL: ${convexUrl}`);
+  info(`Deployment: ${deployment}`);
+
+  // Check for existing token for this deployment
+  const existing = await readTokenFile(deployment);
+  if (existing.status === 'ok') {
+    info(`Existing token found for deployment ${deployment}`);
     process.stdout.write('Overwrite? [y/N]: ');
     const answer = await readLine();
     if (answer === null || answer.trim().toLowerCase() !== 'y') {
       console.log('Aborted.');
       process.exit(0);
     }
+  } else if (existing.status === 'invalid') {
+    info(
+      `Existing token for ${deployment} is invalid (${existing.reason}) — will replace`,
+    );
   }
-
-  const { convexUrl } = await loadConfig();
-  info(`Convex URL: ${convexUrl}`);
 
   const provider = await selectProvider();
   info(`Provider: ${provider}`);
@@ -237,13 +253,13 @@ async function main() {
     }
 
     // Step 5: Store tokens
-    await writeTokenFile({
+    await writeTokenFile(deployment, {
       convexUrl,
       token: tokenResult.tokens.token,
       refreshToken: tokenResult.tokens.refreshToken,
     });
 
-    success(`Token saved to ${getTokenFilePath()}`);
+    success(`Token saved to ${getTokensFilePath()} [${deployment}]`);
     console.log('\nThe companion will use this token on next startup.');
     console.log('Run `bun run companion` to start the companion.\n');
   } finally {
