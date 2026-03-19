@@ -112,7 +112,6 @@ async function upsertHeartbeatForOrgs(
 
 /**
  * Upserts a companion heartbeat for the authenticated user's orgs.
- * Public equivalent of {@link upsertHeartbeatAllOrgs} — scoped to user's orgs.
  */
 export const companionHeartbeat = mutation({
   args: {
