@@ -4,11 +4,12 @@ import { useMatch, useNavigate } from '@tanstack/react-router';
 import { useMutation, useQuery } from 'convex/react';
 import { AlertTriangle, Loader2, Play, Square } from 'lucide-react';
 import { useState } from 'react';
+import { DEFAULT_MODEL } from '@/constants';
 import { useCompanionStatus } from '@/frontend/hooks/useCompanionStatus';
 import { useStickyValue } from '@/frontend/hooks/useStickyValue';
 import { useAppStore } from '@/frontend/stores/app';
 import type { ClaudeModelId } from './ModelPicker';
-import ModelPicker, { DEFAULT_MODEL } from './ModelPicker';
+import ModelPicker from './ModelPicker';
 import Button from './ui/Button';
 
 interface ClaudeButtonProps {
