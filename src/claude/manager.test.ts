@@ -6,16 +6,15 @@ vi.mock('@anthropic-ai/claude-agent-sdk', () => ({
   query: vi.fn(),
 }));
 
-// Mock ConvexHttpClient as a proper class
-vi.mock('convex/browser', () => {
-  class MockConvexHttpClient {
-    mutation = vi.fn().mockResolvedValue(undefined);
-  }
-  return { ConvexHttpClient: MockConvexHttpClient };
-});
+// Mock the shared Convex clients — the manager uses getConvexClient() for
+// mutations and getConvexHttpClient() for one-shot queries.
+const mockMutation = vi.fn().mockResolvedValue(undefined);
+const mockQuery = vi.fn().mockResolvedValue(undefined);
 
-// Set CONVEX_URL so the manager can create a ConvexHttpClient
-process.env.CONVEX_URL = 'http://localhost:3210';
+vi.mock('@/server/convex-client', () => ({
+  getConvexClient: vi.fn(() => ({ mutation: mockMutation })),
+  getConvexHttpClient: vi.fn(async () => ({ query: mockQuery })),
+}));
 
 import { query as mockSdkQuery } from '@anthropic-ai/claude-agent-sdk';
 
@@ -25,11 +24,13 @@ afterEach(async () => {
     stopSession(id);
   }
   // Wait for all sessions to drain from the active map. Cleanup involves
-  // async calls (flushEvents, denyAll, updateStatus) that need mock fetch.
+  // async calls (flushEvents, denyAll, updateStatus) that need mock clients.
   const deadline = Date.now() + 2000;
   while (getActiveSessions().length > 0 && Date.now() < deadline) {
     await new Promise((r) => setTimeout(r, 50));
   }
+  mockMutation.mockClear();
+  mockQuery.mockClear();
   vi.restoreAllMocks();
 });
 
@@ -132,18 +133,6 @@ describe('claude/manager (SDK-based)', () => {
 
   describe('stopSession', () => {
     it('aborts the controller and marks session as idle (stop = resumable)', async () => {
-      process.env.CONVEX_SITE_URL = 'http://localhost:3211';
-      process.env.INTERNAL_API_SECRET = 'test-secret';
-
-      const fetchCalls: string[] = [];
-      vi.spyOn(globalThis, 'fetch').mockImplementation(
-        async (input: RequestInfo | URL) => {
-          const url = typeof input === 'string' ? input : input.toString();
-          fetchCalls.push(url);
-          return new Response('{}', { status: 200 });
-        },
-      );
-
       // Create a long-running iterator that throws when aborted (like the real SDK)
       let abortReject: ((err: Error) => void) | undefined;
 
@@ -190,14 +179,16 @@ describe('claude/manager (SDK-based)', () => {
       // Session should be cleaned up from memory
       expect(getSession('stop-test')).toBeUndefined();
 
-      // Convex updateStatus should have been called with 'idle'
-      const statusCalls = fetchCalls.filter((url) =>
-        url.includes('sessions/updateStatus'),
+      // companionUpdateStatus should have been called with 'idle'
+      const statusCalls = mockMutation.mock.calls.filter(
+        (call) =>
+          typeof call[1] === 'object' &&
+          'status' in (call[1] as Record<string, unknown>),
       );
       expect(statusCalls.length).toBeGreaterThan(0);
-
-      delete process.env.CONVEX_SITE_URL;
-      delete process.env.INTERNAL_API_SECRET;
+      // The last status update should be 'idle' (user-initiated stop = resumable)
+      const lastStatus = statusCalls[statusCalls.length - 1];
+      expect((lastStatus?.[1] as Record<string, unknown>)?.status).toBe('idle');
     });
 
     it('does nothing for a non-existent session', async () => {
@@ -208,18 +199,6 @@ describe('claude/manager (SDK-based)', () => {
 
   describe('session lifecycle', () => {
     it('cleans up on completion and calls updateStatus with idle', async () => {
-      process.env.CONVEX_SITE_URL = 'http://localhost:3211';
-      process.env.INTERNAL_API_SECRET = 'test-secret';
-
-      const fetchCalls: Array<{ url: string; body: string }> = [];
-      vi.spyOn(globalThis, 'fetch').mockImplementation(
-        async (input: RequestInfo | URL, init?: RequestInit) => {
-          const url = typeof input === 'string' ? input : input.toString();
-          fetchCalls.push({ url, body: String(init?.body ?? '') });
-          return new Response('{}', { status: 200 });
-        },
-      );
-
       const mockIter = createMockIterator([
         {
           type: 'result',
@@ -245,31 +224,14 @@ describe('claude/manager (SDK-based)', () => {
       // Session should be cleaned up (removed from active map)
       expect(getSession('lifecycle-test')).toBeUndefined();
 
-      // updateStatus should have been called with 'idle'
-      const statusCalls = fetchCalls.filter(({ url }) =>
-        url.includes('sessions/updateStatus'),
+      // companionUpdateStatus should have been called with 'idle'
+      const statusCalls = mockMutation.mock.calls.filter(
+        (call) => typeof call[1] === 'object' && call[1]?.status === 'idle',
       );
       expect(statusCalls.length).toBeGreaterThan(0);
-      const lastStatusCall = statusCalls[statusCalls.length - 1];
-      expect(lastStatusCall?.body).toContain('"idle"');
-
-      delete process.env.CONVEX_SITE_URL;
-      delete process.env.INTERNAL_API_SECRET;
     });
 
     it('calls updateStatus with failed for error results', async () => {
-      process.env.CONVEX_SITE_URL = 'http://localhost:3211';
-      process.env.INTERNAL_API_SECRET = 'test-secret';
-
-      const fetchCalls: Array<{ url: string; body: string }> = [];
-      vi.spyOn(globalThis, 'fetch').mockImplementation(
-        async (input: RequestInfo | URL, init?: RequestInit) => {
-          const url = typeof input === 'string' ? input : input.toString();
-          fetchCalls.push({ url, body: String(init?.body ?? '') });
-          return new Response('{}', { status: 200 });
-        },
-      );
-
       const mockIter = createMockIterator([
         {
           type: 'result',
@@ -292,15 +254,11 @@ describe('claude/manager (SDK-based)', () => {
       // Let iterator complete
       await new Promise((r) => setTimeout(r, 100));
 
-      const statusCalls = fetchCalls.filter(({ url }) =>
-        url.includes('sessions/updateStatus'),
+      // companionUpdateStatus should have been called with 'failed'
+      const statusCalls = mockMutation.mock.calls.filter(
+        (call) => typeof call[1] === 'object' && call[1]?.status === 'failed',
       );
       expect(statusCalls.length).toBeGreaterThan(0);
-      const lastStatusCall = statusCalls[statusCalls.length - 1];
-      expect(lastStatusCall?.body).toContain('"failed"');
-
-      delete process.env.CONVEX_SITE_URL;
-      delete process.env.INTERNAL_API_SECRET;
     });
   });
 
@@ -375,26 +333,7 @@ describe('claude/manager (SDK-based)', () => {
   });
 
   describe('default mode: queues every tool', () => {
-    it('calls pendingApprovals/create for Read and Bash', async () => {
-      process.env.CONVEX_SITE_URL = 'http://localhost:3211';
-      process.env.INTERNAL_API_SECRET = 'test-secret';
-
-      const createCalls: Array<{ url: string; body: string }> = [];
-      vi.spyOn(globalThis, 'fetch').mockImplementation(
-        async (input: RequestInfo | URL, init?: RequestInit) => {
-          const url = typeof input === 'string' ? input : input.toString();
-          const body = String(init?.body ?? '');
-          if (url.includes('pendingApprovals/create')) {
-            createCalls.push({ url, body });
-          }
-          // listResolvedUnconsumed never resolves so canUseTool stays parked
-          if (url.includes('pendingApprovals/listResolvedUnconsumed')) {
-            return new Response(JSON.stringify([]), { status: 200 });
-          }
-          return new Response('{}', { status: 200 });
-        },
-      );
-
+    it('calls companionCreate for Read and Bash', async () => {
       vi.mocked(mockSdkQuery).mockImplementation((params: unknown) => {
         const { options } = params as {
           options: {
@@ -438,13 +377,20 @@ describe('claude/manager (SDK-based)', () => {
 
       await new Promise((r) => setTimeout(r, 100));
 
-      const r1Calls = createCalls.filter((c) => c.body.includes('"r1"'));
-      const r2Calls = createCalls.filter((c) => c.body.includes('"r2"'));
+      // companionCreate should have been called for both tools
+      const createCalls = mockMutation.mock.calls.filter(
+        (call) =>
+          typeof call[1] === 'object' &&
+          'requestId' in (call[1] as Record<string, unknown>),
+      );
+      const r1Calls = createCalls.filter(
+        (c) => (c[1] as Record<string, unknown>).requestId === 'r1',
+      );
+      const r2Calls = createCalls.filter(
+        (c) => (c[1] as Record<string, unknown>).requestId === 'r2',
+      );
       expect(r1Calls.length).toBeGreaterThan(0);
       expect(r2Calls.length).toBeGreaterThan(0);
-
-      delete process.env.CONVEX_SITE_URL;
-      delete process.env.INTERNAL_API_SECRET;
     });
   });
 
@@ -503,10 +449,7 @@ describe('claude/manager (SDK-based)', () => {
       }
     });
 
-    it('calls pendingApprovals/create for unsafe bash commands', async () => {
-      process.env.CONVEX_SITE_URL = 'http://localhost:3211';
-      process.env.INTERNAL_API_SECRET = 'test-secret';
-
+    it('calls companionCreate for unsafe bash commands', async () => {
       const unsafe = [
         ['bun run dev', 'u1'], // arbitrary package.json script
         ['git branch -D main', 'u2'], // destructive flag
@@ -520,21 +463,6 @@ describe('claude/manager (SDK-based)', () => {
         ['git diff HEAD~1..HEAD', 'u10'], // range args enable targeted exfiltration
         ['git diff HEAD~1..HEAD src/.env', 'u11'], // explicit secret file path
       ] as const;
-
-      const createCalls: Array<{ url: string; body: string }> = [];
-      vi.spyOn(globalThis, 'fetch').mockImplementation(
-        async (input: RequestInfo | URL, init?: RequestInit) => {
-          const url = typeof input === 'string' ? input : input.toString();
-          const body = String(init?.body ?? '');
-          if (url.includes('pendingApprovals/create')) {
-            createCalls.push({ url, body });
-          }
-          if (url.includes('pendingApprovals/listResolvedUnconsumed')) {
-            return new Response(JSON.stringify([]), { status: 200 });
-          }
-          return new Response('{}', { status: 200 });
-        },
-      );
 
       vi.mocked(mockSdkQuery).mockImplementation((params: unknown) => {
         const { options } = params as {
@@ -572,37 +500,22 @@ describe('claude/manager (SDK-based)', () => {
 
       await new Promise((r) => setTimeout(r, 100));
 
+      const createCalls = mockMutation.mock.calls.filter(
+        (call) =>
+          typeof call[1] === 'object' &&
+          'requestId' in (call[1] as Record<string, unknown>),
+      );
       for (const [cmd, id] of unsafe) {
-        const matched = createCalls.some((c) => c.body.includes(`"${id}"`));
-        expect(
-          matched,
-          `"${cmd}" should have called pendingApprovals/create`,
-        ).toBe(true);
+        const matched = createCalls.some(
+          (c) => (c[1] as Record<string, unknown>).requestId === id,
+        );
+        expect(matched, `"${cmd}" should have called companionCreate`).toBe(
+          true,
+        );
       }
-
-      delete process.env.CONVEX_SITE_URL;
-      delete process.env.INTERNAL_API_SECRET;
     });
 
-    it('calls pendingApprovals/create for write-side tools (Write, Edit)', async () => {
-      process.env.CONVEX_SITE_URL = 'http://localhost:3211';
-      process.env.INTERNAL_API_SECRET = 'test-secret';
-
-      const createCalls: Array<{ url: string; body: string }> = [];
-      vi.spyOn(globalThis, 'fetch').mockImplementation(
-        async (input: RequestInfo | URL, init?: RequestInit) => {
-          const url = typeof input === 'string' ? input : input.toString();
-          const body = String(init?.body ?? '');
-          if (url.includes('pendingApprovals/create')) {
-            createCalls.push({ url, body });
-          }
-          if (url.includes('pendingApprovals/listResolvedUnconsumed')) {
-            return new Response(JSON.stringify([]), { status: 200 });
-          }
-          return new Response('{}', { status: 200 });
-        },
-      );
-
+    it('calls companionCreate for write-side tools (Write, Edit)', async () => {
       vi.mocked(mockSdkQuery).mockImplementation((params: unknown) => {
         const { options } = params as {
           options: {
@@ -646,11 +559,21 @@ describe('claude/manager (SDK-based)', () => {
 
       await new Promise((r) => setTimeout(r, 100));
 
-      expect(createCalls.some((c) => c.body.includes('"w1"'))).toBe(true);
-      expect(createCalls.some((c) => c.body.includes('"e1"'))).toBe(true);
-
-      delete process.env.CONVEX_SITE_URL;
-      delete process.env.INTERNAL_API_SECRET;
+      const createCalls = mockMutation.mock.calls.filter(
+        (call) =>
+          typeof call[1] === 'object' &&
+          'requestId' in (call[1] as Record<string, unknown>),
+      );
+      expect(
+        createCalls.some(
+          (c) => (c[1] as Record<string, unknown>).requestId === 'w1',
+        ),
+      ).toBe(true);
+      expect(
+        createCalls.some(
+          (c) => (c[1] as Record<string, unknown>).requestId === 'e1',
+        ),
+      ).toBe(true);
     });
   });
 
@@ -671,19 +594,6 @@ describe('claude/manager (SDK-based)', () => {
 
   describe('stop session with pending approval', () => {
     it('resolves pending approvals as denied when session is stopped', async () => {
-      process.env.CONVEX_SITE_URL = 'http://localhost:3211';
-      process.env.INTERNAL_API_SECRET = 'test-secret';
-
-      vi.spyOn(globalThis, 'fetch').mockImplementation(
-        async (input: RequestInfo | URL) => {
-          const url = typeof input === 'string' ? input : input.toString();
-          if (url.includes('pendingApprovals/listResolvedUnconsumed')) {
-            return new Response(JSON.stringify([]), { status: 200 });
-          }
-          return new Response('{}', { status: 200 });
-        },
-      );
-
       let pendingResult: { behavior: string; message?: string } | undefined;
 
       vi.mocked(mockSdkQuery).mockImplementation((params: unknown) => {
@@ -724,9 +634,6 @@ describe('claude/manager (SDK-based)', () => {
       await new Promise((r) => setTimeout(r, 100));
       expect(pendingResult?.behavior).toBe('deny');
       expect(pendingResult?.message).toMatch(/session/i);
-
-      delete process.env.CONVEX_SITE_URL;
-      delete process.env.INTERNAL_API_SECRET;
     });
   });
 
@@ -736,25 +643,8 @@ describe('claude/manager (SDK-based)', () => {
 
   describe('resumed session flush behavior', () => {
     it('calls flushEvents for every event when resumeSdkSessionId is provided', async () => {
-      process.env.CONVEX_SITE_URL = 'http://localhost:3211';
-      process.env.INTERNAL_API_SECRET = 'test-secret';
-
-      let insertBatchCallCount = 0;
-      const fetchSpy = vi
-        .spyOn(globalThis, 'fetch')
-        .mockImplementation(async (input: RequestInfo | URL) => {
-          const url = typeof input === 'string' ? input : input.toString();
-          if (url.includes('sessionEvents/insertBatch')) {
-            insertBatchCallCount++;
-          }
-          // getNextBatchIndex returns nextBatchIndex = 0
-          if (url.includes('sessionEvents/getNextBatchIndex')) {
-            return new Response(JSON.stringify({ nextBatchIndex: 5 }), {
-              status: 200,
-            });
-          }
-          return new Response('{}', { status: 200 });
-        });
+      // getNextBatchIndex returns nextBatchIndex = 5
+      mockQuery.mockResolvedValueOnce({ nextBatchIndex: 5 });
 
       // Three events from the iterator; plus one synthetic prompt event = 4 total
       const mockEvents = [
@@ -783,31 +673,17 @@ describe('claude/manager (SDK-based)', () => {
       // Wait for the iterator to complete and all flushes to settle
       await new Promise((r) => setTimeout(r, 200));
 
-      fetchSpy.mockRestore();
-      delete process.env.CONVEX_SITE_URL;
-      delete process.env.INTERNAL_API_SECRET;
-
-      // Each event triggers an immediate flush (per-event). The prompt synthetic
-      // event + 3 iterator events = 4 total inserts (flushing is idempotent so
-      // empty flushes are no-ops). Allow for at least 4 insertBatch calls.
-      expect(insertBatchCallCount).toBeGreaterThanOrEqual(4);
+      // companionInsertBatch should have been called multiple times
+      const insertCalls = mockMutation.mock.calls.filter(
+        (call) =>
+          typeof call[1] === 'object' &&
+          'batchIndex' in (call[1] as Record<string, unknown>),
+      );
+      // Prompt event + 3 iterator events = at least 4 insertBatch calls
+      expect(insertCalls.length).toBeGreaterThanOrEqual(4);
     });
 
     it('calls flushEvents for every event even without resumeSdkSessionId', async () => {
-      process.env.CONVEX_SITE_URL = 'http://localhost:3211';
-      process.env.INTERNAL_API_SECRET = 'test-secret';
-
-      let insertBatchCallCount = 0;
-      const fetchSpy = vi
-        .spyOn(globalThis, 'fetch')
-        .mockImplementation(async (input: RequestInfo | URL) => {
-          const url = typeof input === 'string' ? input : input.toString();
-          if (url.includes('sessionEvents/insertBatch')) {
-            insertBatchCallCount++;
-          }
-          return new Response('{}', { status: 200 });
-        });
-
       const mockEvents = [
         { type: 'assistant', text: 'Hello' },
         { type: 'assistant', text: 'World' },
@@ -834,13 +710,13 @@ describe('claude/manager (SDK-based)', () => {
       // Wait for the iterator to complete
       await new Promise((r) => setTimeout(r, 200));
 
-      fetchSpy.mockRestore();
-      delete process.env.CONVEX_SITE_URL;
-      delete process.env.INTERNAL_API_SECRET;
-
-      // All sessions flush per-event now, so prompt event + 3 iterator events
-      // = at least 4 insertBatch calls (may merge concurrent flushes).
-      expect(insertBatchCallCount).toBeGreaterThanOrEqual(1);
+      // All sessions flush per-event now
+      const insertCalls = mockMutation.mock.calls.filter(
+        (call) =>
+          typeof call[1] === 'object' &&
+          'batchIndex' in (call[1] as Record<string, unknown>),
+      );
+      expect(insertCalls.length).toBeGreaterThanOrEqual(1);
     });
   });
 
@@ -850,20 +726,6 @@ describe('claude/manager (SDK-based)', () => {
 
   describe('sendMessageToSession', () => {
     it('pushes message to channel and buffers it for Convex persistence', async () => {
-      process.env.CONVEX_SITE_URL = 'http://localhost:3211';
-      process.env.INTERNAL_API_SECRET = 'test-secret';
-
-      const insertBatchBodies: string[] = [];
-      vi.spyOn(globalThis, 'fetch').mockImplementation(
-        async (input: RequestInfo | URL, init?: RequestInit) => {
-          const url = typeof input === 'string' ? input : input.toString();
-          if (url.includes('sessionEvents/insertBatch')) {
-            insertBatchBodies.push(String(init?.body ?? ''));
-          }
-          return new Response('{}', { status: 200 });
-        },
-      );
-
       const mockIter = createMockIterator([
         {
           type: 'system',
@@ -913,16 +775,20 @@ describe('claude/manager (SDK-based)', () => {
       // Wait for the buffered event to be flushed to Convex
       await new Promise((r) => setTimeout(r, 100));
 
-      // The follow-up message should have been flushed via insertBatch
-      const allBodies = insertBatchBodies.join(' ');
-      expect(allBodies).toContain('follow-up message');
+      // The follow-up message should have been flushed via companionInsertBatch
+      const insertCalls = mockMutation.mock.calls.filter(
+        (call) =>
+          typeof call[1] === 'object' &&
+          'events' in (call[1] as Record<string, unknown>),
+      );
+      const allEvents = insertCalls.flatMap((c) =>
+        JSON.stringify((c[1] as Record<string, unknown>).events),
+      );
+      expect(allEvents.join(' ')).toContain('follow-up message');
 
       // Cleanup
       resolveBlock?.();
       await new Promise((r) => setTimeout(r, 100));
-
-      delete process.env.CONVEX_SITE_URL;
-      delete process.env.INTERNAL_API_SECRET;
     });
 
     it('returns false when session does not exist', async () => {
@@ -969,18 +835,6 @@ describe('claude/manager (SDK-based)', () => {
 
   describe('session name from prompt', () => {
     it('persists session name as first 30 chars of prompt to Convex', async () => {
-      process.env.CONVEX_SITE_URL = 'http://localhost:3211';
-      process.env.INTERNAL_API_SECRET = 'test-secret';
-
-      const fetchCalls: Array<{ url: string; body: string }> = [];
-      vi.spyOn(globalThis, 'fetch').mockImplementation(
-        async (input: RequestInfo | URL, init?: RequestInit) => {
-          const url = typeof input === 'string' ? input : input.toString();
-          fetchCalls.push({ url, body: String(init?.body ?? '') });
-          return new Response('{}', { status: 200 });
-        },
-      );
-
       const mockIter = createMockIterator([]);
       vi.mocked(mockSdkQuery).mockReturnValue(mockIter as never);
 
@@ -995,29 +849,18 @@ describe('claude/manager (SDK-based)', () => {
 
       await new Promise((r) => setTimeout(r, 50));
 
-      const nameCalls = fetchCalls.filter(({ url }) =>
-        url.includes('updateName'),
+      const nameCalls = mockMutation.mock.calls.filter(
+        (call) =>
+          typeof call[1] === 'object' &&
+          'name' in (call[1] as Record<string, unknown>),
       );
       expect(nameCalls.length).toBeGreaterThan(0);
-      expect(nameCalls[0]?.body).toContain('Implement the authentication f…');
-
-      delete process.env.CONVEX_SITE_URL;
-      delete process.env.INTERNAL_API_SECRET;
+      expect((nameCalls[0]?.[1] as Record<string, unknown>)?.name).toBe(
+        'Implement the authentication f…',
+      );
     });
 
     it('uses full prompt as name when prompt is 30 chars or fewer', async () => {
-      process.env.CONVEX_SITE_URL = 'http://localhost:3211';
-      process.env.INTERNAL_API_SECRET = 'test-secret';
-
-      const fetchCalls: Array<{ url: string; body: string }> = [];
-      vi.spyOn(globalThis, 'fetch').mockImplementation(
-        async (input: RequestInfo | URL, init?: RequestInit) => {
-          const url = typeof input === 'string' ? input : input.toString();
-          fetchCalls.push({ url, body: String(init?.body ?? '') });
-          return new Response('{}', { status: 200 });
-        },
-      );
-
       const mockIter = createMockIterator([]);
       vi.mocked(mockSdkQuery).mockReturnValue(mockIter as never);
 
@@ -1031,14 +874,15 @@ describe('claude/manager (SDK-based)', () => {
 
       await new Promise((r) => setTimeout(r, 50));
 
-      const nameCalls = fetchCalls.filter(({ url }) =>
-        url.includes('updateName'),
+      const nameCalls = mockMutation.mock.calls.filter(
+        (call) =>
+          typeof call[1] === 'object' &&
+          'name' in (call[1] as Record<string, unknown>),
       );
       expect(nameCalls.length).toBeGreaterThan(0);
-      expect(nameCalls[0]?.body).toContain('Fix the bug');
-
-      delete process.env.CONVEX_SITE_URL;
-      delete process.env.INTERNAL_API_SECRET;
+      expect((nameCalls[0]?.[1] as Record<string, unknown>)?.name).toBe(
+        'Fix the bug',
+      );
     });
   });
 

@@ -5,7 +5,11 @@ import {
   mutation,
   query,
 } from './_generated/server';
-import { requireOrgMembership, requireRole } from './lib/auth';
+import {
+  requireOrgMembership,
+  requireRole,
+  requireSessionOwnership,
+} from './lib/auth';
 
 // ── Internal functions (companion via HTTP) ─────────────────────────
 
@@ -77,6 +81,78 @@ export const serverMarkConsumed = internalMutation({
 export const serverDenyAll = internalMutation({
   args: { sessionId: v.id('sessions') },
   handler: async (ctx, args) => {
+    const unresolved = await ctx.db
+      .query('pendingApprovals')
+      .withIndex('by_session_unresolved', (q) =>
+        q.eq('sessionId', args.sessionId).eq('resolved', false),
+      )
+      .collect();
+    for (const approval of unresolved) {
+      await ctx.db.patch(approval._id, {
+        resolved: true,
+        approved: false,
+        denyMessage: 'Session ended',
+        consumed: true,
+      });
+    }
+  },
+});
+
+// ── Public companion mutations/queries (JWT-authenticated) ──────────
+
+/** Creates a pending approval. Public equivalent of {@link serverCreate}. */
+export const companionCreate = mutation({
+  args: {
+    sessionId: v.id('sessions'),
+    requestId: v.string(),
+    tool: v.string(),
+    input: v.string(),
+  },
+  handler: async (ctx, args) => {
+    await requireSessionOwnership(ctx, args.sessionId);
+    await ctx.db.insert('pendingApprovals', {
+      sessionId: args.sessionId,
+      requestId: args.requestId,
+      tool: args.tool,
+      input: args.input,
+      resolved: false,
+      consumed: false,
+    });
+  },
+});
+
+/** Resolved-but-unconsumed approvals. Public equivalent of {@link serverListResolvedUnconsumed}. */
+export const companionListResolvedUnconsumed = query({
+  args: { sessionId: v.id('sessions') },
+  handler: async (ctx, args) => {
+    await requireSessionOwnership(ctx, args.sessionId);
+    const approvals = await ctx.db
+      .query('pendingApprovals')
+      .withIndex('by_session_unresolved', (q) =>
+        q.eq('sessionId', args.sessionId).eq('resolved', true),
+      )
+      .collect();
+    return approvals.filter((a) => !a.consumed);
+  },
+});
+
+/** Marks an approval as consumed. Public equivalent of {@link serverMarkConsumed}. */
+export const companionMarkConsumed = mutation({
+  args: { id: v.id('pendingApprovals') },
+  handler: async (ctx, args) => {
+    const approval = await ctx.db.get(args.id);
+    if (!approval) return;
+    // Verify caller owns the approval's session
+    await requireSessionOwnership(ctx, approval.sessionId);
+    await ctx.db.patch(args.id, { consumed: true });
+  },
+});
+
+/** Denies all unresolved approvals. Public equivalent of {@link serverDenyAll}. */
+export const companionDenyAll = mutation({
+  args: { sessionId: v.id('sessions') },
+  handler: async (ctx, args) => {
+    await requireSessionOwnership(ctx, args.sessionId);
     const unresolved = await ctx.db
       .query('pendingApprovals')
       .withIndex('by_session_unresolved', (q) =>

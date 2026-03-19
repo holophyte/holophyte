@@ -63,3 +63,44 @@ export async function getOrgIdFromTask(
   if (!repo) throw new Error('Repo not found');
   return repo.orgId;
 }
+
+/**
+ * Verifies the authenticated user owns the session (via session → task → repo → org)
+ * and has at least the specified role. Defaults to `member` to match browser-side
+ * mutation access controls.
+ *
+ * Throws if the session doesn't exist, the user isn't a member of its org,
+ * or their role is below `minRole`.
+ */
+export async function requireSessionOwnership(
+  ctx: QueryCtx | MutationCtx,
+  sessionId: Id<'sessions'>,
+  minRole: 'viewer' | 'member' | 'admin' | 'owner' = 'member',
+) {
+  const session = await ctx.db.get(sessionId);
+  if (!session) throw new Error('Session not found');
+  const orgId = await getOrgIdFromTask(ctx, session.taskId);
+  const { userId, membership } = await requireOrgMembership(ctx, orgId);
+  requireRole(membership, minRole);
+  return { userId, membership, session };
+}
+
+/**
+ * Returns org IDs where the user has at least the specified role.
+ * Defaults to `member` — excludes `viewer`-only memberships.
+ */
+export async function getUserWritableOrgIds(
+  ctx: QueryCtx | MutationCtx,
+  userId: Id<'users'>,
+  minRole: 'viewer' | 'member' | 'admin' | 'owner' = 'member',
+): Promise<Set<Id<'organizations'>>> {
+  const memberships = await ctx.db
+    .query('memberships')
+    .withIndex('by_user', (q) => q.eq('userId', userId))
+    .collect();
+  return new Set(
+    memberships
+      .filter((m) => ROLE_LEVELS[m.role] >= ROLE_LEVELS[minRole])
+      .map((m) => m.orgId),
+  );
+}

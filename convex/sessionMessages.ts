@@ -12,6 +12,7 @@ import {
   requireAuth,
   requireOrgMembership,
   requireRole,
+  requireSessionOwnership,
 } from './lib/auth';
 
 /**
@@ -119,5 +120,20 @@ export const companionListPending = query({
     const userId = await requireAuth(ctx);
     const orgIds = await getUserOrgIds(ctx, userId);
     return fetchPendingMessages(ctx, orgIds);
+  },
+});
+
+/**
+ * Marks a session message as consumed.
+ * Public equivalent of {@link markConsumed} — authenticated via JWT.
+ */
+export const companionMarkConsumed = mutation({
+  args: { id: v.id('sessionMessages') },
+  handler: async (ctx, args) => {
+    const msg = await ctx.db.get(args.id);
+    if (!msg) return;
+    // Verify caller owns the message's session
+    await requireSessionOwnership(ctx, msg.sessionId);
+    await ctx.db.patch(args.id, { consumed: true });
   },
 });

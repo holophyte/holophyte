@@ -1,77 +1,93 @@
-// ── Convex internal API helpers ──────────────────────────────────────
+// ── Shared Convex client for companion ──────────────────────────────
+//
+// Creates and manages two clients:
+// - ConvexClient (WebSocket) — for subscriptions + mutations
+// - ConvexHttpClient (HTTP) — for one-shot queries
+//
+// Both are authenticated with the same JWT from the user's token file.
+// The token fetcher is shared so the HTTP client picks up tokens
+// refreshed by the WebSocket client.
 
-/** Whether a startup warning about missing config has already been logged. */
-let configWarningLogged = false;
+import { ConvexClient, ConvexHttpClient } from 'convex/browser';
+import type { TokenFileData } from './auth-token';
+import { createFetchToken } from './auth-token';
 
-export function getConvexConfig() {
-  const baseUrl = process.env.CONVEX_SITE_URL;
-  const secret = process.env.INTERNAL_API_SECRET;
+let convexClient: ConvexClient | null = null;
+let httpClient: ConvexHttpClient | null = null;
+/** Shared token fetcher — ConvexClient refreshes it, httpClient reads it. */
+let fetchToken:
+  | ((args: { forceRefreshToken: boolean }) => Promise<string | null>)
+  | null = null;
 
-  if (!baseUrl || !secret) {
-    if (!configWarningLogged) {
-      configWarningLogged = true;
-      const missing = [
-        !baseUrl && 'CONVEX_SITE_URL',
-        !secret && 'INTERNAL_API_SECRET',
-      ].filter(Boolean);
-      console.error(
-        `WARNING: ${missing.join(' and ')} not set — session data will not be persisted to the database`,
-      );
-    }
-    return null;
+/**
+ * Creates and authenticates both Convex clients.
+ *
+ * Call once during companion startup, before subscriptions or polling begin.
+ * Safe to call again after `closeCompanionClients()` (e.g. on token refresh).
+ */
+export function initCompanionClients(
+  convexUrl: string,
+  tokenFile: TokenFileData,
+): void {
+  // Validate token matches deployment before opening connections
+  const normalize = (u: string) => u.replace(/\/$/, '');
+  if (normalize(tokenFile.convexUrl) !== normalize(convexUrl)) {
+    throw new Error(
+      `Token is for ${tokenFile.convexUrl}, not ${convexUrl}. Run \`bun run setup\` to re-authenticate.`,
+    );
   }
-  return { baseUrl, secret };
+
+  // Close existing clients to avoid leaking WebSocket connections
+  if (convexClient) {
+    convexClient.close().catch(console.error);
+  }
+  httpClient = null;
+
+  // Shared token fetcher — ConvexClient's periodic refresh updates the
+  // token in the closure; getConvexHttpClient() re-sets it before each use.
+  fetchToken = createFetchToken(tokenFile);
+
+  // WebSocket client — subscriptions + mutations (auto-refreshes tokens)
+  convexClient = new ConvexClient(convexUrl);
+  convexClient.setAuth(fetchToken);
+
+  // HTTP client — one-shot queries (token refreshed before each use)
+  httpClient = new ConvexHttpClient(convexUrl);
+  httpClient.setAuth(tokenFile.token);
+
+  console.log(
+    tokenFile.ephemeral
+      ? 'Companion authenticated anonymously'
+      : 'Companion authenticated as user via stored token',
+  );
+}
+
+/** Returns the WebSocket-based ConvexClient for subscriptions and mutations. */
+export function getConvexClient(): ConvexClient | null {
+  return convexClient;
 }
 
 /**
- * Calls a Convex HTTP action. Returns `true` if the call succeeded, `false`
- * if it was skipped (missing config). Throws on HTTP errors.
+ * Returns the HTTP-based ConvexHttpClient for one-shot queries.
+ *
+ * Refreshes the auth token from the shared fetcher before returning, so
+ * tokens refreshed by the WebSocket client are picked up automatically.
+ * ConvexHttpClient.setAuth() only takes a string (no fetcher callback),
+ * so we bridge the gap here.
  */
-export async function callConvexInternal(
-  path: string,
-  body: Record<string, unknown>,
-): Promise<boolean> {
-  const config = getConvexConfig();
-  if (!config) return false;
-
-  const res = await fetch(`${config.baseUrl}${path}`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${config.secret}`,
-    },
-    body: JSON.stringify(body),
-  });
-
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`Convex HTTP action failed (${res.status}): ${text}`);
-  }
-
-  return true;
+export async function getConvexHttpClient(): Promise<ConvexHttpClient | null> {
+  if (!httpClient || !fetchToken) return null;
+  // Get the latest token (already refreshed by ConvexClient if needed)
+  const token = await fetchToken({ forceRefreshToken: false });
+  if (!token) return null;
+  httpClient.setAuth(token);
+  return httpClient;
 }
 
-export async function queryConvexInternal<T>(
-  path: string,
-  body: Record<string, unknown>,
-): Promise<T> {
-  const config = getConvexConfig();
-  if (!config)
-    throw new Error('CONVEX_SITE_URL or INTERNAL_API_SECRET not set');
-
-  const res = await fetch(`${config.baseUrl}${path}`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${config.secret}`,
-    },
-    body: JSON.stringify(body),
-  });
-
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`Convex HTTP action failed (${res.status}): ${text}`);
-  }
-
-  return (await res.json()) as T;
+/** Tears down both clients. Safe to call when clients are null. */
+export function closeCompanionClients(): void {
+  convexClient?.close().catch(console.error);
+  convexClient = null;
+  httpClient = null;
+  fetchToken = null;
 }

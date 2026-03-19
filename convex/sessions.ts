@@ -1,6 +1,6 @@
 import { v } from 'convex/values';
 import type { Id } from './_generated/dataModel';
-import type { QueryCtx } from './_generated/server';
+import type { MutationCtx, QueryCtx } from './_generated/server';
 import {
   internalMutation,
   internalQuery,
@@ -9,9 +9,11 @@ import {
 } from './_generated/server';
 import {
   getUserOrgIds,
+  getUserWritableOrgIds,
   requireAuth,
   requireOrgMembership,
   requireRole,
+  requireSessionOwnership,
 } from './lib/auth';
 import { sessionStatusValidator } from './schema';
 
@@ -399,19 +401,7 @@ export const serverUpdateActivity = internalMutation({
  */
 export const serverMarkStoppedAsIdle = internalMutation({
   args: {},
-  handler: async (ctx) => {
-    const stoppedSessions = await ctx.db
-      .query('sessions')
-      .withIndex('by_status', (q) => q.eq('status', 'stopped'))
-      .collect();
-    for (const session of stoppedSessions) {
-      await ctx.db.patch(session._id, {
-        status: 'idle',
-        lastActivityAt: Date.now(),
-      });
-    }
-    return { count: stoppedSessions.length };
-  },
+  handler: async (ctx) => markStoppedAsIdleImpl(ctx),
 });
 
 /**
@@ -425,19 +415,7 @@ export const serverMarkStoppedAsIdle = internalMutation({
  */
 export const serverMarkStaleRunning = internalMutation({
   args: {},
-  handler: async (ctx) => {
-    const runningSessions = await ctx.db
-      .query('sessions')
-      .withIndex('by_status', (q) => q.eq('status', 'running'))
-      .collect();
-    for (const session of runningSessions) {
-      await ctx.db.patch(session._id, {
-        status: 'idle',
-        lastActivityAt: session.lastActivityAt ?? session.startedAt,
-      });
-    }
-    return { count: runningSessions.length };
-  },
+  handler: async (ctx) => markStaleRunningImpl(ctx),
 });
 
 /**
@@ -664,5 +642,193 @@ export const companionListStopped = query({
       result.push({ _id: s._id });
     }
     return result;
+  },
+});
+
+// ── Shared helpers for internal + companion mutations ────────────────
+
+async function markStaleRunningImpl(
+  ctx: MutationCtx,
+  orgIds?: Set<Id<'organizations'>>,
+) {
+  const runningSessions = await ctx.db
+    .query('sessions')
+    .withIndex('by_status', (q) => q.eq('status', 'running'))
+    .collect();
+  let count = 0;
+  for (const session of runningSessions) {
+    if (orgIds) {
+      const task = await ctx.db.get(session.taskId);
+      if (!task) continue;
+      const repo = await ctx.db.get(task.repoId);
+      if (!repo || !orgIds.has(repo.orgId)) continue;
+    }
+    await ctx.db.patch(session._id, {
+      status: 'idle',
+      lastActivityAt: session.lastActivityAt ?? session.startedAt,
+    });
+    count++;
+  }
+  return { count };
+}
+
+async function markStoppedAsIdleImpl(
+  ctx: MutationCtx,
+  orgIds?: Set<Id<'organizations'>>,
+) {
+  const stoppedSessions = await ctx.db
+    .query('sessions')
+    .withIndex('by_status', (q) => q.eq('status', 'stopped'))
+    .collect();
+  let count = 0;
+  for (const session of stoppedSessions) {
+    if (orgIds) {
+      const task = await ctx.db.get(session.taskId);
+      if (!task) continue;
+      const repo = await ctx.db.get(task.repoId);
+      if (!repo || !orgIds.has(repo.orgId)) continue;
+    }
+    await ctx.db.patch(session._id, {
+      status: 'idle',
+      lastActivityAt: Date.now(),
+    });
+    count++;
+  }
+  return { count };
+}
+
+// ── Public companion mutations (JWT-authenticated via ConvexClient) ──
+
+/**
+ * Atomically transitions a queued session to `running`.
+ * Public equivalent of {@link claimQueued} — authenticated via JWT.
+ */
+export const companionClaimQueued = mutation({
+  args: { id: v.id('sessions') },
+  handler: async (ctx, args) => {
+    const { session } = await requireSessionOwnership(ctx, args.id);
+    if (session.status !== 'queued') return { ok: false };
+    await ctx.db.patch(args.id, {
+      status: 'running',
+      lastActivityAt: Date.now(),
+    });
+    return { ok: true };
+  },
+});
+
+/**
+ * Updates session status and bumps `lastActivityAt`.
+ * Public equivalent of {@link serverUpdateStatus} — authenticated via JWT.
+ */
+export const companionUpdateStatus = mutation({
+  args: {
+    id: v.id('sessions'),
+    status: sessionStatusValidator,
+  },
+  handler: async (ctx, args) => {
+    await requireSessionOwnership(ctx, args.id);
+    await ctx.db.patch(args.id, {
+      status: args.status,
+      lastActivityAt: Date.now(),
+    });
+  },
+});
+
+/**
+ * Marks all `running` sessions as `idle` (startup crash recovery).
+ * Public equivalent of {@link serverMarkStaleRunning} — scoped to user's orgs.
+ */
+export const companionMarkStaleRunning = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const userId = await requireAuth(ctx);
+    const orgIds = await getUserWritableOrgIds(ctx, userId);
+    return markStaleRunningImpl(ctx, orgIds);
+  },
+});
+
+/**
+ * Marks all `stopped` sessions as `idle` (startup cleanup).
+ * Public equivalent of {@link serverMarkStoppedAsIdle} — scoped to user's orgs.
+ */
+export const companionMarkStoppedAsIdle = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const userId = await requireAuth(ctx);
+    const orgIds = await getUserWritableOrgIds(ctx, userId);
+    return markStoppedAsIdleImpl(ctx, orgIds);
+  },
+});
+
+/**
+ * Updates `lastHeartbeat` for a batch of active sessions.
+ * Public equivalent of {@link serverBatchHeartbeat} — authenticated via JWT.
+ */
+export const companionBatchHeartbeat = mutation({
+  args: { sessionIds: v.array(v.id('sessions')) },
+  handler: async (ctx, args) => {
+    const userId = await requireAuth(ctx);
+    const orgIds = await getUserWritableOrgIds(ctx, userId);
+    const now = Date.now();
+    for (const id of args.sessionIds) {
+      const session = await ctx.db.get(id);
+      if (!session) continue;
+      // Verify session belongs to caller's org (member+ role)
+      const task = await ctx.db.get(session.taskId);
+      if (!task) continue;
+      const repo = await ctx.db.get(task.repoId);
+      if (!repo || !orgIds.has(repo.orgId)) continue;
+      await ctx.db.patch(id, { lastHeartbeat: now });
+    }
+  },
+});
+
+/**
+ * Persists the SDK session ID, model, and permission mode.
+ * Public equivalent of {@link updateSdkSessionId} — authenticated via JWT.
+ */
+export const companionUpdateSdkSessionId = mutation({
+  args: {
+    id: v.id('sessions'),
+    sdkSessionId: v.string(),
+    model: v.optional(v.string()),
+    permissionMode: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    await requireSessionOwnership(ctx, args.id);
+    await ctx.db.patch(args.id, {
+      sdkSessionId: args.sdkSessionId,
+      ...(args.model !== undefined && { model: args.model }),
+      ...(args.permissionMode !== undefined && {
+        permissionMode: args.permissionMode,
+      }),
+    });
+  },
+});
+
+/**
+ * Bumps `lastActivityAt` without changing status.
+ * Public equivalent of {@link serverUpdateActivity} — authenticated via JWT.
+ */
+export const companionUpdateActivity = mutation({
+  args: { id: v.id('sessions') },
+  handler: async (ctx, args) => {
+    await requireSessionOwnership(ctx, args.id);
+    await ctx.db.patch(args.id, { lastActivityAt: Date.now() });
+  },
+});
+
+/**
+ * Sets the human-readable display name for a session.
+ * Public equivalent of {@link serverUpdateName} — authenticated via JWT.
+ */
+export const companionUpdateName = mutation({
+  args: {
+    id: v.id('sessions'),
+    name: v.string(),
+  },
+  handler: async (ctx, args) => {
+    await requireSessionOwnership(ctx, args.id);
+    await ctx.db.patch(args.id, { name: args.name });
   },
 });

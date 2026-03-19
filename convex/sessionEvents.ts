@@ -1,6 +1,11 @@
 import { v } from 'convex/values';
-import { internalMutation, internalQuery, query } from './_generated/server';
-import { requireOrgMembership } from './lib/auth';
+import {
+  internalMutation,
+  internalQuery,
+  mutation,
+  query,
+} from './_generated/server';
+import { requireOrgMembership, requireSessionOwnership } from './lib/auth';
 
 /** Server-side mutation for batched event persistence. */
 export const insertBatch = internalMutation({
@@ -28,6 +33,45 @@ export const insertBatch = internalMutation({
 export const getNextBatchIndex = internalQuery({
   args: { sessionId: v.id('sessions') },
   handler: async (ctx, args) => {
+    const lastBatch = await ctx.db
+      .query('sessionEvents')
+      .withIndex('by_session_batch', (q) => q.eq('sessionId', args.sessionId))
+      .order('desc')
+      .first();
+    return { nextBatchIndex: lastBatch ? lastBatch.batchIndex + 1 : 0 };
+  },
+});
+
+// ── Public companion mutations/queries (JWT-authenticated) ──────────
+
+/** Batched event persistence. Public equivalent of {@link insertBatch}. */
+export const companionInsertBatch = mutation({
+  args: {
+    sessionId: v.id('sessions'),
+    events: v.array(
+      v.object({
+        type: v.string(),
+        data: v.string(),
+        timestamp: v.number(),
+      }),
+    ),
+    batchIndex: v.number(),
+  },
+  handler: async (ctx, args) => {
+    await requireSessionOwnership(ctx, args.sessionId);
+    await ctx.db.insert('sessionEvents', {
+      sessionId: args.sessionId,
+      events: args.events,
+      batchIndex: args.batchIndex,
+    });
+  },
+});
+
+/** Next available batchIndex. Public equivalent of {@link getNextBatchIndex}. */
+export const companionGetNextBatchIndex = query({
+  args: { sessionId: v.id('sessions') },
+  handler: async (ctx, args) => {
+    await requireSessionOwnership(ctx, args.sessionId);
     const lastBatch = await ctx.db
       .query('sessionEvents')
       .withIndex('by_session_batch', (q) => q.eq('sessionId', args.sessionId))
