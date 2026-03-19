@@ -194,8 +194,11 @@ function isInstanceAlive(instanceId: string): boolean {
   try {
     process.kill(stalePid, 0);
     return true; // Process exists
-  } catch {
-    return false; // Process is dead
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === 'ESRCH') {
+      return false; // Process definitively gone
+    }
+    return true; // EPERM or other — process likely still alive
   }
 }
 
