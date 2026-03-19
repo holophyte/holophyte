@@ -1,12 +1,12 @@
 ---
 name: autopilot
-description: Implement a feature and iterate on Greptile review comments autonomously
+description: Implement a feature and iterate on PR review comments autonomously
 user-invocable: true
 ---
 
 # Autopilot
 
-Implement a feature, push a PR, and autonomously iterate on Greptile code review
+Implement a feature, push a PR, and autonomously iterate on PR code review
 comments until resolved.
 
 ## Usage
@@ -173,17 +173,17 @@ gh pr list --head $(git branch --show-current) --json number --jq '.[0].number'
 - If no PR exists, create one with `gh pr create` — use a conventional prefix in the title (e.g., `feat: add drag reordering to kanban columns`)
 - If PR exists, it's already updated by the push
 
-### 8. Poll for Greptile Review
+### 8. Poll for PR Review
 
-Wait for all PR checks (including Greptile) to complete, then fetch new comments:
+Wait for all PR checks to complete, then fetch new comments:
 
 ```bash
 bun run pr-comments -- --poll <PR_NUMBER>
 ```
 
-This uses `gh pr checks --watch` to block until all checks finish, then shows any new Greptile comments.
+This uses `gh pr checks --watch` to block until all checks finish, then shows any new review bot comments.
 
-- If no new comments after checks complete, exit successfully — Greptile found nothing to flag
+- If no new comments after checks complete, exit successfully — review bots found nothing to flag
 
 ### 9. Triage Comments
 
@@ -230,7 +230,7 @@ bun run test
 
 ```bash
 git add <changed files>
-git commit -m "fix: address greptile review feedback"
+git commit -m "fix: address review feedback"
 git push
 ```
 
@@ -240,7 +240,7 @@ Return to **Step 8** for the next round.
 
 Stop the loop when any of these are true:
 
-- **No new comments** — Greptile found nothing new after the latest push (success)
+- **No new comments** — review bots found nothing new after the latest push (success)
 - **Max 3 iterations** — report remaining unresolved comments to the user
 - **Quality checks fail after 2 retries** — stop and report the errors
 
