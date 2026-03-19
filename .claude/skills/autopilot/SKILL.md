@@ -21,7 +21,7 @@ Before starting, assess whether the feature needs design discussion:
 
 **Use `/brainstorm` first if:**
 - New data model or schema changes with multiple valid approaches
-- New system boundary (new API endpoint, new WebSocket message type, new external integration)
+- New system boundary (new API endpoint, new Convex action/mutation, new external integration)
 - The feature description is ambiguous or underspecified
 - Multiple architectural approaches exist with meaningful trade-offs
 

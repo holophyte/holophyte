@@ -43,9 +43,9 @@ When a task page loads and its most recent session is idle, `SessionPanel` loads
 ### Session Resume Flow
 
 1. Frontend reads the `sdkSessionId` from the Convex session record (available via `useSession` → `sdkSessionId`).
-2. Frontend POSTs to `POST /api/sessions/start` with `resumeSdkSessionId` set to the captured `sdkSessionId`.
-3. Server calls `queryConvexInternal` to get the next `batchIndex` for appending new events after the existing history.
-4. Server spawns a new SDK process with `options.resume = resumeSdkSessionId`.
+2. Frontend calls a Convex mutation to resume the session, passing `resumeSdkSessionId`.
+3. Companion process picks up the resume request, fetches the next `batchIndex` from Convex for event ordering continuity.
+4. Companion spawns a new SDK process with `options.resume = resumeSdkSessionId`.
 5. Convex real-time subscriptions in `useSession()` automatically pick up new events as they're persisted — no manual reconnection needed.
 6. Conversation continues seamlessly — the SDK reloads prior context from its own storage.
 

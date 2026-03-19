@@ -58,7 +58,7 @@ After approval, offer to hand off to:
 
 **Use `/brainstorm` when:**
 - New data model or schema changes with multiple valid approaches
-- New system boundary (API endpoint, WebSocket message type, external integration)
+- New system boundary (API endpoint, Convex action/mutation, external integration)
 - Feature description is ambiguous or underspecified
 - Multiple architectural approaches exist with meaningful trade-offs
 
