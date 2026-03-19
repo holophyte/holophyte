@@ -128,7 +128,6 @@ export const companionHeartbeat = mutation({
 
 /**
  * Returns the most recent companion heartbeat across all of the user's orgs.
- * Public equivalent of the `/api/internal/companion/status` HTTP endpoint.
  *
  * Checks every org the user belongs to and returns the most recently seen
  * heartbeat, so the duplicate-instance check works correctly for multi-org users.
