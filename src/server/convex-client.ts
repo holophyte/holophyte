@@ -24,10 +24,13 @@ let fetchToken:
  *
  * Call once during companion startup, before subscriptions or polling begin.
  * Safe to call again after `closeCompanionClients()` (e.g. on token refresh).
+ *
+ * @param deployment - CONVEX_DEPLOYMENT value, used to key token persistence on refresh.
  */
 export function initCompanionClients(
   convexUrl: string,
   tokenFile: TokenFileData,
+  deployment: string,
 ): void {
   // Validate token matches deployment before opening connections
   const normalize = (u: string) => u.replace(/\/$/, '');
@@ -45,7 +48,7 @@ export function initCompanionClients(
 
   // Shared token fetcher — ConvexClient's periodic refresh updates the
   // token in the closure; getConvexHttpClient() re-sets it before each use.
-  fetchToken = createFetchToken(tokenFile);
+  fetchToken = createFetchToken(deployment, tokenFile);
 
   // WebSocket client — subscriptions + mutations (auto-refreshes tokens)
   convexClient = new ConvexClient(convexUrl);
