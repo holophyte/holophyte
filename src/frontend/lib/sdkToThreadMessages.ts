@@ -160,6 +160,11 @@ export function sdkToThreadMessages(
  * stream. Both user and assistant events clear the suggestion. Empty or
  * whitespace-only suggestions are treated as noise (not clear signals) and
  * skipped — the SDK clears suggestions via the next user/assistant turn.
+ *
+ * Note: `prompt_suggestion` is not yet part of the official `SDKMessage` union
+ * in `@anthropic-ai/claude-agent-sdk` types. The runtime events are emitted as
+ * plain objects so the type check works, but TypeScript may flag `.suggestion`
+ * access if the SDK types are tightened. Track for inclusion upstream.
  */
 export function extractPromptSuggestion(events: SDKMessage[]): string | null {
   for (let i = events.length - 1; i >= 0; i--) {

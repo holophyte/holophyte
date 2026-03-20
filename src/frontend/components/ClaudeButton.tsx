@@ -147,7 +147,7 @@ export function ClaudeButton({ task }: ClaudeButtonProps) {
           <Play className="h-4 w-4 mr-1" />
           Launch Claude Code
         </Button>
-        <ModelPicker value={model} onChange={setModel} />
+        {task.prompt && <ModelPicker value={model} onChange={setModel} />}
       </div>
       {(companionState === 'offline' || companionState === 'stale') && (
         <p className="text-xs text-yellow-600 mt-1 flex items-center gap-1">
