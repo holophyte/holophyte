@@ -27,12 +27,26 @@ export const listActive = query({
   args: { orgId: v.id('organizations') },
   handler: async (ctx, args) => {
     await requireOrgMembership(ctx, args.orgId);
-    return await ctx.db
+    // Primary: indexed lookup for sessions with denormalized orgId
+    const sessions = await ctx.db
       .query('sessions')
       .withIndex('by_org_status', (q) =>
         q.eq('orgId', args.orgId).eq('status', 'running'),
       )
       .collect();
+    // Fallback: pick up un-backfilled running sessions (orgId undefined)
+    // TODO(#170): remove fallback after backfill confirmed complete
+    const indexedIds = new Set(sessions.map((s) => s._id));
+    const allRunning = await ctx.db
+      .query('sessions')
+      .withIndex('by_status', (q) => q.eq('status', 'running'))
+      .collect();
+    for (const s of allRunning) {
+      if (indexedIds.has(s._id) || s.orgId) continue;
+      const resolvedOrgId = await getOrgIdFromTaskOrNull(ctx, s.taskId);
+      if (resolvedOrgId && resolvedOrgId === args.orgId) sessions.push(s);
+    }
+    return sessions;
   },
 });
 
