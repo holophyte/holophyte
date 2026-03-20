@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 import { SessionActionsContext } from './SessionActionsContext';
@@ -27,7 +27,11 @@ vi.mock('@assistant-ui/react', () => {
       children: ReactNode;
       className?: string;
     }) => (
-      <div data-testid="thread-viewport" className={className}>
+      <div
+        data-testid="thread-viewport"
+        className={className}
+        style={{ overflowY: 'auto' }}
+      >
         {children}
       </div>
     ),
@@ -140,9 +144,37 @@ describe('SessionThread', () => {
       expect(screen.getByTestId('session-composer')).toBeInTheDocument();
     });
 
-    it('renders ScrollToBottom button', () => {
+    it('renders ScrollToBottom button hidden when not scrolled', () => {
       render(<SessionThread />, { wrapper: withSessionActions() });
-      expect(screen.getByLabelText('Scroll to bottom')).toBeInTheDocument();
+      const btn = screen.getByLabelText('Scroll to bottom');
+      expect(btn).toBeInTheDocument();
+      // Not scrolled, so button should be hidden from AT
+      expect(btn).toHaveAttribute('aria-hidden', 'true');
+      expect(btn).toHaveAttribute('tabindex', '-1');
+    });
+
+    it('shows ScrollToBottom button when scrolled far from bottom', () => {
+      render(<SessionThread />, { wrapper: withSessionActions() });
+      const viewport = screen.getByTestId('thread-viewport');
+
+      // Simulate a tall scrollable area scrolled far from bottom
+      Object.defineProperty(viewport, 'scrollHeight', {
+        value: 2000,
+        configurable: true,
+      });
+      Object.defineProperty(viewport, 'clientHeight', {
+        value: 500,
+        configurable: true,
+      });
+      Object.defineProperty(viewport, 'scrollTop', {
+        value: 0,
+        configurable: true,
+      });
+      fireEvent.scroll(viewport);
+
+      const btn = screen.getByRole('button', { name: 'Scroll to bottom' });
+      expect(btn).toHaveAttribute('aria-hidden', 'false');
+      expect(btn).toHaveAttribute('tabindex', '0');
     });
   });
 
