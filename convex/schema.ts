@@ -168,6 +168,7 @@ export default defineSchema({
 
   sessions: defineTable({
     taskId: v.id('tasks'),
+    orgId: v.optional(v.id('organizations')), // logically required; optional for backwards-compat during backfill
     status: v.union(
       v.literal('queued'),
       v.literal('running'),
@@ -190,7 +191,8 @@ export default defineSchema({
   })
     .index('by_task', ['taskId'])
     .index('by_status', ['status'])
-    .index('by_task_activity', ['taskId', 'lastActivityAt']),
+    .index('by_task_activity', ['taskId', 'lastActivityAt'])
+    .index('by_org_status', ['orgId', 'status']),
 
   sessionMessages: defineTable({
     sessionId: v.id('sessions'),
