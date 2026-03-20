@@ -44,7 +44,7 @@ export const listActive = query({
     for (const s of allRunning) {
       if (indexedIds.has(s._id) || s.orgId) continue;
       const resolvedOrgId = await getOrgIdFromTaskOrNull(ctx, s.taskId);
-      if (resolvedOrgId === args.orgId) sessions.push(s);
+      if (resolvedOrgId && resolvedOrgId === args.orgId) sessions.push(s);
     }
     return sessions;
   },
