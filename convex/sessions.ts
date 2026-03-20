@@ -457,6 +457,23 @@ async function fetchQueuedSessions(
         .withIndex('by_status', (q) => q.eq('status', 'queued'))
         .collect();
 
+  // Fallback: pick up un-backfilled queued sessions (orgId undefined)
+  // TODO(#170): remove fallback after backfill confirmed complete
+  if (orgIds) {
+    const indexedIds = new Set(sessions.map((s) => s._id));
+    const allQueued = await ctx.db
+      .query('sessions')
+      .withIndex('by_status', (q) => q.eq('status', 'queued'))
+      .collect();
+    for (const s of allQueued) {
+      if (indexedIds.has(s._id) || s.orgId) continue;
+      const resolvedOrgId = await getOrgIdFromTaskOrNull(ctx, s.taskId);
+      if (resolvedOrgId && orgIds.has(resolvedOrgId)) {
+        sessions.push(s);
+      }
+    }
+  }
+
   const result = [];
   for (const session of sessions) {
     const task = await ctx.db.get(session.taskId);
@@ -631,6 +648,20 @@ export const companionListStopped = query({
     const userId = await requireAuth(ctx);
     const orgIds = await getUserOrgIds(ctx, userId);
     const sessions = await collectByOrgs(ctx, orgIds, 'stopped');
+    // Fallback: pick up un-backfilled stopped sessions (orgId undefined)
+    // TODO(#170): remove fallback after backfill confirmed complete
+    const indexedIds = new Set(sessions.map((s) => s._id));
+    const allStopped = await ctx.db
+      .query('sessions')
+      .withIndex('by_status', (q) => q.eq('status', 'stopped'))
+      .collect();
+    for (const s of allStopped) {
+      if (indexedIds.has(s._id) || s.orgId) continue;
+      const resolvedOrgId = await getOrgIdFromTaskOrNull(ctx, s.taskId);
+      if (resolvedOrgId && orgIds.has(resolvedOrgId)) {
+        sessions.push(s);
+      }
+    }
     return sessions.map((s) => ({ _id: s._id }));
   },
 });
@@ -884,11 +915,13 @@ export const companionUpdateName = mutation({
  * `isDone` is true:
  * ```
  * let cursor = undefined;
+ * let isDone = false;
  * do {
  *   const r = await convex.mutation(internal.sessions.backfillOrgId, { cursor });
+ *   isDone = r.isDone;
  *   cursor = r.continueCursor ?? undefined;
- *   console.log(`patched ${r.patched}, done: ${r.isDone}`);
- * } while (!r.isDone);
+ *   console.log(`patched ${r.patched}, done: ${isDone}`);
+ * } while (!isDone);
  * ```
  */
 export const backfillOrgId = internalMutation({
