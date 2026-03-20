@@ -189,7 +189,7 @@ describe('SessionComposer', () => {
         withSession(<SessionComposer />, { promptSuggestion: suggestion }),
       );
       const input = screen.getByRole('textbox');
-      expect(input).toHaveAttribute('placeholder', suggestion);
+      expect(input).toHaveAttribute('placeholder', `${suggestion}  [tab]`);
     });
 
     it('shows default placeholder when running (even with suggestion)', () => {
