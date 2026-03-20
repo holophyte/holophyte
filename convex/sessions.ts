@@ -27,26 +27,12 @@ export const listActive = query({
   args: { orgId: v.id('organizations') },
   handler: async (ctx, args) => {
     await requireOrgMembership(ctx, args.orgId);
-    // Primary: indexed lookup for sessions with denormalized orgId
-    const sessions = await ctx.db
+    return await ctx.db
       .query('sessions')
       .withIndex('by_org_status', (q) =>
         q.eq('orgId', args.orgId).eq('status', 'running'),
       )
       .collect();
-    // Fallback: pick up un-backfilled running sessions (orgId undefined)
-    // TODO(#170): remove fallback after backfill confirmed complete
-    const indexedIds = new Set(sessions.map((s) => s._id));
-    const allRunning = await ctx.db
-      .query('sessions')
-      .withIndex('by_status', (q) => q.eq('status', 'running'))
-      .collect();
-    for (const s of allRunning) {
-      if (indexedIds.has(s._id) || s.orgId) continue;
-      const resolvedOrgId = await getOrgIdFromTaskOrNull(ctx, s.taskId);
-      if (resolvedOrgId && resolvedOrgId === args.orgId) sessions.push(s);
-    }
-    return sessions;
   },
 });
 
@@ -471,23 +457,6 @@ async function fetchQueuedSessions(
         .withIndex('by_status', (q) => q.eq('status', 'queued'))
         .collect();
 
-  // Fallback: pick up un-backfilled queued sessions (orgId undefined)
-  // TODO(#170): remove fallback after backfill confirmed complete
-  if (orgIds) {
-    const indexedIds = new Set(sessions.map((s) => s._id));
-    const allQueued = await ctx.db
-      .query('sessions')
-      .withIndex('by_status', (q) => q.eq('status', 'queued'))
-      .collect();
-    for (const s of allQueued) {
-      if (indexedIds.has(s._id) || s.orgId) continue;
-      const resolvedOrgId = await getOrgIdFromTaskOrNull(ctx, s.taskId);
-      if (resolvedOrgId && orgIds.has(resolvedOrgId)) {
-        sessions.push(s);
-      }
-    }
-  }
-
   const result = [];
   for (const session of sessions) {
     const task = await ctx.db.get(session.taskId);
@@ -662,20 +631,6 @@ export const companionListStopped = query({
     const userId = await requireAuth(ctx);
     const orgIds = await getUserOrgIds(ctx, userId);
     const sessions = await collectByOrgs(ctx, orgIds, 'stopped');
-    // Fallback: pick up un-backfilled stopped sessions (orgId undefined)
-    // TODO(#170): remove fallback after backfill confirmed complete
-    const indexedIds = new Set(sessions.map((s) => s._id));
-    const allStopped = await ctx.db
-      .query('sessions')
-      .withIndex('by_status', (q) => q.eq('status', 'stopped'))
-      .collect();
-    for (const s of allStopped) {
-      if (indexedIds.has(s._id) || s.orgId) continue;
-      const resolvedOrgId = await getOrgIdFromTaskOrNull(ctx, s.taskId);
-      if (resolvedOrgId && orgIds.has(resolvedOrgId)) {
-        sessions.push(s);
-      }
-    }
     return sessions.map((s) => ({ _id: s._id }));
   },
 });
@@ -699,30 +654,12 @@ async function transitionSessions(
   const { fromStatus, toStatus, lastActivityAt, orgIds } = opts;
   let count = 0;
 
-  let sessions: Doc<'sessions'>[];
-  if (orgIds) {
-    // Primary: indexed lookup for sessions with denormalized orgId
-    sessions = await collectByOrgs(ctx, orgIds, fromStatus);
-    // Fallback: pick up un-backfilled sessions (orgId undefined) via by_status
-    // TODO(#170): remove fallback after backfill confirmed complete
-    const allByStatus = await ctx.db
-      .query('sessions')
-      .withIndex('by_status', (q) => q.eq('status', fromStatus))
-      .collect();
-    const indexedIds = new Set(sessions.map((s) => s._id));
-    for (const s of allByStatus) {
-      if (indexedIds.has(s._id) || s.orgId) continue;
-      const resolvedOrgId = await getOrgIdFromTaskOrNull(ctx, s.taskId);
-      if (resolvedOrgId && orgIds.has(resolvedOrgId)) {
-        sessions.push(s);
-      }
-    }
-  } else {
-    sessions = await ctx.db
-      .query('sessions')
-      .withIndex('by_status', (q) => q.eq('status', fromStatus))
-      .collect();
-  }
+  const sessions = orgIds
+    ? await collectByOrgs(ctx, orgIds, fromStatus)
+    : await ctx.db
+        .query('sessions')
+        .withIndex('by_status', (q) => q.eq('status', fromStatus))
+        .collect();
 
   for (const session of sessions) {
     await ctx.db.patch(session._id, {
@@ -827,26 +764,9 @@ export const companionMarkStoppedAsIdle = mutation({
 });
 
 /**
- * Returns the orgId for a session via task→repo join.
- * Gracefully returns null if the task or repo has been deleted (orphaned session).
- * TODO(#170): remove fallback after backfill confirmed complete.
- */
-async function getOrgIdFromTaskOrNull(
-  ctx: QueryCtx,
-  taskId: Id<'tasks'>,
-): Promise<Id<'organizations'> | null> {
-  const task = await ctx.db.get(taskId);
-  if (!task) return null;
-  const repo = await ctx.db.get(task.repoId);
-  if (!repo) return null;
-  return repo.orgId;
-}
-
-/**
  * Updates `lastHeartbeat` for a batch of active sessions.
  * Public equivalent of {@link serverBatchHeartbeat} — authenticated via JWT.
- * Uses denormalized orgId for org check; falls back to task→repo join for
- * un-backfilled sessions.
+ * Uses denormalized orgId for org membership check.
  */
 export const companionBatchHeartbeat = mutation({
   args: { sessionIds: v.array(v.id('sessions')) },
@@ -856,12 +776,7 @@ export const companionBatchHeartbeat = mutation({
     const now = Date.now();
     for (const id of args.sessionIds) {
       const session = await ctx.db.get(id);
-      if (!session) continue;
-      // Use denormalized orgId; fallback to join for un-backfilled sessions
-      // TODO(#170): remove fallback after backfill confirmed complete
-      const sessionOrgId =
-        session.orgId ?? (await getOrgIdFromTaskOrNull(ctx, session.taskId));
-      if (!sessionOrgId || !orgIds.has(sessionOrgId)) continue;
+      if (!session?.orgId || !orgIds.has(session.orgId)) continue;
       await ctx.db.patch(id, { lastHeartbeat: now });
     }
   },
@@ -914,51 +829,5 @@ export const companionUpdateName = mutation({
   handler: async (ctx, args) => {
     await requireSessionOwnership(ctx, args.id);
     await ctx.db.patch(args.id, { name: args.name });
-  },
-});
-
-/**
- * Backfills `orgId` onto existing sessions that were created before the
- * denormalization was added.
- *
- * Pages through all sessions in batches of 500. For each session missing
- * `orgId`, resolves it via `task → repo` and patches. Orphaned sessions
- * (task or repo deleted) are skipped gracefully.
- *
- * Invoke iteratively, passing the returned `continueCursor` back until
- * `isDone` is true:
- * ```
- * let cursor = undefined;
- * let isDone = false;
- * do {
- *   const r = await convex.mutation(internal.sessions.backfillOrgId, { cursor });
- *   isDone = r.isDone;
- *   cursor = r.continueCursor ?? undefined;
- *   console.log(`patched ${r.patched}, done: ${isDone}`);
- * } while (!isDone);
- * ```
- */
-export const backfillOrgId = internalMutation({
-  args: { cursor: v.optional(v.string()) },
-  handler: async (ctx, args) => {
-    const PAGE_SIZE = 500;
-    const result = await ctx.db
-      .query('sessions')
-      .paginate({ numItems: PAGE_SIZE, cursor: args.cursor ?? null });
-    let patched = 0;
-    for (const session of result.page) {
-      if (session.orgId) continue; // already has orgId
-      const task = await ctx.db.get(session.taskId);
-      if (!task) continue; // orphaned session — skip gracefully
-      const repo = await ctx.db.get(task.repoId);
-      if (!repo) continue; // orphaned session — skip gracefully
-      await ctx.db.patch(session._id, { orgId: repo.orgId });
-      patched++;
-    }
-    return {
-      patched,
-      isDone: result.isDone,
-      continueCursor: result.isDone ? null : result.continueCursor,
-    };
   },
 });

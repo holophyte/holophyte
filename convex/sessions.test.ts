@@ -1015,76 +1015,6 @@ describe('sessions.companionMarkStoppedAsIdle — org isolation', () => {
   });
 });
 
-describe('sessions.backfillOrgId', () => {
-  it('patches sessions missing orgId via task→repo join', async () => {
-    const t = convexTest(schema);
-    const { taskId, orgId } = await setupTaskEnv(t);
-
-    // Insert a session without orgId (simulates pre-denorm document)
-    const sessionId = await t.run(async (ctx) => {
-      return await ctx.db.insert('sessions', {
-        taskId,
-        status: 'idle',
-        startedAt: Date.now(),
-        lastActivityAt: Date.now(),
-      });
-    });
-
-    const result = await t.mutation(internal.sessions.backfillOrgId, {});
-    expect(result.patched).toBe(1);
-    expect(result.isDone).toBe(true);
-
-    const session = await t.run(async (ctx) => ctx.db.get(sessionId));
-    expect(session?.orgId).toBe(orgId);
-  });
-
-  it('skips sessions that already have orgId (idempotent)', async () => {
-    const t = convexTest(schema);
-    const { authed, taskId } = await setupTaskEnv(t);
-
-    // Create via mutation (already has orgId)
-    await authed.mutation(api.sessions.create, { taskId });
-
-    const result = await t.mutation(internal.sessions.backfillOrgId, {});
-    expect(result.patched).toBe(0);
-    expect(result.isDone).toBe(true);
-  });
-
-  it('skips orphaned sessions gracefully (task deleted)', async () => {
-    const t = convexTest(schema);
-    const { taskId } = await setupTaskEnv(t);
-
-    // Insert session without orgId, then delete the task
-    const sessionId = await t.run(async (ctx) => {
-      const id = await ctx.db.insert('sessions', {
-        taskId,
-        status: 'idle',
-        startedAt: Date.now(),
-        lastActivityAt: Date.now(),
-      });
-      await ctx.db.delete(taskId);
-      return id;
-    });
-
-    // Should not throw — just skip the orphaned session
-    const result = await t.mutation(internal.sessions.backfillOrgId, {});
-    expect(result.patched).toBe(0);
-    expect(result.isDone).toBe(true);
-
-    // Session still exists but has no orgId (was orphaned)
-    const session = await t.run(async (ctx) => ctx.db.get(sessionId));
-    expect(session?.orgId).toBeUndefined();
-  });
-
-  it('returns isDone true and continueCursor null when finished', async () => {
-    const t = convexTest(schema);
-
-    const result = await t.mutation(internal.sessions.backfillOrgId, {});
-    expect(result.isDone).toBe(true);
-    expect(result.continueCursor).toBeNull();
-  });
-});
-
 describe('sessions.companionListQueued — org isolation', () => {
   it("returns only queued sessions for the caller's orgs", async () => {
     const t = convexTest(schema);
@@ -1166,30 +1096,5 @@ describe('sessions.companionListStopped — org isolation', () => {
     );
     expect(otherStopped).toHaveLength(1);
     expect(otherStopped[0]?._id).toBe(otherSessionId);
-  });
-});
-
-describe('sessions.companionBatchHeartbeat — fallback', () => {
-  it('heartbeats sessions without orgId via task→repo fallback', async () => {
-    const t = convexTest(schema);
-    const { authed, taskId } = await setupTaskEnv(t);
-
-    // Insert a session without orgId (simulating pre-backfill state)
-    const sessionId = await t.run(async (ctx) => {
-      return await ctx.db.insert('sessions', {
-        taskId,
-        status: 'running',
-        startedAt: Date.now(),
-        lastActivityAt: Date.now(),
-      });
-    });
-
-    // Heartbeat should work via fallback
-    await authed.mutation(api.sessions.companionBatchHeartbeat, {
-      sessionIds: [sessionId],
-    });
-
-    const session = await t.run(async (ctx) => ctx.db.get(sessionId));
-    expect(session?.lastHeartbeat).toBeDefined();
   });
 });
