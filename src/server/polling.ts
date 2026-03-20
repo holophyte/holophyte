@@ -104,6 +104,20 @@ export async function companionPoll() {
               );
             }
           }
+          // Discard token with mismatched URL when anonymous auth is available.
+          if (
+            tokenStatus === 'ok' &&
+            cachedTokenFile &&
+            !cachedTokenFile.ephemeral
+          ) {
+            const normalize = (u: string) => u.replace(/\/$/, '');
+            if (normalize(cachedTokenFile.convexUrl) !== normalize(convexUrl)) {
+              if (process.env.ALLOW_ANONYMOUS_AUTH === '1') {
+                cachedTokenFile = null;
+                tokenStatus = 'missing';
+              }
+            }
+          }
           // Only fall back to anonymous auth when the token is missing, not
           // when it's invalid (corrupt token should surface as an error).
           if (
@@ -259,9 +273,27 @@ export async function startCompanion(url: string): Promise<void> {
     );
   }
 
+  // If the stored token's URL doesn't match the current CONVEX_URL (e.g. token
+  // was saved against cloud but we're running local), discard it so the
+  // anonymous auth fallback can kick in.
+  const convexUrl = process.env.CONVEX_URL;
+  if (tokenStatus === 'ok' && cachedTokenFile && convexUrl) {
+    const normalize = (u: string) => u.replace(/\/$/, '');
+    if (normalize(cachedTokenFile.convexUrl) !== normalize(convexUrl)) {
+      if (process.env.ALLOW_ANONYMOUS_AUTH === '1') {
+        console.log(
+          `Token URL mismatch (stored: ${cachedTokenFile.convexUrl}, current: ${convexUrl}), falling back to anonymous auth`,
+        );
+        cachedTokenFile = null;
+        tokenStatus = 'missing';
+      }
+      // If anonymous auth is not allowed, initCompanionClients will throw
+      // with a descriptive error message prompting the user to re-run setup.
+    }
+  }
+
   // Anonymous auth fallback (still part of step 1 — obtaining a token)
   // Only fall back when the token is missing, not when it's corrupt.
-  const convexUrl = process.env.CONVEX_URL;
   if (
     tokenStatus === 'missing' &&
     !cachedTokenFile &&
