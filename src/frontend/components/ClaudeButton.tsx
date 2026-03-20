@@ -43,6 +43,10 @@ export function ClaudeButton({ task }: ClaudeButtonProps) {
     setModel(DEFAULT_MODEL);
   }
 
+  const isOnThisTaskPage =
+    taskPageMatch?.params.taskId === task._id &&
+    taskPageMatch?.params.repoId === String(task.repoId);
+
   const handleLaunch = async () => {
     setError(null);
     if (!task.repo) return;
@@ -58,8 +62,7 @@ export function ClaudeButton({ task }: ClaudeButtonProps) {
           model,
         });
         openSession(sessionId);
-        // Navigate to task page after launching, unless already there
-        if (!taskPageMatch) {
+        if (!isOnThisTaskPage) {
           void navigate({
             to: '/repos/$repoId/tasks/$taskId/page',
             params: { repoId: String(task.repoId), taskId: task._id },
@@ -72,7 +75,7 @@ export function ClaudeButton({ task }: ClaudeButtonProps) {
       }
     } else {
       // No prompt: navigate to task page for chat-first flow
-      if (!taskPageMatch) {
+      if (!isOnThisTaskPage) {
         // Clear active session so task page shows the empty composer
         closeSession();
         void navigate({
