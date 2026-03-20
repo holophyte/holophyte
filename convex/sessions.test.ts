@@ -871,3 +871,216 @@ describe('sessions.serverMarkStoppedAsIdle', () => {
     expect(result.count).toBe(0);
   });
 });
+
+describe('sessions.listActive — org isolation', () => {
+  it('returns only sessions for the queried org, not other orgs', async () => {
+    const t = convexTest(schema);
+    const { authed, orgId, taskId } = await setupTaskEnv(t);
+
+    // Create a running session in org 1
+    const sessionId = await authed.mutation(api.sessions.create, { taskId });
+    await t.run(async (ctx) => {
+      await ctx.db.patch(sessionId, { status: 'running' });
+    });
+
+    // Create a second user with their own org and a running session
+    const { authed: otherAuthed } = await setupUser(t, 'Other User');
+    const otherOrgId = await otherAuthed.mutation(api.organizations.create, {
+      name: 'Other Org',
+      slug: 'other-org',
+    });
+    const otherRepoId = await otherAuthed.mutation(api.repos.create, {
+      name: 'other-repo',
+      path: '/tmp/other-repo',
+      orgId: otherOrgId,
+    });
+    const otherTaskId = await otherAuthed.mutation(api.tasks.create, {
+      repoId: otherRepoId,
+      title: 'Other Task',
+    });
+    const otherSessionId = await otherAuthed.mutation(api.sessions.create, {
+      taskId: otherTaskId,
+    });
+    await t.run(async (ctx) => {
+      await ctx.db.patch(otherSessionId, { status: 'running' });
+    });
+
+    // Org 1 should only see its own session
+    const active = await authed.query(api.sessions.listActive, { orgId });
+    expect(active).toHaveLength(1);
+    expect(active[0]?._id).toBe(sessionId);
+
+    // Org 2 should only see its own session
+    const otherActive = await otherAuthed.query(api.sessions.listActive, {
+      orgId: otherOrgId,
+    });
+    expect(otherActive).toHaveLength(1);
+    expect(otherActive[0]?._id).toBe(otherSessionId);
+  });
+});
+
+describe('sessions.companionMarkStaleRunning — org isolation', () => {
+  it('only transitions running sessions in the caller orgs', async () => {
+    const t = convexTest(schema);
+    const { authed, taskId } = await setupTaskEnv(t);
+
+    // Create running session in org 1
+    const sessionId = await authed.mutation(api.sessions.create, { taskId });
+    await t.run(async (ctx) => {
+      await ctx.db.patch(sessionId, { status: 'running' });
+    });
+
+    // Create running session in org 2 (different user)
+    const { authed: otherAuthed } = await setupUser(t, 'Other User');
+    const otherOrgId = await otherAuthed.mutation(api.organizations.create, {
+      name: 'Other Org',
+      slug: 'other-org-2',
+    });
+    const otherRepoId = await otherAuthed.mutation(api.repos.create, {
+      name: 'other-repo-2',
+      path: '/tmp/other-repo-2',
+      orgId: otherOrgId,
+    });
+    const otherTaskId = await otherAuthed.mutation(api.tasks.create, {
+      repoId: otherRepoId,
+      title: 'Other Task',
+    });
+    const otherSessionId = await otherAuthed.mutation(api.sessions.create, {
+      taskId: otherTaskId,
+    });
+    await t.run(async (ctx) => {
+      await ctx.db.patch(otherSessionId, { status: 'running' });
+    });
+
+    // Only mark stale for org 1's user — should only affect org 1 session
+    const result = await authed.mutation(
+      api.sessions.companionMarkStaleRunning,
+      {},
+    );
+    expect(result.count).toBe(1);
+
+    const [s1, s2] = await t.run(async (ctx) =>
+      Promise.all([ctx.db.get(sessionId), ctx.db.get(otherSessionId)]),
+    );
+    expect(s1?.status).toBe('idle');
+    expect(s2?.status).toBe('running'); // not touched
+  });
+});
+
+describe('sessions.companionMarkStoppedAsIdle — org isolation', () => {
+  it('only transitions stopped sessions in the caller orgs', async () => {
+    const t = convexTest(schema);
+    const { authed, taskId } = await setupTaskEnv(t);
+
+    // Create stopped session in org 1
+    const sessionId = await authed.mutation(api.sessions.create, { taskId });
+    await t.run(async (ctx) => {
+      await ctx.db.patch(sessionId, { status: 'stopped' });
+    });
+
+    // Create stopped session in org 2 (different user)
+    const { authed: otherAuthed } = await setupUser(t, 'Other User');
+    const otherOrgId = await otherAuthed.mutation(api.organizations.create, {
+      name: 'Other Org',
+      slug: 'other-org-3',
+    });
+    const otherRepoId = await otherAuthed.mutation(api.repos.create, {
+      name: 'other-repo-3',
+      path: '/tmp/other-repo-3',
+      orgId: otherOrgId,
+    });
+    const otherTaskId = await otherAuthed.mutation(api.tasks.create, {
+      repoId: otherRepoId,
+      title: 'Other Task',
+    });
+    const otherSessionId = await otherAuthed.mutation(api.sessions.create, {
+      taskId: otherTaskId,
+    });
+    await t.run(async (ctx) => {
+      await ctx.db.patch(otherSessionId, { status: 'stopped' });
+    });
+
+    // Only mark stopped as idle for org 1's user — should only affect org 1 session
+    const result = await authed.mutation(
+      api.sessions.companionMarkStoppedAsIdle,
+      {},
+    );
+    expect(result.count).toBe(1);
+
+    const [s1, s2] = await t.run(async (ctx) =>
+      Promise.all([ctx.db.get(sessionId), ctx.db.get(otherSessionId)]),
+    );
+    expect(s1?.status).toBe('idle');
+    expect(s2?.status).toBe('stopped'); // not touched
+  });
+});
+
+describe('sessions.backfillOrgId', () => {
+  it('patches sessions missing orgId via task→repo join', async () => {
+    const t = convexTest(schema);
+    const { taskId, orgId } = await setupTaskEnv(t);
+
+    // Insert a session without orgId (simulates pre-denorm document)
+    const sessionId = await t.run(async (ctx) => {
+      return await ctx.db.insert('sessions', {
+        taskId,
+        status: 'idle',
+        startedAt: Date.now(),
+        lastActivityAt: Date.now(),
+      });
+    });
+
+    const result = await t.mutation(internal.sessions.backfillOrgId, {});
+    expect(result.patched).toBe(1);
+    expect(result.isDone).toBe(true);
+
+    const session = await t.run(async (ctx) => ctx.db.get(sessionId));
+    expect(session?.orgId).toBe(orgId);
+  });
+
+  it('skips sessions that already have orgId (idempotent)', async () => {
+    const t = convexTest(schema);
+    const { authed, taskId } = await setupTaskEnv(t);
+
+    // Create via mutation (already has orgId)
+    await authed.mutation(api.sessions.create, { taskId });
+
+    const result = await t.mutation(internal.sessions.backfillOrgId, {});
+    expect(result.patched).toBe(0);
+    expect(result.isDone).toBe(true);
+  });
+
+  it('skips orphaned sessions gracefully (task deleted)', async () => {
+    const t = convexTest(schema);
+    const { taskId } = await setupTaskEnv(t);
+
+    // Insert session without orgId, then delete the task
+    const sessionId = await t.run(async (ctx) => {
+      const id = await ctx.db.insert('sessions', {
+        taskId,
+        status: 'idle',
+        startedAt: Date.now(),
+        lastActivityAt: Date.now(),
+      });
+      await ctx.db.delete(taskId);
+      return id;
+    });
+
+    // Should not throw — just skip the orphaned session
+    const result = await t.mutation(internal.sessions.backfillOrgId, {});
+    expect(result.patched).toBe(0);
+    expect(result.isDone).toBe(true);
+
+    // Session still exists but has no orgId (was orphaned)
+    const session = await t.run(async (ctx) => ctx.db.get(sessionId));
+    expect(session?.orgId).toBeUndefined();
+  });
+
+  it('returns isDone true and continueCursor null when finished', async () => {
+    const t = convexTest(schema);
+
+    const result = await t.mutation(internal.sessions.backfillOrgId, {});
+    expect(result.isDone).toBe(true);
+    expect(result.continueCursor).toBeNull();
+  });
+});
