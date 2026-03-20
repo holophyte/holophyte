@@ -17,6 +17,7 @@ export default function SessionComposer() {
         <div className="px-3 pt-2">
           <button
             type="button"
+            aria-label={`Use suggestion: ${promptSuggestion}`}
             onClick={() => composerRuntime.setText(promptSuggestion)}
             className="inline-flex items-center gap-1.5 rounded-full border border-border/50 bg-muted/30 px-3 py-1 text-xs text-muted-foreground hover:bg-muted/50 transition-colors max-w-full"
           >
