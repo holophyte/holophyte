@@ -172,8 +172,8 @@ export function extractPromptSuggestion(events: SDKMessage[]): string | null {
     const event = events[i]!;
     if (event.type === 'user' || event.type === 'assistant') return null;
     if (event.type === 'prompt_suggestion') {
-      const { suggestion } = event;
-      if (suggestion.trim()) return suggestion;
+      const suggestion = (event as { suggestion?: string }).suggestion;
+      if (suggestion?.trim()) return suggestion;
     }
   }
   return null;
