@@ -1,5 +1,6 @@
 import { ComposerPrimitive, useComposerRuntime } from '@assistant-ui/react';
 import { SendHorizontal } from 'lucide-react';
+import { useState } from 'react';
 import { useSessionActions } from './SessionActionsContext';
 
 export default function SessionComposer() {
@@ -7,18 +8,30 @@ export default function SessionComposer() {
   const isDisabled = sessionStatus !== 'idle';
   const composerRuntime = useComposerRuntime();
 
+  const [chipDismissed, setChipDismissed] = useState(false);
+  const [prevSuggestion, setPrevSuggestion] = useState(promptSuggestion);
+  if (promptSuggestion !== prevSuggestion) {
+    setPrevSuggestion(promptSuggestion);
+    setChipDismissed(false);
+  }
+
+  const showChip = !isDisabled && promptSuggestion && !chipDismissed;
+
   const placeholder = isDisabled
     ? 'Waiting for session to finish…'
     : 'Send a follow-up to Claude… (Enter to send)';
 
   return (
     <>
-      {!isDisabled && promptSuggestion && (
+      {showChip && (
         <div className="px-3 pt-2">
           <button
             type="button"
             aria-label={`Use suggestion: ${promptSuggestion}`}
-            onClick={() => composerRuntime.setText(promptSuggestion)}
+            onClick={() => {
+              composerRuntime.setText(promptSuggestion);
+              setChipDismissed(true);
+            }}
             className="inline-flex items-center gap-1.5 rounded-full border border-border/50 bg-muted/30 px-3 py-1 text-xs text-muted-foreground hover:bg-muted/50 transition-colors max-w-full"
           >
             <span className="truncate">{promptSuggestion}</span>

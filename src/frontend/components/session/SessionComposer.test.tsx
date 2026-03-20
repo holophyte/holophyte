@@ -210,5 +210,17 @@ describe('SessionComposer', () => {
       await user.click(chip);
       expect(mockSetText).toHaveBeenCalledWith(suggestion);
     });
+
+    it('chip is dismissed after clicking it', async () => {
+      const user = userEvent.setup();
+      render(
+        withSession(<SessionComposer />, { promptSuggestion: suggestion }),
+      );
+      const chip = screen
+        .getByText(suggestion)
+        .closest('button') as HTMLElement;
+      await user.click(chip);
+      expect(screen.queryByText(suggestion)).toBeNull();
+    });
   });
 });

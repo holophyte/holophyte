@@ -158,7 +158,8 @@ export function sdkToThreadMessages(
  * Returns the `suggestion` field from the last `prompt_suggestion` event,
  * but only if it appears after the final `user` or `assistant` event in the
  * stream. Both user and assistant events clear the suggestion. Empty or
- * whitespace-only suggestions are ignored.
+ * whitespace-only suggestions are treated as noise (not clear signals) and
+ * skipped — the SDK clears suggestions via the next user/assistant turn.
  */
 export function extractPromptSuggestion(events: SDKMessage[]): string | null {
   for (let i = events.length - 1; i >= 0; i--) {
