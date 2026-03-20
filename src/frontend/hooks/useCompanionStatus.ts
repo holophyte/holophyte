@@ -2,6 +2,7 @@ import { api } from '@convex/_generated/api';
 import type { Id } from '@convex/_generated/dataModel';
 import { useQuery } from 'convex/react';
 import { useSyncExternalStore } from 'react';
+import { allowAnonymousAuth } from '@/frontend/lib/config';
 
 const STALE_THRESHOLD_MS = 30_000;
 const OFFLINE_THRESHOLD_MS = 5 * 60_000;
@@ -50,7 +51,18 @@ function getSnapshot() {
 export function useCompanionStatus(
   orgId: Id<'organizations'> | null | undefined,
 ) {
-  const status = useQuery(api.companion.getStatus, orgId ? { orgId } : 'skip');
+  // In local dev with anonymous auth, the browser and companion may sign in
+  // as separate anonymous users in separate personal orgs. Use the global
+  // (org-agnostic) status query so the companion heartbeat is always visible.
+  const orgStatus = useQuery(
+    api.companion.getStatus,
+    !allowAnonymousAuth && orgId ? { orgId } : 'skip',
+  );
+  const globalStatus = useQuery(
+    api.companion.getGlobalStatus,
+    allowAnonymousAuth ? {} : 'skip',
+  );
+  const status = allowAnonymousAuth ? globalStatus : orgStatus;
   const currentTime = useSyncExternalStore(subscribe, getSnapshot);
 
   // status === undefined means the query hasn't resolved yet (or is skipped)

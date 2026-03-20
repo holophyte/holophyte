@@ -78,6 +78,28 @@ export const getStatus = query({
   },
 });
 
+/**
+ * Returns the most recent companion heartbeat across all orgs.
+ *
+ * Used for local dev with anonymous auth where the browser and companion
+ * may be in different personal orgs. No auth required — only exposes
+ * heartbeat metadata (lastSeen, sessionCount, machineId, url).
+ */
+export const getGlobalStatus = query({
+  args: {},
+  handler: async (ctx) => {
+    const all = await ctx.db.query('companion').collect();
+    if (all.length === 0) return null;
+    const latest = all.reduce((a, b) => (a.lastSeen > b.lastSeen ? a : b));
+    return {
+      lastSeen: latest.lastSeen,
+      activeSessionCount: latest.activeSessionCount,
+      machineId: latest.machineId,
+      url: latest.url,
+    };
+  },
+});
+
 // ── Cleanup ──────────────────────────────────────────────────────────
 
 /** Max age before a companion row is considered stale and eligible for deletion. */
