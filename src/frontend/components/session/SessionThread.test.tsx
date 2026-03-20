@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 import { SessionActionsContext } from './SessionActionsContext';
@@ -6,6 +6,10 @@ import { SessionActionsContext } from './SessionActionsContext';
 // ---------------------------------------------------------------------------
 // Mocks
 // ---------------------------------------------------------------------------
+
+const { mockScrollToBottom } = vi.hoisted(() => ({
+  mockScrollToBottom: vi.fn(),
+}));
 
 vi.mock('@assistant-ui/react', () => {
   const ThreadPrimitive = {
@@ -27,7 +31,11 @@ vi.mock('@assistant-ui/react', () => {
       children: ReactNode;
       className?: string;
     }) => (
-      <div data-testid="thread-viewport" className={className}>
+      <div
+        data-testid="thread-viewport"
+        className={className}
+        style={{ overflowY: 'auto' }}
+      >
         {children}
       </div>
     ),
@@ -49,18 +57,13 @@ vi.mock('@assistant-ui/react', () => {
         )}
       </div>
     ),
-    ScrollToBottom: ({ className }: { className?: string }) => (
-      <button
-        data-testid="scroll-to-bottom"
-        className={className}
-        type="button"
-      >
-        Scroll to bottom
-      </button>
-    ),
   };
 
-  return { ThreadPrimitive };
+  const useThreadViewport = (
+    selector: (s: Record<string, unknown>) => unknown,
+  ) => selector({ scrollToBottom: mockScrollToBottom, isAtBottom: true });
+
+  return { ThreadPrimitive, useThreadViewport };
 });
 
 // Mock SessionComposer
@@ -145,9 +148,94 @@ describe('SessionThread', () => {
       expect(screen.getByTestId('session-composer')).toBeInTheDocument();
     });
 
-    it('renders ScrollToBottom button', () => {
+    it('renders ScrollToBottom button hidden when not scrolled', () => {
       render(<SessionThread />, { wrapper: withSessionActions() });
-      expect(screen.getByTestId('scroll-to-bottom')).toBeInTheDocument();
+      const btn = screen.getByLabelText('Scroll to bottom');
+      expect(btn).toBeInTheDocument();
+      // Not scrolled, so button should be hidden from AT
+      expect(btn).toHaveAttribute('aria-hidden', 'true');
+      expect(btn).toHaveAttribute('tabindex', '-1');
+    });
+
+    it('shows ScrollToBottom button when scrolled far from bottom', () => {
+      render(<SessionThread />, { wrapper: withSessionActions() });
+      const viewport = screen.getByTestId('thread-viewport');
+
+      // Simulate a tall scrollable area scrolled far from bottom
+      Object.defineProperty(viewport, 'scrollHeight', {
+        value: 2000,
+        configurable: true,
+      });
+      Object.defineProperty(viewport, 'clientHeight', {
+        value: 500,
+        configurable: true,
+      });
+      Object.defineProperty(viewport, 'scrollTop', {
+        value: 0,
+        configurable: true,
+      });
+      fireEvent.scroll(viewport);
+
+      const btn = screen.getByRole('button', { name: 'Scroll to bottom' });
+      expect(btn).not.toHaveAttribute('aria-hidden');
+      expect(btn).toHaveAttribute('tabindex', '0');
+    });
+
+    it('hides ScrollToBottom button when scrolled back near bottom', () => {
+      render(<SessionThread />, { wrapper: withSessionActions() });
+      const viewport = screen.getByTestId('thread-viewport');
+
+      // First scroll far away
+      Object.defineProperty(viewport, 'scrollHeight', {
+        value: 2000,
+        configurable: true,
+      });
+      Object.defineProperty(viewport, 'clientHeight', {
+        value: 500,
+        configurable: true,
+      });
+      Object.defineProperty(viewport, 'scrollTop', {
+        value: 0,
+        configurable: true,
+      });
+      fireEvent.scroll(viewport);
+
+      // Now scroll back near bottom (distance = 50, below threshold)
+      Object.defineProperty(viewport, 'scrollTop', {
+        value: 1450,
+        configurable: true,
+      });
+      fireEvent.scroll(viewport);
+
+      const btn = screen.getByLabelText('Scroll to bottom');
+      expect(btn).toHaveAttribute('aria-hidden', 'true');
+      expect(btn).toHaveAttribute('tabindex', '-1');
+    });
+
+    it('calls scrollToBottom with smooth behavior when clicked', () => {
+      mockScrollToBottom.mockClear();
+      render(<SessionThread />, { wrapper: withSessionActions() });
+      const viewport = screen.getByTestId('thread-viewport');
+
+      // Make button visible by simulating scroll far from bottom
+      Object.defineProperty(viewport, 'scrollHeight', {
+        value: 2000,
+        configurable: true,
+      });
+      Object.defineProperty(viewport, 'clientHeight', {
+        value: 500,
+        configurable: true,
+      });
+      Object.defineProperty(viewport, 'scrollTop', {
+        value: 0,
+        configurable: true,
+      });
+      fireEvent.scroll(viewport);
+
+      fireEvent.click(screen.getByRole('button', { name: 'Scroll to bottom' }));
+      expect(mockScrollToBottom).toHaveBeenCalledWith({
+        behavior: 'smooth',
+      });
     });
   });
 
