@@ -1,6 +1,6 @@
 import { ComposerPrimitive, useComposerRuntime } from '@assistant-ui/react';
 import { SendHorizontal } from 'lucide-react';
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { useSessionActions } from './SessionActionsContext';
 
 export default function SessionComposer() {
@@ -17,6 +17,13 @@ export default function SessionComposer() {
 
   const showChip = !isDisabled && promptSuggestion && !chipDismissed;
 
+  const acceptSuggestion = useCallback(() => {
+    if (!showChip || !promptSuggestion) return false;
+    composerRuntime.setText(promptSuggestion);
+    setChipDismissed(true);
+    return true;
+  }, [showChip, promptSuggestion, composerRuntime]);
+
   const placeholder = isDisabled
     ? 'Waiting for session to finish…'
     : 'Send a follow-up to Claude… (Enter to send)';
@@ -28,13 +35,13 @@ export default function SessionComposer() {
           <button
             type="button"
             aria-label={`Use suggestion: ${promptSuggestion}`}
-            onClick={() => {
-              composerRuntime.setText(promptSuggestion);
-              setChipDismissed(true);
-            }}
+            onClick={acceptSuggestion}
             className="inline-flex items-center gap-1.5 rounded-full border border-border/50 bg-muted/30 px-3 py-1 text-xs text-muted-foreground hover:bg-muted/50 transition-colors max-w-full"
           >
             <span className="truncate">{promptSuggestion}</span>
+            <kbd className="shrink-0 rounded border border-border/50 bg-muted/50 px-1 py-0.5 font-mono text-[10px] leading-none text-muted-foreground/70">
+              Tab
+            </kbd>
           </button>
         </div>
       )}
@@ -44,6 +51,11 @@ export default function SessionComposer() {
             placeholder={placeholder}
             disabled={isDisabled}
             rows={1}
+            onKeyDown={(e) => {
+              if (e.key === 'Tab' && acceptSuggestion()) {
+                e.preventDefault();
+              }
+            }}
             className="flex-1 resize-none rounded-md border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground/50 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 min-h-11 max-h-36 leading-relaxed"
           />
           <ComposerPrimitive.Send

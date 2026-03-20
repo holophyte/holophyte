@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { ReactNode } from 'react';
 import { describe, expect, it, vi } from 'vitest';
@@ -41,11 +41,13 @@ vi.mock('@assistant-ui/react', () => {
       className,
       autoFocus,
       onSubmit,
+      onKeyDown,
     }: {
       placeholder?: string;
       className?: string;
       autoFocus?: boolean;
       onSubmit?: () => void;
+      onKeyDown?: (e: React.KeyboardEvent) => void;
     }) => {
       _onSubmit = onSubmit ?? null;
       return (
@@ -55,6 +57,7 @@ vi.mock('@assistant-ui/react', () => {
           className={className}
           // biome-ignore lint/a11y/noAutofocus: test mock replicates component interface
           autoFocus={autoFocus}
+          onKeyDown={onKeyDown}
           onChange={(e) => {
             _inputValue = e.target.value;
           }}
@@ -220,6 +223,24 @@ describe('SessionComposer', () => {
         .getByText(suggestion)
         .closest('button') as HTMLElement;
       await user.click(chip);
+      expect(screen.queryByText(suggestion)).toBeNull();
+    });
+
+    it('chip shows Tab hint', () => {
+      render(
+        withSession(<SessionComposer />, { promptSuggestion: suggestion }),
+      );
+      expect(screen.getByText('Tab')).toBeInTheDocument();
+    });
+
+    it('Tab key accepts suggestion and fills composer', () => {
+      mockSetText.mockClear();
+      render(
+        withSession(<SessionComposer />, { promptSuggestion: suggestion }),
+      );
+      const input = screen.getByRole('textbox');
+      fireEvent.keyDown(input, { key: 'Tab' });
+      expect(mockSetText).toHaveBeenCalledWith(suggestion);
       expect(screen.queryByText(suggestion)).toBeNull();
     });
   });
