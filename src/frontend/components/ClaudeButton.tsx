@@ -74,10 +74,9 @@ export function ClaudeButton({ task }: ClaudeButtonProps) {
         setLoading(false);
       }
     } else {
-      // No prompt: navigate to task page for chat-first flow
+      // No prompt: clear active session so task page shows the empty composer
+      closeSession();
       if (!isOnThisTaskPage) {
-        // Clear active session so task page shows the empty composer
-        closeSession();
         void navigate({
           to: '/repos/$repoId/tasks/$taskId/page',
           params: { repoId: String(task.repoId), taskId: task._id },
