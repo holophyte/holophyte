@@ -102,6 +102,8 @@ export default function SessionThread() {
       <button
         type="button"
         aria-label="Scroll to bottom"
+        aria-hidden={!show}
+        tabIndex={show ? 0 : -1}
         onClick={() => scrollToBottom({ behavior: 'smooth' })}
         className={cn(
           'absolute bottom-20 right-4 flex h-8 w-8 items-center justify-center rounded-full bg-background shadow-md border border-border text-muted-foreground hover:text-foreground transition-all duration-200',
