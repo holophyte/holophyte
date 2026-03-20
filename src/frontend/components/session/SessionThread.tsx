@@ -106,7 +106,7 @@ export default function SessionThread() {
         tabIndex={show ? 0 : -1}
         onClick={() => scrollToBottom({ behavior: 'smooth' })}
         className={cn(
-          'absolute bottom-20 right-4 flex h-8 w-8 items-center justify-center rounded-full bg-background shadow-md border border-border text-muted-foreground hover:text-foreground transition-all duration-200',
+          'absolute bottom-20 right-4 flex h-8 w-8 items-center justify-center rounded-full bg-foreground text-background shadow-lg hover:bg-foreground/80 transition-all duration-200',
           show
             ? 'opacity-100 translate-y-0'
             : 'opacity-0 translate-y-2 pointer-events-none',
