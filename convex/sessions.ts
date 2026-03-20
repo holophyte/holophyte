@@ -1,5 +1,5 @@
 import { v } from 'convex/values';
-import type { Id } from './_generated/dataModel';
+import type { Doc, Id } from './_generated/dataModel';
 import type { MutationCtx, QueryCtx } from './_generated/server';
 import {
   internalMutation,
@@ -394,7 +394,12 @@ export const serverUpdateActivity = internalMutation({
  */
 export const serverMarkStoppedAsIdle = internalMutation({
   args: {},
-  handler: async (ctx) => markStoppedAsIdleImpl(ctx),
+  handler: async (ctx) =>
+    transitionSessions(ctx, {
+      fromStatus: 'stopped',
+      toStatus: 'idle',
+      lastActivityAt: () => Date.now(),
+    }),
 });
 
 /**
@@ -408,7 +413,12 @@ export const serverMarkStoppedAsIdle = internalMutation({
  */
 export const serverMarkStaleRunning = internalMutation({
   args: {},
-  handler: async (ctx) => markStaleRunningImpl(ctx),
+  handler: async (ctx) =>
+    transitionSessions(ctx, {
+      fromStatus: 'running',
+      toStatus: 'idle',
+      lastActivityAt: (s) => s.lastActivityAt ?? s.startedAt,
+    }),
 });
 
 /**
@@ -440,33 +450,15 @@ async function fetchQueuedSessions(
   ctx: QueryCtx,
   orgIds?: Set<Id<'organizations'>>,
 ) {
-  if (orgIds) {
-    // Org-scoped: use compound index to avoid full scan + per-session join
-    const result = [];
-    for (const orgId of orgIds) {
-      const sessions = await ctx.db
+  const sessions = orgIds
+    ? await collectByOrgs(ctx, orgIds, 'queued')
+    : await ctx.db
         .query('sessions')
-        .withIndex('by_org_status', (q) =>
-          q.eq('orgId', orgId).eq('status', 'queued'),
-        )
+        .withIndex('by_status', (q) => q.eq('status', 'queued'))
         .collect();
-      for (const session of sessions) {
-        const task = await ctx.db.get(session.taskId);
-        if (!task) continue;
-        const repo = await ctx.db.get(task.repoId);
-        if (!repo) continue;
-        result.push({ ...session, repoPath: repo.path });
-      }
-    }
-    return result;
-  }
-  // Internal callers: scan all queued sessions globally
-  const queued = await ctx.db
-    .query('sessions')
-    .withIndex('by_status', (q) => q.eq('status', 'queued'))
-    .collect();
+
   const result = [];
-  for (const session of queued) {
+  for (const session of sessions) {
     const task = await ctx.db.get(session.taskId);
     if (!task) continue;
     const repo = await ctx.db.get(task.repoId);
@@ -638,100 +630,64 @@ export const companionListStopped = query({
   handler: async (ctx) => {
     const userId = await requireAuth(ctx);
     const orgIds = await getUserOrgIds(ctx, userId);
-    const result = [];
-    for (const orgId of orgIds) {
-      const stopped = await ctx.db
-        .query('sessions')
-        .withIndex('by_org_status', (q) =>
-          q.eq('orgId', orgId).eq('status', 'stopped'),
-        )
-        .collect();
-      for (const s of stopped) {
-        result.push({ _id: s._id });
-      }
-    }
-    return result;
+    const sessions = await collectByOrgs(ctx, orgIds, 'stopped');
+    return sessions.map((s) => ({ _id: s._id }));
   },
 });
 
 // ── Shared helpers for internal + companion mutations ────────────────
 
-async function markStaleRunningImpl(
+/**
+ * Collects sessions matching `fromStatus`, patches each to `toStatus` with
+ * the given `lastActivityAt`. When `orgIds` is provided, uses the compound
+ * `by_org_status` index per org; otherwise scans globally via `by_status`.
+ */
+async function transitionSessions(
   ctx: MutationCtx,
-  orgIds?: Set<Id<'organizations'>>,
-) {
+  opts: {
+    fromStatus: Doc<'sessions'>['status'];
+    toStatus: Doc<'sessions'>['status'];
+    lastActivityAt: (session: Doc<'sessions'>) => number;
+    orgIds?: Set<Id<'organizations'>>;
+  },
+): Promise<{ count: number }> {
+  const { fromStatus, toStatus, lastActivityAt, orgIds } = opts;
   let count = 0;
-  if (orgIds) {
-    // Org-scoped: use compound index to avoid full scan + per-session join
-    for (const orgId of orgIds) {
-      const sessions = await ctx.db
+
+  const sessions = orgIds
+    ? await collectByOrgs(ctx, orgIds, fromStatus)
+    : await ctx.db
         .query('sessions')
-        .withIndex('by_org_status', (q) =>
-          q.eq('orgId', orgId).eq('status', 'running'),
-        )
+        .withIndex('by_status', (q) => q.eq('status', fromStatus))
         .collect();
-      for (const session of sessions) {
-        await ctx.db.patch(session._id, {
-          status: 'idle',
-          lastActivityAt: session.lastActivityAt ?? session.startedAt,
-        });
-        count++;
-      }
-    }
-  } else {
-    // Global: keep using by_status (internal/cron callers)
-    const runningSessions = await ctx.db
-      .query('sessions')
-      .withIndex('by_status', (q) => q.eq('status', 'running'))
-      .collect();
-    for (const session of runningSessions) {
-      await ctx.db.patch(session._id, {
-        status: 'idle',
-        lastActivityAt: session.lastActivityAt ?? session.startedAt,
-      });
-      count++;
-    }
+
+  for (const session of sessions) {
+    await ctx.db.patch(session._id, {
+      status: toStatus,
+      lastActivityAt: lastActivityAt(session),
+    });
+    count++;
   }
   return { count };
 }
 
-async function markStoppedAsIdleImpl(
-  ctx: MutationCtx,
-  orgIds?: Set<Id<'organizations'>>,
-) {
-  let count = 0;
-  if (orgIds) {
-    // Org-scoped: use compound index to avoid full scan + per-session join
-    for (const orgId of orgIds) {
-      const sessions = await ctx.db
-        .query('sessions')
-        .withIndex('by_org_status', (q) =>
-          q.eq('orgId', orgId).eq('status', 'stopped'),
-        )
-        .collect();
-      for (const session of sessions) {
-        await ctx.db.patch(session._id, {
-          status: 'idle',
-          lastActivityAt: Date.now(),
-        });
-        count++;
-      }
-    }
-  } else {
-    // Global: keep using by_status (internal/cron callers)
-    const stoppedSessions = await ctx.db
+/** Collects sessions across multiple orgs using the compound index. */
+async function collectByOrgs(
+  ctx: MutationCtx | QueryCtx,
+  orgIds: Set<Id<'organizations'>>,
+  status: Doc<'sessions'>['status'],
+): Promise<Doc<'sessions'>[]> {
+  const result: Doc<'sessions'>[] = [];
+  for (const orgId of orgIds) {
+    const sessions = await ctx.db
       .query('sessions')
-      .withIndex('by_status', (q) => q.eq('status', 'stopped'))
+      .withIndex('by_org_status', (q) =>
+        q.eq('orgId', orgId).eq('status', status),
+      )
       .collect();
-    for (const session of stoppedSessions) {
-      await ctx.db.patch(session._id, {
-        status: 'idle',
-        lastActivityAt: Date.now(),
-      });
-      count++;
-    }
+    result.push(...sessions);
   }
-  return { count };
+  return result;
 }
 
 // ── Public companion mutations (JWT-authenticated via ConvexClient) ──
@@ -780,7 +736,12 @@ export const companionMarkStaleRunning = mutation({
   handler: async (ctx) => {
     const userId = await requireAuth(ctx);
     const orgIds = await getUserWritableOrgIds(ctx, userId);
-    return markStaleRunningImpl(ctx, orgIds);
+    return transitionSessions(ctx, {
+      fromStatus: 'running',
+      toStatus: 'idle',
+      lastActivityAt: (s) => s.lastActivityAt ?? s.startedAt,
+      orgIds,
+    });
   },
 });
 
@@ -793,7 +754,12 @@ export const companionMarkStoppedAsIdle = mutation({
   handler: async (ctx) => {
     const userId = await requireAuth(ctx);
     const orgIds = await getUserWritableOrgIds(ctx, userId);
-    return markStoppedAsIdleImpl(ctx, orgIds);
+    return transitionSessions(ctx, {
+      fromStatus: 'stopped',
+      toStatus: 'idle',
+      lastActivityAt: () => Date.now(),
+      orgIds,
+    });
   },
 });
 
@@ -803,7 +769,7 @@ export const companionMarkStoppedAsIdle = mutation({
  * TODO(#170): remove fallback after backfill confirmed complete.
  */
 async function getOrgIdFromTask(
-  ctx: MutationCtx,
+  ctx: QueryCtx,
   taskId: Id<'tasks'>,
 ): Promise<Id<'organizations'> | null> {
   const task = await ctx.db.get(taskId);

@@ -1084,3 +1084,112 @@ describe('sessions.backfillOrgId', () => {
     expect(result.continueCursor).toBeNull();
   });
 });
+
+describe('sessions.companionListQueued — org isolation', () => {
+  it("returns only queued sessions for the caller's orgs", async () => {
+    const t = convexTest(schema);
+    const { authed, taskId } = await setupTaskEnv(t);
+
+    // Create a queued session in org 1
+    await authed.mutation(api.sessions.create, { taskId });
+
+    // Create a second user with their own org and a queued session
+    const { authed: otherAuthed } = await setupUser(t, 'Other User');
+    const otherOrgId = await otherAuthed.mutation(api.organizations.create, {
+      name: 'Other Org',
+      slug: 'other-org-queued',
+    });
+    const otherRepoId = await otherAuthed.mutation(api.repos.create, {
+      name: 'other-repo',
+      path: '/tmp/other-repo-queued',
+      orgId: otherOrgId,
+    });
+    const otherTaskId = await otherAuthed.mutation(api.tasks.create, {
+      repoId: otherRepoId,
+      title: 'Other Task',
+    });
+    await otherAuthed.mutation(api.sessions.create, { taskId: otherTaskId });
+
+    // Each user should only see their own org's queued sessions
+    const myQueued = await authed.query(api.sessions.companionListQueued, {});
+    expect(myQueued).toHaveLength(1);
+
+    const otherQueued = await otherAuthed.query(
+      api.sessions.companionListQueued,
+      {},
+    );
+    expect(otherQueued).toHaveLength(1);
+  });
+});
+
+describe('sessions.companionListStopped — org isolation', () => {
+  it("returns only stopped sessions for the caller's orgs", async () => {
+    const t = convexTest(schema);
+    const { authed, taskId } = await setupTaskEnv(t);
+
+    // Create a stopped session in org 1
+    const sessionId = await authed.mutation(api.sessions.create, { taskId });
+    await t.run(async (ctx) => {
+      await ctx.db.patch(sessionId, { status: 'stopped' });
+    });
+
+    // Create a second user with their own org and a stopped session
+    const { authed: otherAuthed } = await setupUser(t, 'Other User');
+    const otherOrgId = await otherAuthed.mutation(api.organizations.create, {
+      name: 'Other Org',
+      slug: 'other-org-stopped',
+    });
+    const otherRepoId = await otherAuthed.mutation(api.repos.create, {
+      name: 'other-repo',
+      path: '/tmp/other-repo-stopped',
+      orgId: otherOrgId,
+    });
+    const otherTaskId = await otherAuthed.mutation(api.tasks.create, {
+      repoId: otherRepoId,
+      title: 'Other Task',
+    });
+    const otherSessionId = await otherAuthed.mutation(api.sessions.create, {
+      taskId: otherTaskId,
+    });
+    await t.run(async (ctx) => {
+      await ctx.db.patch(otherSessionId, { status: 'stopped' });
+    });
+
+    // Each user should only see their own org's stopped sessions
+    const myStopped = await authed.query(api.sessions.companionListStopped, {});
+    expect(myStopped).toHaveLength(1);
+    expect(myStopped[0]?._id).toBe(sessionId);
+
+    const otherStopped = await otherAuthed.query(
+      api.sessions.companionListStopped,
+      {},
+    );
+    expect(otherStopped).toHaveLength(1);
+    expect(otherStopped[0]?._id).toBe(otherSessionId);
+  });
+});
+
+describe('sessions.companionBatchHeartbeat — fallback', () => {
+  it('heartbeats sessions without orgId via task→repo fallback', async () => {
+    const t = convexTest(schema);
+    const { authed, taskId } = await setupTaskEnv(t);
+
+    // Insert a session without orgId (simulating pre-backfill state)
+    const sessionId = await t.run(async (ctx) => {
+      return await ctx.db.insert('sessions', {
+        taskId,
+        status: 'running',
+        startedAt: Date.now(),
+        lastActivityAt: Date.now(),
+      });
+    });
+
+    // Heartbeat should work via fallback
+    await authed.mutation(api.sessions.companionBatchHeartbeat, {
+      sessionIds: [sessionId],
+    });
+
+    const session = await t.run(async (ctx) => ctx.db.get(sessionId));
+    expect(session?.lastHeartbeat).toBeDefined();
+  });
+});
