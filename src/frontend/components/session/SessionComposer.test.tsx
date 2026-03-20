@@ -232,5 +232,16 @@ describe('SessionComposer', () => {
       fireEvent.keyDown(input, { key: 'Tab' });
       expect(mockSetText).not.toHaveBeenCalled();
     });
+
+    it('Tab key does nothing when input is not empty', () => {
+      mockSetText.mockClear();
+      _mockInput.value = 'partial message';
+      render(
+        withSession(<SessionComposer />, { promptSuggestion: suggestion }),
+      );
+      const input = screen.getByRole('textbox');
+      fireEvent.keyDown(input, { key: 'Tab' });
+      expect(mockSetText).not.toHaveBeenCalled();
+    });
   });
 });
