@@ -151,3 +151,30 @@ export function sdkToThreadMessages(
 
   return messages;
 }
+
+/**
+ * Extracts the most recent prompt suggestion from the SDK event stream.
+ *
+ * Returns the `suggestion` field from the last `prompt_suggestion` event,
+ * but only if it appears after the final `user` or `assistant` event in the
+ * stream. Both user and assistant events clear the suggestion. Empty or
+ * whitespace-only suggestions are treated as noise (not clear signals) and
+ * skipped — the SDK clears suggestions via the next user/assistant turn.
+ *
+ * Note: `prompt_suggestion` is not yet part of the official `SDKMessage` union
+ * in `@anthropic-ai/claude-agent-sdk` types. The runtime events are emitted as
+ * plain objects so the type check works, but TypeScript may flag `.suggestion`
+ * access if the SDK types are tightened. Track for inclusion upstream.
+ */
+export function extractPromptSuggestion(events: SDKMessage[]): string | null {
+  for (let i = events.length - 1; i >= 0; i--) {
+    // biome-ignore lint/style/noNonNullAssertion: index is within bounds (loop condition guarantees i >= 0 && i < events.length)
+    const event = events[i]!;
+    if (event.type === 'user' || event.type === 'assistant') return null;
+    if (event.type === 'prompt_suggestion') {
+      const suggestion = (event as { suggestion?: string }).suggestion;
+      if (suggestion?.trim()) return suggestion.trim();
+    }
+  }
+  return null;
+}

@@ -1,14 +1,24 @@
-import { ComposerPrimitive } from '@assistant-ui/react';
+import {
+  ComposerPrimitive,
+  useComposer,
+  useComposerRuntime,
+} from '@assistant-ui/react';
 import { SendHorizontal } from 'lucide-react';
 import { useSessionActions } from './SessionActionsContext';
 
 export default function SessionComposer() {
-  const { sessionStatus } = useSessionActions();
+  const { sessionStatus, promptSuggestion } = useSessionActions();
   const isDisabled = sessionStatus !== 'idle';
+  const composerRuntime = useComposerRuntime();
+  const isEmpty = useComposer((s) => !s.text.trim());
+
+  const hasSuggestion = !isDisabled && !!promptSuggestion;
 
   const placeholder = isDisabled
     ? 'Waiting for session to finish…'
-    : 'Send a follow-up to Claude… (Enter to send)';
+    : hasSuggestion
+      ? `${promptSuggestion}  [tab]`
+      : 'Send a follow-up to Claude… (Enter to send)';
 
   return (
     <ComposerPrimitive.Root className="shrink-0 border-t bg-muted/10 px-3 py-2">
@@ -17,7 +27,13 @@ export default function SessionComposer() {
           placeholder={placeholder}
           disabled={isDisabled}
           rows={1}
-          className="flex-1 resize-none rounded-md border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground/50 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 min-h-11 max-h-36 leading-relaxed"
+          onKeyDown={(e) => {
+            if (e.key === 'Tab' && !e.shiftKey && promptSuggestion && isEmpty) {
+              e.preventDefault();
+              composerRuntime.setText(promptSuggestion);
+            }
+          }}
+          className={`flex-1 resize-none rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 min-h-11 max-h-36 leading-relaxed ${hasSuggestion ? 'placeholder:italic placeholder:text-muted-foreground/40' : 'placeholder:text-muted-foreground/50'}`}
         />
         <ComposerPrimitive.Send
           disabled={isDisabled}

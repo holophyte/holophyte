@@ -1,18 +1,22 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { ReactNode } from 'react';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { SessionActionsContext } from './SessionActionsContext';
 
 // ---------------------------------------------------------------------------
 // Mocks
 // ---------------------------------------------------------------------------
 
-// Mock ComposerPrimitive from @assistant-ui/react
+const mockSetText = vi.fn();
+
+// Shared state for simulating composer input — lives outside the factory
+// so afterEach can reset it between tests.
+const _mockInput = { value: '' };
+
+// Mock ComposerPrimitive and useComposerRuntime from @assistant-ui/react
 // These simulate the real primitives with enough fidelity to test behavior
 vi.mock('@assistant-ui/react', () => {
-  // Shared state for simulating composer input across the mocked primitives
-  let _inputValue = '';
   let _onSubmit: (() => void) | null = null;
 
   const ComposerPrimitive = {
@@ -39,11 +43,13 @@ vi.mock('@assistant-ui/react', () => {
       className,
       autoFocus,
       onSubmit,
+      onKeyDown,
     }: {
       placeholder?: string;
       className?: string;
       autoFocus?: boolean;
       onSubmit?: () => void;
+      onKeyDown?: (e: React.KeyboardEvent) => void;
     }) => {
       _onSubmit = onSubmit ?? null;
       return (
@@ -53,8 +59,9 @@ vi.mock('@assistant-ui/react', () => {
           className={className}
           // biome-ignore lint/a11y/noAutofocus: test mock replicates component interface
           autoFocus={autoFocus}
+          onKeyDown={onKeyDown}
           onChange={(e) => {
-            _inputValue = e.target.value;
+            _mockInput.value = e.target.value;
           }}
         />
       );
@@ -77,32 +84,30 @@ vi.mock('@assistant-ui/react', () => {
     ),
   };
 
-  return { ComposerPrimitive };
+  return {
+    ComposerPrimitive,
+    useComposerRuntime: () => ({ setText: mockSetText }),
+    // Track composer text separately from DOM textarea value for useComposer
+    useComposer: (selector: (s: { text: string }) => unknown) =>
+      selector({ text: _mockInput.value }),
+  };
 });
 
-function withIdleSession(children: ReactNode) {
+function withSession(
+  children: ReactNode,
+  overrides: {
+    sessionStatus?: 'idle' | 'running';
+    promptSuggestion?: string | null;
+  } = {},
+) {
   return (
     <SessionActionsContext.Provider
       value={{
         approve: vi.fn(),
         deny: vi.fn(),
         pendingApprovals: [],
-        sessionStatus: 'idle',
-      }}
-    >
-      {children}
-    </SessionActionsContext.Provider>
-  );
-}
-
-function withRunningSession(children: ReactNode) {
-  return (
-    <SessionActionsContext.Provider
-      value={{
-        approve: vi.fn(),
-        deny: vi.fn(),
-        pendingApprovals: [],
-        sessionStatus: 'running',
+        sessionStatus: overrides.sessionStatus ?? 'idle',
+        promptSuggestion: overrides.promptSuggestion ?? null,
       }}
     >
       {children}
@@ -117,31 +122,37 @@ import SessionComposer from './SessionComposer';
 // ---------------------------------------------------------------------------
 
 describe('SessionComposer', () => {
+  afterEach(() => {
+    _mockInput.value = '';
+  });
+
   describe('rendering', () => {
     it('renders a text input area', () => {
-      render(withIdleSession(<SessionComposer />));
+      render(withSession(<SessionComposer />));
       expect(screen.getByTestId('composer-input')).toBeInTheDocument();
     });
 
     it('renders a send button', () => {
-      render(withIdleSession(<SessionComposer />));
+      render(withSession(<SessionComposer />));
       expect(screen.getByTestId('composer-send')).toBeInTheDocument();
     });
 
     it('renders with a placeholder', () => {
-      render(withIdleSession(<SessionComposer />));
+      render(withSession(<SessionComposer />));
       const input = screen.getByTestId('composer-input') as HTMLTextAreaElement;
       expect(input.placeholder).toBeTruthy();
     });
 
     it('renders without crashing', () => {
-      expect(() => render(withIdleSession(<SessionComposer />))).not.toThrow();
+      expect(() => render(withSession(<SessionComposer />))).not.toThrow();
     });
   });
 
   describe('disabled state when running', () => {
     it('applies disabled/opacity styling when session is running', () => {
-      const { container } = render(withRunningSession(<SessionComposer />));
+      const { container } = render(
+        withSession(<SessionComposer />, { sessionStatus: 'running' }),
+      );
       // Either the input is disabled or a wrapper has an opacity/disabled class
       const input = container.querySelector(
         '[data-testid="composer-input"]',
@@ -163,10 +174,74 @@ describe('SessionComposer', () => {
   describe('input behavior', () => {
     it('accepts text input', async () => {
       const user = userEvent.setup();
-      render(withIdleSession(<SessionComposer />));
+      render(withSession(<SessionComposer />));
       const input = screen.getByTestId('composer-input');
       await user.type(input, 'Hello Claude');
       expect((input as HTMLTextAreaElement).value).toBe('Hello Claude');
+    });
+  });
+
+  describe('prompt suggestion', () => {
+    const suggestion = 'Run the test suite';
+
+    it('shows suggestion as placeholder when idle with promptSuggestion', () => {
+      render(
+        withSession(<SessionComposer />, { promptSuggestion: suggestion }),
+      );
+      const input = screen.getByRole('textbox');
+      expect(input).toHaveAttribute('placeholder', `${suggestion}  [tab]`);
+    });
+
+    it('shows default placeholder when running (even with suggestion)', () => {
+      render(
+        withSession(<SessionComposer />, {
+          sessionStatus: 'running',
+          promptSuggestion: suggestion,
+        }),
+      );
+      const input = screen.getByRole('textbox');
+      expect(input).toHaveAttribute(
+        'placeholder',
+        'Waiting for session to finish…',
+      );
+    });
+
+    it('shows default placeholder when no suggestion', () => {
+      render(withSession(<SessionComposer />));
+      const input = screen.getByRole('textbox');
+      expect(input).toHaveAttribute(
+        'placeholder',
+        'Send a follow-up to Claude… (Enter to send)',
+      );
+    });
+
+    it('Tab key fills composer with suggestion text', () => {
+      mockSetText.mockClear();
+      render(
+        withSession(<SessionComposer />, { promptSuggestion: suggestion }),
+      );
+      const input = screen.getByRole('textbox');
+      fireEvent.keyDown(input, { key: 'Tab' });
+      expect(mockSetText).toHaveBeenCalledWith(suggestion);
+    });
+
+    it('Tab key does nothing when no suggestion', () => {
+      mockSetText.mockClear();
+      render(withSession(<SessionComposer />));
+      const input = screen.getByRole('textbox');
+      fireEvent.keyDown(input, { key: 'Tab' });
+      expect(mockSetText).not.toHaveBeenCalled();
+    });
+
+    it('Tab key does nothing when input is not empty', () => {
+      mockSetText.mockClear();
+      _mockInput.value = 'partial message';
+      render(
+        withSession(<SessionComposer />, { promptSuggestion: suggestion }),
+      );
+      const input = screen.getByRole('textbox');
+      fireEvent.keyDown(input, { key: 'Tab' });
+      expect(mockSetText).not.toHaveBeenCalled();
     });
   });
 });

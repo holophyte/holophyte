@@ -10,6 +10,7 @@ interface SessionActions {
   deny: (requestId: string, message?: string) => void;
   pendingApprovals: PendingApproval[];
   sessionStatus: SessionStatus | null;
+  promptSuggestion: string | null;
 }
 
 export const SessionActionsContext = createContext<SessionActions | null>(null);
@@ -25,10 +26,17 @@ export function SessionActionsProvider({
   deny,
   pendingApprovals,
   sessionStatus,
+  promptSuggestion,
 }: SessionActionsProviderProps) {
   return (
     <SessionActionsContext.Provider
-      value={{ approve, deny, pendingApprovals, sessionStatus }}
+      value={{
+        approve,
+        deny,
+        pendingApprovals,
+        sessionStatus,
+        promptSuggestion,
+      }}
     >
       {children}
     </SessionActionsContext.Provider>

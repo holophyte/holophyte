@@ -3,9 +3,11 @@ import type { Id } from '@convex/_generated/dataModel';
 import { useMutation, useQuery } from 'convex/react';
 import { Square } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { QUEUED_WARNING_THRESHOLD_MS } from '@/constants';
+import { DEFAULT_MODEL, QUEUED_WARNING_THRESHOLD_MS } from '@/constants';
 import { useSession } from '@/frontend/hooks/useSession';
 import { useAppStore } from '@/frontend/stores/app';
+import type { ClaudeModelId } from './ModelPicker';
+import ModelPicker from './ModelPicker';
 import SessionDropdown from './SessionDropdown';
 import SessionRuntimeProvider from './session/SessionRuntimeProvider';
 import SessionThread from './session/SessionThread';
@@ -131,12 +133,13 @@ export default function SessionPanel({ taskId }: SessionPanelProps) {
   );
 
   /** Create a brand-new session (used by NoSessionPlaceholder). */
-  const handleNewSession = async (text: string) => {
+  const handleNewSession = async (text: string, model: ClaudeModelId) => {
     if (!task?.repo?.path) return;
     // Create session in Convex with 'queued' status — the companion picks it up
     const newSessionId = await createSession({
       taskId,
       prompt: text,
+      model,
     });
     openSession(newSessionId);
   };
@@ -189,7 +192,9 @@ export default function SessionPanel({ taskId }: SessionPanelProps) {
           </SessionRuntimeProvider>
         ) : (
           <NoSessionPlaceholder
+            key={taskId}
             taskPath={task?.repo?.path ?? ''}
+            taskPrompt={task?.prompt}
             onStart={handleNewSession}
           />
         )}
@@ -200,23 +205,36 @@ export default function SessionPanel({ taskId }: SessionPanelProps) {
 
 interface NoSessionPlaceholderProps {
   taskPath: string;
-  onStart: (text: string) => Promise<void>;
+  taskPrompt?: string;
+  onStart: (text: string, model: ClaudeModelId) => Promise<void>;
 }
 
 function NoSessionPlaceholder({
   taskPath,
+  taskPrompt,
   onStart,
 }: NoSessionPlaceholderProps) {
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [model, setModel] = useState<ClaudeModelId>(DEFAULT_MODEL);
+
+  // Pre-fill text from the task prompt when it arrives from Convex, but only if
+  // the user hasn't started typing. Uses derived-state-without-useEffect pattern.
+  const [prevPrompt, setPrevPrompt] = useState<string | undefined>(undefined);
+  if (taskPrompt !== prevPrompt) {
+    setPrevPrompt(taskPrompt);
+    if (taskPrompt && text === '') {
+      setText(taskPrompt);
+    }
+  }
 
   const handleSend = async () => {
     if (!text.trim() || !taskPath) return;
     setSending(true);
     setError(null);
     try {
-      await onStart(text.trim());
+      await onStart(text.trim(), model);
       setText('');
     } catch {
       setError('Failed to start session. Try again.');
@@ -246,13 +264,16 @@ function NoSessionPlaceholder({
           }}
         />
         {error && <p className="text-xs text-destructive">{error}</p>}
-        <Button
-          className="w-full"
-          disabled={!text.trim() || sending || !taskPath}
-          onClick={() => void handleSend()}
-        >
-          {sending ? 'Starting…' : 'Start session'}
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            className="flex-1"
+            disabled={!text.trim() || sending || !taskPath}
+            onClick={() => void handleSend()}
+          >
+            {sending ? 'Starting…' : 'Start session'}
+          </Button>
+          <ModelPicker value={model} onChange={setModel} />
+        </div>
       </div>
     </div>
   );

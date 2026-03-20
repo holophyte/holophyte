@@ -4,11 +4,12 @@ import { useMatch, useNavigate } from '@tanstack/react-router';
 import { useMutation, useQuery } from 'convex/react';
 import { AlertTriangle, Loader2, Play, Square } from 'lucide-react';
 import { useState } from 'react';
+import { DEFAULT_MODEL } from '@/constants';
 import { useCompanionStatus } from '@/frontend/hooks/useCompanionStatus';
 import { useStickyValue } from '@/frontend/hooks/useStickyValue';
 import { useAppStore } from '@/frontend/stores/app';
 import type { ClaudeModelId } from './ModelPicker';
-import ModelPicker, { DEFAULT_MODEL } from './ModelPicker';
+import ModelPicker from './ModelPicker';
 import Button from './ui/Button';
 
 interface ClaudeButtonProps {
@@ -23,6 +24,7 @@ export function ClaudeButton({ task }: ClaudeButtonProps) {
   const createSession = useMutation(api.sessions.create);
   const requestStop = useMutation(api.sessions.requestStop);
   const openSession = useAppStore((s) => s.openSession);
+  const closeSession = useAppStore((s) => s.closeSession);
   const navigate = useNavigate();
   const taskPageMatch = useMatch({
     from: '/repos/$repoId/tasks/$taskId/page',
@@ -41,29 +43,45 @@ export function ClaudeButton({ task }: ClaudeButtonProps) {
     setModel(DEFAULT_MODEL);
   }
 
+  const isOnThisTaskPage =
+    taskPageMatch?.params.taskId === task._id &&
+    taskPageMatch?.params.repoId === String(task.repoId);
+
   const handleLaunch = async () => {
-    if (!task.prompt || !task.repo) return;
-    setLoading(true);
     setError(null);
-    try {
-      // Create session in Convex with 'queued' status — the companion picks it up
-      const sessionId = await createSession({
-        taskId: task._id,
-        prompt: task.prompt,
-        model,
-      });
-      openSession(sessionId);
-      // Navigate to task page after launching, unless already there
-      if (!taskPageMatch) {
+    if (!task.repo) return;
+
+    if (task.prompt) {
+      // Has prompt: create + queue session immediately
+      setLoading(true);
+      try {
+        // Create session in Convex with 'queued' status — the companion picks it up
+        const sessionId = await createSession({
+          taskId: task._id,
+          prompt: task.prompt,
+          model,
+        });
+        openSession(sessionId);
+        if (!isOnThisTaskPage) {
+          void navigate({
+            to: '/repos/$repoId/tasks/$taskId/page',
+            params: { repoId: String(task.repoId), taskId: task._id },
+          });
+        }
+      } catch (err) {
+        setError(String(err));
+      } finally {
+        setLoading(false);
+      }
+    } else {
+      // No prompt: clear active session so task page shows the empty composer
+      closeSession();
+      if (!isOnThisTaskPage) {
         void navigate({
           to: '/repos/$repoId/tasks/$taskId/page',
           params: { repoId: String(task.repoId), taskId: task._id },
         });
       }
-    } catch (err) {
-      setError(String(err));
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -124,12 +142,12 @@ export function ClaudeButton({ task }: ClaudeButtonProps) {
           size="sm"
           className="flex-1"
           onClick={handleLaunch}
-          disabled={!task.prompt || !task.repo || companionState === 'loading'}
+          disabled={!task.repo || companionState === 'loading'}
         >
           <Play className="h-4 w-4 mr-1" />
           Launch Claude Code
         </Button>
-        <ModelPicker value={model} onChange={setModel} />
+        {task.prompt && <ModelPicker value={model} onChange={setModel} />}
       </div>
       {(companionState === 'offline' || companionState === 'stale') && (
         <p className="text-xs text-yellow-600 mt-1 flex items-center gap-1">
