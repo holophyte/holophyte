@@ -49,15 +49,6 @@ vi.mock('@assistant-ui/react', () => {
         )}
       </div>
     ),
-    ScrollToBottom: ({ className }: { className?: string }) => (
-      <button
-        data-testid="scroll-to-bottom"
-        className={className}
-        type="button"
-      >
-        Scroll to bottom
-      </button>
-    ),
   };
 
   const useThreadViewport = (
