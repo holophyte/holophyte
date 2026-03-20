@@ -38,6 +38,7 @@ export default function SessionComposer() {
             onClick={acceptSuggestion}
             className="inline-flex items-center gap-1.5 rounded-full border border-border/50 bg-muted/30 px-3 py-1 text-xs text-muted-foreground hover:bg-muted/50 transition-colors max-w-full"
           >
+            <span className="shrink-0 font-medium">Suggestion:</span>
             <span className="truncate">{promptSuggestion}</span>
             <kbd className="shrink-0 rounded border border-border/50 bg-muted/50 px-1 py-0.5 font-mono text-[10px] leading-none text-muted-foreground/70">
               Tab
