@@ -168,7 +168,7 @@ export default defineSchema({
 
   sessions: defineTable({
     taskId: v.id('tasks'),
-    orgId: v.optional(v.id('organizations')), // required — added to existing table
+    orgId: v.optional(v.id('organizations')), // logically required; optional for backwards-compat during backfill
     status: v.union(
       v.literal('queued'),
       v.literal('running'),

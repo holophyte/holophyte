@@ -654,12 +654,30 @@ async function transitionSessions(
   const { fromStatus, toStatus, lastActivityAt, orgIds } = opts;
   let count = 0;
 
-  const sessions = orgIds
-    ? await collectByOrgs(ctx, orgIds, fromStatus)
-    : await ctx.db
-        .query('sessions')
-        .withIndex('by_status', (q) => q.eq('status', fromStatus))
-        .collect();
+  let sessions: Doc<'sessions'>[];
+  if (orgIds) {
+    // Primary: indexed lookup for sessions with denormalized orgId
+    sessions = await collectByOrgs(ctx, orgIds, fromStatus);
+    // Fallback: pick up un-backfilled sessions (orgId undefined) via by_status
+    // TODO(#170): remove fallback after backfill confirmed complete
+    const allByStatus = await ctx.db
+      .query('sessions')
+      .withIndex('by_status', (q) => q.eq('status', fromStatus))
+      .collect();
+    const indexedIds = new Set(sessions.map((s) => s._id));
+    for (const s of allByStatus) {
+      if (indexedIds.has(s._id) || s.orgId) continue;
+      const resolvedOrgId = await getOrgIdFromTaskOrNull(ctx, s.taskId);
+      if (resolvedOrgId && orgIds.has(resolvedOrgId)) {
+        sessions.push(s);
+      }
+    }
+  } else {
+    sessions = await ctx.db
+      .query('sessions')
+      .withIndex('by_status', (q) => q.eq('status', fromStatus))
+      .collect();
+  }
 
   for (const session of sessions) {
     await ctx.db.patch(session._id, {
@@ -768,7 +786,7 @@ export const companionMarkStoppedAsIdle = mutation({
  * Gracefully returns null if the task or repo has been deleted (orphaned session).
  * TODO(#170): remove fallback after backfill confirmed complete.
  */
-async function getOrgIdFromTask(
+async function getOrgIdFromTaskOrNull(
   ctx: QueryCtx,
   taskId: Id<'tasks'>,
 ): Promise<Id<'organizations'> | null> {
@@ -797,7 +815,7 @@ export const companionBatchHeartbeat = mutation({
       // Use denormalized orgId; fallback to join for un-backfilled sessions
       // TODO(#170): remove fallback after backfill confirmed complete
       const sessionOrgId =
-        session.orgId ?? (await getOrgIdFromTask(ctx, session.taskId));
+        session.orgId ?? (await getOrgIdFromTaskOrNull(ctx, session.taskId));
       if (!sessionOrgId || !orgIds.has(sessionOrgId)) continue;
       await ctx.db.patch(id, { lastHeartbeat: now });
     }
