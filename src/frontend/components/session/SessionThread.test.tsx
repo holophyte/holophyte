@@ -7,6 +7,10 @@ import { SessionActionsContext } from './SessionActionsContext';
 // Mocks
 // ---------------------------------------------------------------------------
 
+const { mockScrollToBottom } = vi.hoisted(() => ({
+  mockScrollToBottom: vi.fn(),
+}));
+
 vi.mock('@assistant-ui/react', () => {
   const ThreadPrimitive = {
     Root: ({
@@ -57,7 +61,7 @@ vi.mock('@assistant-ui/react', () => {
 
   const useThreadViewport = (
     selector: (s: Record<string, unknown>) => unknown,
-  ) => selector({ scrollToBottom: vi.fn(), isAtBottom: true });
+  ) => selector({ scrollToBottom: mockScrollToBottom, isAtBottom: true });
 
   return { ThreadPrimitive, useThreadViewport };
 });
@@ -175,6 +179,32 @@ describe('SessionThread', () => {
       const btn = screen.getByRole('button', { name: 'Scroll to bottom' });
       expect(btn).toHaveAttribute('aria-hidden', 'false');
       expect(btn).toHaveAttribute('tabindex', '0');
+    });
+
+    it('calls scrollToBottom with smooth behavior when clicked', () => {
+      mockScrollToBottom.mockClear();
+      render(<SessionThread />, { wrapper: withSessionActions() });
+      const viewport = screen.getByTestId('thread-viewport');
+
+      // Make button visible by simulating scroll far from bottom
+      Object.defineProperty(viewport, 'scrollHeight', {
+        value: 2000,
+        configurable: true,
+      });
+      Object.defineProperty(viewport, 'clientHeight', {
+        value: 500,
+        configurable: true,
+      });
+      Object.defineProperty(viewport, 'scrollTop', {
+        value: 0,
+        configurable: true,
+      });
+      fireEvent.scroll(viewport);
+
+      fireEvent.click(screen.getByRole('button', { name: 'Scroll to bottom' }));
+      expect(mockScrollToBottom).toHaveBeenCalledWith({
+        behavior: 'smooth',
+      });
     });
   });
 
