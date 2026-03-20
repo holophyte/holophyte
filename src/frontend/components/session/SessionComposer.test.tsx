@@ -85,31 +85,21 @@ vi.mock('@assistant-ui/react', () => {
   };
 });
 
-function withIdleSession(children: ReactNode) {
+function withSession(
+  children: ReactNode,
+  overrides: {
+    sessionStatus?: 'idle' | 'running';
+    promptSuggestion?: string | null;
+  } = {},
+) {
   return (
     <SessionActionsContext.Provider
       value={{
         approve: vi.fn(),
         deny: vi.fn(),
         pendingApprovals: [],
-        sessionStatus: 'idle',
-        promptSuggestion: null,
-      }}
-    >
-      {children}
-    </SessionActionsContext.Provider>
-  );
-}
-
-function withRunningSession(children: ReactNode) {
-  return (
-    <SessionActionsContext.Provider
-      value={{
-        approve: vi.fn(),
-        deny: vi.fn(),
-        pendingApprovals: [],
-        sessionStatus: 'running',
-        promptSuggestion: null,
+        sessionStatus: overrides.sessionStatus ?? 'idle',
+        promptSuggestion: overrides.promptSuggestion ?? null,
       }}
     >
       {children}
@@ -126,29 +116,31 @@ import SessionComposer from './SessionComposer';
 describe('SessionComposer', () => {
   describe('rendering', () => {
     it('renders a text input area', () => {
-      render(withIdleSession(<SessionComposer />));
+      render(withSession(<SessionComposer />));
       expect(screen.getByTestId('composer-input')).toBeInTheDocument();
     });
 
     it('renders a send button', () => {
-      render(withIdleSession(<SessionComposer />));
+      render(withSession(<SessionComposer />));
       expect(screen.getByTestId('composer-send')).toBeInTheDocument();
     });
 
     it('renders with a placeholder', () => {
-      render(withIdleSession(<SessionComposer />));
+      render(withSession(<SessionComposer />));
       const input = screen.getByTestId('composer-input') as HTMLTextAreaElement;
       expect(input.placeholder).toBeTruthy();
     });
 
     it('renders without crashing', () => {
-      expect(() => render(withIdleSession(<SessionComposer />))).not.toThrow();
+      expect(() => render(withSession(<SessionComposer />))).not.toThrow();
     });
   });
 
   describe('disabled state when running', () => {
     it('applies disabled/opacity styling when session is running', () => {
-      const { container } = render(withRunningSession(<SessionComposer />));
+      const { container } = render(
+        withSession(<SessionComposer />, { sessionStatus: 'running' }),
+      );
       // Either the input is disabled or a wrapper has an opacity/disabled class
       const input = container.querySelector(
         '[data-testid="composer-input"]',
@@ -170,7 +162,7 @@ describe('SessionComposer', () => {
   describe('input behavior', () => {
     it('accepts text input', async () => {
       const user = userEvent.setup();
-      render(withIdleSession(<SessionComposer />));
+      render(withSession(<SessionComposer />));
       const input = screen.getByTestId('composer-input');
       await user.type(input, 'Hello Claude');
       expect((input as HTMLTextAreaElement).value).toBe('Hello Claude');
@@ -178,42 +170,27 @@ describe('SessionComposer', () => {
   });
 
   describe('suggestion chip', () => {
+    const suggestion = 'Run the test suite';
+
     it('renders chip when session is idle and promptSuggestion is non-null', () => {
       render(
-        <SessionActionsContext.Provider
-          value={{
-            approve: vi.fn(),
-            deny: vi.fn(),
-            pendingApprovals: [],
-            sessionStatus: 'idle',
-            promptSuggestion: 'Run the test suite',
-          }}
-        >
-          <SessionComposer />
-        </SessionActionsContext.Provider>,
+        withSession(<SessionComposer />, { promptSuggestion: suggestion }),
       );
-      expect(screen.getByText('Run the test suite')).toBeInTheDocument();
+      expect(screen.getByText(suggestion)).toBeInTheDocument();
     });
 
     it('does NOT render chip when session is running (even with non-empty suggestion)', () => {
       render(
-        <SessionActionsContext.Provider
-          value={{
-            approve: vi.fn(),
-            deny: vi.fn(),
-            pendingApprovals: [],
-            sessionStatus: 'running',
-            promptSuggestion: 'Run the test suite',
-          }}
-        >
-          <SessionComposer />
-        </SessionActionsContext.Provider>,
+        withSession(<SessionComposer />, {
+          sessionStatus: 'running',
+          promptSuggestion: suggestion,
+        }),
       );
-      expect(screen.queryByText('Run the test suite')).not.toBeInTheDocument();
+      expect(screen.queryByText(suggestion)).not.toBeInTheDocument();
     });
 
     it('does NOT render chip when promptSuggestion is null', () => {
-      render(withIdleSession(<SessionComposer />));
+      render(withSession(<SessionComposer />));
       // no chip button beyond the send button
       const buttons = screen.getAllByRole('button');
       // Only the send button should be present
@@ -225,23 +202,13 @@ describe('SessionComposer', () => {
       const user = userEvent.setup();
       mockSetText.mockClear();
       render(
-        <SessionActionsContext.Provider
-          value={{
-            approve: vi.fn(),
-            deny: vi.fn(),
-            pendingApprovals: [],
-            sessionStatus: 'idle',
-            promptSuggestion: 'Run the test suite',
-          }}
-        >
-          <SessionComposer />
-        </SessionActionsContext.Provider>,
+        withSession(<SessionComposer />, { promptSuggestion: suggestion }),
       );
       const chip = screen
-        .getByText('Run the test suite')
+        .getByText(suggestion)
         .closest('button') as HTMLElement;
       await user.click(chip);
-      expect(mockSetText).toHaveBeenCalledWith('Run the test suite');
+      expect(mockSetText).toHaveBeenCalledWith(suggestion);
     });
   });
 });
