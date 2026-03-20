@@ -172,68 +172,44 @@ describe('SessionComposer', () => {
     });
   });
 
-  describe('suggestion chip', () => {
+  describe('prompt suggestion', () => {
     const suggestion = 'Run the test suite';
 
-    it('renders chip when session is idle and promptSuggestion is non-null', () => {
+    it('shows suggestion as placeholder when idle with promptSuggestion', () => {
       render(
         withSession(<SessionComposer />, { promptSuggestion: suggestion }),
       );
-      expect(screen.getByText(suggestion)).toBeInTheDocument();
+      const input = screen.getByRole('textbox');
+      expect(input).toHaveAttribute(
+        'placeholder',
+        `${suggestion}  (Tab to accept)`,
+      );
     });
 
-    it('does NOT render chip when session is running (even with non-empty suggestion)', () => {
+    it('shows default placeholder when running (even with suggestion)', () => {
       render(
         withSession(<SessionComposer />, {
           sessionStatus: 'running',
           promptSuggestion: suggestion,
         }),
       );
-      expect(screen.queryByText(suggestion)).not.toBeInTheDocument();
+      const input = screen.getByRole('textbox');
+      expect(input).toHaveAttribute(
+        'placeholder',
+        'Waiting for session to finish…',
+      );
     });
 
-    it('does NOT render chip when promptSuggestion is null', () => {
+    it('shows default placeholder when no suggestion', () => {
       render(withSession(<SessionComposer />));
-      // no chip button beyond the send button
-      const buttons = screen.getAllByRole('button');
-      // Only the send button should be present
-      expect(buttons).toHaveLength(1);
-      expect(screen.getByTestId('composer-send')).toBeInTheDocument();
-    });
-
-    it('clicking chip calls setText with the suggestion text', async () => {
-      const user = userEvent.setup();
-      mockSetText.mockClear();
-      render(
-        withSession(<SessionComposer />, { promptSuggestion: suggestion }),
+      const input = screen.getByRole('textbox');
+      expect(input).toHaveAttribute(
+        'placeholder',
+        'Send a follow-up to Claude… (Enter to send)',
       );
-      const chip = screen
-        .getByText(suggestion)
-        .closest('button') as HTMLElement;
-      await user.click(chip);
-      expect(mockSetText).toHaveBeenCalledWith(suggestion);
     });
 
-    it('chip is dismissed after clicking it', async () => {
-      const user = userEvent.setup();
-      render(
-        withSession(<SessionComposer />, { promptSuggestion: suggestion }),
-      );
-      const chip = screen
-        .getByText(suggestion)
-        .closest('button') as HTMLElement;
-      await user.click(chip);
-      expect(screen.queryByText(suggestion)).toBeNull();
-    });
-
-    it('chip shows Tab hint', () => {
-      render(
-        withSession(<SessionComposer />, { promptSuggestion: suggestion }),
-      );
-      expect(screen.getByText('Tab')).toBeInTheDocument();
-    });
-
-    it('Tab key accepts suggestion and fills composer', () => {
+    it('Tab key fills composer with suggestion text', () => {
       mockSetText.mockClear();
       render(
         withSession(<SessionComposer />, { promptSuggestion: suggestion }),
@@ -241,7 +217,14 @@ describe('SessionComposer', () => {
       const input = screen.getByRole('textbox');
       fireEvent.keyDown(input, { key: 'Tab' });
       expect(mockSetText).toHaveBeenCalledWith(suggestion);
-      expect(screen.queryByText(suggestion)).toBeNull();
+    });
+
+    it('Tab key does nothing when no suggestion', () => {
+      mockSetText.mockClear();
+      render(withSession(<SessionComposer />));
+      const input = screen.getByRole('textbox');
+      fireEvent.keyDown(input, { key: 'Tab' });
+      expect(mockSetText).not.toHaveBeenCalled();
     });
   });
 });
