@@ -31,7 +31,7 @@ export default function SessionComposer() {
             if (
               e.key === 'Tab' &&
               !e.shiftKey &&
-              !isDisabled &&
+              hasSuggestion &&
               promptSuggestion &&
               isEmpty
             ) {
