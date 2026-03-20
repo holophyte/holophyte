@@ -60,7 +60,11 @@ vi.mock('@assistant-ui/react', () => {
     ),
   };
 
-  return { ThreadPrimitive };
+  const useThreadViewport = (
+    selector: (s: Record<string, unknown>) => unknown,
+  ) => selector({ scrollToBottom: vi.fn(), isAtBottom: true });
+
+  return { ThreadPrimitive, useThreadViewport };
 });
 
 // Mock SessionComposer
@@ -147,7 +151,7 @@ describe('SessionThread', () => {
 
     it('renders ScrollToBottom button', () => {
       render(<SessionThread />, { wrapper: withSessionActions() });
-      expect(screen.getByTestId('scroll-to-bottom')).toBeInTheDocument();
+      expect(screen.getByLabelText('Scroll to bottom')).toBeInTheDocument();
     });
   });
 

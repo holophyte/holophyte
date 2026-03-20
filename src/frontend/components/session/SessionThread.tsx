@@ -1,10 +1,13 @@
-import { ThreadPrimitive } from '@assistant-ui/react';
-import { Sparkles } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { ThreadPrimitive, useThreadViewport } from '@assistant-ui/react';
+import { ChevronDown, Sparkles } from 'lucide-react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import CustomAssistantMessage from './CustomAssistantMessage';
 import CustomUserMessage from './CustomUserMessage';
 import { useSessionActions } from './SessionActionsContext';
 import SessionComposer from './SessionComposer';
+
+/** Minimum distance (px) from bottom before the scroll button appears */
+const SCROLL_THRESHOLD = 200;
 
 function ThinkingIndicator() {
   const { sessionStatus } = useSessionActions();
@@ -37,6 +40,65 @@ function ThinkingIndicator() {
   );
 }
 
+function ScrollToBottomButton() {
+  const scrollToBottom = useThreadViewport((s) => s.scrollToBottom);
+  const [show, setShow] = useState(false);
+  const viewportRef = useRef<HTMLElement | null>(null);
+
+  const handleScroll = useCallback((e: Event) => {
+    const el = e.target as HTMLElement;
+    const distance = el.scrollHeight - el.scrollTop - el.clientHeight;
+    setShow(distance > SCROLL_THRESHOLD);
+  }, []);
+
+  // Find the viewport element (ThreadPrimitive.Viewport renders the scrollable div)
+  const sentinelRef = useCallback(
+    (node: HTMLDivElement | null) => {
+      // Clean up previous listener
+      if (viewportRef.current) {
+        viewportRef.current.removeEventListener('scroll', handleScroll);
+        viewportRef.current = null;
+      }
+
+      if (!node) return;
+
+      // Walk up to find the scrollable viewport
+      let el: HTMLElement | null = node.parentElement;
+      while (el) {
+        const { overflowY } = getComputedStyle(el);
+        if (overflowY === 'auto' || overflowY === 'scroll') {
+          viewportRef.current = el;
+          el.addEventListener('scroll', handleScroll, { passive: true });
+          // Check initial position
+          const distance = el.scrollHeight - el.scrollTop - el.clientHeight;
+          setShow(distance > SCROLL_THRESHOLD);
+          break;
+        }
+        el = el.parentElement;
+      }
+    },
+    [handleScroll],
+  );
+
+  return (
+    <>
+      <div ref={sentinelRef} className="hidden" aria-hidden="true" />
+      <button
+        type="button"
+        aria-label="Scroll to bottom"
+        onClick={() => scrollToBottom({ behavior: 'smooth' })}
+        className={`absolute bottom-20 right-4 flex h-8 w-8 items-center justify-center rounded-full bg-background shadow-md border border-border text-muted-foreground hover:text-foreground transition-all duration-200 ${
+          show
+            ? 'opacity-100 translate-y-0'
+            : 'opacity-0 translate-y-2 pointer-events-none'
+        }`}
+      >
+        <ChevronDown className="h-4 w-4" />
+      </button>
+    </>
+  );
+}
+
 export default function SessionThread() {
   return (
     <ThreadPrimitive.Root className="relative flex h-full flex-col">
@@ -51,7 +113,7 @@ export default function SessionThread() {
           <ThinkingIndicator />
         </div>
       </ThreadPrimitive.Viewport>
-      <ThreadPrimitive.ScrollToBottom className="absolute bottom-20 right-4 flex h-8 w-8 items-center justify-center rounded-full bg-background shadow-md border border-border text-muted-foreground hover:text-foreground" />
+      <ScrollToBottomButton />
       <SessionComposer />
     </ThreadPrimitive.Root>
   );
