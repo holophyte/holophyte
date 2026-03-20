@@ -177,8 +177,39 @@ describe('SessionThread', () => {
       fireEvent.scroll(viewport);
 
       const btn = screen.getByRole('button', { name: 'Scroll to bottom' });
-      expect(btn).toHaveAttribute('aria-hidden', 'false');
+      expect(btn).not.toHaveAttribute('aria-hidden');
       expect(btn).toHaveAttribute('tabindex', '0');
+    });
+
+    it('hides ScrollToBottom button when scrolled back near bottom', () => {
+      render(<SessionThread />, { wrapper: withSessionActions() });
+      const viewport = screen.getByTestId('thread-viewport');
+
+      // First scroll far away
+      Object.defineProperty(viewport, 'scrollHeight', {
+        value: 2000,
+        configurable: true,
+      });
+      Object.defineProperty(viewport, 'clientHeight', {
+        value: 500,
+        configurable: true,
+      });
+      Object.defineProperty(viewport, 'scrollTop', {
+        value: 0,
+        configurable: true,
+      });
+      fireEvent.scroll(viewport);
+
+      // Now scroll back near bottom (distance = 50, below threshold)
+      Object.defineProperty(viewport, 'scrollTop', {
+        value: 1450,
+        configurable: true,
+      });
+      fireEvent.scroll(viewport);
+
+      const btn = screen.getByLabelText('Scroll to bottom');
+      expect(btn).toHaveAttribute('aria-hidden', 'true');
+      expect(btn).toHaveAttribute('tabindex', '-1');
     });
 
     it('calls scrollToBottom with smooth behavior when clicked', () => {

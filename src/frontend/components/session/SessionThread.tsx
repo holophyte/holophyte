@@ -102,7 +102,7 @@ export default function SessionThread() {
       <button
         type="button"
         aria-label="Scroll to bottom"
-        aria-hidden={!show}
+        aria-hidden={show ? undefined : true}
         tabIndex={show ? 0 : -1}
         onClick={() => scrollToBottom({ behavior: 'smooth' })}
         className={cn(
