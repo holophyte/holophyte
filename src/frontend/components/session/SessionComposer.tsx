@@ -28,7 +28,7 @@ export default function SessionComposer() {
           disabled={isDisabled}
           rows={1}
           onKeyDown={(e) => {
-            if (e.key === 'Tab' && promptSuggestion && isEmpty) {
+            if (e.key === 'Tab' && !e.shiftKey && promptSuggestion && isEmpty) {
               e.preventDefault();
               composerRuntime.setText(promptSuggestion);
             }
