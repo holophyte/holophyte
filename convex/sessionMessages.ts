@@ -9,6 +9,7 @@ import {
 } from './_generated/server';
 import {
   getUserOrgIds,
+  isLocalDevMode,
   requireAuth,
   requireOrgMembership,
   requireRole,
@@ -117,6 +118,7 @@ export const markConsumed = internalMutation({
 export const companionListPending = query({
   args: {},
   handler: async (ctx) => {
+    if (isLocalDevMode()) return fetchPendingMessages(ctx);
     const userId = await requireAuth(ctx);
     const orgIds = await getUserOrgIds(ctx, userId);
     return fetchPendingMessages(ctx, orgIds);
@@ -132,8 +134,9 @@ export const companionMarkConsumed = mutation({
   handler: async (ctx, args) => {
     const msg = await ctx.db.get(args.id);
     if (!msg) return;
-    // Verify caller owns the message's session
-    await requireSessionOwnership(ctx, msg.sessionId);
+    if (!isLocalDevMode()) {
+      await requireSessionOwnership(ctx, msg.sessionId);
+    }
     await ctx.db.patch(args.id, { consumed: true });
   },
 });

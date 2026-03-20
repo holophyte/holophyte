@@ -10,6 +10,7 @@ import {
 import {
   getUserOrgIds,
   getUserWritableOrgIds,
+  isLocalDevMode,
   requireAuth,
   requireOrgMembership,
   requireRole,
@@ -609,6 +610,7 @@ export const listStopped = internalQuery({
 export const companionListQueued = query({
   args: {},
   handler: async (ctx) => {
+    if (isLocalDevMode()) return fetchQueuedSessions(ctx);
     const userId = await requireAuth(ctx);
     const orgIds = await getUserOrgIds(ctx, userId);
     return fetchQueuedSessions(ctx, orgIds);
@@ -628,6 +630,13 @@ export const companionListQueued = query({
 export const companionListStopped = query({
   args: {},
   handler: async (ctx) => {
+    if (isLocalDevMode()) {
+      const sessions = await ctx.db
+        .query('sessions')
+        .withIndex('by_status', (q) => q.eq('status', 'stopped'))
+        .collect();
+      return sessions.map((s) => ({ _id: s._id }));
+    }
     const userId = await requireAuth(ctx);
     const orgIds = await getUserOrgIds(ctx, userId);
     const sessions = await collectByOrgs(ctx, orgIds, 'stopped');
@@ -699,8 +708,13 @@ async function collectByOrgs(
 export const companionClaimQueued = mutation({
   args: { id: v.id('sessions') },
   handler: async (ctx, args) => {
-    const { session } = await requireSessionOwnership(ctx, args.id);
-    if (session.status !== 'queued') return { ok: false };
+    if (isLocalDevMode()) {
+      const session = await ctx.db.get(args.id);
+      if (!session || session.status !== 'queued') return { ok: false };
+    } else {
+      const { session } = await requireSessionOwnership(ctx, args.id);
+      if (session.status !== 'queued') return { ok: false };
+    }
     await ctx.db.patch(args.id, {
       status: 'running',
       lastActivityAt: Date.now(),
@@ -719,7 +733,12 @@ export const companionUpdateStatus = mutation({
     status: sessionStatusValidator,
   },
   handler: async (ctx, args) => {
-    await requireSessionOwnership(ctx, args.id);
+    if (isLocalDevMode()) {
+      const session = await ctx.db.get(args.id);
+      if (!session) throw new Error('Session not found');
+    } else {
+      await requireSessionOwnership(ctx, args.id);
+    }
     await ctx.db.patch(args.id, {
       status: args.status,
       lastActivityAt: Date.now(),
@@ -734,6 +753,13 @@ export const companionUpdateStatus = mutation({
 export const companionMarkStaleRunning = mutation({
   args: {},
   handler: async (ctx) => {
+    if (isLocalDevMode()) {
+      return transitionSessions(ctx, {
+        fromStatus: 'running',
+        toStatus: 'idle',
+        lastActivityAt: (s) => s.lastActivityAt ?? s.startedAt,
+      });
+    }
     const userId = await requireAuth(ctx);
     const orgIds = await getUserWritableOrgIds(ctx, userId);
     return transitionSessions(ctx, {
@@ -752,6 +778,13 @@ export const companionMarkStaleRunning = mutation({
 export const companionMarkStoppedAsIdle = mutation({
   args: {},
   handler: async (ctx) => {
+    if (isLocalDevMode()) {
+      return transitionSessions(ctx, {
+        fromStatus: 'stopped',
+        toStatus: 'idle',
+        lastActivityAt: () => Date.now(),
+      });
+    }
     const userId = await requireAuth(ctx);
     const orgIds = await getUserWritableOrgIds(ctx, userId);
     return transitionSessions(ctx, {
@@ -771,12 +804,16 @@ export const companionMarkStoppedAsIdle = mutation({
 export const companionBatchHeartbeat = mutation({
   args: { sessionIds: v.array(v.id('sessions')) },
   handler: async (ctx, args) => {
-    const userId = await requireAuth(ctx);
-    const orgIds = await getUserWritableOrgIds(ctx, userId);
+    let orgIds: Set<Id<'organizations'>> | null = null;
+    if (!isLocalDevMode()) {
+      const userId = await requireAuth(ctx);
+      orgIds = await getUserWritableOrgIds(ctx, userId);
+    }
     const now = Date.now();
     for (const id of args.sessionIds) {
       const session = await ctx.db.get(id);
-      if (!session?.orgId || !orgIds.has(session.orgId)) continue;
+      if (!session) continue;
+      if (orgIds && (!session.orgId || !orgIds.has(session.orgId))) continue;
       await ctx.db.patch(id, { lastHeartbeat: now });
     }
   },
@@ -794,7 +831,7 @@ export const companionUpdateSdkSessionId = mutation({
     permissionMode: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    await requireSessionOwnership(ctx, args.id);
+    if (!isLocalDevMode()) await requireSessionOwnership(ctx, args.id);
     await ctx.db.patch(args.id, {
       sdkSessionId: args.sdkSessionId,
       ...(args.model !== undefined && { model: args.model }),
@@ -812,7 +849,7 @@ export const companionUpdateSdkSessionId = mutation({
 export const companionUpdateActivity = mutation({
   args: { id: v.id('sessions') },
   handler: async (ctx, args) => {
-    await requireSessionOwnership(ctx, args.id);
+    if (!isLocalDevMode()) await requireSessionOwnership(ctx, args.id);
     await ctx.db.patch(args.id, { lastActivityAt: Date.now() });
   },
 });
@@ -827,7 +864,7 @@ export const companionUpdateName = mutation({
     name: v.string(),
   },
   handler: async (ctx, args) => {
-    await requireSessionOwnership(ctx, args.id);
+    if (!isLocalDevMode()) await requireSessionOwnership(ctx, args.id);
     await ctx.db.patch(args.id, { name: args.name });
   },
 });

@@ -9,6 +9,15 @@ const ROLE_LEVELS: Record<Doc<'memberships'>['role'], number> = {
   owner: 3,
 };
 
+/**
+ * Returns true when ALLOW_ANONYMOUS_AUTH is set on the Convex deployment.
+ * Used to skip org-scoping in companion functions for local dev where the
+ * browser and companion may be separate anonymous users in separate orgs.
+ */
+export function isLocalDevMode(): boolean {
+  return process.env.ALLOW_ANONYMOUS_AUTH === '1';
+}
+
 /** Returns userId or throws — use in mutations/queries that require auth. */
 export async function requireAuth(ctx: QueryCtx | MutationCtx) {
   const userId = await getAuthUserId(ctx);
