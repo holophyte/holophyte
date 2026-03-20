@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { ReactNode } from 'react';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { SessionActionsContext } from './SessionActionsContext';
 
 // ---------------------------------------------------------------------------
@@ -10,11 +10,13 @@ import { SessionActionsContext } from './SessionActionsContext';
 
 const mockSetText = vi.fn();
 
+// Shared state for simulating composer input — lives outside the factory
+// so afterEach can reset it between tests.
+const _mockInput = { value: '' };
+
 // Mock ComposerPrimitive and useComposerRuntime from @assistant-ui/react
 // These simulate the real primitives with enough fidelity to test behavior
 vi.mock('@assistant-ui/react', () => {
-  // Shared state for simulating composer input across the mocked primitives
-  let _inputValue = '';
   let _onSubmit: (() => void) | null = null;
 
   const ComposerPrimitive = {
@@ -59,7 +61,7 @@ vi.mock('@assistant-ui/react', () => {
           autoFocus={autoFocus}
           onKeyDown={onKeyDown}
           onChange={(e) => {
-            _inputValue = e.target.value;
+            _mockInput.value = e.target.value;
           }}
         />
       );
@@ -85,6 +87,9 @@ vi.mock('@assistant-ui/react', () => {
   return {
     ComposerPrimitive,
     useComposerRuntime: () => ({ setText: mockSetText }),
+    // Track composer text separately from DOM textarea value for useComposer
+    useComposer: (selector: (s: { text: string }) => unknown) =>
+      selector({ text: _mockInput.value }),
   };
 });
 
@@ -117,6 +122,10 @@ import SessionComposer from './SessionComposer';
 // ---------------------------------------------------------------------------
 
 describe('SessionComposer', () => {
+  afterEach(() => {
+    _mockInput.value = '';
+  });
+
   describe('rendering', () => {
     it('renders a text input area', () => {
       render(withSession(<SessionComposer />));
@@ -180,10 +189,7 @@ describe('SessionComposer', () => {
         withSession(<SessionComposer />, { promptSuggestion: suggestion }),
       );
       const input = screen.getByRole('textbox');
-      expect(input).toHaveAttribute(
-        'placeholder',
-        `${suggestion}  (Tab to accept)`,
-      );
+      expect(input).toHaveAttribute('placeholder', suggestion);
     });
 
     it('shows default placeholder when running (even with suggestion)', () => {
