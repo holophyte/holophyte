@@ -20,27 +20,19 @@ import { sessionStatusValidator } from './schema';
 /**
  * Returns all currently running sessions scoped to an org.
  *
- * Uses the `by_status` index for an O(1) status scan, then cross-checks each
- * session's task→repo chain to filter by org. Requires org membership.
+ * Uses the `by_org_status` compound index for a direct org+status lookup,
+ * eliminating the previous full scan + N join. Requires org membership.
  */
 export const listActive = query({
   args: { orgId: v.id('organizations') },
   handler: async (ctx, args) => {
     await requireOrgMembership(ctx, args.orgId);
-    // Use by_status index for O(1) lookup, then verify org membership
-    const runningSessions = await ctx.db
+    return await ctx.db
       .query('sessions')
-      .withIndex('by_status', (q) => q.eq('status', 'running'))
+      .withIndex('by_org_status', (q) =>
+        q.eq('orgId', args.orgId).eq('status', 'running'),
+      )
       .collect();
-    const orgSessions = [];
-    for (const session of runningSessions) {
-      const task = await ctx.db.get(session.taskId);
-      if (!task) continue;
-      const repo = await ctx.db.get(task.repoId);
-      if (!repo || repo.orgId !== args.orgId) continue;
-      orgSessions.push(session);
-    }
-    return orgSessions;
   },
 });
 
@@ -153,6 +145,7 @@ export const create = mutation({
     const now = Date.now();
     return await ctx.db.insert('sessions', {
       taskId: args.taskId,
+      orgId: repo.orgId,
       status: 'queued',
       startedAt: now,
       lastActivityAt: now,
@@ -440,13 +433,34 @@ export const serverUpdateName = internalMutation({
 
 /**
  * Shared implementation for listQueued and companionListQueued.
- * When `orgIds` is provided, only returns sessions whose repo belongs to one
- * of those orgs (used by the public companion query for cross-org isolation).
+ * When `orgIds` is provided, queries by_org_status per org to avoid a full
+ * table scan + N+1 join. Without orgIds (internal callers), uses by_status.
  */
 async function fetchQueuedSessions(
   ctx: QueryCtx,
   orgIds?: Set<Id<'organizations'>>,
 ) {
+  if (orgIds) {
+    // Org-scoped: use compound index to avoid full scan + per-session join
+    const result = [];
+    for (const orgId of orgIds) {
+      const sessions = await ctx.db
+        .query('sessions')
+        .withIndex('by_org_status', (q) =>
+          q.eq('orgId', orgId).eq('status', 'queued'),
+        )
+        .collect();
+      for (const session of sessions) {
+        const task = await ctx.db.get(session.taskId);
+        if (!task) continue;
+        const repo = await ctx.db.get(task.repoId);
+        if (!repo) continue;
+        result.push({ ...session, repoPath: repo.path });
+      }
+    }
+    return result;
+  }
+  // Internal callers: scan all queued sessions globally
   const queued = await ctx.db
     .query('sessions')
     .withIndex('by_status', (q) => q.eq('status', 'queued'))
@@ -457,7 +471,6 @@ async function fetchQueuedSessions(
     if (!task) continue;
     const repo = await ctx.db.get(task.repoId);
     if (!repo) continue;
-    if (orgIds && !orgIds.has(repo.orgId)) continue;
     result.push({ ...session, repoPath: repo.path });
   }
   return result;
@@ -617,29 +630,25 @@ export const companionListQueued = query({
  * `_id` to minimise data in transit. Requires JWT authentication.
  *
  * Scoped to the authenticated user's orgs — the companion can only see
- * sessions for orgs it is a member of.
- *
- * Note: org filtering requires O(N×2) DB reads (task + repo per session).
- * Acceptable because `serverMarkStoppedAsIdle` drains stopped sessions on
- * startup, keeping N small. If stopped sessions accumulate, consider a
- * compound index on `(status, orgId)` to filter earlier.
+ * sessions for orgs it is a member of. Uses by_org_status index to avoid
+ * the previous O(N×2) full scan + per-session join pattern.
  */
 export const companionListStopped = query({
   args: {},
   handler: async (ctx) => {
     const userId = await requireAuth(ctx);
     const orgIds = await getUserOrgIds(ctx, userId);
-    const stopped = await ctx.db
-      .query('sessions')
-      .withIndex('by_status', (q) => q.eq('status', 'stopped'))
-      .collect();
     const result = [];
-    for (const s of stopped) {
-      const task = await ctx.db.get(s.taskId);
-      if (!task) continue;
-      const repo = await ctx.db.get(task.repoId);
-      if (!repo || !orgIds.has(repo.orgId)) continue;
-      result.push({ _id: s._id });
+    for (const orgId of orgIds) {
+      const stopped = await ctx.db
+        .query('sessions')
+        .withIndex('by_org_status', (q) =>
+          q.eq('orgId', orgId).eq('status', 'stopped'),
+        )
+        .collect();
+      for (const s of stopped) {
+        result.push({ _id: s._id });
+      }
     }
     return result;
   },
@@ -651,23 +660,37 @@ async function markStaleRunningImpl(
   ctx: MutationCtx,
   orgIds?: Set<Id<'organizations'>>,
 ) {
-  const runningSessions = await ctx.db
-    .query('sessions')
-    .withIndex('by_status', (q) => q.eq('status', 'running'))
-    .collect();
   let count = 0;
-  for (const session of runningSessions) {
-    if (orgIds) {
-      const task = await ctx.db.get(session.taskId);
-      if (!task) continue;
-      const repo = await ctx.db.get(task.repoId);
-      if (!repo || !orgIds.has(repo.orgId)) continue;
+  if (orgIds) {
+    // Org-scoped: use compound index to avoid full scan + per-session join
+    for (const orgId of orgIds) {
+      const sessions = await ctx.db
+        .query('sessions')
+        .withIndex('by_org_status', (q) =>
+          q.eq('orgId', orgId).eq('status', 'running'),
+        )
+        .collect();
+      for (const session of sessions) {
+        await ctx.db.patch(session._id, {
+          status: 'idle',
+          lastActivityAt: session.lastActivityAt ?? session.startedAt,
+        });
+        count++;
+      }
     }
-    await ctx.db.patch(session._id, {
-      status: 'idle',
-      lastActivityAt: session.lastActivityAt ?? session.startedAt,
-    });
-    count++;
+  } else {
+    // Global: keep using by_status (internal/cron callers)
+    const runningSessions = await ctx.db
+      .query('sessions')
+      .withIndex('by_status', (q) => q.eq('status', 'running'))
+      .collect();
+    for (const session of runningSessions) {
+      await ctx.db.patch(session._id, {
+        status: 'idle',
+        lastActivityAt: session.lastActivityAt ?? session.startedAt,
+      });
+      count++;
+    }
   }
   return { count };
 }
@@ -676,23 +699,37 @@ async function markStoppedAsIdleImpl(
   ctx: MutationCtx,
   orgIds?: Set<Id<'organizations'>>,
 ) {
-  const stoppedSessions = await ctx.db
-    .query('sessions')
-    .withIndex('by_status', (q) => q.eq('status', 'stopped'))
-    .collect();
   let count = 0;
-  for (const session of stoppedSessions) {
-    if (orgIds) {
-      const task = await ctx.db.get(session.taskId);
-      if (!task) continue;
-      const repo = await ctx.db.get(task.repoId);
-      if (!repo || !orgIds.has(repo.orgId)) continue;
+  if (orgIds) {
+    // Org-scoped: use compound index to avoid full scan + per-session join
+    for (const orgId of orgIds) {
+      const sessions = await ctx.db
+        .query('sessions')
+        .withIndex('by_org_status', (q) =>
+          q.eq('orgId', orgId).eq('status', 'stopped'),
+        )
+        .collect();
+      for (const session of sessions) {
+        await ctx.db.patch(session._id, {
+          status: 'idle',
+          lastActivityAt: Date.now(),
+        });
+        count++;
+      }
     }
-    await ctx.db.patch(session._id, {
-      status: 'idle',
-      lastActivityAt: Date.now(),
-    });
-    count++;
+  } else {
+    // Global: keep using by_status (internal/cron callers)
+    const stoppedSessions = await ctx.db
+      .query('sessions')
+      .withIndex('by_status', (q) => q.eq('status', 'stopped'))
+      .collect();
+    for (const session of stoppedSessions) {
+      await ctx.db.patch(session._id, {
+        status: 'idle',
+        lastActivityAt: Date.now(),
+      });
+      count++;
+    }
   }
   return { count };
 }
@@ -761,8 +798,26 @@ export const companionMarkStoppedAsIdle = mutation({
 });
 
 /**
+ * Returns the orgId for a session via task→repo join.
+ * Gracefully returns null if the task or repo has been deleted (orphaned session).
+ * TODO(#170): remove fallback after backfill confirmed complete.
+ */
+async function getOrgIdFromTask(
+  ctx: MutationCtx,
+  taskId: Id<'tasks'>,
+): Promise<Id<'organizations'> | null> {
+  const task = await ctx.db.get(taskId);
+  if (!task) return null;
+  const repo = await ctx.db.get(task.repoId);
+  if (!repo) return null;
+  return repo.orgId;
+}
+
+/**
  * Updates `lastHeartbeat` for a batch of active sessions.
  * Public equivalent of {@link serverBatchHeartbeat} — authenticated via JWT.
+ * Uses denormalized orgId for org check; falls back to task→repo join for
+ * un-backfilled sessions.
  */
 export const companionBatchHeartbeat = mutation({
   args: { sessionIds: v.array(v.id('sessions')) },
@@ -773,11 +828,11 @@ export const companionBatchHeartbeat = mutation({
     for (const id of args.sessionIds) {
       const session = await ctx.db.get(id);
       if (!session) continue;
-      // Verify session belongs to caller's org (member+ role)
-      const task = await ctx.db.get(session.taskId);
-      if (!task) continue;
-      const repo = await ctx.db.get(task.repoId);
-      if (!repo || !orgIds.has(repo.orgId)) continue;
+      // Use denormalized orgId; fallback to join for un-backfilled sessions
+      // TODO(#170): remove fallback after backfill confirmed complete
+      const sessionOrgId =
+        session.orgId ?? (await getOrgIdFromTask(ctx, session.taskId));
+      if (!sessionOrgId || !orgIds.has(sessionOrgId)) continue;
       await ctx.db.patch(id, { lastHeartbeat: now });
     }
   },
@@ -830,5 +885,49 @@ export const companionUpdateName = mutation({
   handler: async (ctx, args) => {
     await requireSessionOwnership(ctx, args.id);
     await ctx.db.patch(args.id, { name: args.name });
+  },
+});
+
+/**
+ * Backfills `orgId` onto existing sessions that were created before the
+ * denormalization was added.
+ *
+ * Pages through all sessions in batches of 500. For each session missing
+ * `orgId`, resolves it via `task → repo` and patches. Orphaned sessions
+ * (task or repo deleted) are skipped gracefully.
+ *
+ * Invoke iteratively, passing the returned `continueCursor` back until
+ * `isDone` is true:
+ * ```
+ * let cursor = undefined;
+ * do {
+ *   const r = await convex.mutation(internal.sessions.backfillOrgId, { cursor });
+ *   cursor = r.continueCursor ?? undefined;
+ *   console.log(`patched ${r.patched}, done: ${r.isDone}`);
+ * } while (!r.isDone);
+ * ```
+ */
+export const backfillOrgId = internalMutation({
+  args: { cursor: v.optional(v.string()) },
+  handler: async (ctx, args) => {
+    const PAGE_SIZE = 500;
+    const result = await ctx.db
+      .query('sessions')
+      .paginate({ numItems: PAGE_SIZE, cursor: args.cursor ?? null });
+    let patched = 0;
+    for (const session of result.page) {
+      if (session.orgId) continue; // already has orgId
+      const task = await ctx.db.get(session.taskId);
+      if (!task) continue; // orphaned session — skip gracefully
+      const repo = await ctx.db.get(task.repoId);
+      if (!repo) continue; // orphaned session — skip gracefully
+      await ctx.db.patch(session._id, { orgId: repo.orgId });
+      patched++;
+    }
+    return {
+      patched,
+      isDone: result.isDone,
+      continueCursor: result.isDone ? null : result.continueCursor,
+    };
   },
 });
