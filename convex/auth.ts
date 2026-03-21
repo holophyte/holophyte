@@ -1,19 +1,59 @@
 import GitHub from '@auth/core/providers/github';
 import Google from '@auth/core/providers/google';
 import { Anonymous } from '@convex-dev/auth/providers/Anonymous';
+import { Password } from '@convex-dev/auth/providers/Password';
 import { convexAuth } from '@convex-dev/auth/server';
 import { internal } from './_generated/api';
+import type { MutationCtx } from './_generated/server';
 
 const providers = [GitHub, Google] as const;
 
 export const { auth, signIn, signOut, store, isAuthenticated } = convexAuth({
   providers: [
     ...providers,
+    Password,
     ...(process.env.ALLOW_ANONYMOUS_AUTH === '1' ? [Anonymous] : []),
   ],
   callbacks: {
-    async afterUserCreatedOrUpdated(ctx, { userId }) {
+    async createOrUpdateUser(ctx, args) {
+      const {
+        emailVerified: profileEmailVerified,
+        phoneVerified: _profilePhoneVerified,
+        ...profileData
+      } = args.profile;
+      const emailVerified =
+        profileEmailVerified ??
+        ((args.provider.type === 'oauth' || args.provider.type === 'oidc') &&
+          (args.provider as { allowDangerousEmailAccountLinking?: boolean })
+            .allowDangerousEmailAccountLinking !== false);
+      const userData = {
+        ...(emailVerified ? { emailVerificationTime: Date.now() } : null),
+        ...profileData,
+      };
+
+      // Case a: existing account re-sign-in — patch and return
+      if (args.existingUserId !== null) {
+        await ctx.db.patch(args.existingUserId, userData);
+        return args.existingUserId;
+      }
+
+      // Case b: new sign-in — try to link by email
+      if (typeof profileData.email === 'string') {
+        const db = (ctx as unknown as MutationCtx).db;
+        const existingUser = await db
+          .query('users')
+          .withIndex('email', (q) => q.eq('email', profileData.email as string))
+          .first();
+        if (existingUser !== null) {
+          await ctx.db.patch(existingUser._id, userData);
+          return existingUser._id;
+        }
+      }
+
+      // Case c: new user — insert and create personal org
+      const userId = await ctx.db.insert('users', userData);
       await ctx.runMutation(internal.organizations.createPersonal, { userId });
+      return userId;
     },
     async redirect({ redirectTo }) {
       // Allow localhost redirects for CLI setup (`holophyte setup`).
