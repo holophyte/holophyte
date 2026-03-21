@@ -27,14 +27,19 @@ export default function SignInPage() {
       await signIn('password', { flow, email, password });
     } catch (err) {
       const msg = err instanceof Error ? err.message : '';
+      const isCredentialError =
+        msg.includes('Invalid') || msg.includes('not found');
+      const isPasswordError = msg.includes('password');
       const friendly =
-        msg.includes('Invalid') ||
-        msg.includes('not found') ||
-        msg.includes('password')
-          ? flow === 'signIn'
+        flow === 'signIn'
+          ? isCredentialError || isPasswordError
             ? 'Incorrect email or password.'
-            : 'Could not create account. That email may already be in use.'
-          : 'Something went wrong. Please try again.';
+            : 'Something went wrong. Please try again.'
+          : isPasswordError && !isCredentialError
+            ? 'Password does not meet requirements (minimum 8 characters).'
+            : isCredentialError
+              ? 'Could not create account. That email may already be in use.'
+              : 'Something went wrong. Please try again.';
       setError(friendly);
     } finally {
       setLoading(false);
