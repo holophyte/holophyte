@@ -57,6 +57,34 @@ function getDeployment(): string | undefined {
   return process.env.CONVEX_DEPLOYMENT;
 }
 
+/**
+ * Checks if the stored token's URL matches the current CONVEX_URL.
+ * When there's a mismatch and anonymous auth is allowed, discards the token
+ * so the anonymous auth fallback can kick in. Returns the (possibly updated)
+ * status and token.
+ */
+function discardMismatchedToken(
+  tokenStatus: 'missing' | 'invalid' | 'ok',
+  tokenFile: TokenFileData | null | undefined,
+  convexUrl: string,
+): { tokenStatus: 'missing' | 'invalid' | 'ok'; tokenFile: typeof tokenFile } {
+  if (tokenStatus !== 'ok' || !tokenFile || tokenFile.ephemeral) {
+    return { tokenStatus, tokenFile };
+  }
+  const normalize = (u: string) => u.replace(/\/$/, '');
+  if (normalize(tokenFile.convexUrl) !== normalize(convexUrl)) {
+    if (process.env.ALLOW_ANONYMOUS_AUTH === '1') {
+      console.log(
+        `Token URL mismatch (stored: ${tokenFile.convexUrl}, current: ${convexUrl}), falling back to anonymous auth`,
+      );
+      return { tokenStatus: 'missing', tokenFile: null };
+    }
+    // If anonymous auth is not allowed, initCompanionClients will throw
+    // with a descriptive error message prompting the user to re-run setup.
+  }
+  return { tokenStatus, tokenFile };
+}
+
 export async function companionPoll() {
   if (polling) return; // Skip if previous poll is still running
   polling = true;
@@ -104,6 +132,14 @@ export async function companionPoll() {
               );
             }
           }
+          // Discard token with mismatched URL when anonymous auth is available.
+          const mismatchResult = discardMismatchedToken(
+            tokenStatus,
+            cachedTokenFile,
+            convexUrl,
+          );
+          tokenStatus = mismatchResult.tokenStatus;
+          cachedTokenFile = mismatchResult.tokenFile;
           // Only fall back to anonymous auth when the token is missing, not
           // when it's invalid (corrupt token should surface as an error).
           if (
@@ -259,9 +295,22 @@ export async function startCompanion(url: string): Promise<void> {
     );
   }
 
+  // If the stored token's URL doesn't match the current CONVEX_URL (e.g. token
+  // was saved against cloud but we're running local), discard it so the
+  // anonymous auth fallback can kick in.
+  const convexUrl = process.env.CONVEX_URL;
+  if (convexUrl) {
+    const result = discardMismatchedToken(
+      tokenStatus,
+      cachedTokenFile,
+      convexUrl,
+    );
+    tokenStatus = result.tokenStatus;
+    cachedTokenFile = result.tokenFile;
+  }
+
   // Anonymous auth fallback (still part of step 1 — obtaining a token)
   // Only fall back when the token is missing, not when it's corrupt.
-  const convexUrl = process.env.CONVEX_URL;
   if (
     tokenStatus === 'missing' &&
     !cachedTokenFile &&
