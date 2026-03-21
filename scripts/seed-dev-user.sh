@@ -47,9 +47,9 @@ try {
   if (msg.includes('already exists')) {
     console.log('Dev user already exists: dev@localhost');
   } else {
-    // Log the full error for diagnostics, but don't fail the parent script
     console.error('Warning: Could not seed dev user:', msg);
     console.error('You can create one manually via the sign-up form.');
+    process.exit(1);
   }
 }
 "
