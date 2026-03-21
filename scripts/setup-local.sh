@@ -208,6 +208,9 @@ if [ -n "${AUTH_GOOGLE_ID:-}" ] && [ -n "${AUTH_GOOGLE_SECRET:-}" ]; then
   info "Set Google OAuth credentials"
 fi
 
+# Seed dev user for email+password auth (idempotent)
+cd "$REPO_ROOT" && bun run seed:dev-user || warn "Could not seed dev user (backend may not be ready)"
+
 # Stop the temporary backend (only if we started one)
 if [ "$STARTED_TEMP_BACKEND" = true ] && [ -n "$CONVEX_BG_PID" ]; then
   kill "$CONVEX_BG_PID" 2>/dev/null || true

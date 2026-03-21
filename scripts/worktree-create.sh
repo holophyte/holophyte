@@ -194,6 +194,9 @@ if [ -n "${AUTH_GOOGLE_ID:-}" ] && [ -n "${AUTH_GOOGLE_SECRET:-}" ]; then
   cd "$WORKTREE_PATH" && bunx convex env set AUTH_GOOGLE_SECRET "$AUTH_GOOGLE_SECRET"
 fi
 
+# Seed dev user for email+password auth (idempotent)
+cd "$WORKTREE_PATH" && bun run seed:dev-user || echo "Warning: Could not seed dev user"
+
 # Stop the background Convex backend
 kill "$CONVEX_BG_PID" 2>/dev/null || true
 wait "$CONVEX_BG_PID" 2>/dev/null || true
