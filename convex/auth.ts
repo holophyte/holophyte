@@ -11,7 +11,7 @@ const providers = [GitHub, Google] as const;
 export const { auth, signIn, signOut, store, isAuthenticated } = convexAuth({
   providers: [
     ...providers,
-    Password,
+    ...(process.env.ALLOW_PASSWORD_AUTH === '1' ? [Password] : []),
     ...(process.env.ALLOW_ANONYMOUS_AUTH === '1' ? [Anonymous] : []),
   ],
   callbacks: {
@@ -42,8 +42,7 @@ export const { auth, signIn, signOut, store, isAuthenticated } = convexAuth({
       // This prevents a password sign-up from hijacking an existing OAuth account
       // since Password (without email verification) does not set emailVerified.
       if (emailVerified && typeof profileData.email === 'string') {
-        const db = (ctx as unknown as MutationCtx).db;
-        const matches = await db
+        const matches = await (ctx.db as MutationCtx['db'])
           .query('users')
           .withIndex('email', (q) => q.eq('email', profileData.email as string))
           .take(2);

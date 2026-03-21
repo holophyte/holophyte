@@ -170,6 +170,10 @@ info "Set SITE_URL=http://localhost:$DEV_PORT"
 cd "$REPO_ROOT" && bunx convex env set ALLOW_ANONYMOUS_AUTH 1
 info "Set ALLOW_ANONYMOUS_AUTH=1"
 
+# Set ALLOW_PASSWORD_AUTH for email+password sign-in
+cd "$REPO_ROOT" && bunx convex env set ALLOW_PASSWORD_AUTH 1
+info "Set ALLOW_PASSWORD_AUTH=1"
+
 # Generate and set INTERNAL_API_SECRET
 if [ "$INTERNAL_SECRET_EXISTS" = true ]; then
   INTERNAL_API_SECRET=$(grep '^INTERNAL_API_SECRET=' "$ENV_FILE" | head -1 | cut -d= -f2)

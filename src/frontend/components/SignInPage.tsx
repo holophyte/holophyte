@@ -1,5 +1,6 @@
 import { useAuthActions } from '@convex-dev/auth/react';
 import { useState } from 'react';
+import { allowPasswordAuth } from '@/frontend/lib/config';
 import { cn } from '@/frontend/lib/utils';
 import HolophyteIcon from './icons/HolophyteIcon';
 import Button from './ui/Button';
@@ -25,11 +26,16 @@ export default function SignInPage() {
     try {
       await signIn('password', { flow, email, password });
     } catch (err) {
-      setError(
-        err instanceof Error
-          ? err.message
-          : 'Something went wrong. Please try again.',
-      );
+      const msg = err instanceof Error ? err.message : '';
+      const friendly =
+        msg.includes('Invalid') ||
+        msg.includes('not found') ||
+        msg.includes('password')
+          ? flow === 'signIn'
+            ? 'Incorrect email or password.'
+            : 'Could not create account. That email may already be in use.'
+          : 'Something went wrong. Please try again.';
+      setError(friendly);
     } finally {
       setLoading(false);
     }
@@ -69,103 +75,107 @@ export default function SignInPage() {
           </Button>
         </div>
 
-        <div className="relative" aria-hidden="true">
-          <div className="absolute inset-0 flex items-center">
-            <span className="w-full border-t border-border" />
-          </div>
-          <div className="relative flex justify-center">
-            <span className="bg-background px-3 text-xs text-muted-foreground">
-              or
-            </span>
-          </div>
-        </div>
+        {allowPasswordAuth && (
+          <>
+            <div className="relative" aria-hidden="true">
+              <div className="absolute inset-0 flex items-center">
+                <span className="w-full border-t border-border" />
+              </div>
+              <div className="relative flex justify-center">
+                <span className="bg-background px-3 text-xs text-muted-foreground">
+                  or
+                </span>
+              </div>
+            </div>
 
-        <form onSubmit={onSubmit} className="space-y-4">
-          <div className="space-y-1.5">
-            <Label htmlFor="email">Email</Label>
-            <Input
-              id="email"
-              type="email"
-              required
-              autoComplete="email"
-              placeholder="you@example.com"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="password">Password</Label>
-            <Input
-              id="password"
-              type="password"
-              required
-              minLength={8}
-              autoComplete={
-                flow === 'signIn' ? 'current-password' : 'new-password'
-              }
-              placeholder="••••••••"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-            />
-          </div>
+            <form onSubmit={onSubmit} className="space-y-4">
+              <div className="space-y-1.5">
+                <Label htmlFor="email">Email</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  required
+                  autoComplete="email"
+                  placeholder="you@example.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="password">Password</Label>
+                <Input
+                  id="password"
+                  type="password"
+                  required
+                  minLength={8}
+                  autoComplete={
+                    flow === 'signIn' ? 'current-password' : 'new-password'
+                  }
+                  placeholder="••••••••"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                />
+              </div>
 
-          <div aria-live="polite" aria-atomic="true">
-            {error !== null && (
-              <p className="text-sm text-destructive">{error}</p>
-            )}
-          </div>
-
-          <Button
-            type="submit"
-            variant="default"
-            className="w-full"
-            disabled={loading}
-          >
-            {loading
-              ? 'Please wait…'
-              : flow === 'signIn'
-                ? 'Sign in'
-                : 'Create account'}
-          </Button>
-        </form>
-
-        <p className="text-center text-sm text-muted-foreground">
-          {flow === 'signIn' ? (
-            <>
-              Don&apos;t have an account?{' '}
-              <button
-                type="button"
-                className={cn(
-                  'font-medium text-foreground underline-offset-4 hover:underline',
-                  'transition-colors duration-150',
+              <div aria-live="polite" aria-atomic="true">
+                {error !== null && (
+                  <p className="text-sm text-destructive">{error}</p>
                 )}
-                onClick={() => {
-                  setFlow('signUp');
-                  setError(null);
-                }}
+              </div>
+
+              <Button
+                type="submit"
+                variant="default"
+                className="w-full"
+                disabled={loading}
               >
-                Create one
-              </button>
-            </>
-          ) : (
-            <>
-              Already have an account?{' '}
-              <button
-                type="button"
-                className={cn(
-                  'font-medium text-foreground underline-offset-4 hover:underline',
-                  'transition-colors duration-150',
-                )}
-                onClick={() => {
-                  setFlow('signIn');
-                  setError(null);
-                }}
-              >
-                Sign in
-              </button>
-            </>
-          )}
-        </p>
+                {loading
+                  ? 'Please wait…'
+                  : flow === 'signIn'
+                    ? 'Sign in'
+                    : 'Create account'}
+              </Button>
+            </form>
+
+            <p className="text-center text-sm text-muted-foreground">
+              {flow === 'signIn' ? (
+                <>
+                  Don&apos;t have an account?{' '}
+                  <button
+                    type="button"
+                    className={cn(
+                      'font-medium text-foreground underline-offset-4 hover:underline',
+                      'transition-colors duration-150',
+                    )}
+                    onClick={() => {
+                      setFlow('signUp');
+                      setError(null);
+                    }}
+                  >
+                    Create one
+                  </button>
+                </>
+              ) : (
+                <>
+                  Already have an account?{' '}
+                  <button
+                    type="button"
+                    className={cn(
+                      'font-medium text-foreground underline-offset-4 hover:underline',
+                      'transition-colors duration-150',
+                    )}
+                    onClick={() => {
+                      setFlow('signIn');
+                      setError(null);
+                    }}
+                  >
+                    Sign in
+                  </button>
+                </>
+              )}
+            </p>
+          </>
+        )}
       </div>
     </div>
   );

@@ -56,6 +56,8 @@ trap cleanup EXIT
 export PORT="$DEV_PORT"
 # Auto-enable anonymous auth for local dev (manual testing via ?auth query param)
 export ALLOW_ANONYMOUS_AUTH="${ALLOW_ANONYMOUS_AUTH:-1}"
+# Auto-enable password auth for local dev (email+password sign-in form)
+export ALLOW_PASSWORD_AUTH="${ALLOW_PASSWORD_AUTH:-1}"
 
 # Pre-export the local Convex URLs so the Bun server gets the correct values
 # immediately, even if convex-local.sh hasn't reconfigured .env.local yet.

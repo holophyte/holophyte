@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Seed a dev user (dev@localhost / password) for local development.
+# Seed a dev user (dev@holophyte.test / password) for local development.
 # Requires a running local Convex backend with the Password provider deployed.
 #
 # Usage:
@@ -39,13 +39,13 @@ const client = new ConvexHttpClient(process.env.CONVEX_URL);
 try {
   await client.action('auth:signIn', {
     provider: 'password',
-    params: { flow: 'signUp', email: 'dev@localhost', password: 'password' },
+    params: { flow: 'signUp', email: 'dev@holophyte.test', password: 'password' },
   });
-  console.log('Dev user seeded: dev@localhost / password');
+  console.log('Dev user seeded: dev@holophyte.test / password');
 } catch (e) {
   const msg = String(e);
   if (msg.includes('already exists')) {
-    console.log('Dev user already exists: dev@localhost');
+    console.log('Dev user already exists: dev@holophyte.test');
   } else {
     console.error('Warning: Could not seed dev user:', msg);
     console.error('You can create one manually via the sign-up form.');
