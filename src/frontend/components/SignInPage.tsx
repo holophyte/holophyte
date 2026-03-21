@@ -1,9 +1,38 @@
 import { useAuthActions } from '@convex-dev/auth/react';
+import { useState } from 'react';
+import { cn } from '@/frontend/lib/utils';
 import HolophyteIcon from './icons/HolophyteIcon';
 import Button from './ui/Button';
+import Input from './ui/Input';
+import Label from './ui/Label';
+
+type Flow = 'signIn' | 'signUp';
 
 export default function SignInPage() {
   const { signIn } = useAuthActions();
+
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [flow, setFlow] = useState<Flow>('signIn');
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setError(null);
+    setLoading(true);
+    try {
+      await signIn('password', { flow, email, password });
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : 'Something went wrong. Please try again.',
+      );
+    } finally {
+      setLoading(false);
+    }
+  }
 
   return (
     <div className="flex h-screen items-center justify-center bg-background">
@@ -35,6 +64,102 @@ export default function SignInPage() {
             Continue with Google
           </Button>
         </div>
+
+        <div className="relative">
+          <div className="absolute inset-0 flex items-center">
+            <span className="w-full border-t border-border" />
+          </div>
+          <div className="relative flex justify-center">
+            <span className="bg-background px-3 text-xs text-muted-foreground">
+              or
+            </span>
+          </div>
+        </div>
+
+        <form onSubmit={onSubmit} className="space-y-4">
+          <div className="space-y-1.5">
+            <Label htmlFor="email">Email</Label>
+            <Input
+              id="email"
+              type="email"
+              required
+              autoComplete="email"
+              placeholder="you@example.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="password">Password</Label>
+            <Input
+              id="password"
+              type="password"
+              required
+              minLength={8}
+              autoComplete={
+                flow === 'signIn' ? 'current-password' : 'new-password'
+              }
+              placeholder="••••••••"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+            />
+          </div>
+
+          {error !== null && (
+            <p className="text-sm text-destructive">{error}</p>
+          )}
+
+          <Button
+            type="submit"
+            variant="default"
+            className="w-full"
+            disabled={loading}
+          >
+            {loading
+              ? 'Please wait…'
+              : flow === 'signIn'
+                ? 'Sign in'
+                : 'Create account'}
+          </Button>
+        </form>
+
+        <p className="text-center text-sm text-muted-foreground">
+          {flow === 'signIn' ? (
+            <>
+              Don&apos;t have an account?{' '}
+              <button
+                type="button"
+                className={cn(
+                  'font-medium text-foreground underline-offset-4 hover:underline',
+                  'transition-colors duration-150',
+                )}
+                onClick={() => {
+                  setFlow('signUp');
+                  setError(null);
+                }}
+              >
+                Create one
+              </button>
+            </>
+          ) : (
+            <>
+              Already have an account?{' '}
+              <button
+                type="button"
+                className={cn(
+                  'font-medium text-foreground underline-offset-4 hover:underline',
+                  'transition-colors duration-150',
+                )}
+                onClick={() => {
+                  setFlow('signIn');
+                  setError(null);
+                }}
+              >
+                Sign in
+              </button>
+            </>
+          )}
+        </p>
       </div>
     </div>
   );
