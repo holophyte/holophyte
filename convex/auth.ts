@@ -37,16 +37,20 @@ export const { auth, signIn, signOut, store, isAuthenticated } = convexAuth({
         return args.existingUserId;
       }
 
-      // Case b: new sign-in — try to link by email
-      if (typeof profileData.email === 'string') {
+      // Case b: new sign-in — try to link by verified email.
+      // Only link when the incoming provider verified the email (OAuth/OIDC).
+      // This prevents a password sign-up from hijacking an existing OAuth account
+      // since Password (without email verification) does not set emailVerified.
+      if (emailVerified && typeof profileData.email === 'string') {
         const db = (ctx as unknown as MutationCtx).db;
-        const existingUser = await db
+        const matches = await db
           .query('users')
           .withIndex('email', (q) => q.eq('email', profileData.email as string))
-          .first();
-        if (existingUser !== null) {
-          await ctx.db.patch(existingUser._id, userData);
-          return existingUser._id;
+          .take(2);
+        const match = matches.length === 1 ? matches[0] : undefined;
+        if (match) {
+          await ctx.db.patch(match._id, userData);
+          return match._id;
         }
       }
 

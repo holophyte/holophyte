@@ -24,11 +24,17 @@ if [ -z "${CONVEX_URL:-}" ]; then
   fi
 fi
 
+# Safety guard: only seed against local backends
+if [[ "$CONVEX_URL" != http://127.0.0.1:* && "$CONVEX_URL" != http://localhost:* ]]; then
+  echo "Error: seed:dev-user is for local backends only (got $CONVEX_URL)" >&2
+  exit 1
+fi
+
 # Use a small inline Bun script to call the Convex auth action.
 # The Password provider's sign-up flow goes through the Convex action system
 # (not an HTTP endpoint), so we need a real Convex client.
 bun -e "
-const { ConvexHttpClient } = require('convex/browser');
+import { ConvexHttpClient } from 'convex/browser';
 const client = new ConvexHttpClient(process.env.CONVEX_URL);
 try {
   await client.action('auth:signIn', {
@@ -41,6 +47,7 @@ try {
   if (msg.includes('already exists')) {
     console.log('Dev user already exists: dev@localhost');
   } else {
+    // Log the full error for diagnostics, but don't fail the parent script
     console.error('Warning: Could not seed dev user:', msg);
     console.error('You can create one manually via the sign-up form.');
   }

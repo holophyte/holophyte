@@ -19,6 +19,7 @@ export default function SignInPage() {
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    if (loading) return;
     setError(null);
     setLoading(true);
     try {
@@ -39,7 +40,10 @@ export default function SignInPage() {
       <div className="w-full max-w-sm space-y-6 px-4">
         <div className="text-center space-y-2">
           <div className="flex items-center justify-center gap-2">
-            <HolophyteIcon className="h-8 w-8 text-primary" />
+            <HolophyteIcon
+              className="h-8 w-8 text-primary"
+              aria-hidden="true"
+            />
             <h1 className="text-2xl font-bold tracking-tight">Holophyte</h1>
           </div>
           <p className="text-sm text-muted-foreground">
@@ -65,7 +69,7 @@ export default function SignInPage() {
           </Button>
         </div>
 
-        <div className="relative">
+        <div className="relative" aria-hidden="true">
           <div className="absolute inset-0 flex items-center">
             <span className="w-full border-t border-border" />
           </div>
@@ -105,9 +109,11 @@ export default function SignInPage() {
             />
           </div>
 
-          {error !== null && (
-            <p className="text-sm text-destructive">{error}</p>
-          )}
+          <div aria-live="polite" aria-atomic="true">
+            {error !== null && (
+              <p className="text-sm text-destructive">{error}</p>
+            )}
+          </div>
 
           <Button
             type="submit"
