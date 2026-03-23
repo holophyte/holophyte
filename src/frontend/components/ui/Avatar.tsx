@@ -1,3 +1,4 @@
+import { Flower2 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 
 interface AvatarProps {
@@ -15,7 +16,7 @@ export default function Avatar({ src, name, className }: AvatarProps) {
         .join('')
         .slice(0, 2)
         .toUpperCase()
-    : '?';
+    : null;
 
   if (src) {
     return (
@@ -34,7 +35,7 @@ export default function Avatar({ src, name, className }: AvatarProps) {
         className,
       )}
     >
-      {initials}
+      {initials ?? <Flower2 className="h-3/5 w-3/5" />}
     </div>
   );
 }

@@ -39,7 +39,7 @@ const client = new ConvexHttpClient(process.env.CONVEX_URL);
 try {
   await client.action('auth:signIn', {
     provider: 'password',
-    params: { flow: 'signUp', email: 'dev@holophyte.test', password: 'password' },
+    params: { flow: 'signUp', email: 'dev@holophyte.test', password: 'password', name: 'Dev User' },
   });
   console.log('Dev user seeded: dev@holophyte.test / password');
 } catch (e) {

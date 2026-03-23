@@ -12,6 +12,7 @@ type Flow = 'signIn' | 'signUp';
 export default function SignInPage() {
   const { signIn } = useAuthActions();
 
+  const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [flow, setFlow] = useState<Flow>('signIn');
@@ -24,7 +25,9 @@ export default function SignInPage() {
     setError(null);
     setLoading(true);
     try {
-      await signIn('password', { flow, email, password });
+      const params: Record<string, string> = { flow, email, password };
+      if (flow === 'signUp' && name) params.name = name;
+      await signIn('password', params);
     } catch (err) {
       const msg = err instanceof Error ? err.message : '';
       const isCredentialError =
@@ -94,6 +97,19 @@ export default function SignInPage() {
             </div>
 
             <form onSubmit={onSubmit} className="space-y-4">
+              {flow === 'signUp' && (
+                <div className="space-y-1.5">
+                  <Label htmlFor="name">Name</Label>
+                  <Input
+                    id="name"
+                    type="text"
+                    autoComplete="name"
+                    placeholder="Your name"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                  />
+                </div>
+              )}
               <div className="space-y-1.5">
                 <Label htmlFor="email">Email</Label>
                 <Input

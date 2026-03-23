@@ -11,7 +11,16 @@ const providers = [GitHub, Google] as const;
 export const { auth, signIn, signOut, store, isAuthenticated } = convexAuth({
   providers: [
     ...providers,
-    ...(process.env.ALLOW_PASSWORD_AUTH === '1' ? [Password] : []),
+    ...(process.env.ALLOW_PASSWORD_AUTH === '1'
+      ? [
+          Password({
+            profile: (params) => ({
+              email: params.email as string,
+              ...(params.name ? { name: params.name as string } : {}),
+            }),
+          }),
+        ]
+      : []),
     ...(process.env.ALLOW_ANONYMOUS_AUTH === '1' ? [Anonymous] : []),
   ],
   callbacks: {
