@@ -2,7 +2,11 @@ import { Outlet, useMatch } from '@tanstack/react-router';
 import { Authenticated, AuthLoading, Unauthenticated } from 'convex/react';
 import { Loader2 } from 'lucide-react';
 import { useTheme } from '@/frontend/hooks/useTheme';
-import { allowAnonymousAuth, e2eTest } from '@/frontend/lib/config';
+import {
+  allowAnonymousAuth,
+  allowPasswordAuth,
+  e2eTest,
+} from '@/frontend/lib/config';
 import AutoAnonymousAuth from '../components/AutoAnonymousAuth';
 import { CommandPalette } from '../components/CommandPalette';
 import { Sidebar } from '../components/Sidebar';
@@ -50,7 +54,9 @@ export default function RootLayout() {
         <AutoAnonymousAuth />
       )}
       <AuthLoading>{spinner}</AuthLoading>
-      <Unauthenticated>{e2eTest ? spinner : <SignInPage />}</Unauthenticated>
+      <Unauthenticated>
+        {e2eTest && !allowPasswordAuth ? spinner : <SignInPage />}
+      </Unauthenticated>
       <Authenticated>
         <AuthenticatedLayout />
       </Authenticated>

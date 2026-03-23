@@ -50,7 +50,17 @@ export default defineConfig({
   projects: [
     {
       name: 'chromium',
+      testIgnore: 'password-auth.spec.ts',
       use: { browserName: 'chromium' },
+    },
+    {
+      name: 'password-auth',
+      testMatch: 'password-auth.spec.ts',
+      use: {
+        browserName: 'chromium',
+        // Fresh context — no stored auth, so the sign-in page renders
+        storageState: { cookies: [], origins: [] },
+      },
     },
   ],
   // E2E server runs on DEV_PORT+1 so it doesn't collide with the dev server.
@@ -62,6 +72,7 @@ export default defineConfig({
     env: {
       ...process.env,
       E2E_TEST: '1',
+      ALLOW_PASSWORD_AUTH: '1',
       PORT: String(e2ePort),
       // Point at the ephemeral Convex instance (or dev fallback)
       ...(convexCloudPort && {

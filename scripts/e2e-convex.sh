@@ -151,6 +151,8 @@ start_e2e_convex() {
 
   # Set anonymous auth for E2E
   cd "$REPO_ROOT" && bunx convex env set ALLOW_ANONYMOUS_AUTH 1
+  # Set password auth for E2E (password-auth tests)
+  cd "$REPO_ROOT" && bunx convex env set ALLOW_PASSWORD_AUTH 1
 
   # Generate and set INTERNAL_API_SECRET for companion ↔ Convex communication
   E2E_INTERNAL_API_SECRET=$(openssl rand -hex 32)
