@@ -1,4 +1,4 @@
-import { Flower2 } from 'lucide-react';
+import { Flower } from 'lucide-react';
 import { cn } from '../../lib/utils';
 
 interface AvatarProps {
@@ -35,7 +35,7 @@ export default function Avatar({ src, name, className }: AvatarProps) {
         className,
       )}
     >
-      {initials ?? <Flower2 className="h-3/5 w-3/5" />}
+      {initials ?? <Flower className="h-3/5 w-3/5" />}
     </div>
   );
 }
