@@ -13,6 +13,11 @@ async function gotoSignIn(page: import('@playwright/test').Page) {
     const body = await response.text();
     // Flip e2eTest to false so AutoAnonymousAuth doesn't fire
     const patched = body.replace('"e2eTest":true', '"e2eTest":false');
+    if (patched === body) {
+      throw new Error(
+        'gotoSignIn: config patch failed — "e2eTest":true not found in /config.js response',
+      );
+    }
     await route.fulfill({ response, body: patched });
   });
   await page.goto('/');

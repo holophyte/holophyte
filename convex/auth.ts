@@ -36,7 +36,7 @@ export const { auth, signIn, signOut, store, isAuthenticated } = convexAuth({
           (args.provider as { allowDangerousEmailAccountLinking?: boolean })
             .allowDangerousEmailAccountLinking !== false);
       const userData = {
-        ...(emailVerified ? { emailVerificationTime: Date.now() } : null),
+        ...(emailVerified ? { emailVerificationTime: Date.now() } : {}),
         ...profileData,
       };
 
