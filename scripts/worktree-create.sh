@@ -165,6 +165,7 @@ done
 # work through a single origin (matches what's configured in GitHub/Google OAuth apps).
 cd "$WORKTREE_PATH" && bunx convex env set SITE_URL "http://localhost:$DEV_PORT"
 cd "$WORKTREE_PATH" && bunx convex env set ALLOW_ANONYMOUS_AUTH 1
+cd "$WORKTREE_PATH" && bunx convex env set ALLOW_PASSWORD_AUTH 1
 
 # Generate and set INTERNAL_API_SECRET for companion ↔ Convex communication
 INTERNAL_API_SECRET=$(openssl rand -hex 32)
@@ -193,6 +194,9 @@ if [ -n "${AUTH_GOOGLE_ID:-}" ] && [ -n "${AUTH_GOOGLE_SECRET:-}" ]; then
   cd "$WORKTREE_PATH" && bunx convex env set AUTH_GOOGLE_ID "$AUTH_GOOGLE_ID"
   cd "$WORKTREE_PATH" && bunx convex env set AUTH_GOOGLE_SECRET "$AUTH_GOOGLE_SECRET"
 fi
+
+# Seed dev user for email+password auth (idempotent)
+cd "$WORKTREE_PATH" && bun run seed:dev-user || echo "Warning: Could not seed dev user"
 
 # Stop the background Convex backend
 kill "$CONVEX_BG_PID" 2>/dev/null || true

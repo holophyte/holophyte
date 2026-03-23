@@ -24,6 +24,9 @@ const server = Bun.serve({
           allowAnonymousAuth:
             process.env.NODE_ENV !== 'production' &&
             !!process.env.ALLOW_ANONYMOUS_AUTH,
+          allowPasswordAuth:
+            process.env.NODE_ENV !== 'production' &&
+            !!process.env.ALLOW_PASSWORD_AUTH,
         };
         return new Response(
           `window.__HOLOPHYTE_CONFIG__=${JSON.stringify(config)};`,

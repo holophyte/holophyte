@@ -10,6 +10,7 @@ interface HolophyteConfig {
   convexUrl: string;
   e2eTest: boolean;
   allowAnonymousAuth: boolean;
+  allowPasswordAuth: boolean;
 }
 
 const injected = (
@@ -24,3 +25,6 @@ export const e2eTest: boolean = !!injected?.e2eTest;
 
 /** Anonymous auth available — auto sign-in when `?auth` param is present. */
 export const allowAnonymousAuth: boolean = !!injected?.allowAnonymousAuth;
+
+/** Password auth available — show email/password form on sign-in page. */
+export const allowPasswordAuth: boolean = !!injected?.allowPasswordAuth;
