@@ -25,7 +25,6 @@ jobs:
       - run: bunx playwright install --with-deps chromium
       - run: bun run test:e2e
         env:
-          CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY }}
           CONVEX_TEAM: ${{ vars.CONVEX_TEAM }}
           CONVEX_PROJECT: ${{ vars.CONVEX_PROJECT }}
       - uses: actions/upload-artifact@v4

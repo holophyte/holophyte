@@ -106,22 +106,32 @@ start_e2e_convex() {
 
   echo "Starting ephemeral Convex (cloud=$cloud_port, site=$site_port)..."
 
-  # Back up .env.local — convex dev --configure existing overwrites it
+  # CONVEX_DEPLOY_KEY overrides --dev-deployment local, forcing cloud
+  # provisioning. Unset it — local backends don't need cloud auth.
+  unset CONVEX_DEPLOY_KEY 2>/dev/null || true
+
+  # Back up .env.local
   if [ -f "$ENV_LOCAL" ]; then
     cp "$ENV_LOCAL" "$ENV_BACKUP"
   fi
 
-  # Provision: creates deployment on ephemeral ports and deploys functions
-  cd "$REPO_ROOT" && bunx convex dev --configure existing \
-    --team "$CONVEX_TEAM" \
-    --project "$CONVEX_PROJECT" \
-    --dev-deployment local \
+  # Write .env.local for the ephemeral local deployment.
+  # This replaces `convex dev --configure existing` which needs cloud auth
+  # that isn't available in CI environments.
+  local deployment_name="local-${CONVEX_TEAM//-/_}-${CONVEX_PROJECT}-${cloud_port}"
+  cat > "$ENV_LOCAL" <<ENVEOF
+CONVEX_DEPLOYMENT=$deployment_name
+CONVEX_URL=http://127.0.0.1:$cloud_port
+CONVEX_SITE_URL=http://127.0.0.1:$site_port
+ENVEOF
+
+  # Provision local backend and deploy functions synchronously
+  cd "$REPO_ROOT" && bunx convex dev --local \
     --local-cloud-port "$cloud_port" \
     --local-site-port "$site_port" \
     --codegen disable \
     --once
 
-  # .env.local now points to the ephemeral deployment.
   # Start background Convex (reads .env.local for deployment config)
   cd "$REPO_ROOT" && bunx convex dev --local \
     --local-cloud-port "$cloud_port" \
