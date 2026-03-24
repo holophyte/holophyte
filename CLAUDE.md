@@ -164,14 +164,10 @@ scripts/                   → Shared shell scripts (convex-local, dev-local, wo
 - Tests co-located with source: `manager.ts` → `manager.test.ts`
 
 **E2E tests (Playwright):**
-- Tests in `e2e/` directory, pattern `*.spec.ts`
-- Chromium only, base URL `http://localhost:<DEV_PORT+1>` (resolved from `.dev-ports`)
-- **Fully self-contained**: `bun run test:e2e` spins up an ephemeral Convex backend on ports 13210+, deploys functions, runs tests, and tears down automatically — no manual `convex:local` needed
-- Each run gets a fresh database — no test data pollution
-- Dev Convex (`bun run convex:local`) must NOT be running when you run `bun run test:e2e` — the Convex CLI refuses to provision when another local backend is active. Use `bun run test:e2e:isolated` to run E2E without stopping dev Convex
-- Use `waitForApp(page)` helper to wait for hydration before assertions
-- **Manual testing**: Navigate to `http://localhost:<port>?auth` — the `?auth` param triggers anonymous auth
-- See `docs/docs/testing/playwright-manual.md` for the full E2E and manual testing guide
+- `bun run test:e2e` — fully self-contained, spins up an ephemeral Convex backend automatically
+- Dev Convex (`bun run convex:local`) must NOT be running — use `bun run test:e2e:isolated` to avoid stopping it
+- **Manual testing** requires `?auth` in URL — `http://localhost:<port>?auth` triggers anonymous auth; without it the app stalls
+- See `docs/docs/testing/playwright-manual.md` for the full guide
 
 **E2E on CI (GitHub Actions):**
 - Runs automatically on PRs and pushes to main via `.github/workflows/e2e.yml`
