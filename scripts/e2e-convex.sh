@@ -107,16 +107,17 @@ start_e2e_convex() {
   # Unset credentials that override local mode
   unset CONVEX_DEPLOY_KEY 2>/dev/null || true
 
-  # Back up .env.local and clear it — Convex CLI auto-provisions a local
-  # backend in "no account" mode when CONVEX_DEPLOYMENT is not set.
+  # Enable anonymous local development — skips login prompts in CI.
+  export CONVEX_AGENT_MODE=anonymous
+
+  # Back up .env.local and clear it so the CLI provisions a fresh
+  # anonymous local backend.
   if [ -f "$ENV_LOCAL" ]; then
     cp "$ENV_LOCAL" "$ENV_BACKUP"
   fi
   rm -f "$ENV_LOCAL"
 
-  # Provision local backend and deploy functions synchronously.
-  # Without CONVEX_DEPLOYMENT, the CLI auto-creates a local backend
-  # (no cloud auth or login needed).
+  # Provision local backend and deploy functions synchronously
   cd "$REPO_ROOT" && bunx convex dev --local \
     --local-cloud-port "$cloud_port" \
     --local-site-port "$site_port" \
