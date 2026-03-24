@@ -72,12 +72,8 @@ start_e2e_convex() {
     source "$DEV_PORTS"
   fi
 
-  # CONVEX_CLOUD_PORT from .dev-ports is used for the collision check below.
-  # CONVEX_TEAM/CONVEX_PROJECT are no longer needed — the Convex CLI
-  # auto-provisions local backends without cloud auth.
-
-  # convex dev --configure existing refuses to run if another local backend
-  # is active. Check and give a clear error.
+  # Check that dev Convex isn't already running — the CLI refuses to
+  # provision when another local backend is active.
   if port_in_use "${CONVEX_CLOUD_PORT:-3210}"; then
     echo "Error: Dev Convex is running on port ${CONVEX_CLOUD_PORT:-3210}."
     echo ""
