@@ -62,11 +62,9 @@ start_e2e_convex() {
     source "$DEV_PORTS"
   fi
 
-  if [ -z "${CONVEX_TEAM:-}" ] || [ -z "${CONVEX_PROJECT:-}" ]; then
-    echo "Error: CONVEX_TEAM and/or CONVEX_PROJECT not set"
-    echo "Set them in .dev-ports (local) or as environment variables (CI)"
-    exit 1
-  fi
+  # CONVEX_CLOUD_PORT from .dev-ports is used for the collision check below.
+  # CONVEX_TEAM/CONVEX_PROJECT are no longer needed — the Convex CLI
+  # auto-provisions local backends without cloud auth.
 
   # convex dev --configure existing refuses to run if another local backend
   # is active. Check and give a clear error.
@@ -106,26 +104,19 @@ start_e2e_convex() {
 
   echo "Starting ephemeral Convex (cloud=$cloud_port, site=$site_port)..."
 
-  # CONVEX_DEPLOY_KEY overrides --dev-deployment local, forcing cloud
-  # provisioning. Unset it — local backends don't need cloud auth.
+  # Unset credentials that override local mode
   unset CONVEX_DEPLOY_KEY 2>/dev/null || true
 
-  # Back up .env.local
+  # Back up .env.local and clear it — Convex CLI auto-provisions a local
+  # backend in "no account" mode when CONVEX_DEPLOYMENT is not set.
   if [ -f "$ENV_LOCAL" ]; then
     cp "$ENV_LOCAL" "$ENV_BACKUP"
   fi
+  rm -f "$ENV_LOCAL"
 
-  # Write .env.local for the ephemeral local deployment.
-  # This replaces `convex dev --configure existing` which needs cloud auth
-  # that isn't available in CI environments.
-  local deployment_name="local-${CONVEX_TEAM//-/_}-${CONVEX_PROJECT}-${cloud_port}"
-  cat > "$ENV_LOCAL" <<ENVEOF
-CONVEX_DEPLOYMENT=$deployment_name
-CONVEX_URL=http://127.0.0.1:$cloud_port
-CONVEX_SITE_URL=http://127.0.0.1:$site_port
-ENVEOF
-
-  # Provision local backend and deploy functions synchronously
+  # Provision local backend and deploy functions synchronously.
+  # Without CONVEX_DEPLOYMENT, the CLI auto-creates a local backend
+  # (no cloud auth or login needed).
   cd "$REPO_ROOT" && bunx convex dev --local \
     --local-cloud-port "$cloud_port" \
     --local-site-port "$site_port" \
