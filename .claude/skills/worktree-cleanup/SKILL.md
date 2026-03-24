@@ -43,7 +43,7 @@ Before deletion, verify:
 
 3. Check for unpushed local commits (even when PR is merged):
    ```bash
-   git rev-parse --verify --quiet "origin/<branch>" && \
+   git rev-parse --verify --quiet "origin/<branch>" > /dev/null && \
      git log "origin/<branch>..HEAD" --oneline
    ```
    - If `origin/<branch>` doesn't exist (e.g. auto-deleted after merge) → **Safe to delete**
