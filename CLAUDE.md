@@ -164,9 +164,11 @@ scripts/                   → Shared shell scripts (convex-local, dev-local, wo
 - Tests co-located with source: `manager.ts` → `manager.test.ts`
 
 **E2E tests (Playwright):**
-- `bun run test:e2e` — fully self-contained, spins up an ephemeral Convex backend automatically
+- Tests in `e2e/` directory, pattern `*.spec.ts`
+- `bun run test:e2e` — fully self-contained, spins up an ephemeral Convex backend automatically. Each run gets a fresh database — no cleanup needed
 - Dev Convex (`bun run convex:local`) must NOT be running — use `bun run test:e2e:isolated` to avoid stopping it
-- Runs on CI automatically via `.github/workflows/e2e.yml` using `CONVEX_AGENT_MODE=anonymous` (no secrets needed)
+- Use `waitForApp(page)` helper to wait for hydration before assertions
+- Runs on CI automatically via `.github/workflows/e2e.yml` using `CONVEX_AGENT_MODE=anonymous` (no secrets needed). `CONVEX_DEPLOY_KEY` must NOT be in the env — it overrides local mode
 - **Manual testing** requires `?auth` in URL — `http://localhost:<port>?auth`; without it the app stalls
 - See `docs/docs/testing/playwright-manual.md` for the full guide
 
