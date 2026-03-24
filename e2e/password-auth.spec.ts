@@ -91,7 +91,9 @@ test.describe('password auth sign-in page', () => {
     await expect(page.locator('text=Holophyte').first()).toBeVisible({
       timeout: 15000,
     });
-    await expect(page.getByRole('button', { name: 'All Tasks' })).toBeVisible({
+    await expect(
+      page.locator('aside').getByRole('button', { name: 'All Tasks' }),
+    ).toBeVisible({
       timeout: 10000,
     });
   });

@@ -140,6 +140,10 @@ Without both, auth never completes and the app appears stuck. E2E tests (`bun ru
 
 For manual testing (outside the E2E infrastructure), you must include `?auth` in the URL: `http://localhost:<port>?auth`. Without it, anonymous auth never triggers and you get a blank/stuck state with no error message. The E2E test suite handles this internally via `E2E_TEST=1`.
 
+### Password auth tests use a separate Playwright project
+
+`password-auth.spec.ts` runs in a dedicated Playwright project (`password-auth` in `playwright.config.ts`) with empty `storageState` — no pre-authenticated session. Tests use a `gotoSignIn()` helper that intercepts `/config.js` to disable auto-anonymous-auth so the sign-in page renders. If you're adding new auth tests, follow this pattern.
+
 ### Sessions completing too fast
 
 Short prompts (`What is 2+2?`) finish in under a second — too fast to test the running state. Use prompts that require file reads, multiple tool calls, or long outputs when you need the session to stay running.
@@ -148,10 +152,23 @@ Short prompts (`What is 2+2?`) finish in under a second — too fast to test the
 
 If `browser_snapshot` shows loading spinners or empty lists right after navigation, wait another 2–3 seconds and snapshot again. Convex real-time queries resolve asynchronously after mount.
 
+## E2E on CI (GitHub Actions)
+
+E2E tests run automatically on PRs and pushes to main via `.github/workflows/e2e.yml`. The same `bun run test:e2e` command runs on CI — no separate infrastructure, no secrets needed.
+
+The CI runner has no Convex login session. `scripts/e2e-convex.sh` sets `CONVEX_AGENT_MODE=anonymous` — an undocumented Convex CLI env var (beta) that enables anonymous local development without login prompts — and clears `.env.local` so the CLI auto-provisions a fresh local backend.
+
+### Key gotchas for CI
+
+- **`CONVEX_DEPLOY_KEY` must NOT be set** — it overrides `--dev-deployment local` and silently provisions a cloud deployment instead. The script unsets it as a safeguard.
+- **`CONVEX_AGENT_MODE=anonymous`** — without this, the CLI prompts for login and fails in non-interactive terminals.
+
 ## Reference
 
 - Formal E2E tests: `e2e/*.spec.ts`
 - Playwright config: `playwright.config.ts`
 - Global setup/teardown: `e2e/global-setup.ts`, `e2e/global-teardown.ts`
 - `waitForApp` helper: defined at the top of each spec — waits for the sidebar header before asserting
+- CI workflow: `.github/workflows/e2e.yml`
+- E2E Convex provisioning: `scripts/e2e-convex.sh`
 - [Local Development & Worktrees](/local-development) — port allocation, Convex isolation, troubleshooting

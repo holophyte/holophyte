@@ -21,6 +21,14 @@ E2E_PORTS_FILE="$REPO_ROOT/.e2e-convex-ports"
 ENV_LOCAL="$REPO_ROOT/.env.local"
 ENV_BACKUP="$REPO_ROOT/.env.local.dev-backup"
 
+check_dependencies() {
+  if ! command -v lsof >/dev/null 2>&1; then
+    echo "Error: lsof is required for port detection but not found."
+    echo "Install it: sudo apt-get install -y lsof (Linux) or brew install lsof (macOS)"
+    exit 1
+  fi
+}
+
 port_in_use() {
   lsof -iTCP:"$1" -sTCP:LISTEN >/dev/null 2>&1
 }
@@ -56,21 +64,16 @@ stop_e2e_convex() {
 }
 
 start_e2e_convex() {
-  if [ ! -f "$DEV_PORTS" ]; then
-    echo "Error: .dev-ports not found"
-    exit 1
+  check_dependencies
+
+  # Source .dev-ports if it exists (local dev), otherwise rely on env vars (CI)
+  if [ -f "$DEV_PORTS" ]; then
+    # shellcheck source=/dev/null
+    source "$DEV_PORTS"
   fi
 
-  # shellcheck source=/dev/null
-  source "$DEV_PORTS"
-
-  if [ -z "${CONVEX_TEAM:-}" ] || [ -z "${CONVEX_PROJECT:-}" ]; then
-    echo "Error: .dev-ports is missing CONVEX_TEAM and/or CONVEX_PROJECT"
-    exit 1
-  fi
-
-  # convex dev --configure existing refuses to run if another local backend
-  # is active. Check and give a clear error.
+  # Check that dev Convex isn't already running — the CLI refuses to
+  # provision when another local backend is active.
   if port_in_use "${CONVEX_CLOUD_PORT:-3210}"; then
     echo "Error: Dev Convex is running on port ${CONVEX_CLOUD_PORT:-3210}."
     echo ""
@@ -107,22 +110,26 @@ start_e2e_convex() {
 
   echo "Starting ephemeral Convex (cloud=$cloud_port, site=$site_port)..."
 
-  # Back up .env.local — convex dev --configure existing overwrites it
+  # Unset credentials that override local mode
+  unset CONVEX_DEPLOY_KEY 2>/dev/null || true
+
+  # Enable anonymous local development — skips login prompts in CI.
+  export CONVEX_AGENT_MODE=anonymous
+
+  # Back up .env.local and clear it so the CLI provisions a fresh
+  # anonymous local backend.
   if [ -f "$ENV_LOCAL" ]; then
     cp "$ENV_LOCAL" "$ENV_BACKUP"
   fi
+  rm -f "$ENV_LOCAL"
 
-  # Provision: creates deployment on ephemeral ports and deploys functions
-  cd "$REPO_ROOT" && bunx convex dev --configure existing \
-    --team "$CONVEX_TEAM" \
-    --project "$CONVEX_PROJECT" \
-    --dev-deployment local \
+  # Provision local backend and deploy functions synchronously
+  cd "$REPO_ROOT" && bunx convex dev --local \
     --local-cloud-port "$cloud_port" \
     --local-site-port "$site_port" \
     --codegen disable \
     --once
 
-  # .env.local now points to the ephemeral deployment.
   # Start background Convex (reads .env.local for deployment config)
   cd "$REPO_ROOT" && bunx convex dev --local \
     --local-cloud-port "$cloud_port" \

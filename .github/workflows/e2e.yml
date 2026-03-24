@@ -1,7 +1,11 @@
 name: E2E Tests
 
 on:
-  workflow_dispatch: # manual trigger only until cloud Convex is configured for anonymous auth
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -11,11 +15,24 @@ jobs:
   e2e:
     name: E2E Tests
     runs-on: ubuntu-latest
+    # Skip on fork PRs — secrets are unavailable
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
       - run: bun install --frozen-lockfile
       - run: bunx playwright install --with-deps chromium
       - run: bun run test:e2e
-        env:
-          CONVEX_URL: ${{ vars.CONVEX_URL }}
+      - uses: actions/upload-artifact@v4
+        if: ${{ always() && !cancelled() }}
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7
+      - uses: actions/upload-artifact@v4
+        if: ${{ always() && !cancelled() }}
+        with:
+          name: test-results
+          path: test-results/
+          retention-days: 7
