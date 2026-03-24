@@ -43,14 +43,16 @@ Before deletion, verify:
 
 3. Check for unpushed local commits (even when PR is merged):
    ```bash
-   git log origin/<branch>..HEAD --oneline
+   git rev-parse --verify --quiet "origin/<branch>" && \
+     git log "origin/<branch>..HEAD" --oneline
    ```
+   - If `origin/<branch>` doesn't exist (e.g. auto-deleted after merge) → **Safe to delete**
    - If commits exist → **Caution** — local commits not included in the merged PR
-   - If no commits → **Safe to delete**
+   - If no commits and PR is merged → **Safe to delete**
 
 **Why `gh pr list` instead of `git branch --merged`**: This repo uses squash merges, which create a new commit on main. Git doesn't recognize the original branch as merged since the commit SHAs differ. Checking GitHub PR status is the reliable way to detect squash merges.
 
-### 4. Display Merge Status
+### 3. Display Merge Status
 
 - **Safe to delete**: PR was merged (squash-merged into main) and no unpushed local commits
 - **Caution**: PR was merged but there are unpushed local commits — work may be lost
@@ -59,18 +61,18 @@ Before deletion, verify:
 - **Caution**: No PR found but remote branch exists — branch was pushed without a PR
 - **Caution**: No PR found and no remote branch — work may not be pushed
 
-### 5. Request Confirmation
+### 4. Request Confirmation
 
 Always ask for explicit confirmation before proceeding, especially if warnings are present.
 
-### 6. Remove Worktree and Branch
+### 5. Remove Worktree and Branch
 
 ```bash
 git worktree remove ~/.holophyte-dev/<feature-name>
 git branch -D feat/<feature-name>
 ```
 
-### 7. Verify Removal
+### 6. Verify Removal
 
 ```bash
 git worktree list
