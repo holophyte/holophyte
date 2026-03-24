@@ -9,7 +9,9 @@ async function waitForApp(page: import('@playwright/test').Page) {
 test('app loads and shows sidebar', async ({ page }) => {
   await waitForApp(page);
   await expect(page.locator('text=Holophyte')).toBeVisible();
-  await expect(page.getByRole('button', { name: 'All Tasks' })).toBeVisible();
+  await expect(
+    page.locator('aside').getByRole('button', { name: 'All Tasks' }),
+  ).toBeVisible();
 });
 
 test('sidebar shows seed box and projects', async ({ page }) => {
