@@ -31,16 +31,24 @@ Present worktrees to user (excluding main directory).
 
 Before deletion, verify:
 
-1. Check if branch has remote tracking: `git branch -vv`
-2. Check if merged into main: `git branch -r --merged main`
-3. Check for uncommitted changes in worktree
-4. Check for unpushed local commits
+1. Check for uncommitted changes in worktree
+2. Check PR merge status via GitHub CLI (handles squash merges correctly):
+   ```bash
+   gh pr list --head "feat/<name>" --state merged --json number,title,mergedAt
+   ```
+   - If a merged PR exists → **Safe to delete**
+   - If an open PR exists (`--state open`) → **Caution** — PR still open
+   - If a closed (non-merged) PR exists (`--state closed`) → **Caution** — PR was closed without merging; work may be abandoned
+   - If no PR found → Check if branch has a remote (`git branch -vv`) and warn accordingly
+
+**Why `gh pr list` instead of `git branch --merged`**: This repo uses squash merges, which create a new commit on main. Git doesn't recognize the original branch as merged since the commit SHAs differ. Checking GitHub PR status is the reliable way to detect squash merges.
 
 ### 3. Display Merge Status
 
-- Safe to delete: Remote branch exists and has been merged into main
-- Caution: Remote branch exists but has NOT been merged into main
-- Caution: No remote branch exists (work may not be pushed)
+- **Safe to delete**: PR was merged (squash-merged into main)
+- **Caution**: PR is still open — work may not be reviewed/merged yet
+- **Caution**: PR was closed without merging — work may be abandoned
+- **Caution**: No PR found and no remote branch — work may not be pushed
 
 ### 4. Request Confirmation
 
