@@ -174,14 +174,10 @@ scripts/                   → Shared shell scripts (convex-local, dev-local, wo
 - See `docs/docs/testing/playwright-manual.md` for the full E2E and manual testing guide
 
 **E2E on CI (GitHub Actions):**
-- E2E tests run automatically on PRs and pushes to main via `.github/workflows/e2e.yml`
-- Uses `CONVEX_AGENT_MODE=anonymous` to provision a local Convex backend without cloud auth or login — this is an undocumented Convex CLI env var that enables anonymous local development in non-interactive environments
-- The script (`scripts/e2e-convex.sh`) clears `.env.local` so the CLI auto-creates a fresh anonymous deployment, then deploys functions with `convex dev --local --once`
-- No secrets or repo vars needed — the entire flow is auth-free
+- Runs automatically on PRs and pushes to main via `.github/workflows/e2e.yml`
+- Uses `CONVEX_AGENT_MODE=anonymous` for auth-free local Convex provisioning — no secrets or repo vars needed
 - `CONVEX_DEPLOY_KEY` must NOT be in the environment — it overrides `--dev-deployment local` and forces cloud provisioning
-- Playwright artifacts (`playwright-report/`, `test-results/`) are uploaded on both success and failure for debugging
-- Job has a 15-minute timeout; fork PRs are skipped (no access to repo vars)
-- CI runs ~2 minutes: ~30s setup, ~15s Convex provisioning, ~60s tests
+- See `docs/docs/testing/playwright-manual.md` for CI gotchas and details
 
 ## Error Handling
 
