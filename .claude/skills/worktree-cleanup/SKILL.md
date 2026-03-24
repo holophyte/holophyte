@@ -36,32 +36,41 @@ Before deletion, verify:
    ```bash
    gh pr list --head "feat/<name>" --state merged --json number,title,mergedAt
    ```
-   - If a merged PR exists → **Safe to delete**
+   - If a merged PR exists → Check for unpushed local commits (see step 3) before declaring safe
    - If an open PR exists (`--state open`) → **Caution** — PR still open
    - If a closed (non-merged) PR exists (`--state closed`) → **Caution** — PR was closed without merging; work may be abandoned
    - If no PR found → Check if branch has a remote (`git branch -vv`) and warn accordingly
 
+3. Check for unpushed local commits (even when PR is merged):
+   ```bash
+   git log origin/<branch>..HEAD --oneline
+   ```
+   - If commits exist → **Caution** — local commits not included in the merged PR
+   - If no commits → **Safe to delete**
+
 **Why `gh pr list` instead of `git branch --merged`**: This repo uses squash merges, which create a new commit on main. Git doesn't recognize the original branch as merged since the commit SHAs differ. Checking GitHub PR status is the reliable way to detect squash merges.
 
-### 3. Display Merge Status
+### 4. Display Merge Status
 
-- **Safe to delete**: PR was merged (squash-merged into main)
+- **Safe to delete**: PR was merged (squash-merged into main) and no unpushed local commits
+- **Caution**: PR was merged but there are unpushed local commits — work may be lost
 - **Caution**: PR is still open — work may not be reviewed/merged yet
 - **Caution**: PR was closed without merging — work may be abandoned
+- **Caution**: No PR found but remote branch exists — branch was pushed without a PR
 - **Caution**: No PR found and no remote branch — work may not be pushed
 
-### 4. Request Confirmation
+### 5. Request Confirmation
 
 Always ask for explicit confirmation before proceeding, especially if warnings are present.
 
-### 5. Remove Worktree and Branch
+### 6. Remove Worktree and Branch
 
 ```bash
 git worktree remove ~/.holophyte-dev/<feature-name>
 git branch -D feat/<feature-name>
 ```
 
-### 6. Verify Removal
+### 7. Verify Removal
 
 ```bash
 git worktree list
@@ -73,4 +82,5 @@ git branch -a
 - **Never** delete the main worktree
 - **Always** warn if PR may not be complete (unmerged remote branch)
 - **Always** warn if there are uncommitted changes
+- **Always** warn if there are unpushed local commits (even when PR is merged)
 - **Always** require explicit confirmation
