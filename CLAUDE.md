@@ -173,6 +173,16 @@ scripts/                   → Shared shell scripts (convex-local, dev-local, wo
 - **Manual testing**: Navigate to `http://localhost:<port>?auth` — the `?auth` param triggers anonymous auth
 - See `docs/docs/testing/playwright-manual.md` for the full E2E and manual testing guide
 
+**E2E on CI (GitHub Actions):**
+- E2E tests run automatically on PRs and pushes to main via `.github/workflows/e2e.yml`
+- Uses `CONVEX_AGENT_MODE=anonymous` to provision a local Convex backend without cloud auth or login — this is an undocumented Convex CLI env var that enables anonymous local development in non-interactive environments
+- The script (`scripts/e2e-convex.sh`) clears `.env.local` so the CLI auto-creates a fresh anonymous deployment, then deploys functions with `convex dev --local --once`
+- No secrets or repo vars needed — the entire flow is auth-free
+- `CONVEX_DEPLOY_KEY` must NOT be in the environment — it overrides `--dev-deployment local` and forces cloud provisioning
+- Playwright artifacts (`playwright-report/`, `test-results/`) are uploaded on both success and failure for debugging
+- Job has a 15-minute timeout; fork PRs are skipped (no access to repo vars)
+- CI runs ~2 minutes: ~30s setup, ~15s Convex provisioning, ~60s tests
+
 ## Error Handling
 
 **Server routes** (`src/server.ts`): Catch errors and return structured JSON responses. Always log with `console.error` before returning a 500.
@@ -238,7 +248,8 @@ Server configuration lives in environment variables with sensible defaults:
 - `bunfig.toml` configures `bun-plugin-tailwind` under `[serve.static]`
 - Pre-commit hooks configured via `.githooks/` — `prepare` script in package.json sets `core.hooksPath` on `bun install`
 - `bun run --watch` swallows subprocess stderr — run `bun src/server.ts` directly when debugging SDK session issues
-- No CI/CD or Docker configured
+- **`CONVEX_DEPLOY_KEY` overrides `--dev-deployment local`** — if set in the environment, `convex dev --configure existing --dev-deployment local` silently provisions a cloud deployment instead. E2E scripts unset it before provisioning.
+- **`CONVEX_AGENT_MODE=anonymous`** — undocumented Convex CLI env var that enables anonymous local development without login prompts. Required for CI/non-interactive environments. Beta feature per CLI output.
 - **`convex dev --local` silently connects to cloud** if `.dev-ports` is missing `CONVEX_TEAM`/`CONVEX_PROJECT` — always include both
 - **Stop `convex:local` before running E2E tests** — `bun run test:e2e` spins up its own ephemeral Convex; the CLI refuses to provision if another local backend is active. Alternatively, use `bun run test:e2e:isolated` which runs in a temp worktree and doesn't touch the main repo's `.env.local`
 - **Manual testing requires `ALLOW_ANONYMOUS_AUTH=1`** on Convex env — `bunx convex env set ALLOW_ANONYMOUS_AUTH 1` (auto-set by `worktree:create` for new worktrees)

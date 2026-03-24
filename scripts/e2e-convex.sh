@@ -21,6 +21,14 @@ E2E_PORTS_FILE="$REPO_ROOT/.e2e-convex-ports"
 ENV_LOCAL="$REPO_ROOT/.env.local"
 ENV_BACKUP="$REPO_ROOT/.env.local.dev-backup"
 
+check_dependencies() {
+  if ! command -v lsof >/dev/null 2>&1; then
+    echo "Error: lsof is required for port detection but not found."
+    echo "Install it: sudo apt-get install -y lsof (Linux) or brew install lsof (macOS)"
+    exit 1
+  fi
+}
+
 port_in_use() {
   lsof -iTCP:"$1" -sTCP:LISTEN >/dev/null 2>&1
 }
@@ -56,6 +64,8 @@ stop_e2e_convex() {
 }
 
 start_e2e_convex() {
+  check_dependencies
+
   # Source .dev-ports if it exists (local dev), otherwise rely on env vars (CI)
   if [ -f "$DEV_PORTS" ]; then
     # shellcheck source=/dev/null

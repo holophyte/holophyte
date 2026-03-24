@@ -148,10 +148,35 @@ Short prompts (`What is 2+2?`) finish in under a second — too fast to test the
 
 If `browser_snapshot` shows loading spinners or empty lists right after navigation, wait another 2–3 seconds and snapshot again. Convex real-time queries resolve asynchronously after mount.
 
+## E2E on CI (GitHub Actions)
+
+E2E tests run automatically on PRs and pushes to main via `.github/workflows/e2e.yml`. The same `bun run test:e2e` command runs on CI — no separate infrastructure.
+
+### How it works
+
+The CI runner has no Convex login session and no `.dev-ports` file. The E2E scripts handle this:
+
+1. `scripts/e2e-convex.sh` sets `CONVEX_AGENT_MODE=anonymous` — an undocumented Convex CLI env var that enables anonymous local development without login prompts (beta feature)
+2. `.env.local` is cleared so the CLI auto-provisions a fresh anonymous local backend
+3. `convex dev --local --once` downloads the backend binary, starts it, and deploys functions
+4. Tests run against the ephemeral backend, same as locally
+
+**No secrets or repo vars are needed.** The entire flow is auth-free.
+
+### Key gotchas for CI
+
+- **`CONVEX_DEPLOY_KEY` must NOT be set** — it overrides `--dev-deployment local` and silently provisions a cloud deployment instead. The script unsets it as a safeguard.
+- **`CONVEX_AGENT_MODE=anonymous`** — without this, the CLI prompts for login and fails in non-interactive terminals. This is the only way to run `convex dev --local` without credentials in CI.
+- **Fork PRs are skipped** — the workflow checks `github.event.pull_request.head.repo.full_name` to avoid running on forks.
+- **Timing**: ~2 minutes total (30s setup, 15s Convex provisioning, 60s tests).
+- **Artifacts**: `playwright-report/` and `test-results/` are uploaded on both success and failure for debugging.
+
 ## Reference
 
 - Formal E2E tests: `e2e/*.spec.ts`
 - Playwright config: `playwright.config.ts`
 - Global setup/teardown: `e2e/global-setup.ts`, `e2e/global-teardown.ts`
 - `waitForApp` helper: defined at the top of each spec — waits for the sidebar header before asserting
+- CI workflow: `.github/workflows/e2e.yml`
+- E2E Convex provisioning: `scripts/e2e-convex.sh`
 - [Local Development & Worktrees](/local-development) — port allocation, Convex isolation, troubleshooting
