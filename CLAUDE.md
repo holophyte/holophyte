@@ -166,14 +166,9 @@ scripts/                   → Shared shell scripts (convex-local, dev-local, wo
 **E2E tests (Playwright):**
 - `bun run test:e2e` — fully self-contained, spins up an ephemeral Convex backend automatically
 - Dev Convex (`bun run convex:local`) must NOT be running — use `bun run test:e2e:isolated` to avoid stopping it
-- **Manual testing** requires `?auth` in URL — `http://localhost:<port>?auth` triggers anonymous auth; without it the app stalls
+- Runs on CI automatically via `.github/workflows/e2e.yml` using `CONVEX_AGENT_MODE=anonymous` (no secrets needed)
+- **Manual testing** requires `?auth` in URL — `http://localhost:<port>?auth`; without it the app stalls
 - See `docs/docs/testing/playwright-manual.md` for the full guide
-
-**E2E on CI (GitHub Actions):**
-- Runs automatically on PRs and pushes to main via `.github/workflows/e2e.yml`
-- Uses `CONVEX_AGENT_MODE=anonymous` for auth-free local Convex provisioning — no secrets or repo vars needed
-- `CONVEX_DEPLOY_KEY` must NOT be in the environment — it overrides `--dev-deployment local` and forces cloud provisioning
-- See `docs/docs/testing/playwright-manual.md` for CI gotchas and details
 
 ## Error Handling
 
