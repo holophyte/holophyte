@@ -56,16 +56,15 @@ stop_e2e_convex() {
 }
 
 start_e2e_convex() {
-  if [ ! -f "$DEV_PORTS" ]; then
-    echo "Error: .dev-ports not found"
-    exit 1
+  # Source .dev-ports if it exists (local dev), otherwise rely on env vars (CI)
+  if [ -f "$DEV_PORTS" ]; then
+    # shellcheck source=/dev/null
+    source "$DEV_PORTS"
   fi
 
-  # shellcheck source=/dev/null
-  source "$DEV_PORTS"
-
   if [ -z "${CONVEX_TEAM:-}" ] || [ -z "${CONVEX_PROJECT:-}" ]; then
-    echo "Error: .dev-ports is missing CONVEX_TEAM and/or CONVEX_PROJECT"
+    echo "Error: CONVEX_TEAM and/or CONVEX_PROJECT not set"
+    echo "Set them in .dev-ports (local) or as environment variables (CI)"
     exit 1
   fi
 
