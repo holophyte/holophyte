@@ -140,6 +140,10 @@ Without both, auth never completes and the app appears stuck. E2E tests (`bun ru
 
 For manual testing (outside the E2E infrastructure), you must include `?auth` in the URL: `http://localhost:<port>?auth`. Without it, anonymous auth never triggers and you get a blank/stuck state with no error message. The E2E test suite handles this internally via `E2E_TEST=1`.
 
+### Password auth tests use a separate Playwright project
+
+`password-auth.spec.ts` runs in a dedicated Playwright project (`password-auth` in `playwright.config.ts`) with empty `storageState` — no pre-authenticated session. Tests use a `gotoSignIn()` helper that intercepts `/config.js` to disable auto-anonymous-auth so the sign-in page renders. If you're adding new auth tests, follow this pattern.
+
 ### Sessions completing too fast
 
 Short prompts (`What is 2+2?`) finish in under a second — too fast to test the running state. Use prompts that require file reads, multiple tool calls, or long outputs when you need the session to stay running.
@@ -150,26 +154,14 @@ If `browser_snapshot` shows loading spinners or empty lists right after navigati
 
 ## E2E on CI (GitHub Actions)
 
-E2E tests run automatically on PRs and pushes to main via `.github/workflows/e2e.yml`. The same `bun run test:e2e` command runs on CI — no separate infrastructure.
+E2E tests run automatically on PRs and pushes to main via `.github/workflows/e2e.yml`. The same `bun run test:e2e` command runs on CI — no separate infrastructure, no secrets needed.
 
-### How it works
-
-The CI runner has no Convex login session and no `.dev-ports` file. The E2E scripts handle this:
-
-1. `scripts/e2e-convex.sh` sets `CONVEX_AGENT_MODE=anonymous` — an undocumented Convex CLI env var that enables anonymous local development without login prompts (beta feature)
-2. `.env.local` is cleared so the CLI auto-provisions a fresh anonymous local backend
-3. `convex dev --local --once` downloads the backend binary, starts it, and deploys functions
-4. Tests run against the ephemeral backend, same as locally
-
-**No secrets or repo vars are needed.** The entire flow is auth-free.
+The CI runner has no Convex login session. `scripts/e2e-convex.sh` sets `CONVEX_AGENT_MODE=anonymous` — an undocumented Convex CLI env var (beta) that enables anonymous local development without login prompts — and clears `.env.local` so the CLI auto-provisions a fresh local backend.
 
 ### Key gotchas for CI
 
 - **`CONVEX_DEPLOY_KEY` must NOT be set** — it overrides `--dev-deployment local` and silently provisions a cloud deployment instead. The script unsets it as a safeguard.
-- **`CONVEX_AGENT_MODE=anonymous`** — without this, the CLI prompts for login and fails in non-interactive terminals. This is the only way to run `convex dev --local` without credentials in CI.
-- **Fork PRs are skipped** — the workflow checks `github.event.pull_request.head.repo.full_name` to avoid running on forks.
-- **Timing**: ~2 minutes total (30s setup, 15s Convex provisioning, 60s tests).
-- **Artifacts**: `playwright-report/` and `test-results/` are uploaded on both success and failure for debugging.
+- **`CONVEX_AGENT_MODE=anonymous`** — without this, the CLI prompts for login and fails in non-interactive terminals.
 
 ## Reference
 
