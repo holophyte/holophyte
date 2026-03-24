@@ -98,7 +98,10 @@ test('clicking all tasks returns to kanban board', async ({ page }) => {
   await page.locator('button', { hasText: 'Seed Box' }).click();
   await expect(page.locator('h1', { hasText: 'Seed Box' })).toBeVisible();
 
-  await page.locator('button', { hasText: 'All Tasks' }).click();
+  await page
+    .locator('aside')
+    .locator('button', { hasText: 'All Tasks' })
+    .click();
   // View transition may be slow on CI — wait for the kanban board to mount
   await expect(page.locator('h1', { hasText: 'All Tasks' })).toBeVisible({
     timeout: 10000,

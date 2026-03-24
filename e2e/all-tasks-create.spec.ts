@@ -8,7 +8,10 @@ async function waitForApp(page: import('@playwright/test').Page) {
 
 // Ensure we are on the All Tasks view (no repo selected)
 async function goToAllTasks(page: import('@playwright/test').Page) {
-  await page.getByRole('button', { name: 'All Tasks' }).click();
+  await page
+    .locator('aside')
+    .getByRole('button', { name: 'All Tasks' })
+    .click();
   await expect(page.locator('h1', { hasText: 'All Tasks' })).toBeVisible({
     timeout: 10000,
   });
