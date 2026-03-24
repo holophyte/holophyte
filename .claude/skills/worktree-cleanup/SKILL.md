@@ -38,6 +38,7 @@ Before deletion, verify:
    ```
    - If a merged PR exists → **Safe to delete**
    - If an open PR exists (`--state open`) → **Caution** — PR still open
+   - If a closed (non-merged) PR exists (`--state closed`) → **Caution** — PR was closed without merging; work may be abandoned
    - If no PR found → Check if branch has a remote (`git branch -vv`) and warn accordingly
 
 **Why `gh pr list` instead of `git branch --merged`**: This repo uses squash merges, which create a new commit on main. Git doesn't recognize the original branch as merged since the commit SHAs differ. Checking GitHub PR status is the reliable way to detect squash merges.
@@ -46,6 +47,7 @@ Before deletion, verify:
 
 - **Safe to delete**: PR was merged (squash-merged into main)
 - **Caution**: PR is still open — work may not be reviewed/merged yet
+- **Caution**: PR was closed without merging — work may be abandoned
 - **Caution**: No PR found and no remote branch — work may not be pushed
 
 ### 4. Request Confirmation
