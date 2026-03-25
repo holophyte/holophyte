@@ -843,6 +843,25 @@ export const companionUpdateSdkSessionId = mutation({
 });
 
 /**
+ * Persists project commands discovered from the repo's .claude/commands/ directory.
+ * Called eagerly at session start, before the SDK processes the first prompt.
+ */
+export const companionUpdateProjectCommands = mutation({
+  args: {
+    id: v.id('sessions'),
+    projectCommands: v.array(
+      v.object({ name: v.string(), description: v.string() }),
+    ),
+  },
+  handler: async (ctx, args) => {
+    if (!isLocalDevMode()) await requireSessionOwnership(ctx, args.id);
+    await ctx.db.patch(args.id, {
+      projectCommands: args.projectCommands,
+    });
+  },
+});
+
+/**
  * Bumps `lastActivityAt` without changing status.
  * Public equivalent of {@link serverUpdateActivity} — authenticated via JWT.
  */

@@ -108,6 +108,7 @@ function withSession(
         pendingApprovals: [],
         sessionStatus: overrides.sessionStatus ?? 'idle',
         promptSuggestion: overrides.promptSuggestion ?? null,
+        availableCommands: [],
       }}
     >
       {children}

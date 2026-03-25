@@ -61,8 +61,14 @@ export default function SessionPanel({ taskId }: SessionPanelProps) {
 
   // Single useSession call — state is passed down to SessionRuntimeProvider as props
   // to avoid duplicate WebSocket connections.
-  const { events, pendingApprovals, sessionStatus, approve, deny } =
-    useSession(sessionId);
+  const {
+    events,
+    pendingApprovals,
+    sessionStatus,
+    projectCommands,
+    approve,
+    deny,
+  } = useSession(sessionId);
 
   const [stopping, setStopping] = useState(false);
   const [now, setNow] = useState(() => Date.now());
@@ -175,6 +181,7 @@ export default function SessionPanel({ taskId }: SessionPanelProps) {
             events={events}
             pendingApprovals={pendingApprovals}
             sessionStatus={sessionStatus}
+            projectCommands={projectCommands}
             approve={approve}
             deny={deny}
             sendMessage={handleSendMessage}

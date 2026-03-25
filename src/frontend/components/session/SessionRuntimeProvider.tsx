@@ -8,12 +8,14 @@ import type { ReactNode } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type {
   PendingApproval,
+  ProjectCommand,
   SessionStatus,
 } from '@/frontend/hooks/useSession';
 import {
   extractPromptSuggestion,
   sdkToThreadMessages,
 } from '@/frontend/lib/sdkToThreadMessages';
+
 import { SessionActionsProvider } from './SessionActionsContext';
 
 interface SessionRuntimeProviderProps {
@@ -21,6 +23,7 @@ interface SessionRuntimeProviderProps {
   events: SDKMessage[];
   pendingApprovals: PendingApproval[];
   sessionStatus: SessionStatus | null;
+  projectCommands: ProjectCommand[];
   approve: (requestId: string) => void;
   deny: (requestId: string, message?: string) => void;
   sendMessage: (sessionId: string, text: string) => Promise<void>;
@@ -32,6 +35,7 @@ export default function SessionRuntimeProvider({
   events,
   pendingApprovals,
   sessionStatus,
+  projectCommands,
   approve,
   deny,
   sendMessage,
@@ -64,6 +68,25 @@ export default function SessionRuntimeProvider({
     () => extractPromptSuggestion(events),
     [events],
   );
+
+  // Merge persisted commands with dynamic skills from the init event.
+  // Commands are persisted to Convex; skills come from the event stream.
+  const availableCommands = useMemo(() => {
+    const initEvent = events.find(
+      (e) => e.type === 'system' && 'subtype' in e && e.subtype === 'init',
+    );
+    const skills: ProjectCommand[] = initEvent
+      ? (Array.isArray((initEvent as Record<string, unknown>).skills)
+          ? ((initEvent as Record<string, unknown>).skills as string[])
+          : []
+        ).map((name) => ({ name, description: '' }))
+      : [];
+    const commandNames = new Set(projectCommands.map((c) => c.name));
+    const uniqueSkills = skills.filter((s) => !commandNames.has(s.name));
+    return [...projectCommands, ...uniqueSkills].sort((a, b) =>
+      a.name.localeCompare(b.name),
+    );
+  }, [events, projectCommands]);
 
   // Merge SDK messages with the optimistic user message (if any).
   const messages = useMemo(() => {
@@ -122,6 +145,7 @@ export default function SessionRuntimeProvider({
         pendingApprovals={pendingApprovals}
         sessionStatus={sessionStatus}
         promptSuggestion={promptSuggestion}
+        availableCommands={availableCommands}
       >
         {children}
       </SessionActionsProvider>

@@ -450,6 +450,7 @@ export async function startSession(opts: {
 
   sdkOptions.model = opts.model ?? DEFAULT_MODEL;
   sdkOptions.promptSuggestions = true;
+  sdkOptions.settingSources = ['project'];
 
   if (opts.resumeSdkSessionId) {
     sdkOptions.resume = opts.resumeSdkSessionId;
@@ -514,6 +515,34 @@ async function consumeIterator(
         } catch (err) {
           console.error('Failed to persist SDK session ID:', err);
         }
+
+        // Persist only commands (not skills) with descriptions.
+        // Skills are dynamic and read from the init event on the frontend.
+        const skillNames = new Set(
+          Array.isArray((event as Record<string, unknown>).skills)
+            ? ((event as Record<string, unknown>).skills as string[])
+            : [],
+        );
+        // Fire-and-forget: supportedCommands() runs concurrently with the
+        // iterator loop. This avoids deadlock because the main loop continues
+        // consuming events while this promise resolves independently.
+        iterator
+          .supportedCommands()
+          .then(async (all) => {
+            const commands = all.filter((c) => !skillNames.has(c.name));
+            const client = getConvexClient();
+            if (!client || commands.length === 0) return;
+            await client.mutation(api.sessions.companionUpdateProjectCommands, {
+              id: session.convexSessionId as Id<'sessions'>,
+              projectCommands: commands.map((c) => ({
+                name: c.name,
+                description: c.description,
+              })),
+            });
+          })
+          .catch((err) => {
+            console.error('Failed to fetch supported commands:', err);
+          });
       }
 
       // Detect error results
