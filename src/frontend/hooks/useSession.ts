@@ -102,14 +102,16 @@ function normalizeProjectCommands(
   raw: unknown[] | undefined,
 ): ProjectCommand[] {
   if (!raw) return [];
-  return raw.map((item) => {
-    if (typeof item === 'string') return { name: item, description: '' };
-    const obj = item as Record<string, unknown>;
-    return {
-      name: String(obj.name ?? ''),
-      description: String(obj.description ?? ''),
-    };
-  });
+  return raw
+    .map((item) => {
+      if (typeof item === 'string') return { name: item, description: '' };
+      const obj = item as Record<string, unknown>;
+      return {
+        name: String(obj.name ?? ''),
+        description: String(obj.description ?? ''),
+      };
+    })
+    .sort((a, b) => a.name.localeCompare(b.name));
 }
 
 const HEARTBEAT_STALE_MS = 10_000;

@@ -76,7 +76,8 @@ export function filterCommands(
   commands: ProjectCommand[],
   filter: string,
 ): ProjectCommand[] {
+  const lowerFilter = filter.toLowerCase();
   return commands.filter((cmd) =>
-    cmd.name.toLowerCase().startsWith(filter.toLowerCase()),
+    cmd.name?.toLowerCase().startsWith(lowerFilter),
   );
 }

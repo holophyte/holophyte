@@ -516,10 +516,17 @@ async function consumeIterator(
           console.error('Failed to persist SDK session ID:', err);
         }
 
-        // Fetch full command/skill list with descriptions from the SDK
+        // Persist only commands (not skills) with descriptions.
+        // Skills are dynamic and read from the init event on the frontend.
+        const skillNames = new Set(
+          Array.isArray((event as Record<string, unknown>).skills)
+            ? ((event as Record<string, unknown>).skills as string[])
+            : [],
+        );
         iterator
           .supportedCommands()
-          .then(async (commands) => {
+          .then(async (all) => {
+            const commands = all.filter((c) => !skillNames.has(c.name));
             const client = getConvexClient();
             if (!client || commands.length === 0) return;
             await client.mutation(api.sessions.companionUpdateProjectCommands, {

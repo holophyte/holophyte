@@ -69,8 +69,24 @@ export default function SessionRuntimeProvider({
     [events],
   );
 
-  // Commands and skills from the SDK's supportedCommands(), persisted to Convex
-  const availableCommands = projectCommands;
+  // Merge persisted commands with dynamic skills from the init event.
+  // Commands are persisted to Convex; skills come from the event stream.
+  const availableCommands = useMemo(() => {
+    const initEvent = events.find(
+      (e) => e.type === 'system' && 'subtype' in e && e.subtype === 'init',
+    );
+    const skills: ProjectCommand[] = initEvent
+      ? (Array.isArray((initEvent as Record<string, unknown>).skills)
+          ? ((initEvent as Record<string, unknown>).skills as string[])
+          : []
+        ).map((name) => ({ name, description: '' }))
+      : [];
+    const commandNames = new Set(projectCommands.map((c) => c.name));
+    const uniqueSkills = skills.filter((s) => !commandNames.has(s.name));
+    return [...projectCommands, ...uniqueSkills].sort((a, b) =>
+      a.name.localeCompare(b.name),
+    );
+  }, [events, projectCommands]);
 
   // Merge SDK messages with the optimistic user message (if any).
   const messages = useMemo(() => {

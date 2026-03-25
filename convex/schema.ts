@@ -188,9 +188,14 @@ export default defineSchema({
     endedAt: v.optional(v.number()),
     // Companion heartbeat — updated every poll cycle for active sessions
     lastHeartbeat: v.optional(v.number()),
-    // Commands and skills from the SDK's supportedCommands() (name + description)
+    // Commands and skills — accepts both old string[] and new {name, description}[] format
     projectCommands: v.optional(
-      v.array(v.object({ name: v.string(), description: v.string() })),
+      v.array(
+        v.union(
+          v.string(),
+          v.object({ name: v.string(), description: v.string() }),
+        ),
+      ),
     ),
   })
     .index('by_task', ['taskId'])
