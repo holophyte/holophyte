@@ -4,7 +4,7 @@ import {
   useComposerRuntime,
 } from '@assistant-ui/react';
 import { SendHorizontal } from 'lucide-react';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { cn } from '@/frontend/lib/utils';
 import { useSessionActions } from './SessionActionsContext';
 import SlashCommandMenu, { filterCommands } from './SlashCommandMenu';
@@ -21,7 +21,6 @@ export default function SessionComposer() {
 
   // Slash command menu state
   const [dismissed, setDismissed] = useState(false);
-  const userDismissedRef = useRef(false);
   const [isFocused, setIsFocused] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(0);
 
@@ -33,7 +32,6 @@ export default function SessionComposer() {
   const hasSlashMatch = slashMatch !== null;
   useEffect(() => {
     if (!hasSlashMatch) {
-      userDismissedRef.current = false;
       setDismissed(false);
     }
   }, [hasSlashMatch]);
@@ -82,7 +80,6 @@ export default function SessionComposer() {
         }
         if (e.key === 'Escape') {
           e.preventDefault();
-          userDismissedRef.current = true;
           setDismissed(true);
           return;
         }
@@ -154,7 +151,6 @@ export default function SessionComposer() {
             setSelectedIndex(0);
           }}
           onFocus={() => {
-            userDismissedRef.current = false;
             setDismissed(false);
             setIsFocused(true);
           }}
