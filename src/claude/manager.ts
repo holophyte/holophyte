@@ -523,6 +523,9 @@ async function consumeIterator(
             ? ((event as Record<string, unknown>).skills as string[])
             : [],
         );
+        // Fire-and-forget: supportedCommands() runs concurrently with the
+        // iterator loop. This avoids deadlock because the main loop continues
+        // consuming events while this promise resolves independently.
         iterator
           .supportedCommands()
           .then(async (all) => {
