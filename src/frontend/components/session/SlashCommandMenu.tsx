@@ -34,12 +34,14 @@ export default function SlashCommandMenu({
   return (
     <div
       ref={listRef}
+      id="slash-command-menu"
       role="listbox"
       className="absolute bottom-full left-0 right-0 mb-1 max-h-32 overflow-y-auto overscroll-contain rounded-md border border-border bg-popover shadow-lg z-10"
     >
       {filtered.map((cmd, i) => (
         <button
           key={cmd.name}
+          id={`slash-cmd-${cmd.name}`}
           type="button"
           role="option"
           aria-selected={i === selectedIndex}

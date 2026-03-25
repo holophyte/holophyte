@@ -4,7 +4,7 @@ import {
   useComposerRuntime,
 } from '@assistant-ui/react';
 import { SendHorizontal } from 'lucide-react';
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useSessionActions } from './SessionActionsContext';
 import SlashCommandMenu, { filterCommands } from './SlashCommandMenu';
 
@@ -19,14 +19,24 @@ export default function SessionComposer() {
   const hasSuggestion = !isDisabled && !!promptSuggestion;
 
   // Slash command menu state
-  const [menuOpen, setMenuOpen] = useState(false);
+  const userDismissedRef = useRef(false);
   const [selectedIndex, setSelectedIndex] = useState(0);
 
   // Determine if the input starts with "/" and extract the filter text
   const slashMatch = composerText.match(/^\/(\S*)$/);
   const slashFilter = slashMatch?.[1] ?? '';
+
+  // Reset dismissed state when the slash pattern is no longer present
+  useEffect(() => {
+    if (slashMatch === null) {
+      userDismissedRef.current = false;
+    }
+  }, [slashMatch]);
+
   const showMenu =
-    menuOpen && slashMatch !== null && availableCommands.length > 0;
+    !userDismissedRef.current &&
+    slashMatch !== null &&
+    availableCommands.length > 0;
   const filteredCommands = showMenu
     ? filterCommands(availableCommands, slashFilter)
     : [];
@@ -34,7 +44,6 @@ export default function SessionComposer() {
   const handleSelectCommand = useCallback(
     (name: string) => {
       composerRuntime.setText(`/${name} `);
-      setMenuOpen(false);
       setSelectedIndex(0);
     },
     [composerRuntime],
@@ -70,7 +79,7 @@ export default function SessionComposer() {
         }
         if (e.key === 'Escape') {
           e.preventDefault();
-          setMenuOpen(false);
+          userDismissedRef.current = true;
           return;
         }
       }
@@ -121,11 +130,23 @@ export default function SessionComposer() {
           disabled={isDisabled}
           rows={1}
           onKeyDown={handleKeyDown}
+          {...(showMenu && filteredCommands.length > 0
+            ? {
+                role: 'combobox',
+                'aria-haspopup': 'listbox' as const,
+                'aria-expanded': true,
+                'aria-controls': 'slash-command-menu',
+                'aria-activedescendant': filteredCommands[selectedIndex]
+                  ? `slash-cmd-${filteredCommands[selectedIndex].name}`
+                  : undefined,
+              }
+            : {})}
           onChange={() => {
-            // Open menu when user starts typing "/" at the beginning
             // Reset selection on each keystroke
-            setMenuOpen(true);
             setSelectedIndex(0);
+          }}
+          onBlur={() => {
+            userDismissedRef.current = true;
           }}
           className={`flex-1 resize-none rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 min-h-11 max-h-36 leading-relaxed ${hasSuggestion ? 'placeholder:italic placeholder:text-muted-foreground/40' : 'placeholder:text-muted-foreground/50'}`}
         />
