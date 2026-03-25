@@ -72,7 +72,7 @@ export default function SessionComposer() {
           if (cmd) handleSelectCommand(cmd.name);
           return;
         }
-        if (e.key === 'Enter') {
+        if (e.key === 'Enter' && !e.shiftKey) {
           e.preventDefault();
           const cmd = filteredCommands[selectedIndex];
           if (cmd) handleSelectCommand(cmd.name);
