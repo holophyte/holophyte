@@ -456,14 +456,24 @@ export async function startSession(opts: {
     sdkOptions.resume = opts.resumeSdkSessionId;
   }
 
+  // Read project commands eagerly so the frontend has them before the first prompt
+  readProjectCommands(opts.repoPath)
+    .then(async (projectCommands) => {
+      if (projectCommands.length === 0) return;
+      const client = getConvexClient();
+      if (client) {
+        await client.mutation(api.sessions.companionUpdateProjectCommands, {
+          id: session.convexSessionId as Id<'sessions'>,
+          projectCommands,
+        });
+      }
+    })
+    .catch((err) => {
+      console.error('Failed to persist project commands:', err);
+    });
+
   // Consume the SDK iterator in the background (non-blocking)
-  consumeIterator(
-    session,
-    sessionId,
-    opts.prompt,
-    opts.repoPath,
-    sdkOptions,
-  ).catch((err) => {
+  consumeIterator(session, sessionId, opts.prompt, sdkOptions).catch((err) => {
     console.error('Unhandled error in session iterator:', err);
   });
 
@@ -489,7 +499,6 @@ async function consumeIterator(
   session: Session,
   sessionId: string,
   prompt: string,
-  repoPath: string,
   options: Parameters<typeof sdkQuery>[0]['options'],
 ): Promise<void> {
   let finalStatus: 'idle' | 'failed' = 'idle';
@@ -525,7 +534,6 @@ async function consumeIterator(
         );
 
         try {
-          const projectCommands = await readProjectCommands(repoPath);
           const sdkClient = getConvexClient();
           if (sdkClient) {
             await sdkClient.mutation(api.sessions.companionUpdateSdkSessionId, {
@@ -533,7 +541,6 @@ async function consumeIterator(
               sdkSessionId: session.sdkSessionId,
               model: session.model,
               permissionMode: session.permissionMode,
-              projectCommands,
             });
           }
         } catch (err) {
