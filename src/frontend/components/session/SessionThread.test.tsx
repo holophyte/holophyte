@@ -100,6 +100,7 @@ function withSessionActions(
         pendingApprovals: [],
         sessionStatus,
         promptSuggestion: null,
+        availableCommands: [],
       }}
     >
       {children}

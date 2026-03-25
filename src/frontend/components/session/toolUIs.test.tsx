@@ -42,6 +42,7 @@ function withSessionActions(
         pendingApprovals,
         sessionStatus: pendingApprovals.length > 0 ? 'waiting_input' : 'idle',
         promptSuggestion: null,
+        availableCommands: [],
       }}
     >
       {children}

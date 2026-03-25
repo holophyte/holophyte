@@ -11,6 +11,8 @@ interface SessionActions {
   pendingApprovals: PendingApproval[];
   sessionStatus: SessionStatus | null;
   promptSuggestion: string | null;
+  /** Available slash commands and skills from the session's system/init event. */
+  availableCommands: string[];
 }
 
 export const SessionActionsContext = createContext<SessionActions | null>(null);
@@ -27,6 +29,7 @@ export function SessionActionsProvider({
   pendingApprovals,
   sessionStatus,
   promptSuggestion,
+  availableCommands,
 }: SessionActionsProviderProps) {
   return (
     <SessionActionsContext.Provider
@@ -36,6 +39,7 @@ export function SessionActionsProvider({
         pendingApprovals,
         sessionStatus,
         promptSuggestion,
+        availableCommands,
       }}
     >
       {children}

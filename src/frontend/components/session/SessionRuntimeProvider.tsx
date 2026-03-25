@@ -65,6 +65,21 @@ export default function SessionRuntimeProvider({
     [events],
   );
 
+  // Extract available slash commands and skills from the system/init event.
+  const availableCommands = useMemo(() => {
+    const initEvent = events.find(
+      (e) => e.type === 'system' && 'subtype' in e && e.subtype === 'init',
+    );
+    if (!initEvent) return [];
+    const evt = initEvent as Record<string, unknown>;
+    const commands = Array.isArray(evt.slash_commands)
+      ? (evt.slash_commands as string[])
+      : [];
+    const skills = Array.isArray(evt.skills) ? (evt.skills as string[]) : [];
+    // Dedupe and sort — skills and slash_commands may overlap
+    return [...new Set([...commands, ...skills])].sort();
+  }, [events]);
+
   // Merge SDK messages with the optimistic user message (if any).
   const messages = useMemo(() => {
     if (!optimisticUserMsg) return sdkMessages;
@@ -122,6 +137,7 @@ export default function SessionRuntimeProvider({
         pendingApprovals={pendingApprovals}
         sessionStatus={sessionStatus}
         promptSuggestion={promptSuggestion}
+        availableCommands={availableCommands}
       >
         {children}
       </SessionActionsProvider>
