@@ -21,6 +21,7 @@ export default function SessionComposer() {
 
   // Slash command menu state
   const userDismissedRef = useRef(false);
+  const [isFocused, setIsFocused] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(0);
 
   // Determine if the input starts with "/" and extract the filter text
@@ -36,7 +37,10 @@ export default function SessionComposer() {
   }, [hasSlashMatch]);
 
   const showMenu =
-    !userDismissedRef.current && hasSlashMatch && availableCommands.length > 0;
+    isFocused &&
+    !userDismissedRef.current &&
+    hasSlashMatch &&
+    availableCommands.length > 0;
   const filteredCommands = showMenu
     ? filterCommands(availableCommands, slashFilter)
     : [];
@@ -149,9 +153,8 @@ export default function SessionComposer() {
             // Reset selection on each keystroke
             setSelectedIndex(0);
           }}
-          onBlur={() => {
-            userDismissedRef.current = true;
-          }}
+          onFocus={() => setIsFocused(true)}
+          onBlur={() => setIsFocused(false)}
           className={cn(
             'flex-1 resize-none rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 min-h-11 max-h-36 leading-relaxed',
             hasSuggestion
