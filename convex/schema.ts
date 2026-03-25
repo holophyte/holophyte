@@ -188,6 +188,8 @@ export default defineSchema({
     endedAt: v.optional(v.number()),
     // Companion heartbeat — updated every poll cycle for active sessions
     lastHeartbeat: v.optional(v.number()),
+    // Project-level commands and skills discovered from the repo's .claude/ directory
+    projectCommands: v.optional(v.array(v.string())),
   })
     .index('by_task', ['taskId'])
     .index('by_status', ['status'])

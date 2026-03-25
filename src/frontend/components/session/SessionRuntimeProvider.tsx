@@ -14,6 +14,7 @@ import {
   extractPromptSuggestion,
   sdkToThreadMessages,
 } from '@/frontend/lib/sdkToThreadMessages';
+
 import { SessionActionsProvider } from './SessionActionsContext';
 
 interface SessionRuntimeProviderProps {
@@ -21,6 +22,7 @@ interface SessionRuntimeProviderProps {
   events: SDKMessage[];
   pendingApprovals: PendingApproval[];
   sessionStatus: SessionStatus | null;
+  projectCommands: string[];
   approve: (requestId: string) => void;
   deny: (requestId: string, message?: string) => void;
   sendMessage: (sessionId: string, text: string) => Promise<void>;
@@ -32,6 +34,7 @@ export default function SessionRuntimeProvider({
   events,
   pendingApprovals,
   sessionStatus,
+  projectCommands,
   approve,
   deny,
   sendMessage,
@@ -65,20 +68,21 @@ export default function SessionRuntimeProvider({
     [events],
   );
 
-  // Extract available slash commands and skills from the system/init event.
+  // Combine project commands (from filesystem, static at init) with skills
+  // (from init event, dynamic). Skills come from .claude/skills/ and are always
+  // project-defined. Project commands come from .claude/commands/ read by the
+  // companion at init time.
   const availableCommands = useMemo(() => {
     const initEvent = events.find(
       (e) => e.type === 'system' && 'subtype' in e && e.subtype === 'init',
     );
-    if (!initEvent) return [];
-    const evt = initEvent as Record<string, unknown>;
-    const commands = Array.isArray(evt.slash_commands)
-      ? (evt.slash_commands as string[])
+    const skills = initEvent
+      ? Array.isArray((initEvent as Record<string, unknown>).skills)
+        ? ((initEvent as Record<string, unknown>).skills as string[])
+        : []
       : [];
-    const skills = Array.isArray(evt.skills) ? (evt.skills as string[]) : [];
-    // Dedupe and sort — skills and slash_commands may overlap
-    return [...new Set([...commands, ...skills])].sort();
-  }, [events]);
+    return [...new Set([...projectCommands, ...skills])].sort();
+  }, [events, projectCommands]);
 
   // Merge SDK messages with the optimistic user message (if any).
   const messages = useMemo(() => {

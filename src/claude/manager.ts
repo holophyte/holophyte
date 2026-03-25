@@ -457,17 +457,53 @@ export async function startSession(opts: {
   }
 
   // Consume the SDK iterator in the background (non-blocking)
-  consumeIterator(session, sessionId, opts.prompt, sdkOptions).catch((err) => {
+  consumeIterator(
+    session,
+    sessionId,
+    opts.prompt,
+    opts.repoPath,
+    sdkOptions,
+  ).catch((err) => {
     console.error('Unhandled error in session iterator:', err);
   });
 
   return { sessionId, warning };
 }
 
+/** Reads command/skill names from .claude/commands/ and .claude/skills/ in a repo. */
+async function readProjectCommands(repoPath: string): Promise<string[]> {
+  const names: string[] = [];
+  for (const subdir of ['commands', 'skills']) {
+    const dir = `${repoPath}/.claude/${subdir}`;
+    try {
+      const entries = await Array.fromAsync(new Bun.Glob('*.md').scan(dir));
+      for (const entry of entries) {
+        names.push(entry.replace(/\.md$/, ''));
+      }
+    } catch {
+      // Directory doesn't exist — skip
+    }
+  }
+  // Also check for skill directories (skills can be directories with SKILL.md)
+  try {
+    const entries = await Array.fromAsync(
+      new Bun.Glob('*/SKILL.md').scan(`${repoPath}/.claude/skills`),
+    );
+    for (const entry of entries) {
+      const name = entry.replace(/\/SKILL\.md$/, '');
+      if (!names.includes(name)) names.push(name);
+    }
+  } catch {
+    // Directory doesn't exist — skip
+  }
+  return names.sort();
+}
+
 async function consumeIterator(
   session: Session,
   sessionId: string,
   prompt: string,
+  repoPath: string,
   options: Parameters<typeof sdkQuery>[0]['options'],
 ): Promise<void> {
   let finalStatus: 'idle' | 'failed' = 'idle';
@@ -503,6 +539,7 @@ async function consumeIterator(
         );
 
         try {
+          const projectCommands = await readProjectCommands(repoPath);
           const sdkClient = getConvexClient();
           if (sdkClient) {
             await sdkClient.mutation(api.sessions.companionUpdateSdkSessionId, {
@@ -510,6 +547,7 @@ async function consumeIterator(
               sdkSessionId: session.sdkSessionId,
               model: session.model,
               permissionMode: session.permissionMode,
+              projectCommands,
             });
           }
         } catch (err) {

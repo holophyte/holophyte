@@ -66,6 +66,8 @@ export interface UseSessionReturn {
    * Available once the session has been initialized by the SDK.
    */
   sdkSessionId: string | undefined;
+  /** Project commands discovered from the repo's .claude/ directory at init. */
+  projectCommands: string[];
   /**
    * Approve a pending tool-use request. Resolves the approval via Convex mutation.
    *
@@ -235,6 +237,7 @@ export function useSession(sessionId: string | null): UseSessionReturn {
     companionOnline,
     messageQueued,
     sdkSessionId: sessionRecord?.sdkSessionId,
+    projectCommands: sessionRecord?.projectCommands ?? [],
     approve,
     deny,
     sendMessage,

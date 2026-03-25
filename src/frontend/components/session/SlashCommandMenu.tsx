@@ -34,7 +34,7 @@ export default function SlashCommandMenu({
     <div
       ref={listRef}
       role="listbox"
-      className="absolute bottom-full left-0 right-0 mb-1 max-h-56 overflow-y-auto rounded-md border border-border bg-popover shadow-lg z-10"
+      className="absolute bottom-full left-0 right-0 mb-1 max-h-28 overflow-y-auto overscroll-contain rounded-md border border-border bg-popover shadow-lg z-10"
     >
       {filtered.map((cmd, i) => (
         <button
@@ -42,13 +42,13 @@ export default function SlashCommandMenu({
           type="button"
           role="option"
           aria-selected={i === selectedIndex}
-          className={`flex w-full items-center px-3 py-1.5 text-sm cursor-pointer ${
+          className={`flex w-full items-center px-2.5 py-0.5 text-xs cursor-pointer ${
             i === selectedIndex
               ? 'bg-accent text-accent-foreground'
               : 'text-popover-foreground hover:bg-accent/50'
           }`}
           onMouseDown={(e) => {
-            // Prevent blur on the textarea
+            // Prevent blur on the textarea when clicking a command
             e.preventDefault();
             onSelect(cmd);
           }}

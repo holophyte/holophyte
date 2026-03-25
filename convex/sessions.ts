@@ -829,6 +829,7 @@ export const companionUpdateSdkSessionId = mutation({
     sdkSessionId: v.string(),
     model: v.optional(v.string()),
     permissionMode: v.optional(v.string()),
+    projectCommands: v.optional(v.array(v.string())),
   },
   handler: async (ctx, args) => {
     if (!isLocalDevMode()) await requireSessionOwnership(ctx, args.id);
@@ -837,6 +838,9 @@ export const companionUpdateSdkSessionId = mutation({
       ...(args.model !== undefined && { model: args.model }),
       ...(args.permissionMode !== undefined && {
         permissionMode: args.permissionMode,
+      }),
+      ...(args.projectCommands !== undefined && {
+        projectCommands: args.projectCommands,
       }),
     });
   },

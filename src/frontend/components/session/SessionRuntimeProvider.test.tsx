@@ -41,6 +41,7 @@ function makeProps(
     events: [],
     pendingApprovals: [],
     sessionStatus: 'idle' as const,
+    projectCommands: [],
     approve: vi.fn(),
     deny: vi.fn(),
     sendMessage: vi.fn().mockResolvedValue(undefined),
