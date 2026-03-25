@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { createContext, useContext } from 'react';
 import type {
   PendingApproval,
+  ProjectCommand,
   SessionStatus,
 } from '@/frontend/hooks/useSession';
 
@@ -11,8 +12,8 @@ interface SessionActions {
   pendingApprovals: PendingApproval[];
   sessionStatus: SessionStatus | null;
   promptSuggestion: string | null;
-  /** Available slash commands and skills from the session's system/init event. */
-  availableCommands: string[];
+  /** Available slash commands and skills from the SDK. */
+  availableCommands: ProjectCommand[];
 }
 
 export const SessionActionsContext = createContext<SessionActions | null>(null);

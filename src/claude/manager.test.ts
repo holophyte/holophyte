@@ -46,6 +46,7 @@ function createMockIterator(events: Array<Record<string, unknown>>) {
     return: vi.fn(),
     throw: vi.fn(),
     streamInput: vi.fn().mockResolvedValue(undefined),
+    supportedCommands: vi.fn().mockResolvedValue([]),
   };
 }
 
@@ -151,6 +152,7 @@ describe('claude/manager (SDK-based)', () => {
           });
         },
         streamInput: vi.fn().mockResolvedValue(undefined),
+        supportedCommands: vi.fn().mockResolvedValue([]),
       };
       vi.mocked(mockSdkQuery).mockReturnValue(mockIter as never);
 
@@ -364,6 +366,7 @@ describe('claude/manager (SDK-based)', () => {
             ]);
           },
           streamInput: vi.fn().mockResolvedValue(undefined),
+          supportedCommands: vi.fn().mockResolvedValue([]),
         } as never;
       });
 
@@ -487,6 +490,7 @@ describe('claude/manager (SDK-based)', () => {
             );
           },
           streamInput: vi.fn().mockResolvedValue(undefined),
+          supportedCommands: vi.fn().mockResolvedValue([]),
         } as never;
       });
 
@@ -546,6 +550,7 @@ describe('claude/manager (SDK-based)', () => {
             ]);
           },
           streamInput: vi.fn().mockResolvedValue(undefined),
+          supportedCommands: vi.fn().mockResolvedValue([]),
         } as never;
       });
 
@@ -614,6 +619,7 @@ describe('claude/manager (SDK-based)', () => {
             );
           },
           streamInput: vi.fn().mockResolvedValue(undefined),
+          supportedCommands: vi.fn().mockResolvedValue([]),
         } as never;
       });
 
@@ -752,6 +758,7 @@ describe('claude/manager (SDK-based)', () => {
           await blockPromise;
         },
         streamInput: mockIter.streamInput,
+        supportedCommands: vi.fn().mockResolvedValue([]),
       };
       vi.mocked(mockSdkQuery).mockReturnValue(blockingIter as never);
 
@@ -808,6 +815,7 @@ describe('claude/manager (SDK-based)', () => {
           await blockPromise;
         },
         streamInput: vi.fn().mockResolvedValue(undefined),
+        supportedCommands: vi.fn().mockResolvedValue([]),
       };
       vi.mocked(mockSdkQuery).mockReturnValue(blockingIter as never);
 
@@ -915,6 +923,7 @@ describe('claude/manager (SDK-based)', () => {
           };
         },
         streamInput: vi.fn().mockResolvedValue(undefined),
+        supportedCommands: vi.fn().mockResolvedValue([]),
       };
 
       return { iter, resolveBlock: () => resolveBlock?.(), used: false };

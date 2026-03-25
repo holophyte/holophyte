@@ -38,6 +38,12 @@ export type SessionStatus =
   | 'idle'
   | 'failed';
 
+/** A command or skill available in a session. */
+export interface ProjectCommand {
+  name: string;
+  description: string;
+}
+
 /**
  * Return value of {@link useSession}.
  */
@@ -66,8 +72,8 @@ export interface UseSessionReturn {
    * Available once the session has been initialized by the SDK.
    */
   sdkSessionId: string | undefined;
-  /** Project commands discovered from the repo's .claude/ directory at init. */
-  projectCommands: string[];
+  /** Commands and skills available in this session, with descriptions. */
+  projectCommands: ProjectCommand[];
   /**
    * Approve a pending tool-use request. Resolves the approval via Convex mutation.
    *
@@ -89,6 +95,21 @@ export interface UseSessionReturn {
    * @param text - The message text to inject into the SDK conversation.
    */
   sendMessage: (sessionId: string, text: string) => Promise<void>;
+}
+
+/** Handles both old string[] and new {name, description}[] formats from Convex. */
+function normalizeProjectCommands(
+  raw: unknown[] | undefined,
+): ProjectCommand[] {
+  if (!raw) return [];
+  return raw.map((item) => {
+    if (typeof item === 'string') return { name: item, description: '' };
+    const obj = item as Record<string, unknown>;
+    return {
+      name: String(obj.name ?? ''),
+      description: String(obj.description ?? ''),
+    };
+  });
 }
 
 const HEARTBEAT_STALE_MS = 10_000;
@@ -237,7 +258,7 @@ export function useSession(sessionId: string | null): UseSessionReturn {
     companionOnline,
     messageQueued,
     sdkSessionId: sessionRecord?.sdkSessionId,
-    projectCommands: sessionRecord?.projectCommands ?? [],
+    projectCommands: normalizeProjectCommands(sessionRecord?.projectCommands),
     approve,
     deny,
     sendMessage,

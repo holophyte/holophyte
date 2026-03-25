@@ -32,8 +32,8 @@ export default function SessionComposer() {
     : [];
 
   const handleSelectCommand = useCallback(
-    (command: string) => {
-      composerRuntime.setText(`/${command} `);
+    (name: string) => {
+      composerRuntime.setText(`/${name} `);
       setMenuOpen(false);
       setSelectedIndex(0);
     },
@@ -59,13 +59,13 @@ export default function SessionComposer() {
         if (e.key === 'Tab') {
           e.preventDefault();
           const cmd = filteredCommands[selectedIndex];
-          if (cmd) handleSelectCommand(cmd);
+          if (cmd) handleSelectCommand(cmd.name);
           return;
         }
         if (e.key === 'Enter') {
           e.preventDefault();
           const cmd = filteredCommands[selectedIndex];
-          if (cmd) handleSelectCommand(cmd);
+          if (cmd) handleSelectCommand(cmd.name);
           return;
         }
         if (e.key === 'Escape') {

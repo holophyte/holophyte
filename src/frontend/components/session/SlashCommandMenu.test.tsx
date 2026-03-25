@@ -1,5 +1,6 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
+import type { ProjectCommand } from '@/frontend/hooks/useSession';
 import SlashCommandMenu, { filterCommands } from './SlashCommandMenu';
 
 // jsdom doesn't implement scrollIntoView
@@ -7,7 +8,18 @@ beforeAll(() => {
   Element.prototype.scrollIntoView = vi.fn();
 });
 
-const commands = ['commit', 'test', 'worktree', 'pr', 'autopilot'];
+const cmd = (name: string, description = ''): ProjectCommand => ({
+  name,
+  description,
+});
+
+const commands: ProjectCommand[] = [
+  cmd('commit', 'Git commit current changes'),
+  cmd('test', 'Run tests and handle failures'),
+  cmd('worktree', 'Create new git worktree'),
+  cmd('pr', 'Create GitHub pull request'),
+  cmd('autopilot', 'Implement a feature end-to-end'),
+];
 
 describe('SlashCommandMenu', () => {
   describe('filterCommands', () => {
@@ -16,8 +28,12 @@ describe('SlashCommandMenu', () => {
     });
 
     it('filters by prefix case-insensitively', () => {
-      expect(filterCommands(commands, 'co')).toEqual(['commit']);
-      expect(filterCommands(commands, 'CO')).toEqual(['commit']);
+      expect(filterCommands(commands, 'co').map((c) => c.name)).toEqual([
+        'commit',
+      ]);
+      expect(filterCommands(commands, 'CO').map((c) => c.name)).toEqual([
+        'commit',
+      ]);
     });
 
     it('returns empty array when no matches', () => {
@@ -25,18 +41,21 @@ describe('SlashCommandMenu', () => {
     });
 
     it('matches multiple commands with same prefix', () => {
-      const cmds = ['test', 'test-e2e', 'typecheck'];
-      expect(filterCommands(cmds, 't')).toEqual([
+      const cmds = [cmd('test'), cmd('test-e2e'), cmd('typecheck')];
+      expect(filterCommands(cmds, 't').map((c) => c.name)).toEqual([
         'test',
         'test-e2e',
         'typecheck',
       ]);
-      expect(filterCommands(cmds, 'te')).toEqual(['test', 'test-e2e']);
+      expect(filterCommands(cmds, 'te').map((c) => c.name)).toEqual([
+        'test',
+        'test-e2e',
+      ]);
     });
   });
 
   describe('rendering', () => {
-    it('renders matching commands', () => {
+    it('renders matching commands with descriptions', () => {
       render(
         <SlashCommandMenu
           commands={commands}
@@ -46,6 +65,9 @@ describe('SlashCommandMenu', () => {
         />,
       );
       expect(screen.getByText('/commit')).toBeInTheDocument();
+      expect(
+        screen.getByText('Git commit current changes'),
+      ).toBeInTheDocument();
       expect(screen.getByText('/test')).toBeInTheDocument();
       expect(screen.getByText('/worktree')).toBeInTheDocument();
     });
@@ -91,7 +113,7 @@ describe('SlashCommandMenu', () => {
   });
 
   describe('interactions', () => {
-    it('calls onSelect when a command is clicked', () => {
+    it('calls onSelect with command name when clicked', () => {
       const onSelect = vi.fn();
       render(
         <SlashCommandMenu

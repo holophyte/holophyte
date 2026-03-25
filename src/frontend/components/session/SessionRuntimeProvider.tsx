@@ -8,6 +8,7 @@ import type { ReactNode } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type {
   PendingApproval,
+  ProjectCommand,
   SessionStatus,
 } from '@/frontend/hooks/useSession';
 import {
@@ -22,7 +23,7 @@ interface SessionRuntimeProviderProps {
   events: SDKMessage[];
   pendingApprovals: PendingApproval[];
   sessionStatus: SessionStatus | null;
-  projectCommands: string[];
+  projectCommands: ProjectCommand[];
   approve: (requestId: string) => void;
   deny: (requestId: string, message?: string) => void;
   sendMessage: (sessionId: string, text: string) => Promise<void>;
@@ -68,21 +69,8 @@ export default function SessionRuntimeProvider({
     [events],
   );
 
-  // Combine project commands (from filesystem, static at init) with skills
-  // (from init event, dynamic). Skills come from .claude/skills/ and are always
-  // project-defined. Project commands come from .claude/commands/ read by the
-  // companion at init time.
-  const availableCommands = useMemo(() => {
-    const initEvent = events.find(
-      (e) => e.type === 'system' && 'subtype' in e && e.subtype === 'init',
-    );
-    const skills = initEvent
-      ? Array.isArray((initEvent as Record<string, unknown>).skills)
-        ? ((initEvent as Record<string, unknown>).skills as string[])
-        : []
-      : [];
-    return [...new Set([...projectCommands, ...skills])].sort();
-  }, [events, projectCommands]);
+  // Commands and skills from the SDK's supportedCommands(), persisted to Convex
+  const availableCommands = projectCommands;
 
   // Merge SDK messages with the optimistic user message (if any).
   const messages = useMemo(() => {

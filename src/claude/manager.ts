@@ -456,43 +456,12 @@ export async function startSession(opts: {
     sdkOptions.resume = opts.resumeSdkSessionId;
   }
 
-  // Read project commands eagerly so the frontend has them before the first prompt
-  readProjectCommands(opts.repoPath)
-    .then(async (projectCommands) => {
-      if (projectCommands.length === 0) return;
-      const client = getConvexClient();
-      if (client) {
-        await client.mutation(api.sessions.companionUpdateProjectCommands, {
-          id: session.convexSessionId as Id<'sessions'>,
-          projectCommands,
-        });
-      }
-    })
-    .catch((err) => {
-      console.error('Failed to persist project commands:', err);
-    });
-
   // Consume the SDK iterator in the background (non-blocking)
   consumeIterator(session, sessionId, opts.prompt, sdkOptions).catch((err) => {
     console.error('Unhandled error in session iterator:', err);
   });
 
   return { sessionId, warning };
-}
-
-/** Reads command names from .claude/commands/ in a repo. Skills come from the SDK init event. */
-async function readProjectCommands(repoPath: string): Promise<string[]> {
-  const names: string[] = [];
-  const dir = `${repoPath}/.claude/commands`;
-  try {
-    const entries = await Array.fromAsync(new Bun.Glob('*.md').scan(dir));
-    for (const entry of entries) {
-      names.push(entry.replace(/\.md$/, ''));
-    }
-  } catch {
-    // Directory doesn't exist — skip
-  }
-  return names.sort();
 }
 
 async function consumeIterator(
@@ -546,6 +515,24 @@ async function consumeIterator(
         } catch (err) {
           console.error('Failed to persist SDK session ID:', err);
         }
+
+        // Fetch full command/skill list with descriptions from the SDK
+        iterator
+          .supportedCommands()
+          .then(async (commands) => {
+            const client = getConvexClient();
+            if (!client || commands.length === 0) return;
+            await client.mutation(api.sessions.companionUpdateProjectCommands, {
+              id: session.convexSessionId as Id<'sessions'>,
+              projectCommands: commands.map((c) => ({
+                name: c.name,
+                description: c.description,
+              })),
+            });
+          })
+          .catch((err) => {
+            console.error('Failed to fetch supported commands:', err);
+          });
       }
 
       // Detect error results

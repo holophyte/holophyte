@@ -1,14 +1,15 @@
 import { useEffect, useRef } from 'react';
+import type { ProjectCommand } from '@/frontend/hooks/useSession';
 
 interface SlashCommandMenuProps {
-  /** All available command names (without leading slash). */
-  commands: string[];
+  /** All available commands (without leading slash). */
+  commands: ProjectCommand[];
   /** The text after the leading `/` used to filter commands. */
   filter: string;
   /** Index of the currently highlighted item. */
   selectedIndex: number;
   /** Called when the user selects a command (Tab, Enter, or click). */
-  onSelect: (command: string) => void;
+  onSelect: (name: string) => void;
 }
 
 export default function SlashCommandMenu({
@@ -34,15 +35,15 @@ export default function SlashCommandMenu({
     <div
       ref={listRef}
       role="listbox"
-      className="absolute bottom-full left-0 right-0 mb-1 max-h-28 overflow-y-auto overscroll-contain rounded-md border border-border bg-popover shadow-lg z-10"
+      className="absolute bottom-full left-0 right-0 mb-1 max-h-48 overflow-y-auto overscroll-contain rounded-md border border-border bg-popover shadow-lg z-10"
     >
       {filtered.map((cmd, i) => (
         <button
-          key={cmd}
+          key={cmd.name}
           type="button"
           role="option"
           aria-selected={i === selectedIndex}
-          className={`flex w-full items-center px-2.5 py-0.5 text-xs cursor-pointer ${
+          className={`flex w-full items-center gap-2 px-2.5 py-1 text-xs cursor-pointer ${
             i === selectedIndex
               ? 'bg-accent text-accent-foreground'
               : 'text-popover-foreground hover:bg-accent/50'
@@ -50,10 +51,17 @@ export default function SlashCommandMenu({
           onMouseDown={(e) => {
             // Prevent blur on the textarea when clicking a command
             e.preventDefault();
-            onSelect(cmd);
+            onSelect(cmd.name);
           }}
         >
-          <span className="font-mono text-muted-foreground">/{cmd}</span>
+          <span className="shrink-0 font-mono text-muted-foreground">
+            /{cmd.name}
+          </span>
+          {cmd.description && (
+            <span className="truncate text-muted-foreground/70">
+              {cmd.description}
+            </span>
+          )}
         </button>
       ))}
     </div>
@@ -64,8 +72,11 @@ export default function SlashCommandMenu({
  * Returns the filtered command list for a given input and filter.
  * Exported for use in keyboard navigation logic.
  */
-export function filterCommands(commands: string[], filter: string): string[] {
+export function filterCommands(
+  commands: ProjectCommand[],
+  filter: string,
+): ProjectCommand[] {
   return commands.filter((cmd) =>
-    cmd.toLowerCase().startsWith(filter.toLowerCase()),
+    cmd.name.toLowerCase().startsWith(filter.toLowerCase()),
   );
 }
