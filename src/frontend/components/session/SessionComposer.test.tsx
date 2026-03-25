@@ -9,6 +9,7 @@ import { SessionActionsContext } from './SessionActionsContext';
 // ---------------------------------------------------------------------------
 
 const mockSetText = vi.fn();
+const mockSend = vi.fn();
 
 // Shared state for simulating composer input — lives outside the factory
 // so afterEach can reset it between tests.
@@ -17,8 +18,6 @@ const _mockInput = { value: '' };
 // Mock ComposerPrimitive and useComposerRuntime from @assistant-ui/react
 // These simulate the real primitives with enough fidelity to test behavior
 vi.mock('@assistant-ui/react', () => {
-  let _onSubmit: (() => void) | null = null;
-
   const ComposerPrimitive = {
     Root: ({
       children,
@@ -27,38 +26,28 @@ vi.mock('@assistant-ui/react', () => {
       children: ReactNode;
       className?: string;
     }) => (
-      <form
-        data-testid="composer-root"
-        className={className}
-        onSubmit={(e) => {
-          e.preventDefault();
-          _onSubmit?.();
-        }}
-      >
+      <form data-testid="composer-root" className={className}>
         {children}
       </form>
     ),
     Input: ({
       placeholder,
       className,
-      autoFocus,
-      onSubmit,
       onKeyDown,
+      disabled,
     }: {
       placeholder?: string;
       className?: string;
-      autoFocus?: boolean;
-      onSubmit?: () => void;
       onKeyDown?: (e: React.KeyboardEvent) => void;
+      disabled?: boolean;
+      rows?: number;
     }) => {
-      _onSubmit = onSubmit ?? null;
       return (
         <textarea
           data-testid="composer-input"
           placeholder={placeholder}
           className={className}
-          // biome-ignore lint/a11y/noAutofocus: test mock replicates component interface
-          autoFocus={autoFocus}
+          disabled={disabled}
           onKeyDown={onKeyDown}
           onChange={(e) => {
             _mockInput.value = e.target.value;
@@ -66,37 +55,22 @@ vi.mock('@assistant-ui/react', () => {
         />
       );
     },
-    Send: ({
-      children,
-      className,
-    }: {
-      children: ReactNode;
-      className?: string;
-    }) => (
-      <button
-        type="submit"
-        data-testid="composer-send"
-        className={className}
-        onClick={() => _onSubmit?.()}
-      >
-        {children}
-      </button>
-    ),
   };
 
   return {
     ComposerPrimitive,
-    useComposerRuntime: () => ({ setText: mockSetText }),
-    // Track composer text separately from DOM textarea value for useComposer
+    useComposerRuntime: () => ({ setText: mockSetText, send: mockSend }),
     useComposer: (selector: (s: { text: string }) => unknown) =>
       selector({ text: _mockInput.value }),
   };
 });
 
+const mockRequestStop = vi.fn().mockResolvedValue(undefined);
+
 function withSession(
   children: ReactNode,
   overrides: {
-    sessionStatus?: 'idle' | 'running';
+    sessionStatus?: 'idle' | 'running' | 'queued';
     promptSuggestion?: string | null;
   } = {},
 ) {
@@ -105,6 +79,7 @@ function withSession(
       value={{
         approve: vi.fn(),
         deny: vi.fn(),
+        requestStop: mockRequestStop,
         pendingApprovals: [],
         sessionStatus: overrides.sessionStatus ?? 'idle',
         promptSuggestion: overrides.promptSuggestion ?? null,
@@ -124,6 +99,7 @@ import SessionComposer from './SessionComposer';
 describe('SessionComposer', () => {
   afterEach(() => {
     _mockInput.value = '';
+    vi.clearAllMocks();
   });
 
   describe('rendering', () => {
@@ -132,9 +108,11 @@ describe('SessionComposer', () => {
       expect(screen.getByTestId('composer-input')).toBeInTheDocument();
     });
 
-    it('renders a send button', () => {
+    it('renders a button', () => {
       render(withSession(<SessionComposer />));
-      expect(screen.getByTestId('composer-send')).toBeInTheDocument();
+      expect(
+        screen.getByRole('button', { name: /send message/i }),
+      ).toBeInTheDocument();
     });
 
     it('renders with a placeholder', () => {
@@ -148,26 +126,62 @@ describe('SessionComposer', () => {
     });
   });
 
-  describe('disabled state when running', () => {
-    it('applies disabled/opacity styling when session is running', () => {
-      const { container } = render(
-        withSession(<SessionComposer />, { sessionStatus: 'running' }),
-      );
-      // Either the input is disabled or a wrapper has an opacity/disabled class
-      const input = container.querySelector(
-        '[data-testid="composer-input"]',
-      ) as HTMLElement;
-      const sendBtn = container.querySelector(
-        '[data-testid="composer-send"]',
-      ) as HTMLElement;
-      // At least one of: input disabled, send button disabled, or visual disabled hint
-      const isDisabled =
-        (input as HTMLInputElement | null)?.disabled ||
-        (sendBtn as HTMLButtonElement | null)?.disabled ||
-        container.querySelector('[disabled]') !== null ||
-        container.querySelector('[class*="opacity"]') !== null ||
-        container.querySelector('[class*="disabled"]') !== null;
-      expect(isDisabled).toBe(true);
+  describe('dual-purpose button', () => {
+    it('shows send icon when idle with empty input', () => {
+      render(withSession(<SessionComposer />));
+      expect(
+        screen.getByRole('button', { name: /send message/i }),
+      ).toBeInTheDocument();
+    });
+
+    it('shows stop icon when running with empty input', () => {
+      render(withSession(<SessionComposer />, { sessionStatus: 'running' }));
+      expect(
+        screen.getByRole('button', { name: /stop session/i }),
+      ).toBeInTheDocument();
+    });
+
+    it('shows send icon when running with text in input', () => {
+      _mockInput.value = 'hello';
+      render(withSession(<SessionComposer />, { sessionStatus: 'running' }));
+      expect(
+        screen.getByRole('button', { name: /send message/i }),
+      ).toBeInTheDocument();
+    });
+
+    it('clicking stop calls requestStop', async () => {
+      const user = userEvent.setup();
+      render(withSession(<SessionComposer />, { sessionStatus: 'running' }));
+      const btn = screen.getByRole('button', { name: /stop session/i });
+      await user.click(btn);
+      expect(mockRequestStop).toHaveBeenCalled();
+    });
+
+    it('clicking send calls composerRuntime.send()', async () => {
+      const user = userEvent.setup();
+      _mockInput.value = 'hello';
+      render(withSession(<SessionComposer />));
+      const btn = screen.getByRole('button', { name: /send message/i });
+      await user.click(btn);
+      expect(mockSend).toHaveBeenCalled();
+    });
+  });
+
+  describe('Enter key behavior', () => {
+    it('Enter on empty input while running calls requestStop', () => {
+      render(withSession(<SessionComposer />, { sessionStatus: 'running' }));
+      const input = screen.getByTestId('composer-input');
+      const event = fireEvent.keyDown(input, { key: 'Enter' });
+      expect(mockRequestStop).toHaveBeenCalled();
+      // Should prevent default (form submission)
+      expect(event).toBe(false);
+    });
+
+    it('Enter on empty input while idle does not call requestStop', () => {
+      render(withSession(<SessionComposer />));
+      const input = screen.getByTestId('composer-input');
+      fireEvent.keyDown(input, { key: 'Enter' });
+      expect(mockRequestStop).not.toHaveBeenCalled();
     });
   });
 
@@ -178,6 +192,12 @@ describe('SessionComposer', () => {
       const input = screen.getByTestId('composer-input');
       await user.type(input, 'Hello Claude');
       expect((input as HTMLTextAreaElement).value).toBe('Hello Claude');
+    });
+
+    it('input is not disabled when running', () => {
+      render(withSession(<SessionComposer />, { sessionStatus: 'running' }));
+      const input = screen.getByTestId('composer-input') as HTMLTextAreaElement;
+      expect(input.disabled).toBe(false);
     });
   });
 
@@ -192,7 +212,7 @@ describe('SessionComposer', () => {
       expect(input).toHaveAttribute('placeholder', `${suggestion}  [tab]`);
     });
 
-    it('shows default placeholder when running (even with suggestion)', () => {
+    it('shows queue placeholder when running (even with suggestion)', () => {
       render(
         withSession(<SessionComposer />, {
           sessionStatus: 'running',
@@ -202,7 +222,7 @@ describe('SessionComposer', () => {
       const input = screen.getByRole('textbox');
       expect(input).toHaveAttribute(
         'placeholder',
-        'Waiting for session to finish…',
+        'Send a follow-up to queue… (Enter to stop)',
       );
     });
 
@@ -242,6 +262,47 @@ describe('SessionComposer', () => {
       const input = screen.getByRole('textbox');
       fireEvent.keyDown(input, { key: 'Tab' });
       expect(mockSetText).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('up-arrow history', () => {
+    it('ArrowUp on empty input sets text from history', () => {
+      _mockInput.value = 'first message';
+      const { rerender } = render(withSession(<SessionComposer />));
+      const input = screen.getByTestId('composer-input');
+
+      // Simulate sending by pressing Enter with non-empty input
+      fireEvent.keyDown(input, { key: 'Enter' });
+
+      // Clear input to simulate post-send state and re-render so React state updates
+      _mockInput.value = '';
+      rerender(withSession(<SessionComposer />));
+
+      // ArrowUp should recall the last sent message
+      fireEvent.keyDown(input, { key: 'ArrowUp' });
+      expect(mockSetText).toHaveBeenCalledWith('first message');
+    });
+
+    it('ArrowDown after ArrowUp restores draft', () => {
+      // Send a message first
+      _mockInput.value = 'sent message';
+      const { rerender } = render(withSession(<SessionComposer />));
+      const input = screen.getByTestId('composer-input');
+      fireEvent.keyDown(input, { key: 'Enter' });
+
+      // Clear input and re-render
+      _mockInput.value = '';
+      rerender(withSession(<SessionComposer />));
+
+      // ArrowUp to recall
+      fireEvent.keyDown(input, { key: 'ArrowUp' });
+      expect(mockSetText).toHaveBeenCalledWith('sent message');
+
+      // ArrowDown to go back to draft
+      mockSetText.mockClear();
+      fireEvent.keyDown(input, { key: 'ArrowDown' });
+      // Should restore the draft (empty string since that's what was there)
+      expect(mockSetText).toHaveBeenCalledWith('');
     });
   });
 });

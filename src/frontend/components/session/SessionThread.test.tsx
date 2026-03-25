@@ -97,6 +97,7 @@ function withSessionActions(
       value={{
         approve: vi.fn(),
         deny: vi.fn(),
+        requestStop: vi.fn().mockResolvedValue(undefined),
         pendingApprovals: [],
         sessionStatus,
         promptSuggestion: null,

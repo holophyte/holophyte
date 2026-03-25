@@ -8,6 +8,7 @@ import type {
 interface SessionActions {
   approve: (requestId: string) => void;
   deny: (requestId: string, message?: string) => void;
+  requestStop: () => Promise<void>;
   pendingApprovals: PendingApproval[];
   sessionStatus: SessionStatus | null;
   promptSuggestion: string | null;
@@ -24,6 +25,7 @@ export function SessionActionsProvider({
   children,
   approve,
   deny,
+  requestStop,
   pendingApprovals,
   sessionStatus,
   promptSuggestion,
@@ -33,6 +35,7 @@ export function SessionActionsProvider({
       value={{
         approve,
         deny,
+        requestStop,
         pendingApprovals,
         sessionStatus,
         promptSuggestion,

@@ -30,6 +30,7 @@ function withSessionActions(
     pendingApprovals: opts.pendingApprovals ?? [],
     sessionStatus: opts.sessionStatus ?? 'waiting_input',
     promptSuggestion: null,
+    requestStop: vi.fn().mockResolvedValue(undefined),
   };
   return ({ children }) => (
     <SessionActionsContext.Provider value={value}>

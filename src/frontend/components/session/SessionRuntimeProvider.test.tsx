@@ -43,6 +43,7 @@ function makeProps(
     sessionStatus: 'idle' as const,
     approve: vi.fn(),
     deny: vi.fn(),
+    requestStop: vi.fn().mockResolvedValue(undefined),
     sendMessage: vi.fn().mockResolvedValue(undefined),
     children: <div />,
     ...overrides,

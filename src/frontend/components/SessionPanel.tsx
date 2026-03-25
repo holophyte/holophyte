@@ -1,7 +1,6 @@
 import { api } from '@convex/_generated/api';
 import type { Id } from '@convex/_generated/dataModel';
 import { useMutation, useQuery } from 'convex/react';
-import { Square } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { DEFAULT_MODEL, QUEUED_WARNING_THRESHOLD_MS } from '@/constants';
 import { useSession } from '@/frontend/hooks/useSession';
@@ -61,10 +60,15 @@ export default function SessionPanel({ taskId }: SessionPanelProps) {
 
   // Single useSession call — state is passed down to SessionRuntimeProvider as props
   // to avoid duplicate WebSocket connections.
-  const { events, pendingApprovals, sessionStatus, approve, deny } =
-    useSession(sessionId);
+  const {
+    events,
+    pendingApprovals,
+    sessionStatus,
+    approve,
+    deny,
+    sendMessage: sessionSendMessage,
+  } = useSession(sessionId);
 
-  const [stopping, setStopping] = useState(false);
   const [now, setNow] = useState(() => Date.now());
 
   // Tick every second while the session is queued to keep the warning fresh.
@@ -85,17 +89,14 @@ export default function SessionPanel({ taskId }: SessionPanelProps) {
     return null;
   }, [sessionStatus, session, now]);
 
-  const handleStop = async () => {
+  const handleStop = useCallback(async () => {
     if (!sessionId) return;
-    setStopping(true);
     try {
       await requestStop({ id: sessionId as Id<'sessions'> });
     } catch (err) {
       console.error('Failed to stop session:', err);
-    } finally {
-      setStopping(false);
     }
-  };
+  }, [sessionId, requestStop]);
 
   /** Resume an idle session by queuing it with a new prompt. */
   const resumeIdleSession = useCallback(
@@ -113,23 +114,18 @@ export default function SessionPanel({ taskId }: SessionPanelProps) {
 
   /**
    * Unified send handler passed to SessionRuntimeProvider.
-   * The composer is only enabled during `idle` state, so this always triggers
-   * a resume. The running-state branch is a safety net in case the composer
-   * enable/disable timing races with a status change.
+   * - idle: resumes the session with a new prompt
+   * - running/queued: queues a follow-up message for delivery to the SDK
    */
   const handleSendMessage = useCallback(
-    async (_sessionId: string, text: string) => {
+    async (sid: string, text: string) => {
       if (sessionStatus === 'idle') {
         await resumeIdleSession(text);
-        return;
+      } else if (sessionStatus === 'running' || sessionStatus === 'queued') {
+        await sessionSendMessage(sid, text);
       }
-      // Safety: composer should be disabled for non-idle states, but log if reached
-      console.error(
-        '[SessionPanel] handleSendMessage called in unexpected status:',
-        sessionStatus,
-      );
     },
-    [sessionStatus, resumeIdleSession],
+    [sessionStatus, resumeIdleSession, sessionSendMessage],
   );
 
   /** Create a brand-new session (used by NoSessionPlaceholder). */
@@ -148,18 +144,6 @@ export default function SessionPanel({ taskId }: SessionPanelProps) {
     <div className="flex h-full flex-col bg-background">
       <div className="flex shrink-0 items-center gap-2 border-b border-border/50 px-3 py-2">
         <SessionDropdown taskId={taskId} activeSessionId={sessionId} />
-        {(sessionStatus === 'running' || sessionStatus === 'queued') && (
-          <Button
-            size="sm"
-            variant="destructive"
-            disabled={stopping}
-            onClick={() => void handleStop()}
-            aria-label="Stop session"
-          >
-            <Square className="h-3.5 w-3.5" />
-            {stopping ? 'Stopping…' : 'Stop'}
-          </Button>
-        )}
       </div>
 
       {queuedWarning && (
@@ -177,6 +161,7 @@ export default function SessionPanel({ taskId }: SessionPanelProps) {
             sessionStatus={sessionStatus}
             approve={approve}
             deny={deny}
+            requestStop={handleStop}
             sendMessage={handleSendMessage}
           >
             <BashToolUI />

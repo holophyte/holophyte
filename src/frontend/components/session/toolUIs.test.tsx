@@ -39,6 +39,7 @@ function withSessionActions(
       value={{
         approve,
         deny,
+        requestStop: vi.fn().mockResolvedValue(undefined),
         pendingApprovals,
         sessionStatus: pendingApprovals.length > 0 ? 'waiting_input' : 'idle',
         promptSuggestion: null,
