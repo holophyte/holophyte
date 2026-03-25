@@ -151,7 +151,6 @@ export default function SessionComposer() {
             setSelectedIndex(0);
           }}
           onFocus={() => {
-            setDismissed(false);
             setIsFocused(true);
           }}
           onBlur={() => setIsFocused(false)}
