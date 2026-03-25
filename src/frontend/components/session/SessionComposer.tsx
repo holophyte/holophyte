@@ -68,7 +68,7 @@ export default function SessionComposer() {
           );
           return;
         }
-        if (e.key === 'Tab') {
+        if (e.key === 'Tab' && !e.shiftKey) {
           e.preventDefault();
           const cmd = filteredCommands[selectedIndex];
           if (cmd) handleSelectCommand(cmd.name);
@@ -153,7 +153,11 @@ export default function SessionComposer() {
             // Reset selection on each keystroke
             setSelectedIndex(0);
           }}
-          onFocus={() => setIsFocused(true)}
+          onFocus={() => {
+            userDismissedRef.current = false;
+            setDismissed(false);
+            setIsFocused(true);
+          }}
           onBlur={() => setIsFocused(false)}
           className={cn(
             'flex-1 resize-none rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 min-h-11 max-h-36 leading-relaxed',
