@@ -20,6 +20,7 @@ export default function SessionComposer() {
   const hasSuggestion = !isDisabled && !!promptSuggestion;
 
   // Slash command menu state
+  const [dismissed, setDismissed] = useState(false);
   const userDismissedRef = useRef(false);
   const [isFocused, setIsFocused] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -33,14 +34,12 @@ export default function SessionComposer() {
   useEffect(() => {
     if (!hasSlashMatch) {
       userDismissedRef.current = false;
+      setDismissed(false);
     }
   }, [hasSlashMatch]);
 
   const showMenu =
-    isFocused &&
-    !userDismissedRef.current &&
-    hasSlashMatch &&
-    availableCommands.length > 0;
+    isFocused && !dismissed && hasSlashMatch && availableCommands.length > 0;
   const filteredCommands = showMenu
     ? filterCommands(availableCommands, slashFilter)
     : [];
@@ -84,6 +83,7 @@ export default function SessionComposer() {
         if (e.key === 'Escape') {
           e.preventDefault();
           userDismissedRef.current = true;
+          setDismissed(true);
           return;
         }
       }
