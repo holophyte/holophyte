@@ -470,28 +470,14 @@ export async function startSession(opts: {
   return { sessionId, warning };
 }
 
-/** Reads command/skill names from .claude/commands/ and .claude/skills/ in a repo. */
+/** Reads command names from .claude/commands/ in a repo. Skills come from the SDK init event. */
 async function readProjectCommands(repoPath: string): Promise<string[]> {
   const names: string[] = [];
-  for (const subdir of ['commands', 'skills']) {
-    const dir = `${repoPath}/.claude/${subdir}`;
-    try {
-      const entries = await Array.fromAsync(new Bun.Glob('*.md').scan(dir));
-      for (const entry of entries) {
-        names.push(entry.replace(/\.md$/, ''));
-      }
-    } catch {
-      // Directory doesn't exist — skip
-    }
-  }
-  // Also check for skill directories (skills can be directories with SKILL.md)
+  const dir = `${repoPath}/.claude/commands`;
   try {
-    const entries = await Array.fromAsync(
-      new Bun.Glob('*/SKILL.md').scan(`${repoPath}/.claude/skills`),
-    );
+    const entries = await Array.fromAsync(new Bun.Glob('*.md').scan(dir));
     for (const entry of entries) {
-      const name = entry.replace(/\/SKILL\.md$/, '');
-      if (!names.includes(name)) names.push(name);
+      names.push(entry.replace(/\.md$/, ''));
     }
   } catch {
     // Directory doesn't exist — skip
