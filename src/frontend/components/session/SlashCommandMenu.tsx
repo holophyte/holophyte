@@ -35,7 +35,7 @@ export default function SlashCommandMenu({
     <div
       ref={listRef}
       role="listbox"
-      className="absolute bottom-full left-0 right-0 mb-1 max-h-48 overflow-y-auto overscroll-contain rounded-md border border-border bg-popover shadow-lg z-10"
+      className="absolute bottom-full left-0 right-0 mb-1 max-h-32 overflow-y-auto overscroll-contain rounded-md border border-border bg-popover shadow-lg z-10"
     >
       {filtered.map((cmd, i) => (
         <button
