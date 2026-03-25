@@ -137,14 +137,14 @@ describe('SlashCommandMenu', () => {
           onSelect={onSelect}
         />,
       );
-      const button = screen.getByText('/commit').closest('button');
-      expect(button).not.toBeNull();
+      const option = screen.getByText('/commit').closest('[role="option"]');
+      expect(option).not.toBeNull();
       const event = new MouseEvent('mousedown', {
         bubbles: true,
         cancelable: true,
       });
       // biome-ignore lint/style/noNonNullAssertion: asserted non-null above
-      const prevented = !button!.dispatchEvent(event);
+      const prevented = !option!.dispatchEvent(event);
       // The onMouseDown handler calls preventDefault
       expect(prevented).toBe(true);
     });

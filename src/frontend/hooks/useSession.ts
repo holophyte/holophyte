@@ -40,7 +40,13 @@ export type SessionStatus =
 
 /** A command or skill available in a session. */
 export interface ProjectCommand {
+  /** Command name without the leading slash (e.g. `"commit"`, `"test"`). */
   name: string;
+  /**
+   * Human-readable summary shown in the slash command menu.
+   * Empty string for skills sourced from the SDK init event,
+   * which do not carry descriptions.
+   */
   description: string;
 }
 

@@ -5,6 +5,7 @@ import {
 } from '@assistant-ui/react';
 import { SendHorizontal } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { cn } from '@/frontend/lib/utils';
 import { useSessionActions } from './SessionActionsContext';
 import SlashCommandMenu, { filterCommands } from './SlashCommandMenu';
 
@@ -27,16 +28,15 @@ export default function SessionComposer() {
   const slashFilter = slashMatch?.[1] ?? '';
 
   // Reset dismissed state when the slash pattern is no longer present
+  const hasSlashMatch = slashMatch !== null;
   useEffect(() => {
-    if (slashMatch === null) {
+    if (!hasSlashMatch) {
       userDismissedRef.current = false;
     }
-  }, [slashMatch]);
+  }, [hasSlashMatch]);
 
   const showMenu =
-    !userDismissedRef.current &&
-    slashMatch !== null &&
-    availableCommands.length > 0;
+    !userDismissedRef.current && hasSlashMatch && availableCommands.length > 0;
   const filteredCommands = showMenu
     ? filterCommands(availableCommands, slashFilter)
     : [];
@@ -130,17 +130,21 @@ export default function SessionComposer() {
           disabled={isDisabled}
           rows={1}
           onKeyDown={handleKeyDown}
-          {...(showMenu && filteredCommands.length > 0
-            ? {
-                role: 'combobox',
-                'aria-haspopup': 'listbox' as const,
-                'aria-expanded': true,
-                'aria-controls': 'slash-command-menu',
-                'aria-activedescendant': filteredCommands[selectedIndex]
-                  ? `slash-cmd-${filteredCommands[selectedIndex].name}`
-                  : undefined,
-              }
-            : {})}
+          role="combobox"
+          aria-haspopup="listbox"
+          aria-expanded={showMenu && filteredCommands.length > 0}
+          aria-controls={
+            showMenu && filteredCommands.length > 0
+              ? 'slash-command-menu'
+              : undefined
+          }
+          aria-activedescendant={
+            showMenu &&
+            filteredCommands.length > 0 &&
+            filteredCommands[selectedIndex]
+              ? `slash-cmd-${filteredCommands[selectedIndex].name}`
+              : undefined
+          }
           onChange={() => {
             // Reset selection on each keystroke
             setSelectedIndex(0);
@@ -148,7 +152,12 @@ export default function SessionComposer() {
           onBlur={() => {
             userDismissedRef.current = true;
           }}
-          className={`flex-1 resize-none rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 min-h-11 max-h-36 leading-relaxed ${hasSuggestion ? 'placeholder:italic placeholder:text-muted-foreground/40' : 'placeholder:text-muted-foreground/50'}`}
+          className={cn(
+            'flex-1 resize-none rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 min-h-11 max-h-36 leading-relaxed',
+            hasSuggestion
+              ? 'placeholder:italic placeholder:text-muted-foreground/40'
+              : 'placeholder:text-muted-foreground/50',
+          )}
         />
         <ComposerPrimitive.Send
           disabled={isDisabled}

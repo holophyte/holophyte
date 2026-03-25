@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import type { ProjectCommand } from '@/frontend/hooks/useSession';
+import { cn } from '@/frontend/lib/utils';
 
 interface SlashCommandMenuProps {
   /** All available commands (without leading slash). */
@@ -36,20 +37,22 @@ export default function SlashCommandMenu({
       ref={listRef}
       id="slash-command-menu"
       role="listbox"
+      aria-label="Slash commands"
       className="absolute bottom-full left-0 right-0 mb-1 max-h-32 overflow-y-auto overscroll-contain rounded-md border border-border bg-popover shadow-lg z-10"
     >
       {filtered.map((cmd, i) => (
-        <button
+        <div
           key={cmd.name}
           id={`slash-cmd-${cmd.name}`}
-          type="button"
           role="option"
+          tabIndex={-1}
           aria-selected={i === selectedIndex}
-          className={`flex w-full items-center gap-2 px-2.5 py-1 text-xs cursor-pointer ${
+          className={cn(
+            'flex w-full items-center gap-2 px-2.5 py-1 text-xs cursor-pointer',
             i === selectedIndex
               ? 'bg-accent text-accent-foreground'
-              : 'text-popover-foreground hover:bg-accent/50'
-          }`}
+              : 'text-popover-foreground hover:bg-accent/50',
+          )}
           onMouseDown={(e) => {
             // Prevent blur on the textarea when clicking a command
             e.preventDefault();
@@ -64,15 +67,20 @@ export default function SlashCommandMenu({
               {cmd.description}
             </span>
           )}
-        </button>
+        </div>
       ))}
     </div>
   );
 }
 
 /**
- * Returns the filtered command list for a given input and filter.
- * Exported for use in keyboard navigation logic.
+ * Returns commands whose names start with `filter` (case-insensitive).
+ * Exported so `SessionComposer` can use the same filtering logic for
+ * keyboard navigation without duplicating the predicate.
+ *
+ * @param commands - The full list of available commands.
+ * @param filter - The text typed after the leading `/`; empty string returns all commands.
+ * @returns The subset of `commands` matching the prefix.
  */
 export function filterCommands(
   commands: ProjectCommand[],
