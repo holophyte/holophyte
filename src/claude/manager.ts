@@ -450,6 +450,7 @@ export async function startSession(opts: {
 
   sdkOptions.model = opts.model ?? DEFAULT_MODEL;
   sdkOptions.promptSuggestions = true;
+  sdkOptions.settingSources = ['project'];
 
   if (opts.resumeSdkSessionId) {
     sdkOptions.resume = opts.resumeSdkSessionId;
