@@ -43,6 +43,9 @@ function withSessionActions(
         sessionStatus: pendingApprovals.length > 0 ? 'waiting_input' : 'idle',
         promptSuggestion: null,
         availableCommands: [],
+        handleStop: vi.fn().mockResolvedValue(undefined),
+        messageQueued: false,
+        sendMessage: vi.fn().mockResolvedValue(undefined),
       }}
     >
       {children}

@@ -101,6 +101,9 @@ function withSessionActions(
         sessionStatus,
         promptSuggestion: null,
         availableCommands: [],
+        handleStop: vi.fn().mockResolvedValue(undefined),
+        messageQueued: false,
+        sendMessage: vi.fn().mockResolvedValue(undefined),
       }}
     >
       {children}

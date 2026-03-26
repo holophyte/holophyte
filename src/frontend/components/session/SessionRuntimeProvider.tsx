@@ -27,6 +27,9 @@ interface SessionRuntimeProviderProps {
   approve: (requestId: string) => void;
   deny: (requestId: string, message?: string) => void;
   sendMessage: (sessionId: string, text: string) => Promise<void>;
+  handleStop: () => Promise<void>;
+  messageQueued: boolean;
+  sendMessageDirect: (text: string) => Promise<void>;
   children: ReactNode;
 }
 
@@ -39,6 +42,9 @@ export default function SessionRuntimeProvider({
   approve,
   deny,
   sendMessage,
+  handleStop,
+  messageQueued,
+  sendMessageDirect,
   children,
 }: SessionRuntimeProviderProps) {
   const isRunning = sessionStatus === 'running';
@@ -103,7 +109,6 @@ export default function SessionRuntimeProvider({
 
   const onNew = useCallback(
     async (message: AppendMessage) => {
-      if (isRunning) return; // Composer is disabled during running; extra safety
       const text = message.content
         .filter((p): p is { type: 'text'; text: string } => p.type === 'text')
         .map((p) => p.text)
@@ -122,7 +127,7 @@ export default function SessionRuntimeProvider({
         setOptimisticUserMsg(null);
       }
     },
-    [isRunning, sendMessage, sessionId, events.length],
+    [sendMessage, sessionId, events.length],
   );
 
   const adapter = useMemo(
@@ -146,6 +151,9 @@ export default function SessionRuntimeProvider({
         sessionStatus={sessionStatus}
         promptSuggestion={promptSuggestion}
         availableCommands={availableCommands}
+        handleStop={handleStop}
+        messageQueued={messageQueued}
+        sendMessage={sendMessageDirect}
       >
         {children}
       </SessionActionsProvider>

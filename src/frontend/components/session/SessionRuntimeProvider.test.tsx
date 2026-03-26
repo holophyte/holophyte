@@ -45,6 +45,9 @@ function makeProps(
     approve: vi.fn(),
     deny: vi.fn(),
     sendMessage: vi.fn().mockResolvedValue(undefined),
+    handleStop: vi.fn().mockResolvedValue(undefined),
+    messageQueued: false,
+    sendMessageDirect: vi.fn().mockResolvedValue(undefined),
     children: <div />,
     ...overrides,
   };
@@ -138,6 +141,23 @@ describe('SessionRuntimeProvider', () => {
       const callArg = (useExternalStoreRuntime as ReturnType<typeof vi.fn>).mock
         .calls[0]?.[0];
       expect(callArg.isRunning).toBe(true);
+    });
+  });
+
+  describe('onNew behavior', () => {
+    it('calls sendMessage even when isRunning is true (no early return)', async () => {
+      const sendMessage = vi.fn().mockResolvedValue(undefined);
+      render(
+        <SessionRuntimeProvider
+          {...makeProps({ sessionStatus: 'running', sendMessage })}
+        />,
+      );
+      const callArg = (useExternalStoreRuntime as ReturnType<typeof vi.fn>).mock
+        .calls[0]?.[0];
+      await callArg.onNew({
+        content: [{ type: 'text', text: 'hello' }],
+      });
+      expect(sendMessage).toHaveBeenCalledWith('session-1', 'hello');
     });
   });
 });
