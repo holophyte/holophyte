@@ -44,12 +44,14 @@ vi.mock('@assistant-ui/react', () => {
       autoFocus,
       onSubmit,
       onKeyDown,
+      disabled,
     }: {
       placeholder?: string;
       className?: string;
       autoFocus?: boolean;
       onSubmit?: () => void;
       onKeyDown?: (e: React.KeyboardEvent) => void;
+      disabled?: boolean;
     }) => {
       _onSubmit = onSubmit ?? null;
       return (
@@ -57,6 +59,7 @@ vi.mock('@assistant-ui/react', () => {
           data-testid="composer-input"
           placeholder={placeholder}
           className={className}
+          disabled={disabled}
           // biome-ignore lint/a11y/noAutofocus: test mock replicates component interface
           autoFocus={autoFocus}
           onKeyDown={onKeyDown}
@@ -86,7 +89,10 @@ vi.mock('@assistant-ui/react', () => {
 
   return {
     ComposerPrimitive,
-    useComposerRuntime: () => ({ setText: mockSetText }),
+    useComposerRuntime: () => ({
+      setText: mockSetText,
+      getState: () => ({ text: _mockInput.value }),
+    }),
     // Track composer text separately from DOM textarea value for useComposer
     useComposer: (selector: (s: { text: string }) => unknown) =>
       selector({ text: _mockInput.value }),
@@ -96,8 +102,11 @@ vi.mock('@assistant-ui/react', () => {
 function withSession(
   children: ReactNode,
   overrides: {
-    sessionStatus?: 'idle' | 'running';
+    sessionStatus?: 'idle' | 'running' | 'queued' | 'failed';
     promptSuggestion?: string | null;
+    handleStop?: () => Promise<void>;
+    messageQueued?: boolean;
+    sendMessage?: (text: string) => Promise<void>;
   } = {},
 ) {
   return (
@@ -109,6 +118,11 @@ function withSession(
         sessionStatus: overrides.sessionStatus ?? 'idle',
         promptSuggestion: overrides.promptSuggestion ?? null,
         availableCommands: [],
+        handleStop:
+          overrides.handleStop ?? vi.fn().mockResolvedValue(undefined),
+        messageQueued: overrides.messageQueued ?? false,
+        sendMessage:
+          overrides.sendMessage ?? vi.fn().mockResolvedValue(undefined),
       }}
     >
       {children}
@@ -149,26 +163,72 @@ describe('SessionComposer', () => {
     });
   });
 
-  describe('disabled state when running', () => {
-    it('applies disabled/opacity styling when session is running', () => {
-      const { container } = render(
-        withSession(<SessionComposer />, { sessionStatus: 'running' }),
+  describe('stop button', () => {
+    it('shows stop button when input is empty and session is running', () => {
+      render(withSession(<SessionComposer />, { sessionStatus: 'running' }));
+      expect(screen.getByLabelText('Stop session')).toBeInTheDocument();
+      expect(screen.queryByTestId('composer-send')).not.toBeInTheDocument();
+    });
+
+    it('shows stop button when input is empty and session is queued', () => {
+      render(withSession(<SessionComposer />, { sessionStatus: 'queued' }));
+      expect(screen.getByLabelText('Stop session')).toBeInTheDocument();
+    });
+
+    it('shows send button when input has text while running', () => {
+      _mockInput.value = 'some text';
+      render(withSession(<SessionComposer />, { sessionStatus: 'running' }));
+      expect(screen.getByTestId('composer-send')).toBeInTheDocument();
+      expect(screen.queryByLabelText('Stop session')).not.toBeInTheDocument();
+    });
+
+    it('shows send button when session is idle (even if empty)', () => {
+      render(withSession(<SessionComposer />, { sessionStatus: 'idle' }));
+      expect(screen.getByTestId('composer-send')).toBeInTheDocument();
+      expect(screen.queryByLabelText('Stop session')).not.toBeInTheDocument();
+    });
+
+    it('stop button calls handleStop from context', async () => {
+      const handleStop = vi.fn().mockResolvedValue(undefined);
+      render(
+        withSession(<SessionComposer />, {
+          sessionStatus: 'running',
+          handleStop,
+        }),
       );
-      // Either the input is disabled or a wrapper has an opacity/disabled class
-      const input = container.querySelector(
-        '[data-testid="composer-input"]',
-      ) as HTMLElement;
-      const sendBtn = container.querySelector(
-        '[data-testid="composer-send"]',
-      ) as HTMLElement;
-      // At least one of: input disabled, send button disabled, or visual disabled hint
-      const isDisabled =
-        (input as HTMLInputElement | null)?.disabled ||
-        (sendBtn as HTMLButtonElement | null)?.disabled ||
-        container.querySelector('[disabled]') !== null ||
-        container.querySelector('[class*="opacity"]') !== null ||
-        container.querySelector('[class*="disabled"]') !== null;
-      expect(isDisabled).toBe(true);
+      const stopBtn = screen.getByLabelText('Stop session');
+      fireEvent.click(stopBtn);
+      // Wait for async handler
+      await new Promise((r) => setTimeout(r, 0));
+      expect(handleStop).toHaveBeenCalledTimes(1);
+    });
+
+    it('Enter on empty input while running calls handleStop', async () => {
+      const handleStop = vi.fn().mockResolvedValue(undefined);
+      render(
+        withSession(<SessionComposer />, {
+          sessionStatus: 'running',
+          handleStop,
+        }),
+      );
+      const input = screen.getByTestId('composer-input');
+      fireEvent.keyDown(input, { key: 'Enter' });
+      await new Promise((r) => setTimeout(r, 0));
+      expect(handleStop).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('input enabled state', () => {
+    it('input is not disabled when session is running', () => {
+      render(withSession(<SessionComposer />, { sessionStatus: 'running' }));
+      const input = screen.getByTestId('composer-input') as HTMLTextAreaElement;
+      expect(input.disabled).toBe(false);
+    });
+
+    it('input is disabled when session is failed', () => {
+      render(withSession(<SessionComposer />, { sessionStatus: 'failed' }));
+      const input = screen.getByTestId('composer-input') as HTMLTextAreaElement;
+      expect(input.disabled).toBe(true);
     });
   });
 
@@ -193,7 +253,7 @@ describe('SessionComposer', () => {
       expect(input).toHaveAttribute('placeholder', `${suggestion}  [tab]`);
     });
 
-    it('shows default placeholder when running (even with suggestion)', () => {
+    it('shows stop placeholder when running and input is empty', () => {
       render(
         withSession(<SessionComposer />, {
           sessionStatus: 'running',
@@ -203,7 +263,7 @@ describe('SessionComposer', () => {
       const input = screen.getByRole('textbox');
       expect(input).toHaveAttribute(
         'placeholder',
-        'Waiting for session to finish…',
+        'Type a follow-up or press Enter to stop…',
       );
     });
 
@@ -243,6 +303,18 @@ describe('SessionComposer', () => {
       const input = screen.getByRole('textbox');
       fireEvent.keyDown(input, { key: 'Tab' });
       expect(mockSetText).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('messageQueued indicator', () => {
+    it('renders queued indicator when messageQueued is true', () => {
+      render(withSession(<SessionComposer />, { messageQueued: true }));
+      expect(screen.getByText(/Message queued/)).toBeInTheDocument();
+    });
+
+    it('does not render queued indicator when messageQueued is false', () => {
+      render(withSession(<SessionComposer />, { messageQueued: false }));
+      expect(screen.queryByText(/Message queued/)).not.toBeInTheDocument();
     });
   });
 });

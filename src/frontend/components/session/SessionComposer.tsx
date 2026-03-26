@@ -3,21 +3,45 @@ import {
   useComposer,
   useComposerRuntime,
 } from '@assistant-ui/react';
-import { SendHorizontal } from 'lucide-react';
+import { SendHorizontal, Square } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
+import { useMessageHistory } from '@/frontend/hooks/useMessageHistory';
 import { cn } from '@/frontend/lib/utils';
 import { useSessionActions } from './SessionActionsContext';
 import SlashCommandMenu, { filterCommands } from './SlashCommandMenu';
 
+/** Keys that should not reset history navigation when pressed. */
+const NAVIGATION_PASSTHROUGH_KEYS = new Set([
+  'ArrowUp',
+  'ArrowDown',
+  'Enter',
+  'Tab',
+  'Shift',
+  'Control',
+  'Alt',
+  'Meta',
+  'Escape',
+]);
+
 export default function SessionComposer() {
-  const { sessionStatus, promptSuggestion, availableCommands } =
-    useSessionActions();
-  const isDisabled = sessionStatus !== 'idle';
+  const {
+    sessionStatus,
+    promptSuggestion,
+    availableCommands,
+    handleStop,
+    messageQueued,
+    sendMessage,
+  } = useSessionActions();
   const composerRuntime = useComposerRuntime();
   const composerText = useComposer((s) => s.text);
   const isEmpty = !composerText.trim();
+  const [stopping, setStopping] = useState(false);
+  const history = useMessageHistory();
 
-  const hasSuggestion = !isDisabled && !!promptSuggestion;
+  const isSessionActive =
+    sessionStatus === 'running' || sessionStatus === 'queued';
+  const hasSuggestion = sessionStatus === 'idle' && !!promptSuggestion;
+  const showStop = isEmpty && isSessionActive;
 
   // Slash command menu state
   const [dismissed, setDismissed] = useState(false);
@@ -50,9 +74,29 @@ export default function SessionComposer() {
     [composerRuntime],
   );
 
+  let placeholder: string;
+  if (isSessionActive && isEmpty) {
+    placeholder = 'Type a follow-up or press Enter to stop…';
+  } else if (hasSuggestion) {
+    placeholder = `${promptSuggestion}  [tab]`;
+  } else {
+    placeholder = 'Send a follow-up to Claude… (Enter to send)';
+  }
+
+  const handleStopWithState = async () => {
+    setStopping(true);
+    try {
+      await handleStop();
+    } catch (err) {
+      console.error('Failed to stop session:', err);
+    } finally {
+      setStopping(false);
+    }
+  };
+
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
-      // Slash command menu keyboard navigation
+      // Slash command menu keyboard navigation takes priority
       if (showMenu && filteredCommands.length > 0) {
         if (e.key === 'ArrowDown') {
           e.preventDefault();
@@ -95,6 +139,64 @@ export default function SessionComposer() {
       ) {
         e.preventDefault();
         composerRuntime.setText(promptSuggestion);
+        return;
+      }
+
+      // Enter on empty + running/queued = stop
+      if (e.key === 'Enter' && !e.shiftKey && isEmpty && isSessionActive) {
+        e.preventDefault();
+        void handleStopWithState();
+        return;
+      }
+
+      // Enter on non-empty = record in history + send
+      if (e.key === 'Enter' && !e.shiftKey && !isEmpty) {
+        const text = composerRuntime.getState().text.trim();
+        if (text) history.push(text);
+
+        if (isSessionActive) {
+          // Running/queued: send directly, bypassing the library
+          e.preventDefault();
+          if (text) {
+            composerRuntime.setText('');
+            sendMessage(text).catch((err) =>
+              console.error('Failed to send message:', err),
+            );
+          }
+        }
+        // Idle: don't preventDefault — library handles the actual send
+        return;
+      }
+
+      // ArrowUp on empty = navigate history backward
+      if (e.key === 'ArrowUp' && isEmpty) {
+        const text = history.handleArrowKey(
+          'up',
+          composerRuntime.getState().text,
+        );
+        if (text !== null) {
+          e.preventDefault();
+          composerRuntime.setText(text);
+        }
+        return;
+      }
+
+      // ArrowDown = navigate history forward
+      if (e.key === 'ArrowDown') {
+        const text = history.handleArrowKey(
+          'down',
+          composerRuntime.getState().text,
+        );
+        if (text !== null) {
+          e.preventDefault();
+          composerRuntime.setText(text);
+        }
+        return;
+      }
+
+      // Any other key while navigating = reset navigation
+      if (!NAVIGATION_PASSTHROUGH_KEYS.has(e.key)) {
+        history.resetNavigation();
       }
     },
     [
@@ -106,14 +208,12 @@ export default function SessionComposer() {
       promptSuggestion,
       isEmpty,
       composerRuntime,
+      isSessionActive,
+      handleStopWithState,
+      history,
+      sendMessage,
     ],
   );
-
-  const placeholder = isDisabled
-    ? 'Waiting for session to finish…'
-    : hasSuggestion
-      ? `${promptSuggestion}  [tab]`
-      : 'Send a follow-up to Claude… (Enter to send)';
 
   return (
     <ComposerPrimitive.Root className="shrink-0 border-t bg-muted/10 px-3 py-2">
@@ -128,7 +228,12 @@ export default function SessionComposer() {
         )}
         <ComposerPrimitive.Input
           placeholder={placeholder}
-          disabled={isDisabled}
+          aria-label={
+            isSessionActive
+              ? 'Follow-up message — press Enter to stop session, or type a message'
+              : 'Send a follow-up to Claude'
+          }
+          disabled={sessionStatus === 'failed'}
           rows={1}
           onKeyDown={handleKeyDown}
           role="combobox"
@@ -161,13 +266,32 @@ export default function SessionComposer() {
               : 'placeholder:text-muted-foreground/50',
           )}
         />
-        <ComposerPrimitive.Send
-          disabled={isDisabled}
-          className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-md bg-primary text-primary-foreground shadow hover:bg-primary/90 disabled:pointer-events-none disabled:opacity-50"
-          aria-label="Send message"
-        >
-          <SendHorizontal className="h-4 w-4" />
-        </ComposerPrimitive.Send>
+        {showStop ? (
+          <button
+            type="button"
+            onClick={() => void handleStopWithState()}
+            disabled={stopping}
+            className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-md bg-destructive text-destructive-foreground shadow hover:bg-destructive/90 disabled:pointer-events-none disabled:opacity-50"
+            aria-label="Stop session"
+          >
+            <Square className="h-4 w-4" />
+          </button>
+        ) : (
+          <ComposerPrimitive.Send
+            className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-md bg-primary text-primary-foreground shadow hover:bg-primary/90 disabled:pointer-events-none disabled:opacity-50"
+            aria-label="Send message"
+          >
+            <SendHorizontal className="h-4 w-4" />
+          </ComposerPrimitive.Send>
+        )}
+      </div>
+      <div aria-live="polite" aria-atomic="true">
+        {messageQueued && (
+          <p className="px-1 text-xs text-muted-foreground">
+            Message queued — will be delivered when Claude finishes its current
+            turn.
+          </p>
+        )}
       </div>
     </ComposerPrimitive.Root>
   );
