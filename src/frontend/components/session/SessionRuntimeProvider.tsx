@@ -49,10 +49,9 @@ export default function SessionRuntimeProvider({
 }: SessionRuntimeProviderProps) {
   const isRunning = sessionStatus === 'running';
 
-  const sdkMessages = useMemo(
-    () => sdkToThreadMessages(events, isRunning, pendingApprovals),
-    [events, isRunning, pendingApprovals],
-  );
+  const sdkMessages = useMemo(() => {
+    return sdkToThreadMessages(events, isRunning, pendingApprovals);
+  }, [events, isRunning, pendingApprovals]);
 
   const promptSuggestion = useMemo(
     () => extractPromptSuggestion(events),

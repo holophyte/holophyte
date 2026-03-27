@@ -38,9 +38,10 @@ function assistantEvent(
   if (text) {
     content.push({ type: 'text', text });
   }
+  const msgId = `msg_${Math.random().toString(36).slice(2)}`;
   return {
     type: 'assistant',
-    message: { content },
+    message: { id: msgId, content },
     uuid: `uuid-assistant-${Math.random().toString(36).slice(2)}`,
   } as unknown as SDKMessage;
 }
@@ -94,7 +95,7 @@ function assistantEventWithUuid(
   }
   return {
     type: 'assistant',
-    message: { content },
+    message: { id: uuid, content },
     uuid,
   } as unknown as SDKMessage;
 }
