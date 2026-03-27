@@ -242,7 +242,9 @@ export default function SessionComposer() {
                 : 'Follow-up message — press Enter to send'
               : 'Send a follow-up to Claude'
           }
-          disabled={sessionStatus === 'failed'}
+          disabled={
+            sessionStatus === 'failed' || sessionStatus === 'waiting_input'
+          }
           rows={1}
           onKeyDown={handleKeyDown}
           role="combobox"
