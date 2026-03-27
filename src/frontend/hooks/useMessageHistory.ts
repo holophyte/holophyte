@@ -1,5 +1,7 @@
 import { useCallback, useRef } from 'react';
 
+const MAX_HISTORY = 100;
+
 interface UseMessageHistoryReturn {
   /** Call when a message is successfully sent to record it in history. */
   push: (text: string) => void;
@@ -19,6 +21,9 @@ export function useMessageHistory(): UseMessageHistoryReturn {
 
   const push = useCallback((text: string) => {
     historyRef.current.push(text);
+    if (historyRef.current.length > MAX_HISTORY) {
+      historyRef.current.shift();
+    }
     indexRef.current = -1;
     draftRef.current = '';
   }, []);
