@@ -161,19 +161,22 @@ test.describe('Composer Enhancements — active session state', () => {
     await openTaskPage(page, title);
     await startSession(page, 'Test prompt');
 
-    const input = page.locator(
+    const stopInput = page.locator(
       '[aria-label="Follow-up message — press Enter to stop session, or type a message"]',
+    );
+    const sendInput = page.locator(
+      '[aria-label="Follow-up message — press Enter to send"]',
     );
     const stopButton = page.locator('button[aria-label="Stop session"]');
     const sendButton = page.locator('button[aria-label="Send message"]');
 
-    // Type to show send button
-    await input.fill('Some text');
+    // Type to show send button (aria-label changes when text is entered)
+    await stopInput.fill('Some text');
     await expect(sendButton).toBeVisible({ timeout: 3000 });
     await expect(stopButton).toBeHidden({ timeout: 3000 });
 
-    // Clear to restore stop button
-    await input.fill('');
+    // Clear to restore stop button (use the send-mode aria-label since input has text)
+    await sendInput.fill('');
     await expect(stopButton).toBeVisible({ timeout: 3000 });
     await expect(sendButton).toBeHidden({ timeout: 3000 });
   });
