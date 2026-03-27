@@ -58,28 +58,28 @@ export function sdkToThreadMessages(
     }
   }
 
-  // Deduplicate assistant events by message ID — the SDK sends progressive
+  // Deduplicate assistant events by stable ID — the SDK sends progressive
   // snapshots of the same message (e.g., first with thinking, then with
-  // tool_use). Keep the LAST snapshot for each message ID since it has the
-  // most complete content.
-  const lastAssistantByMsgId = new Map<
+  // tool_use). Keep the LAST snapshot for each stable ID since it has the
+  // most complete content. Use message.id when available, fall back to uuid.
+  const lastAssistantById = new Map<
     string,
-    { event: SDKMessage; uuid: string }
+    { event: SDKMessage; stableId: string }
   >();
   for (const event of events) {
     if (event.type === 'assistant') {
       const msg = event.message as { id?: string };
-      const msgId = String(msg.id ?? '');
       const uuid = (event as { uuid?: string }).uuid ?? '';
-      if (msgId) {
-        lastAssistantByMsgId.set(msgId, { event, uuid });
+      const stableId = String(msg.id ?? uuid);
+      if (stableId) {
+        lastAssistantById.set(stableId, { event, stableId });
       }
     }
   }
 
   const messages: ThreadMessageLike[] = [];
-  // Track which message IDs we've already emitted to avoid duplicates
-  const emittedMsgIds = new Set<string>();
+  // Track which stable IDs we've already emitted to avoid duplicates
+  const emittedIds = new Set<string>();
   const lastAssistantEvent = events
     .filter((e) => e.type === 'assistant')
     .at(-1);
@@ -88,15 +88,16 @@ export function sdkToThreadMessages(
   for (const event of events) {
     if (event.type === 'assistant') {
       const msg = event.message as { id?: string; content?: unknown[] };
-      const msgId = String(msg.id ?? '');
+      const uuid = (event as { uuid?: string }).uuid ?? '';
+      const stableId = String(msg.id ?? uuid);
 
-      // Skip if we've already emitted this message ID (use the latest snapshot)
-      if (emittedMsgIds.has(msgId)) continue;
+      // Skip if we've already emitted this stable ID (use the latest snapshot)
+      if (emittedIds.has(stableId)) continue;
 
       // Use the latest snapshot for this message
-      const latest = lastAssistantByMsgId.get(msgId);
+      const latest = lastAssistantById.get(stableId);
       if (!latest) continue;
-      emittedMsgIds.add(msgId);
+      emittedIds.add(stableId);
 
       const latestMsg =
         (latest.event as { message?: { content?: unknown[] } }).message ?? {};
@@ -148,7 +149,7 @@ export function sdkToThreadMessages(
           : { type: 'complete', reason: 'stop' };
 
       messages.push({
-        id: latest.uuid,
+        id: latest.stableId,
         role: 'assistant',
         content: parts as ThreadMessageLike['content'],
         status,
