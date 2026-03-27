@@ -87,6 +87,7 @@ export default function SessionComposer() {
   }
 
   const handleStopWithState = useCallback(async () => {
+    if (stopping) return;
     setStopping(true);
     try {
       await handleStop();
@@ -95,10 +96,10 @@ export default function SessionComposer() {
     } finally {
       setStopping(false);
     }
-  }, [handleStop]);
+  }, [handleStop, stopping]);
 
   const handleKeyDown = useCallback(
-    (e: React.KeyboardEvent) => {
+    (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
       // Slash command menu keyboard navigation takes priority
       if (showMenu && filteredCommands.length > 0) {
         if (e.key === 'ArrowDown') {
@@ -174,8 +175,8 @@ export default function SessionComposer() {
         return;
       }
 
-      // ArrowUp = navigate history backward (empty starts navigation, non-empty continues it)
-      if (e.key === 'ArrowUp') {
+      // ArrowUp = navigate history backward — only when cursor is at the start of the text
+      if (e.key === 'ArrowUp' && e.currentTarget.selectionStart === 0) {
         const text = history.handleArrowKey(
           'up',
           composerRuntime.getState().text,
@@ -187,8 +188,11 @@ export default function SessionComposer() {
         return;
       }
 
-      // ArrowDown = navigate history forward
-      if (e.key === 'ArrowDown') {
+      // ArrowDown = navigate history forward — only when cursor is at the end of the text
+      if (
+        e.key === 'ArrowDown' &&
+        e.currentTarget.selectionStart === e.currentTarget.value.length
+      ) {
         const text = history.handleArrowKey(
           'down',
           composerRuntime.getState().text,

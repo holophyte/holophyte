@@ -2,6 +2,7 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { ReactNode } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import type { SessionStatus } from '@/frontend/hooks/useSession';
 import { SessionActionsContext } from './SessionActionsContext';
 
 // ---------------------------------------------------------------------------
@@ -102,7 +103,7 @@ vi.mock('@assistant-ui/react', () => {
 function withSession(
   children: ReactNode,
   overrides: {
-    sessionStatus?: 'idle' | 'running' | 'queued' | 'failed';
+    sessionStatus?: SessionStatus;
     promptSuggestion?: string | null;
     handleStop?: () => Promise<void>;
     messageQueued?: boolean;
@@ -228,6 +229,14 @@ describe('SessionComposer', () => {
 
     it('input is disabled when session is failed', () => {
       render(withSession(<SessionComposer />, { sessionStatus: 'failed' }));
+      const input = screen.getByTestId('composer-input') as HTMLTextAreaElement;
+      expect(input.disabled).toBe(true);
+    });
+
+    it('input is disabled when session is waiting_input', () => {
+      render(
+        withSession(<SessionComposer />, { sessionStatus: 'waiting_input' }),
+      );
       const input = screen.getByTestId('composer-input') as HTMLTextAreaElement;
       expect(input.disabled).toBe(true);
     });

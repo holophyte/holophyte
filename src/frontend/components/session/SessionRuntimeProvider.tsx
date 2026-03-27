@@ -107,7 +107,7 @@ export default function SessionRuntimeProvider({
     return [
       ...sdkMessages,
       ...optimisticMsgs.map((text, i) => ({
-        id: `optimistic-${i}-${Date.now()}`,
+        id: `optimistic-${i}`,
         role: 'user' as const,
         content: [{ type: 'text' as const, text }],
       })),
