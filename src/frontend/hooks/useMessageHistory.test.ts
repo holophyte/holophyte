@@ -120,6 +120,50 @@ describe('useMessageHistory', () => {
     });
   });
 
+  describe('MAX_HISTORY cap', () => {
+    it('caps history at 100 entries, dropping the oldest', () => {
+      const { result } = renderHook(() => useMessageHistory());
+      // Push 101 messages
+      for (let i = 0; i < 101; i++) {
+        result.current.push(`msg-${i}`);
+      }
+      // msg-0 was dropped; navigating all the way back should land on msg-1
+      // Navigate to oldest by pressing up 100 times
+      let oldest: string | null = null;
+      for (let i = 0; i < 100; i++) {
+        const candidate = result.current.handleArrowKey(
+          'up',
+          i === 0 ? '' : `msg-${i}`,
+        );
+        if (candidate !== null) oldest = candidate;
+      }
+      // Oldest kept is msg-1 (msg-0 was evicted)
+      expect(oldest).toBe('msg-1');
+    });
+
+    it('keeps exactly 100 entries after 105 pushes', () => {
+      const { result } = renderHook(() => useMessageHistory());
+      for (let i = 0; i < 105; i++) {
+        result.current.push(`msg-${i}`);
+      }
+      // Newest is msg-104; it should be reachable as first up
+      expect(result.current.handleArrowKey('up', '')).toBe('msg-104');
+      // Navigate all the way back — after 100 ups we should reach msg-5
+      // (first 5 were evicted)
+      let last: string | null = null;
+      // Reset by pushing then re-navigating from scratch
+      const { result: r2 } = renderHook(() => useMessageHistory());
+      for (let i = 0; i < 105; i++) {
+        r2.current.push(`item-${i}`);
+      }
+      for (let i = 0; i < 100; i++) {
+        const v = r2.current.handleArrowKey('up', '');
+        if (v !== null) last = v;
+      }
+      expect(last).toBe('item-5');
+    });
+  });
+
   describe('function reference stability', () => {
     it('push is stable across re-renders', () => {
       const { result, rerender } = renderHook(() => useMessageHistory());

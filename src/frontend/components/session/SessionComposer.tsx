@@ -83,7 +83,7 @@ export default function SessionComposer() {
     placeholder = 'Send a follow-up to Claude… (Enter to send)';
   }
 
-  const handleStopWithState = async () => {
+  const handleStopWithState = useCallback(async () => {
     setStopping(true);
     try {
       await handleStop();
@@ -92,7 +92,7 @@ export default function SessionComposer() {
     } finally {
       setStopping(false);
     }
-  };
+  }, [handleStop]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
