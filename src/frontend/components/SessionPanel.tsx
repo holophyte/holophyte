@@ -13,7 +13,6 @@ import SessionThread from './session/SessionThread';
 import {
   BashToolUI,
   EditToolUI,
-  GenericToolUI,
   GlobToolUI,
   GrepToolUI,
   ReadToolUI,
@@ -186,7 +185,6 @@ export default function SessionPanel({ taskId }: SessionPanelProps) {
             <GrepToolUI />
             <WebFetchToolUI />
             <WebSearchToolUI />
-            <GenericToolUI />
             <SessionThread />
           </SessionRuntimeProvider>
         ) : (

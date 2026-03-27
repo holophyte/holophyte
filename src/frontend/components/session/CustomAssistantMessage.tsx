@@ -3,6 +3,7 @@ import { MessagePrimitive } from '@assistant-ui/react';
 import ReactMarkdown from 'react-markdown';
 import rehypeHighlight from 'rehype-highlight';
 import remarkGfm from 'remark-gfm';
+import { ToolCallFallback } from './toolUIs';
 
 const REMARK_PLUGINS = [remarkGfm];
 const REHYPE_PLUGINS = [rehypeHighlight];
@@ -26,6 +27,9 @@ export default function CustomAssistantMessage() {
       <MessagePrimitive.Content
         components={{
           Text: MarkdownText,
+          tools: {
+            Fallback: ToolCallFallback,
+          },
         }}
       />
     </MessagePrimitive.Root>

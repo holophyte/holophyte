@@ -154,19 +154,21 @@ export const GrepToolUI = makeToolUI('Grep');
 export const WebFetchToolUI = makeToolUI('WebFetch');
 export const WebSearchToolUI = makeToolUI('WebSearch');
 
-// Wildcard fallback for unregistered tools
-export const GenericToolUI = makeAssistantToolUI<
-  Record<string, unknown>,
-  unknown
->({
-  toolName: '*',
-  render: ({
-    toolCallId,
-    toolName,
-    args,
-    result,
-    isError,
-  }: ToolRenderProps) => (
+/**
+ * Fallback component for tool-call parts not matched by a registered tool UI.
+ * Passed as `tools.Fallback` to `MessagePrimitive.Content` in
+ * `CustomAssistantMessage` so that ANY tool call renders — the
+ * `makeAssistantToolUI({ toolName: '*' })` approach only registers a literal
+ * `"*"` key and doesn't act as a wildcard.
+ */
+export function ToolCallFallback({
+  toolCallId,
+  toolName,
+  args,
+  result,
+  isError,
+}: ToolRenderProps) {
+  return (
     <ToolCallDisplay
       toolName={toolName}
       toolCallId={toolCallId}
@@ -174,5 +176,5 @@ export const GenericToolUI = makeAssistantToolUI<
       result={result}
       isError={isError}
     />
-  ),
-});
+  );
+}
