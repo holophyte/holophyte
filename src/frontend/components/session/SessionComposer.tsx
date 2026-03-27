@@ -31,6 +31,7 @@ export default function SessionComposer() {
     handleStop,
     messageQueued,
     sendMessage,
+    addOptimisticMessage,
   } = useSessionActions();
   const composerRuntime = useComposerRuntime();
   const composerText = useComposer((s) => s.text);
@@ -75,7 +76,9 @@ export default function SessionComposer() {
   );
 
   let placeholder: string;
-  if (isSessionActive && isEmpty) {
+  if (sessionStatus === 'waiting_input') {
+    placeholder = 'Waiting for tool approval…';
+  } else if (isSessionActive && isEmpty) {
     placeholder = 'Type a follow-up or press Enter to stop…';
   } else if (hasSuggestion) {
     placeholder = `${promptSuggestion}  [tab]`;
@@ -157,6 +160,7 @@ export default function SessionComposer() {
           // Running/queued: send directly, bypassing the library
           e.preventDefault();
           if (text) {
+            addOptimisticMessage(text);
             composerRuntime.setText('');
             sendMessage(text)
               .then(() => history.push(text))
@@ -213,6 +217,7 @@ export default function SessionComposer() {
       isSessionActive,
       handleStopWithState,
       history,
+      addOptimisticMessage,
       sendMessage,
     ],
   );
@@ -237,9 +242,7 @@ export default function SessionComposer() {
                 : 'Follow-up message — press Enter to send'
               : 'Send a follow-up to Claude'
           }
-          disabled={
-            sessionStatus === 'failed' || sessionStatus === 'waiting_input'
-          }
+          disabled={sessionStatus === 'failed'}
           rows={1}
           onKeyDown={handleKeyDown}
           role="combobox"
@@ -281,6 +284,27 @@ export default function SessionComposer() {
             aria-label="Stop session"
           >
             <Square className="h-4 w-4" />
+          </button>
+        ) : isSessionActive ? (
+          <button
+            type="button"
+            disabled={isEmpty}
+            className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-md bg-primary text-primary-foreground shadow hover:bg-primary/90 disabled:pointer-events-none disabled:opacity-50"
+            aria-label="Send message"
+            onClick={() => {
+              const text = composerRuntime.getState().text.trim();
+              if (text) {
+                addOptimisticMessage(text);
+                composerRuntime.setText('');
+                sendMessage(text)
+                  .then(() => history.push(text))
+                  .catch((err) =>
+                    console.error('Failed to send message:', err),
+                  );
+              }
+            }}
+          >
+            <SendHorizontal className="h-4 w-4" />
           </button>
         ) : (
           <ComposerPrimitive.Send

@@ -123,6 +123,7 @@ function withSession(
         messageQueued: overrides.messageQueued ?? false,
         sendMessage:
           overrides.sendMessage ?? vi.fn().mockResolvedValue(undefined),
+        addOptimisticMessage: vi.fn(),
       }}
     >
       {children}
@@ -178,7 +179,7 @@ describe('SessionComposer', () => {
     it('shows send button when input has text while running', () => {
       _mockInput.value = 'some text';
       render(withSession(<SessionComposer />, { sessionStatus: 'running' }));
-      expect(screen.getByTestId('composer-send')).toBeInTheDocument();
+      expect(screen.getByLabelText('Send message')).toBeInTheDocument();
       expect(screen.queryByLabelText('Stop session')).not.toBeInTheDocument();
     });
 
