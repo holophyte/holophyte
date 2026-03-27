@@ -422,7 +422,7 @@ describe('SessionComposer', () => {
     // fires only when `isEmpty=true`. To test ArrowUp navigation we need `rerender`
     // after clearing the input so the component re-evaluates isEmpty.
 
-    it('ArrowUp calls setText with last sent message after input is cleared', () => {
+    it('ArrowUp calls setText with last sent message after input is cleared', async () => {
       mockSetText.mockClear();
       const sendMessage = vi.fn().mockResolvedValue(undefined);
       // Render with non-empty input so history.push fires on Enter
@@ -434,8 +434,10 @@ describe('SessionComposer', () => {
         }),
       );
       const input = screen.getByTestId('composer-input');
-      // Enter while running with text: calls history.push('my command') + setText('')
+      // Enter while running with text: sends then pushes to history
       fireEvent.keyDown(input, { key: 'Enter' });
+      // Wait for sendMessage().then(history.push) to resolve
+      await new Promise((r) => setTimeout(r, 0));
       // Simulate real runtime clearing the input, then force re-render so isEmpty=true
       _mockInput.value = '';
       rerender(
@@ -445,7 +447,7 @@ describe('SessionComposer', () => {
         }),
       );
       mockSetText.mockClear();
-      // ArrowUp with isEmpty=true should navigate back to 'my command'
+      // ArrowUp should navigate back to 'my command'
       fireEvent.keyDown(input, { key: 'ArrowUp' });
       expect(mockSetText).toHaveBeenCalledWith('my command');
     });
@@ -477,7 +479,7 @@ describe('SessionComposer', () => {
       expect(mockSetText).not.toHaveBeenCalled();
     });
 
-    it('ArrowDown navigates forward after ArrowUp', () => {
+    it('ArrowDown navigates forward after ArrowUp', async () => {
       mockSetText.mockClear();
       const sendMessage = vi.fn().mockResolvedValue(undefined);
       _mockInput.value = 'first command';
@@ -488,7 +490,8 @@ describe('SessionComposer', () => {
         }),
       );
       const input = screen.getByTestId('composer-input');
-      fireEvent.keyDown(input, { key: 'Enter' }); // pushes 'first command'
+      fireEvent.keyDown(input, { key: 'Enter' }); // sends then pushes 'first command'
+      await new Promise((r) => setTimeout(r, 0));
       _mockInput.value = 'second command';
       rerender(
         withSession(<SessionComposer />, {
@@ -496,7 +499,8 @@ describe('SessionComposer', () => {
           sendMessage,
         }),
       );
-      fireEvent.keyDown(input, { key: 'Enter' }); // pushes 'second command'
+      fireEvent.keyDown(input, { key: 'Enter' }); // sends then pushes 'second command'
+      await new Promise((r) => setTimeout(r, 0));
       // Clear to empty and re-render so isEmpty=true
       _mockInput.value = '';
       rerender(
@@ -520,7 +524,7 @@ describe('SessionComposer', () => {
       expect(mockSetText).toHaveBeenCalledWith('second command');
     });
 
-    it('ArrowDown restores draft when navigating past newest entry', () => {
+    it('ArrowDown restores draft when navigating past newest entry', async () => {
       mockSetText.mockClear();
       const sendMessage = vi.fn().mockResolvedValue(undefined);
       _mockInput.value = 'sent message';
@@ -531,7 +535,8 @@ describe('SessionComposer', () => {
         }),
       );
       const input = screen.getByTestId('composer-input');
-      fireEvent.keyDown(input, { key: 'Enter' }); // pushes 'sent message'
+      fireEvent.keyDown(input, { key: 'Enter' }); // sends then pushes 'sent message'
+      await new Promise((r) => setTimeout(r, 0));
       // Navigate to empty (ArrowUp saves draft = '')
       _mockInput.value = '';
       rerender(
@@ -549,7 +554,7 @@ describe('SessionComposer', () => {
       expect(mockSetText).toHaveBeenCalledWith('');
     });
 
-    it('a non-navigation key resets history browsing', () => {
+    it('a non-navigation key resets history browsing', async () => {
       mockSetText.mockClear();
       const sendMessage = vi.fn().mockResolvedValue(undefined);
       _mockInput.value = 'sent message';
@@ -561,6 +566,7 @@ describe('SessionComposer', () => {
       );
       const input = screen.getByTestId('composer-input');
       fireEvent.keyDown(input, { key: 'Enter' });
+      await new Promise((r) => setTimeout(r, 0));
       _mockInput.value = '';
       rerender(
         withSession(<SessionComposer />, {

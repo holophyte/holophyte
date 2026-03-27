@@ -149,27 +149,29 @@ export default function SessionComposer() {
         return;
       }
 
-      // Enter on non-empty = record in history + send
+      // Enter on non-empty = send (and record in history on success)
       if (e.key === 'Enter' && !e.shiftKey && !isEmpty) {
         const text = composerRuntime.getState().text.trim();
-        if (text) history.push(text);
 
         if (isSessionActive) {
           // Running/queued: send directly, bypassing the library
           e.preventDefault();
           if (text) {
             composerRuntime.setText('');
-            sendMessage(text).catch((err) =>
-              console.error('Failed to send message:', err),
-            );
+            sendMessage(text)
+              .then(() => history.push(text))
+              .catch((err) => console.error('Failed to send message:', err));
           }
+        } else {
+          // Idle: push to history eagerly (library handles send via onNew)
+          if (text) history.push(text);
+          // Don't preventDefault — library handles the actual send
         }
-        // Idle: don't preventDefault — library handles the actual send
         return;
       }
 
-      // ArrowUp on empty = navigate history backward
-      if (e.key === 'ArrowUp' && isEmpty) {
+      // ArrowUp = navigate history backward (empty starts navigation, non-empty continues it)
+      if (e.key === 'ArrowUp') {
         const text = history.handleArrowKey(
           'up',
           composerRuntime.getState().text,
@@ -230,10 +232,14 @@ export default function SessionComposer() {
           placeholder={placeholder}
           aria-label={
             isSessionActive
-              ? 'Follow-up message — press Enter to stop session, or type a message'
+              ? showStop
+                ? 'Follow-up message — press Enter to stop session, or type a message'
+                : 'Follow-up message — press Enter to send'
               : 'Send a follow-up to Claude'
           }
-          disabled={sessionStatus === 'failed'}
+          disabled={
+            sessionStatus === 'failed' || sessionStatus === 'waiting_input'
+          }
           rows={1}
           onKeyDown={handleKeyDown}
           role="combobox"
