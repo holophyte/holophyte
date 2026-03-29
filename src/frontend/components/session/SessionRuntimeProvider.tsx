@@ -27,6 +27,9 @@ interface SessionRuntimeProviderProps {
   approve: (requestId: string) => void;
   deny: (requestId: string, message?: string) => void;
   sendMessage: (sessionId: string, text: string) => Promise<void>;
+  handleStop: () => Promise<void>;
+  messageQueued: boolean;
+  sendMessageDirect: (text: string) => Promise<void>;
   children: ReactNode;
 }
 
@@ -39,30 +42,16 @@ export default function SessionRuntimeProvider({
   approve,
   deny,
   sendMessage,
+  handleStop,
+  messageQueued,
+  sendMessageDirect,
   children,
 }: SessionRuntimeProviderProps) {
   const isRunning = sessionStatus === 'running';
 
-  // Optimistic user message — shown immediately when the user hits Enter,
-  // before the SDK streams back the real user event.
-  const [optimisticUserMsg, setOptimisticUserMsg] = useState<string | null>(
-    null,
-  );
-  // Track the events length when the optimistic message was set so we only
-  // clear it once NEW events arrive (not on the same render cycle).
-  const eventsLenAtOptimistic = useRef(-1);
-
-  // Clear optimistic message when new SDK events arrive after it was set.
-  useEffect(() => {
-    if (optimisticUserMsg && events.length > eventsLenAtOptimistic.current) {
-      setOptimisticUserMsg(null);
-    }
-  }, [events.length, optimisticUserMsg]);
-
-  const sdkMessages = useMemo(
-    () => sdkToThreadMessages(events, isRunning, pendingApprovals),
-    [events, isRunning, pendingApprovals],
-  );
+  const sdkMessages = useMemo(() => {
+    return sdkToThreadMessages(events, isRunning, pendingApprovals);
+  }, [events, isRunning, pendingApprovals]);
 
   const promptSuggestion = useMemo(
     () => extractPromptSuggestion(events),
@@ -88,22 +77,45 @@ export default function SessionRuntimeProvider({
     );
   }, [events, projectCommands]);
 
-  // Merge SDK messages with the optimistic user message (if any).
+  // Queue of optimistic user messages — shown immediately when the user hits
+  // Enter, before the SDK streams back the real user events.
+  const [optimisticMsgs, setOptimisticMsgs] = useState<string[]>([]);
+  const msgsLenAtOptimistic = useRef(-1);
+
+  // Clear optimistic messages when new SDK events arrive after they were set.
+  useEffect(() => {
+    if (
+      optimisticMsgs.length > 0 &&
+      events.length > msgsLenAtOptimistic.current
+    ) {
+      setOptimisticMsgs([]);
+    }
+  }, [events.length, optimisticMsgs.length]);
+
+  /** Show a user message optimistically in the thread (used by both onNew and direct send). */
+  const addOptimisticMessage = useCallback(
+    (text: string) => {
+      setOptimisticMsgs((prev) => [...prev, text]);
+      msgsLenAtOptimistic.current = events.length;
+    },
+    [events.length],
+  );
+
+  // Merge SDK messages with optimistic user messages.
   const messages = useMemo(() => {
-    if (!optimisticUserMsg) return sdkMessages;
+    if (optimisticMsgs.length === 0) return sdkMessages;
     return [
       ...sdkMessages,
-      {
-        id: `optimistic-${Date.now()}`,
+      ...optimisticMsgs.map((text, i) => ({
+        id: `optimistic-${i}`,
         role: 'user' as const,
-        content: [{ type: 'text' as const, text: optimisticUserMsg }],
-      },
+        content: [{ type: 'text' as const, text }],
+      })),
     ];
-  }, [sdkMessages, optimisticUserMsg]);
+  }, [sdkMessages, optimisticMsgs]);
 
   const onNew = useCallback(
     async (message: AppendMessage) => {
-      if (isRunning) return; // Composer is disabled during running; extra safety
       const text = message.content
         .filter((p): p is { type: 'text'; text: string } => p.type === 'text')
         .map((p) => p.text)
@@ -111,18 +123,17 @@ export default function SessionRuntimeProvider({
       if (!text.trim()) return;
 
       // Show the message immediately so the user sees feedback
-      setOptimisticUserMsg(text);
-      eventsLenAtOptimistic.current = events.length;
+      addOptimisticMessage(text);
 
       try {
         await sendMessage(sessionId, text);
       } catch (err) {
         console.error('[SessionRuntime] onNew failed:', err);
-        // Clear optimistic message on failure — it won't be processed
-        setOptimisticUserMsg(null);
+        // Clear optimistic messages on failure — they won't be processed
+        setOptimisticMsgs([]);
       }
     },
-    [isRunning, sendMessage, sessionId, events.length],
+    [addOptimisticMessage, sendMessage, sessionId],
   );
 
   const adapter = useMemo(
@@ -146,6 +157,10 @@ export default function SessionRuntimeProvider({
         sessionStatus={sessionStatus}
         promptSuggestion={promptSuggestion}
         availableCommands={availableCommands}
+        handleStop={handleStop}
+        messageQueued={messageQueued}
+        sendMessage={sendMessageDirect}
+        addOptimisticMessage={addOptimisticMessage}
       >
         {children}
       </SessionActionsProvider>

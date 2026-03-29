@@ -31,6 +31,10 @@ function withSessionActions(
     sessionStatus: opts.sessionStatus ?? 'waiting_input',
     promptSuggestion: null,
     availableCommands: [],
+    handleStop: vi.fn().mockResolvedValue(undefined),
+    messageQueued: false,
+    sendMessage: vi.fn().mockResolvedValue(undefined),
+    addOptimisticMessage: vi.fn(),
   };
   return ({ children }) => (
     <SessionActionsContext.Provider value={value}>

@@ -43,6 +43,10 @@ function withSessionActions(
         sessionStatus: pendingApprovals.length > 0 ? 'waiting_input' : 'idle',
         promptSuggestion: null,
         availableCommands: [],
+        handleStop: vi.fn().mockResolvedValue(undefined),
+        messageQueued: false,
+        sendMessage: vi.fn().mockResolvedValue(undefined),
+        addOptimisticMessage: vi.fn(),
       }}
     >
       {children}
@@ -83,13 +87,8 @@ describe('toolUIs', () => {
       expect(toolUIs.GrepToolUI).toBeDefined();
     });
 
-    it('exports GenericToolUI or a wildcard fallback', () => {
-      // Either a GenericToolUI export or a wildcard export should exist
-      const hasGeneric =
-        'GenericToolUI' in toolUIs ||
-        'WildcardToolUI' in toolUIs ||
-        'DefaultToolUI' in toolUIs;
-      expect(hasGeneric).toBe(true);
+    it('exports ToolCallFallback for unregistered tools', () => {
+      expect(toolUIs.ToolCallFallback).toBeDefined();
     });
   });
 

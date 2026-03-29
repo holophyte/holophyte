@@ -14,6 +14,10 @@ interface SessionActions {
   promptSuggestion: string | null;
   /** Available slash commands and skills from the SDK. */
   availableCommands: ProjectCommand[];
+  handleStop: () => Promise<void>;
+  messageQueued: boolean;
+  sendMessage: (text: string) => Promise<void>;
+  addOptimisticMessage: (text: string) => void;
 }
 
 export const SessionActionsContext = createContext<SessionActions | null>(null);
@@ -31,6 +35,10 @@ export function SessionActionsProvider({
   sessionStatus,
   promptSuggestion,
   availableCommands,
+  handleStop,
+  messageQueued,
+  sendMessage,
+  addOptimisticMessage,
 }: SessionActionsProviderProps) {
   return (
     <SessionActionsContext.Provider
@@ -41,6 +49,10 @@ export function SessionActionsProvider({
         sessionStatus,
         promptSuggestion,
         availableCommands,
+        handleStop,
+        messageQueued,
+        sendMessage,
+        addOptimisticMessage,
       }}
     >
       {children}

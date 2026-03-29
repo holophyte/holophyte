@@ -2,6 +2,7 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { ReactNode } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import type { SessionStatus } from '@/frontend/hooks/useSession';
 import { SessionActionsContext } from './SessionActionsContext';
 
 // ---------------------------------------------------------------------------
@@ -44,12 +45,14 @@ vi.mock('@assistant-ui/react', () => {
       autoFocus,
       onSubmit,
       onKeyDown,
+      disabled,
     }: {
       placeholder?: string;
       className?: string;
       autoFocus?: boolean;
       onSubmit?: () => void;
       onKeyDown?: (e: React.KeyboardEvent) => void;
+      disabled?: boolean;
     }) => {
       _onSubmit = onSubmit ?? null;
       return (
@@ -57,6 +60,7 @@ vi.mock('@assistant-ui/react', () => {
           data-testid="composer-input"
           placeholder={placeholder}
           className={className}
+          disabled={disabled}
           // biome-ignore lint/a11y/noAutofocus: test mock replicates component interface
           autoFocus={autoFocus}
           onKeyDown={onKeyDown}
@@ -86,7 +90,10 @@ vi.mock('@assistant-ui/react', () => {
 
   return {
     ComposerPrimitive,
-    useComposerRuntime: () => ({ setText: mockSetText }),
+    useComposerRuntime: () => ({
+      setText: mockSetText,
+      getState: () => ({ text: _mockInput.value }),
+    }),
     // Track composer text separately from DOM textarea value for useComposer
     useComposer: (selector: (s: { text: string }) => unknown) =>
       selector({ text: _mockInput.value }),
@@ -96,8 +103,11 @@ vi.mock('@assistant-ui/react', () => {
 function withSession(
   children: ReactNode,
   overrides: {
-    sessionStatus?: 'idle' | 'running';
+    sessionStatus?: SessionStatus;
     promptSuggestion?: string | null;
+    handleStop?: () => Promise<void>;
+    messageQueued?: boolean;
+    sendMessage?: (text: string) => Promise<void>;
   } = {},
 ) {
   return (
@@ -109,6 +119,12 @@ function withSession(
         sessionStatus: overrides.sessionStatus ?? 'idle',
         promptSuggestion: overrides.promptSuggestion ?? null,
         availableCommands: [],
+        handleStop:
+          overrides.handleStop ?? vi.fn().mockResolvedValue(undefined),
+        messageQueued: overrides.messageQueued ?? false,
+        sendMessage:
+          overrides.sendMessage ?? vi.fn().mockResolvedValue(undefined),
+        addOptimisticMessage: vi.fn(),
       }}
     >
       {children}
@@ -149,26 +165,80 @@ describe('SessionComposer', () => {
     });
   });
 
-  describe('disabled state when running', () => {
-    it('applies disabled/opacity styling when session is running', () => {
-      const { container } = render(
-        withSession(<SessionComposer />, { sessionStatus: 'running' }),
+  describe('stop button', () => {
+    it('shows stop button when input is empty and session is running', () => {
+      render(withSession(<SessionComposer />, { sessionStatus: 'running' }));
+      expect(screen.getByLabelText('Stop session')).toBeInTheDocument();
+      expect(screen.queryByTestId('composer-send')).not.toBeInTheDocument();
+    });
+
+    it('shows stop button when input is empty and session is queued', () => {
+      render(withSession(<SessionComposer />, { sessionStatus: 'queued' }));
+      expect(screen.getByLabelText('Stop session')).toBeInTheDocument();
+    });
+
+    it('shows send button when input has text while running', () => {
+      _mockInput.value = 'some text';
+      render(withSession(<SessionComposer />, { sessionStatus: 'running' }));
+      expect(screen.getByLabelText('Send message')).toBeInTheDocument();
+      expect(screen.queryByLabelText('Stop session')).not.toBeInTheDocument();
+    });
+
+    it('shows send button when session is idle (even if empty)', () => {
+      render(withSession(<SessionComposer />, { sessionStatus: 'idle' }));
+      expect(screen.getByTestId('composer-send')).toBeInTheDocument();
+      expect(screen.queryByLabelText('Stop session')).not.toBeInTheDocument();
+    });
+
+    it('stop button calls handleStop from context', async () => {
+      const handleStop = vi.fn().mockResolvedValue(undefined);
+      render(
+        withSession(<SessionComposer />, {
+          sessionStatus: 'running',
+          handleStop,
+        }),
       );
-      // Either the input is disabled or a wrapper has an opacity/disabled class
-      const input = container.querySelector(
-        '[data-testid="composer-input"]',
-      ) as HTMLElement;
-      const sendBtn = container.querySelector(
-        '[data-testid="composer-send"]',
-      ) as HTMLElement;
-      // At least one of: input disabled, send button disabled, or visual disabled hint
-      const isDisabled =
-        (input as HTMLInputElement | null)?.disabled ||
-        (sendBtn as HTMLButtonElement | null)?.disabled ||
-        container.querySelector('[disabled]') !== null ||
-        container.querySelector('[class*="opacity"]') !== null ||
-        container.querySelector('[class*="disabled"]') !== null;
-      expect(isDisabled).toBe(true);
+      const stopBtn = screen.getByLabelText('Stop session');
+      fireEvent.click(stopBtn);
+      // Wait for async handler
+      await new Promise((r) => setTimeout(r, 0));
+      expect(handleStop).toHaveBeenCalledTimes(1);
+    });
+
+    it('Enter on empty input while running calls handleStop', async () => {
+      const handleStop = vi.fn().mockResolvedValue(undefined);
+      render(
+        withSession(<SessionComposer />, {
+          sessionStatus: 'running',
+          handleStop,
+        }),
+      );
+      const input = screen.getByTestId('composer-input');
+      fireEvent.keyDown(input, { key: 'Enter' });
+      await new Promise((r) => setTimeout(r, 0));
+      expect(handleStop).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('input enabled state', () => {
+    it('input is not disabled when session is running', () => {
+      render(withSession(<SessionComposer />, { sessionStatus: 'running' }));
+      const input = screen.getByTestId('composer-input') as HTMLTextAreaElement;
+      expect(input.disabled).toBe(false);
+    });
+
+    it('input is disabled when session is failed', () => {
+      render(withSession(<SessionComposer />, { sessionStatus: 'failed' }));
+      const input = screen.getByTestId('composer-input') as HTMLTextAreaElement;
+      expect(input.disabled).toBe(true);
+    });
+
+    it('input is disabled when session is waiting_input', () => {
+      render(
+        withSession(<SessionComposer />, { sessionStatus: 'waiting_input' }),
+      );
+      const input = screen.getByTestId('composer-input') as HTMLTextAreaElement;
+      expect(input.disabled).toBe(true);
     });
   });
 
@@ -193,7 +263,7 @@ describe('SessionComposer', () => {
       expect(input).toHaveAttribute('placeholder', `${suggestion}  [tab]`);
     });
 
-    it('shows default placeholder when running (even with suggestion)', () => {
+    it('shows stop placeholder when running and input is empty', () => {
       render(
         withSession(<SessionComposer />, {
           sessionStatus: 'running',
@@ -203,7 +273,7 @@ describe('SessionComposer', () => {
       const input = screen.getByRole('textbox');
       expect(input).toHaveAttribute(
         'placeholder',
-        'Waiting for session to finish…',
+        'Type a follow-up or press Enter to stop…',
       );
     });
 
@@ -243,6 +313,298 @@ describe('SessionComposer', () => {
       const input = screen.getByRole('textbox');
       fireEvent.keyDown(input, { key: 'Tab' });
       expect(mockSetText).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('Enter while running sends directly', () => {
+    it('calls sendMessage with trimmed text when Enter is pressed with non-empty input while running', async () => {
+      const sendMessage = vi.fn().mockResolvedValue(undefined);
+      _mockInput.value = 'follow-up message';
+      render(
+        withSession(<SessionComposer />, {
+          sessionStatus: 'running',
+          sendMessage,
+        }),
+      );
+      const input = screen.getByTestId('composer-input');
+      fireEvent.keyDown(input, { key: 'Enter' });
+      await new Promise((r) => setTimeout(r, 0));
+      expect(sendMessage).toHaveBeenCalledWith('follow-up message');
+    });
+
+    it('does not call sendMessage when Enter is pressed with whitespace-only text while running', async () => {
+      const sendMessage = vi.fn().mockResolvedValue(undefined);
+      _mockInput.value = '   ';
+      render(
+        withSession(<SessionComposer />, {
+          sessionStatus: 'running',
+          sendMessage,
+        }),
+      );
+      const input = screen.getByTestId('composer-input');
+      fireEvent.keyDown(input, { key: 'Enter' });
+      await new Promise((r) => setTimeout(r, 0));
+      // Whitespace-only is treated as empty — triggers stop, not send
+      expect(sendMessage).not.toHaveBeenCalled();
+    });
+
+    it('clears composer text (calls setText with empty string) after sending while running', async () => {
+      _mockInput.value = 'follow-up';
+      render(withSession(<SessionComposer />, { sessionStatus: 'running' }));
+      mockSetText.mockClear();
+      const input = screen.getByTestId('composer-input');
+      fireEvent.keyDown(input, { key: 'Enter' });
+      await new Promise((r) => setTimeout(r, 0));
+      expect(mockSetText).toHaveBeenCalledWith('');
+    });
+
+    it('logs error and does not throw when sendMessage rejects while running', async () => {
+      const consoleSpy = vi
+        .spyOn(console, 'error')
+        .mockImplementation(() => {});
+      const sendMessage = vi.fn().mockRejectedValue(new Error('network error'));
+      _mockInput.value = 'some text';
+      render(
+        withSession(<SessionComposer />, {
+          sessionStatus: 'running',
+          sendMessage,
+        }),
+      );
+      const input = screen.getByTestId('composer-input');
+      fireEvent.keyDown(input, { key: 'Enter' });
+      await new Promise((r) => setTimeout(r, 10));
+      expect(consoleSpy).toHaveBeenCalledWith(
+        'Failed to send message:',
+        expect.any(Error),
+      );
+      consoleSpy.mockRestore();
+    });
+  });
+
+  describe('error handling in stop', () => {
+    it('logs error and does not throw when handleStop rejects', async () => {
+      const consoleSpy = vi
+        .spyOn(console, 'error')
+        .mockImplementation(() => {});
+      const handleStop = vi.fn().mockRejectedValue(new Error('stop failed'));
+      render(
+        withSession(<SessionComposer />, {
+          sessionStatus: 'running',
+          handleStop,
+        }),
+      );
+      const stopBtn = screen.getByLabelText('Stop session');
+      fireEvent.click(stopBtn);
+      await new Promise((r) => setTimeout(r, 10));
+      expect(consoleSpy).toHaveBeenCalledWith(
+        'Failed to stop session:',
+        expect.any(Error),
+      );
+      consoleSpy.mockRestore();
+    });
+
+    it('stop button is disabled while handleStop is in progress', async () => {
+      let resolveStop!: () => void;
+      const handleStop = vi.fn(
+        () =>
+          new Promise<void>((resolve) => {
+            resolveStop = resolve;
+          }),
+      );
+      render(
+        withSession(<SessionComposer />, {
+          sessionStatus: 'running',
+          handleStop,
+        }),
+      );
+      const stopBtn = screen.getByLabelText('Stop session');
+      fireEvent.click(stopBtn);
+      // During the async stop, button should be disabled
+      expect(stopBtn).toBeDisabled();
+      // Clean up pending promise
+      resolveStop();
+      await new Promise((r) => setTimeout(r, 0));
+    });
+  });
+
+  describe('arrow key history navigation', () => {
+    // NOTE: `isEmpty` is a render-time value from `useComposer`. The ArrowUp guard
+    // fires only when `isEmpty=true`. To test ArrowUp navigation we need `rerender`
+    // after clearing the input so the component re-evaluates isEmpty.
+
+    it('ArrowUp calls setText with last sent message after input is cleared', async () => {
+      mockSetText.mockClear();
+      const sendMessage = vi.fn().mockResolvedValue(undefined);
+      // Render with non-empty input so history.push fires on Enter
+      _mockInput.value = 'my command';
+      const { rerender } = render(
+        withSession(<SessionComposer />, {
+          sessionStatus: 'running',
+          sendMessage,
+        }),
+      );
+      const input = screen.getByTestId('composer-input');
+      // Enter while running with text: sends then pushes to history
+      fireEvent.keyDown(input, { key: 'Enter' });
+      // Wait for sendMessage().then(history.push) to resolve
+      await new Promise((r) => setTimeout(r, 0));
+      // Simulate real runtime clearing the input, then force re-render so isEmpty=true
+      _mockInput.value = '';
+      rerender(
+        withSession(<SessionComposer />, {
+          sessionStatus: 'running',
+          sendMessage,
+        }),
+      );
+      mockSetText.mockClear();
+      // ArrowUp should navigate back to 'my command'
+      fireEvent.keyDown(input, { key: 'ArrowUp' });
+      expect(mockSetText).toHaveBeenCalledWith('my command');
+    });
+
+    it('ArrowUp does nothing when history is empty and input is empty', () => {
+      mockSetText.mockClear();
+      _mockInput.value = '';
+      render(withSession(<SessionComposer />));
+      const input = screen.getByTestId('composer-input');
+      fireEvent.keyDown(input, { key: 'ArrowUp' });
+      expect(mockSetText).not.toHaveBeenCalled();
+    });
+
+    it('ArrowUp does nothing when input is non-empty (no history navigation with text)', () => {
+      mockSetText.mockClear();
+      _mockInput.value = 'typing something';
+      render(withSession(<SessionComposer />));
+      const input = screen.getByTestId('composer-input');
+      fireEvent.keyDown(input, { key: 'ArrowUp' });
+      expect(mockSetText).not.toHaveBeenCalled();
+    });
+
+    it('ArrowDown does nothing when not currently navigating history', () => {
+      mockSetText.mockClear();
+      _mockInput.value = '';
+      render(withSession(<SessionComposer />));
+      const input = screen.getByTestId('composer-input');
+      fireEvent.keyDown(input, { key: 'ArrowDown' });
+      expect(mockSetText).not.toHaveBeenCalled();
+    });
+
+    it('ArrowDown navigates forward after ArrowUp', async () => {
+      mockSetText.mockClear();
+      const sendMessage = vi.fn().mockResolvedValue(undefined);
+      _mockInput.value = 'first command';
+      const { rerender } = render(
+        withSession(<SessionComposer />, {
+          sessionStatus: 'running',
+          sendMessage,
+        }),
+      );
+      const input = screen.getByTestId('composer-input');
+      fireEvent.keyDown(input, { key: 'Enter' }); // sends then pushes 'first command'
+      await new Promise((r) => setTimeout(r, 0));
+      _mockInput.value = 'second command';
+      rerender(
+        withSession(<SessionComposer />, {
+          sessionStatus: 'running',
+          sendMessage,
+        }),
+      );
+      fireEvent.keyDown(input, { key: 'Enter' }); // sends then pushes 'second command'
+      await new Promise((r) => setTimeout(r, 0));
+      // Clear to empty and re-render so isEmpty=true
+      _mockInput.value = '';
+      rerender(
+        withSession(<SessionComposer />, {
+          sessionStatus: 'running',
+          sendMessage,
+        }),
+      );
+      mockSetText.mockClear();
+      // ArrowUp → most recent = 'second command'
+      fireEvent.keyDown(input, { key: 'ArrowUp' });
+      expect(mockSetText).toHaveBeenLastCalledWith('second command');
+      // ArrowUp again → 'first command'
+      _mockInput.value = 'second command';
+      fireEvent.keyDown(input, { key: 'ArrowUp' });
+      expect(mockSetText).toHaveBeenLastCalledWith('first command');
+      // ArrowDown → back to 'second command'
+      _mockInput.value = 'first command';
+      mockSetText.mockClear();
+      fireEvent.keyDown(input, { key: 'ArrowDown' });
+      expect(mockSetText).toHaveBeenCalledWith('second command');
+    });
+
+    it('ArrowDown restores draft when navigating past newest entry', async () => {
+      mockSetText.mockClear();
+      const sendMessage = vi.fn().mockResolvedValue(undefined);
+      _mockInput.value = 'sent message';
+      const { rerender } = render(
+        withSession(<SessionComposer />, {
+          sessionStatus: 'running',
+          sendMessage,
+        }),
+      );
+      const input = screen.getByTestId('composer-input');
+      fireEvent.keyDown(input, { key: 'Enter' }); // sends then pushes 'sent message'
+      await new Promise((r) => setTimeout(r, 0));
+      // Navigate to empty (ArrowUp saves draft = '')
+      _mockInput.value = '';
+      rerender(
+        withSession(<SessionComposer />, {
+          sessionStatus: 'running',
+          sendMessage,
+        }),
+      );
+      fireEvent.keyDown(input, { key: 'ArrowUp' });
+      expect(mockSetText).toHaveBeenLastCalledWith('sent message');
+      // ArrowDown → restores draft ('')
+      _mockInput.value = 'sent message';
+      mockSetText.mockClear();
+      fireEvent.keyDown(input, { key: 'ArrowDown' });
+      expect(mockSetText).toHaveBeenCalledWith('');
+    });
+
+    it('a non-navigation key resets history browsing', async () => {
+      mockSetText.mockClear();
+      const sendMessage = vi.fn().mockResolvedValue(undefined);
+      _mockInput.value = 'sent message';
+      const { rerender } = render(
+        withSession(<SessionComposer />, {
+          sessionStatus: 'running',
+          sendMessage,
+        }),
+      );
+      const input = screen.getByTestId('composer-input');
+      fireEvent.keyDown(input, { key: 'Enter' });
+      await new Promise((r) => setTimeout(r, 0));
+      _mockInput.value = '';
+      rerender(
+        withSession(<SessionComposer />, {
+          sessionStatus: 'running',
+          sendMessage,
+        }),
+      );
+      // Navigate into history
+      fireEvent.keyDown(input, { key: 'ArrowUp' });
+      expect(mockSetText).toHaveBeenLastCalledWith('sent message');
+      // Press a regular character key — resetNavigation fires
+      fireEvent.keyDown(input, { key: 'a' });
+      // After reset, ArrowDown should return null (no longer navigating)
+      mockSetText.mockClear();
+      fireEvent.keyDown(input, { key: 'ArrowDown' });
+      expect(mockSetText).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('messageQueued indicator', () => {
+    it('renders queued indicator when messageQueued is true', () => {
+      render(withSession(<SessionComposer />, { messageQueued: true }));
+      expect(screen.getByText(/Message queued/)).toBeInTheDocument();
+    });
+
+    it('does not render queued indicator when messageQueued is false', () => {
+      render(withSession(<SessionComposer />, { messageQueued: false }));
+      expect(screen.queryByText(/Message queued/)).not.toBeInTheDocument();
     });
   });
 });

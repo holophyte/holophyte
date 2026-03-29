@@ -58,14 +58,50 @@ export function sdkToThreadMessages(
     }
   }
 
+  // Deduplicate assistant events by stable ID — the SDK sends progressive
+  // snapshots of the same message (e.g., first with thinking, then with
+  // tool_use). Keep the LAST snapshot for each stable ID since it has the
+  // most complete content. Use message.id when available, fall back to uuid.
+  const lastAssistantById = new Map<
+    string,
+    { event: SDKMessage; stableId: string }
+  >();
+  for (const event of events) {
+    if (event.type === 'assistant') {
+      const msg = event.message as { id?: string };
+      const uuid = (event as { uuid?: string }).uuid ?? '';
+      const stableId = String(msg.id ?? uuid);
+      if (stableId) {
+        lastAssistantById.set(stableId, { event, stableId });
+      }
+    }
+  }
+
   const messages: ThreadMessageLike[] = [];
+  // Track which stable IDs we've already emitted to avoid duplicates
+  const emittedIds = new Set<string>();
+  const lastAssistantEvent = events
+    .filter((e) => e.type === 'assistant')
+    .at(-1);
 
   // Second pass: build ThreadMessageLike entries
   for (const event of events) {
     if (event.type === 'assistant') {
-      const msg = event.message as { content?: unknown[] };
-      const content = Array.isArray(msg.content) ? msg.content : [];
-      const uuid = (event as { uuid?: string }).uuid;
+      const msg = event.message as { id?: string; content?: unknown[] };
+      const uuid = (event as { uuid?: string }).uuid ?? '';
+      const stableId = String(msg.id ?? uuid);
+
+      // Skip if we've already emitted this stable ID (use the latest snapshot)
+      if (emittedIds.has(stableId)) continue;
+
+      // Use the latest snapshot for this message
+      const latest = lastAssistantById.get(stableId);
+      if (!latest) continue;
+      emittedIds.add(stableId);
+
+      const latestMsg =
+        (latest.event as { message?: { content?: unknown[] } }).message ?? {};
+      const content = Array.isArray(latestMsg.content) ? latestMsg.content : [];
 
       const parts: ContentPart[] = [];
 
@@ -106,15 +142,14 @@ export function sdkToThreadMessages(
 
       if (parts.length === 0) continue;
 
-      const isLast =
-        event === events.filter((e) => e.type === 'assistant').at(-1);
+      const isLast = latest.event === lastAssistantEvent;
       const status: ThreadMessageLike['status'] =
         isRunning && isLast
           ? { type: 'running' }
           : { type: 'complete', reason: 'stop' };
 
       messages.push({
-        id: uuid,
+        id: latest.stableId,
         role: 'assistant',
         content: parts as ThreadMessageLike['content'],
         status,

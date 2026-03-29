@@ -54,6 +54,9 @@ vi.mock('react-markdown', () => ({
 
 vi.mock('rehype-highlight', () => ({ default: () => {} }));
 vi.mock('remark-gfm', () => ({ default: () => {} }));
+vi.mock('./toolUIs', () => ({
+  ToolCallFallback: () => <div data-testid="tool-call-fallback" />,
+}));
 
 import CustomAssistantMessage from './CustomAssistantMessage';
 

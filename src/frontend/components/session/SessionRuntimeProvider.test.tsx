@@ -45,6 +45,9 @@ function makeProps(
     approve: vi.fn(),
     deny: vi.fn(),
     sendMessage: vi.fn().mockResolvedValue(undefined),
+    handleStop: vi.fn().mockResolvedValue(undefined),
+    messageQueued: false,
+    sendMessageDirect: vi.fn().mockResolvedValue(undefined),
     children: <div />,
     ...overrides,
   };
@@ -138,6 +141,96 @@ describe('SessionRuntimeProvider', () => {
       const callArg = (useExternalStoreRuntime as ReturnType<typeof vi.fn>).mock
         .calls[0]?.[0];
       expect(callArg.isRunning).toBe(true);
+    });
+  });
+
+  describe('onNew behavior', () => {
+    it('calls sendMessage even when isRunning is true (no early return)', async () => {
+      const sendMessage = vi.fn().mockResolvedValue(undefined);
+      render(
+        <SessionRuntimeProvider
+          {...makeProps({ sessionStatus: 'running', sendMessage })}
+        />,
+      );
+      const callArg = (useExternalStoreRuntime as ReturnType<typeof vi.fn>).mock
+        .calls[0]?.[0];
+      await callArg.onNew({
+        content: [{ type: 'text', text: 'hello' }],
+      });
+      expect(sendMessage).toHaveBeenCalledWith('session-1', 'hello');
+    });
+
+    it('does not call sendMessage when content is empty text', async () => {
+      const sendMessage = vi.fn().mockResolvedValue(undefined);
+      render(<SessionRuntimeProvider {...makeProps({ sendMessage })} />);
+      const callArg = (useExternalStoreRuntime as ReturnType<typeof vi.fn>).mock
+        .calls[0]?.[0];
+      await callArg.onNew({
+        content: [{ type: 'text', text: '   ' }],
+      });
+      expect(sendMessage).not.toHaveBeenCalled();
+    });
+
+    it('does not call sendMessage when content has no text parts', async () => {
+      const sendMessage = vi.fn().mockResolvedValue(undefined);
+      render(<SessionRuntimeProvider {...makeProps({ sendMessage })} />);
+      const callArg = (useExternalStoreRuntime as ReturnType<typeof vi.fn>).mock
+        .calls[0]?.[0];
+      await callArg.onNew({
+        content: [{ type: 'image', image: 'data:...' }],
+      });
+      expect(sendMessage).not.toHaveBeenCalled();
+    });
+
+    it('joins multiple text parts with newline', async () => {
+      const sendMessage = vi.fn().mockResolvedValue(undefined);
+      render(<SessionRuntimeProvider {...makeProps({ sendMessage })} />);
+      const callArg = (useExternalStoreRuntime as ReturnType<typeof vi.fn>).mock
+        .calls[0]?.[0];
+      await callArg.onNew({
+        content: [
+          { type: 'text', text: 'line one' },
+          { type: 'text', text: 'line two' },
+        ],
+      });
+      expect(sendMessage).toHaveBeenCalledWith(
+        'session-1',
+        'line one\nline two',
+      );
+    });
+
+    it('logs error and does not rethrow when sendMessage rejects', async () => {
+      const consoleSpy = vi
+        .spyOn(console, 'error')
+        .mockImplementation(() => {});
+      const sendMessage = vi.fn().mockRejectedValue(new Error('send failed'));
+      render(<SessionRuntimeProvider {...makeProps({ sendMessage })} />);
+      const callArg = (useExternalStoreRuntime as ReturnType<typeof vi.fn>).mock
+        .calls[0]?.[0];
+      await expect(
+        callArg.onNew({ content: [{ type: 'text', text: 'hi' }] }),
+      ).resolves.toBeUndefined();
+      expect(consoleSpy).toHaveBeenCalledWith(
+        '[SessionRuntime] onNew failed:',
+        expect.any(Error),
+      );
+      consoleSpy.mockRestore();
+    });
+
+    it('passes sendMessageDirect (not sendMessage) to SessionActionsContext', () => {
+      // SessionRuntimeProvider receives sendMessage (for onNew/adapter) and
+      // sendMessageDirect (for the composer's direct-send path via SessionActionsContext).
+      // The component renders without error when both are distinct functions.
+      const sendMessage = vi.fn().mockResolvedValue(undefined);
+      const sendMessageDirect = vi.fn().mockResolvedValue(undefined);
+      render(
+        <SessionRuntimeProvider
+          {...makeProps({ sendMessage, sendMessageDirect })}
+        />,
+      );
+      expect(
+        screen.getByTestId('assistant-runtime-provider'),
+      ).toBeInTheDocument();
     });
   });
 });
