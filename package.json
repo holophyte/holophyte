@@ -26,6 +26,7 @@
     "pr-comments": "scripts/pr-comments.sh",
     "storybook": "storybook dev -p 6006",
     "setup": "bun run src/setup.ts",
+    "setup:companion": "bun --no-env-file --env-file=.env.companion run src/setup.ts",
     "companion": "bun --no-env-file --env-file=.env.companion run src/companion.ts",
     "mcp": "bun run src/mcp/server.ts",
     "companion:preview": "scripts/companion-preview.sh",
