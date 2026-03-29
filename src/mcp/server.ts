@@ -7,7 +7,6 @@
 // CRITICAL: Redirect console.log to stderr BEFORE any imports that may log,
 // since MCP uses stdout for JSON-RPC and any stray stdout output breaks the protocol.
 
-const _origLog = console.log;
 console.log = (...args: unknown[]) => console.error(...args);
 
 import { api } from '@convex/_generated/api';
@@ -35,16 +34,12 @@ interface OrgInfo {
 let httpClient: ConvexHttpClient | null = null;
 let defaultOrgId: Id<'organizations'> | null = null;
 
-function getDeployment(): string | undefined {
-  return process.env.CONVEX_DEPLOYMENT;
-}
-
 /**
  * Bootstraps auth and initializes the ConvexHttpClient.
  * Replicates the companion's auth flow: token file → anonymous fallback.
  */
 async function bootstrapAuth(convexUrl: string): Promise<void> {
-  const deployment = getDeployment();
+  const deployment = process.env.CONVEX_DEPLOYMENT;
 
   let token: string | null = null;
   if (deployment) {
@@ -108,6 +103,23 @@ function requireOrgId(orgIdArg?: string): Id<'organizations'> {
   return orgId as Id<'organizations'>;
 }
 
+/** Wraps a value as a JSON text response for MCP tool results. */
+function jsonResponse(data: unknown) {
+  return {
+    content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }],
+  };
+}
+
+/** Wraps a plain text string as an MCP tool result. */
+function textResponse(text: string) {
+  return { content: [{ type: 'text' as const, text }] };
+}
+
+/** Returns an MCP error result with the given message. */
+function errorResponse(text: string) {
+  return { content: [{ type: 'text' as const, text }], isError: true };
+}
+
 // ── MCP Server ───────────────────────────────────────────────────────
 
 const server = new McpServer({
@@ -131,18 +143,9 @@ server.tool(
     const repos = await client.query(api.repos.list, {
       orgId: requireOrgId(orgId),
     });
-    return {
-      content: [
-        {
-          type: 'text' as const,
-          text: JSON.stringify(
-            repos.map((r) => ({ id: r._id, name: r.name, path: r.path })),
-            null,
-            2,
-          ),
-        },
-      ],
-    };
+    return jsonResponse(
+      repos.map((r) => ({ id: r._id, name: r.name, path: r.path })),
+    );
   },
 );
 
@@ -185,27 +188,18 @@ server.tool(
     const tasks = status
       ? allTasks.filter((t) => t.status === status)
       : allTasks;
-    return {
-      content: [
-        {
-          type: 'text' as const,
-          text: JSON.stringify(
-            tasks.map((t) => ({
-              id: t._id,
-              title: t.title,
-              status: t.status,
-              repoId: t.repoId,
-              priority: t.priority,
-              prompt: t.prompt
-                ? `${t.prompt.slice(0, 100)}${t.prompt.length > 100 ? '...' : ''}`
-                : '',
-            })),
-            null,
-            2,
-          ),
-        },
-      ],
-    };
+    return jsonResponse(
+      tasks.map((t) => ({
+        id: t._id,
+        title: t.title,
+        status: t.status,
+        repoId: t.repoId,
+        priority: t.priority,
+        prompt: t.prompt
+          ? `${t.prompt.slice(0, 100)}${t.prompt.length > 100 ? '...' : ''}`
+          : '',
+      })),
+    );
   },
 );
 
@@ -220,43 +214,27 @@ server.tool(
     const task = await client.query(api.tasks.get, {
       id: id as Id<'tasks'>,
     });
-    if (!task) {
-      return {
-        content: [{ type: 'text' as const, text: 'Task not found' }],
-        isError: true,
-      };
-    }
-    return {
-      content: [
-        {
-          type: 'text' as const,
-          text: JSON.stringify(
-            {
-              id: task._id,
-              title: task.title,
-              description: task.description,
-              prompt: task.prompt,
-              status: task.status,
-              priority: task.priority,
-              repoId: task.repoId,
-              repoName: task.repo?.name,
-              repoPath: task.repo?.path,
-              labels: task.labels?.map((l) => ({
-                id: l._id,
-                name: l.name,
-                color: l.color,
-              })),
-              subtaskTotal: task.subtaskTotal,
-              subtaskCompleted: task.subtaskCompleted,
-              createdAt: task.createdAt,
-              updatedAt: task.updatedAt,
-            },
-            null,
-            2,
-          ),
-        },
-      ],
-    };
+    if (!task) return errorResponse('Task not found');
+    return jsonResponse({
+      id: task._id,
+      title: task.title,
+      description: task.description,
+      prompt: task.prompt,
+      status: task.status,
+      priority: task.priority,
+      repoId: task.repoId,
+      repoName: task.repo?.name,
+      repoPath: task.repo?.path,
+      labels: task.labels?.map((l) => ({
+        id: l._id,
+        name: l.name,
+        color: l.color,
+      })),
+      subtaskTotal: task.subtaskTotal,
+      subtaskCompleted: task.subtaskCompleted,
+      createdAt: task.createdAt,
+      updatedAt: task.updatedAt,
+    });
   },
 );
 
@@ -300,18 +278,7 @@ server.tool(
       description,
       status,
     });
-    return {
-      content: [
-        {
-          type: 'text' as const,
-          text: JSON.stringify(
-            { id: taskId, title, status: status ?? 'backlog' },
-            null,
-            2,
-          ),
-        },
-      ],
-    };
+    return jsonResponse({ id: taskId, title, status: status ?? 'backlog' });
   },
 );
 
@@ -368,11 +335,7 @@ server.tool(
       }
     }
 
-    return {
-      content: [
-        { type: 'text' as const, text: `Task ${id} updated successfully` },
-      ],
-    };
+    return textResponse(`Task ${id} updated successfully`);
   },
 );
 
@@ -387,33 +350,17 @@ server.tool(
     const session = await client.query(api.sessions.get, {
       id: id as Id<'sessions'>,
     });
-    if (!session) {
-      return {
-        content: [{ type: 'text' as const, text: 'Session not found' }],
-        isError: true,
-      };
-    }
-    return {
-      content: [
-        {
-          type: 'text' as const,
-          text: JSON.stringify(
-            {
-              id: session._id,
-              taskId: session.taskId,
-              status: session.status,
-              model: session.model,
-              permissionMode: session.permissionMode,
-              startedAt: session.startedAt,
-              lastActivityAt: session.lastActivityAt,
-              sdkSessionId: session.sdkSessionId,
-            },
-            null,
-            2,
-          ),
-        },
-      ],
-    };
+    if (!session) return errorResponse('Session not found');
+    return jsonResponse({
+      id: session._id,
+      taskId: session.taskId,
+      status: session.status,
+      model: session.model,
+      permissionMode: session.permissionMode,
+      startedAt: session.startedAt,
+      lastActivityAt: session.lastActivityAt,
+      sdkSessionId: session.sdkSessionId,
+    });
   },
 );
 
@@ -440,23 +387,12 @@ server.tool(
     const task = await client.query(api.tasks.get, {
       id: taskId as Id<'tasks'>,
     });
-    if (!task) {
-      return {
-        content: [{ type: 'text' as const, text: 'Task not found' }],
-        isError: true,
-      };
-    }
+    if (!task) return errorResponse('Task not found');
     const effectivePrompt = prompt ?? task.prompt;
     if (!effectivePrompt) {
-      return {
-        content: [
-          {
-            type: 'text' as const,
-            text: 'No prompt provided and task has no prompt set. Provide a prompt or set one on the task first.',
-          },
-        ],
-        isError: true,
-      };
+      return errorResponse(
+        'No prompt provided and task has no prompt set. Provide a prompt or set one on the task first.',
+      );
     }
 
     // Check companion status (best-effort)
@@ -481,14 +417,9 @@ server.tool(
       model,
     });
 
-    return {
-      content: [
-        {
-          type: 'text' as const,
-          text: `Session created: ${sessionId}\nStatus: queued (will start when companion picks it up)${companionWarning}`,
-        },
-      ],
-    };
+    return textResponse(
+      `Session created: ${sessionId}\nStatus: queued (will start when companion picks it up)${companionWarning}`,
+    );
   },
 );
 
@@ -503,14 +434,9 @@ server.tool(
     await client.mutation(api.sessions.requestStop, {
       id: id as Id<'sessions'>,
     });
-    return {
-      content: [
-        {
-          type: 'text' as const,
-          text: `Stop requested for session ${id}. The companion will abort the SDK process.`,
-        },
-      ],
-    };
+    return textResponse(
+      `Stop requested for session ${id}. The companion will abort the SDK process.`,
+    );
   },
 );
 
@@ -530,23 +456,14 @@ server.tool(
     const templates = await client.query(api.promptTemplates.list, {
       repoId: repoId ? (repoId as Id<'repos'>) : undefined,
     });
-    return {
-      content: [
-        {
-          type: 'text' as const,
-          text: JSON.stringify(
-            templates.map((t) => ({
-              id: t._id,
-              name: t.name,
-              content: t.content,
-              repoId: t.repoId,
-            })),
-            null,
-            2,
-          ),
-        },
-      ],
-    };
+    return jsonResponse(
+      templates.map((t) => ({
+        id: t._id,
+        name: t.name,
+        content: t.content,
+        repoId: t.repoId,
+      })),
+    );
   },
 );
 
@@ -579,22 +496,11 @@ server.tool(
       statusCounts[task.status] = (statusCounts[task.status] ?? 0) + 1;
     }
 
-    return {
-      content: [
-        {
-          type: 'text' as const,
-          text: JSON.stringify(
-            {
-              totalTasks: allTasks.length,
-              byStatus: statusCounts,
-              runningSessions: runningSessions.length,
-            },
-            null,
-            2,
-          ),
-        },
-      ],
-    };
+    return jsonResponse({
+      totalTasks: allTasks.length,
+      byStatus: statusCounts,
+      runningSessions: runningSessions.length,
+    });
   },
 );
 
