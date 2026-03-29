@@ -4,8 +4,10 @@
 // Runs as a stdio subprocess — registered in ~/.claude.json under mcpServers.
 // Talks to Convex directly using ConvexHttpClient (one-shot queries/mutations).
 //
-// CRITICAL: Redirect console.log to stderr BEFORE any imports that may log,
-// since MCP uses stdout for JSON-RPC and any stray stdout output breaks the protocol.
+// Redirect console.log to stderr so stray log output from imported modules
+// doesn't corrupt the MCP stdio protocol. In Bun, this top-level statement
+// runs before ES module imports are evaluated (unlike the spec, where imports
+// are hoisted). If this ever breaks, move the override to a separate preload file.
 
 console.log = (...args: unknown[]) => console.error(...args);
 
@@ -127,6 +129,23 @@ const server = new McpServer({
   version: '1.0.0',
 });
 
+const taskStatusEnum = z.enum([
+  TaskStatus.Backlog,
+  TaskStatus.Todo,
+  TaskStatus.InProgress,
+  TaskStatus.Review,
+  TaskStatus.Done,
+]);
+
+const taskStatusWithArchivedEnum = z.enum([
+  TaskStatus.Backlog,
+  TaskStatus.Todo,
+  TaskStatus.InProgress,
+  TaskStatus.Review,
+  TaskStatus.Done,
+  TaskStatus.Archived,
+]);
+
 // ── Tool: holophyte_list_repos ───────────────────────────────────────
 
 server.tool(
@@ -163,27 +182,26 @@ server.tool(
       .string()
       .optional()
       .describe('Organization ID (uses default org if omitted)'),
-    status: z
-      .string()
-      .optional()
-      .describe(
-        'Filter by status: backlog, todo, in_progress, review, done, archived',
-      ),
+    status: taskStatusWithArchivedEnum.optional().describe('Filter by status'),
     includeArchived: z
       .boolean()
       .optional()
-      .describe('Include archived tasks (default: false)'),
+      .describe(
+        'Include archived tasks (default: false, auto-enabled when status=archived)',
+      ),
   },
   async ({ repoId, orgId, status, includeArchived }) => {
     const client = requireClient();
+    // Auto-include archived tasks when explicitly filtering for them
+    const shouldIncludeArchived = includeArchived ?? status === 'archived';
     const allTasks = repoId
       ? await client.query(api.tasks.listByRepo, {
           repoId: repoId as Id<'repos'>,
-          includeArchived: includeArchived ?? false,
+          includeArchived: shouldIncludeArchived,
         })
       : await client.query(api.tasks.listAll, {
           orgId: requireOrgId(orgId),
-          includeArchived: includeArchived ?? false,
+          includeArchived: shouldIncludeArchived,
         });
     const tasks = status
       ? allTasks.filter((t) => t.status === status)
@@ -239,23 +257,6 @@ server.tool(
 );
 
 // ── Tool: holophyte_create_task ──────────────────────────────────────
-
-const taskStatusEnum = z.enum([
-  TaskStatus.Backlog,
-  TaskStatus.Todo,
-  TaskStatus.InProgress,
-  TaskStatus.Review,
-  TaskStatus.Done,
-]);
-
-const taskStatusWithArchivedEnum = z.enum([
-  TaskStatus.Backlog,
-  TaskStatus.Todo,
-  TaskStatus.InProgress,
-  TaskStatus.Review,
-  TaskStatus.Done,
-  TaskStatus.Archived,
-]);
 
 server.tool(
   'holophyte_create_task',
@@ -315,24 +316,27 @@ server.tool(
     // Move to new status (separate mutation with position at bottom of column)
     if (status) {
       const task = await client.query(api.tasks.get, { id: taskId });
-      if (task) {
-        const existingTasks = await client.query(api.tasks.listByRepo, {
-          repoId: task.repoId,
-          includeArchived: true,
-        });
-        const tasksInTargetStatus = existingTasks.filter(
-          (t) => t.status === status,
+      if (!task) {
+        return errorResponse(
+          'Task fields were updated but the task was deleted before the status change could be applied.',
         );
-        const maxPosition = tasksInTargetStatus.reduce(
-          (max, t) => Math.max(max, t.position),
-          0,
-        );
-        await client.mutation(api.tasks.move, {
-          id: taskId,
-          status,
-          position: maxPosition + 1,
-        });
       }
+      const existingTasks = await client.query(api.tasks.listByRepo, {
+        repoId: task.repoId,
+        includeArchived: true,
+      });
+      const tasksInTargetStatus = existingTasks.filter(
+        (t) => t.status === status,
+      );
+      const maxPosition = tasksInTargetStatus.reduce(
+        (max, t) => Math.max(max, t.position),
+        0,
+      );
+      await client.mutation(api.tasks.move, {
+        id: taskId,
+        status,
+        position: maxPosition + 1,
+      });
     }
 
     return textResponse(`Task ${id} updated successfully`);
