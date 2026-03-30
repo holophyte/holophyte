@@ -42,10 +42,12 @@ const TOKENS_FILE = join(TOKEN_DIR, 'tokens.json');
 /** API key file path — plain text, one key per file. */
 const API_KEY_FILE = join(TOKEN_DIR, 'api-key');
 
+/** Returns the absolute path to the deployment-keyed tokens file (`~/.holophyte/tokens.json`). */
 export function getTokensFilePath(): string {
   return TOKENS_FILE;
 }
 
+/** Returns the absolute path to the API key file (`~/.holophyte/api-key`). */
 export function getApiKeyFilePath(): string {
   return API_KEY_FILE;
 }

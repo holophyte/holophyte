@@ -68,9 +68,13 @@ function GenerateKeyDialog({ open, onOpenChange }: GenerateKeyDialogProps) {
 
   const handleCopy = async () => {
     if (!generatedKey) return;
-    await navigator.clipboard.writeText(generatedKey);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    try {
+      await navigator.clipboard.writeText(generatedKey);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // Clipboard API unavailable (e.g. non-HTTPS context)
+    }
   };
 
   const handleClose = () => {
@@ -243,6 +247,46 @@ function KeyRow({ apiKey, onRevoke, revoking }: KeyRowProps) {
   );
 }
 
+interface KeysListProps {
+  keys: ApiKeyDoc[] | undefined;
+  onRevoke: (keyId: ApiKeyDoc['_id']) => void;
+  revokingId: ApiKeyDoc['_id'] | null;
+}
+
+function KeysList({ keys, onRevoke, revokingId }: KeysListProps) {
+  if (keys === undefined) {
+    return (
+      <div className="flex items-center justify-center py-8 text-muted-foreground">
+        <Loader2 className="h-5 w-5 animate-spin" />
+      </div>
+    );
+  }
+
+  if (keys.length === 0) {
+    return (
+      <div className="rounded-md border border-dashed p-8 text-center">
+        <KeyRound className="mx-auto h-8 w-8 text-muted-foreground/50" />
+        <p className="mt-2 text-sm text-muted-foreground">
+          No API keys yet. Generate one to get started.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      {keys.map((key) => (
+        <KeyRow
+          key={key._id}
+          apiKey={key}
+          onRevoke={onRevoke}
+          revoking={revokingId === key._id}
+        />
+      ))}
+    </div>
+  );
+}
+
 export default function ApiKeysPanel() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [revokingId, setRevokingId] = useState<ApiKeyDoc['_id'] | null>(null);
@@ -274,29 +318,7 @@ export default function ApiKeysPanel() {
         </Button>
       </div>
 
-      {keys === undefined ? (
-        <div className="flex items-center justify-center py-8 text-muted-foreground">
-          <Loader2 className="h-5 w-5 animate-spin" />
-        </div>
-      ) : keys.length === 0 ? (
-        <div className="rounded-md border border-dashed p-8 text-center">
-          <KeyRound className="mx-auto h-8 w-8 text-muted-foreground/50" />
-          <p className="mt-2 text-sm text-muted-foreground">
-            No API keys yet. Generate one to get started.
-          </p>
-        </div>
-      ) : (
-        <div className="space-y-3">
-          {keys.map((key) => (
-            <KeyRow
-              key={key._id}
-              apiKey={key}
-              onRevoke={handleRevoke}
-              revoking={revokingId === key._id}
-            />
-          ))}
-        </div>
-      )}
+      <KeysList keys={keys} onRevoke={handleRevoke} revokingId={revokingId} />
 
       <GenerateKeyDialog open={dialogOpen} onOpenChange={setDialogOpen} />
     </section>

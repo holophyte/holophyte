@@ -492,14 +492,20 @@ http.route({
       return jsonError('apiKey and scope are required strings', 400);
     }
 
+    // Reject obviously invalid keys before hashing (prevents DoS via large strings)
+    if (!/^holo_[0-9a-f]{64}$/.test(apiKey)) {
+      return jsonError('Invalid API key', 401);
+    }
+
     const hashedKey = await hashApiKey(apiKey);
 
     const keyDoc = await ctx.runQuery(internal.apiKeys.validateByHash, {
       hashedKey,
     });
     if (!keyDoc) return jsonError('Invalid API key', 401);
+    // Return same 401 for scope mismatch to prevent key enumeration
     if (!keyDoc.scopes.includes(scope))
-      return jsonError('Scope not authorized', 403);
+      return jsonError('Invalid API key', 401);
 
     await ctx.runMutation(internal.apiKeys.updateLastUsedAt, {
       keyId: keyDoc._id,

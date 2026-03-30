@@ -67,6 +67,29 @@ async function readLine(): Promise<string | null> {
   }
 }
 
+/**
+ * Parses .env.companion and returns a map of key-value pairs.
+ * Returns an empty map if the file doesn't exist.
+ */
+async function readEnvCompanion(): Promise<Map<string, string>> {
+  const vars = new Map<string, string>();
+  try {
+    const envFile = await Bun.file('.env.companion').text();
+    for (const line of envFile.split('\n')) {
+      const [key, ...rest] = line.split('=');
+      const value = rest
+        .join('=')
+        .trim()
+        .replace(/^(['"])(.*)\1$/, '$2');
+      const trimmedKey = key?.trim();
+      if (trimmedKey && value) vars.set(trimmedKey, value);
+    }
+  } catch {
+    // .env.companion doesn't exist, that's OK
+  }
+  return vars;
+}
+
 /** Reads CONVEX_URL and CONVEX_DEPLOYMENT from env or .env.companion. */
 async function loadConfig(): Promise<{
   convexUrl: string;
@@ -75,23 +98,10 @@ async function loadConfig(): Promise<{
   let convexUrl = process.env.CONVEX_URL;
   let deployment = process.env.CONVEX_DEPLOYMENT;
 
-  // Fall back to .env.companion
   if (!convexUrl || !deployment) {
-    try {
-      const envFile = await Bun.file('.env.companion').text();
-      for (const line of envFile.split('\n')) {
-        const [key, ...rest] = line.split('=');
-        const value = rest
-          .join('=')
-          .trim()
-          .replace(/^(['"])(.*)\1$/, '$2');
-        if (key?.trim() === 'CONVEX_URL' && !convexUrl) convexUrl = value;
-        if (key?.trim() === 'CONVEX_DEPLOYMENT' && !deployment)
-          deployment = value;
-      }
-    } catch {
-      // .env.companion doesn't exist, that's OK
-    }
+    const vars = await readEnvCompanion();
+    if (!convexUrl) convexUrl = vars.get('CONVEX_URL');
+    if (!deployment) deployment = vars.get('CONVEX_DEPLOYMENT');
   }
 
   if (!convexUrl)
@@ -137,24 +147,9 @@ async function selectProvider(): Promise<Provider> {
  * by replacing .convex.cloud with .convex.site.
  */
 async function loadSiteUrl(convexUrl: string): Promise<string> {
-  // Check env and .env.companion for CONVEX_SITE_URL
-  let siteUrl = process.env.CONVEX_SITE_URL;
-
-  if (!siteUrl) {
-    try {
-      const envFile = await Bun.file('.env.companion').text();
-      for (const line of envFile.split('\n')) {
-        const [key, ...rest] = line.split('=');
-        const value = rest
-          .join('=')
-          .trim()
-          .replace(/^(['"])(.*)\1$/, '$2');
-        if (key?.trim() === 'CONVEX_SITE_URL' && !siteUrl) siteUrl = value;
-      }
-    } catch {
-      // .env.companion doesn't exist, that's OK
-    }
-  }
+  const siteUrl =
+    process.env.CONVEX_SITE_URL ??
+    (await readEnvCompanion()).get('CONVEX_SITE_URL');
 
   if (siteUrl) return siteUrl.replace(/\/$/, '');
 
@@ -298,10 +293,8 @@ async function main() {
     info('Starting OAuth flow...');
     const httpClient = new ConvexHttpClient(convexUrl);
 
-    // provider is narrowed to 'github' | 'google' — 'apikey' was handled above
-    const oauthProvider = provider as 'github' | 'google';
     const initResult = await httpClient.action(api.auth.signIn, {
-      provider: oauthProvider,
+      provider,
       params: { redirectTo: callbackUrl },
     });
 

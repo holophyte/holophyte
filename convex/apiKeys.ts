@@ -30,6 +30,14 @@ export const generate = action({
     const userId = await getAuthUserId(ctx);
     if (!userId) throw new Error('Not authenticated');
 
+    // Validate scopes against known values
+    const VALID_SCOPES = ['mcp'];
+    const invalid = args.scopes.filter((s) => !VALID_SCOPES.includes(s));
+    if (invalid.length > 0)
+      throw new Error(`Invalid scopes: ${invalid.join(', ')}`);
+    if (args.scopes.length === 0)
+      throw new Error('At least one scope required');
+
     // Generate 32 random bytes → 64 hex chars → holo_<64hex> = 69 chars total
     const bytes = new Uint8Array(32);
     crypto.getRandomValues(bytes);
@@ -63,12 +71,7 @@ export const insertKey = internalMutation({
     scopes: v.array(v.string()),
   },
   handler: async (ctx, args) => {
-    return await ctx.db.insert('apiKeys', {
-      userId: args.userId,
-      hashedKey: args.hashedKey,
-      name: args.name,
-      scopes: args.scopes,
-    });
+    return await ctx.db.insert('apiKeys', args);
   },
 });
 

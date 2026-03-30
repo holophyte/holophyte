@@ -77,7 +77,15 @@ async function bootstrapAuth(convexUrl: string): Promise<void> {
         console.log(
           `MCP server authenticated via API key (userId: ${body.userId ?? 'unknown'})`,
         );
-        // API key is a valid identity gate; proceed with remaining auth for Convex client
+        // API key validated identity — use anonymous auth for the Convex client session.
+        // The key proves who the user is; anonymous auth provides the transport token.
+        const anonResult = await signInAnonymous(convexUrl);
+        if (anonResult) {
+          httpClient = new ConvexHttpClient(convexUrl);
+          httpClient.setAuth(anonResult.token);
+          return;
+        }
+        // If anonymous auth isn't available, fall through to other auth methods
       } else if (resp.status === 401 || resp.status === 403) {
         console.error(
           `API key validation failed (${resp.status}) — refusing to start`,
