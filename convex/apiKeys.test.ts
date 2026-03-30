@@ -201,8 +201,8 @@ describe('apiKeys.revoke', () => {
   });
 });
 
-describe('apiKeys.validateByHash (internal)', () => {
-  it('returns the key doc for a valid unrevoked key', async () => {
+describe('apiKeys.validateAndTouch (internal)', () => {
+  it('returns keyId and userId for a valid unrevoked key with matching scope', async () => {
     const t = convexTest(schema);
     const { userId, authed } = await setupUser(t);
 
@@ -219,22 +219,48 @@ describe('apiKeys.validateByHash (internal)', () => {
     ).join('');
 
     const result = await t.run(async (ctx) => {
-      return ctx.runQuery(internal.apiKeys.validateByHash, { hashedKey });
+      return ctx.runMutation(internal.apiKeys.validateAndTouch, {
+        hashedKey,
+        scope: 'mcp',
+      });
     });
 
     expect(result).not.toBeNull();
-    expect(result).toMatchObject({
-      userId,
-      scopes: ['mcp'],
-    });
+    expect(result).toMatchObject({ userId });
   });
 
   it('returns null for an unknown hash', async () => {
     const t = convexTest(schema);
 
     const result = await t.run(async (ctx) => {
-      return ctx.runQuery(internal.apiKeys.validateByHash, {
+      return ctx.runMutation(internal.apiKeys.validateAndTouch, {
         hashedKey: 'a'.repeat(64),
+        scope: 'mcp',
+      });
+    });
+
+    expect(result).toBeNull();
+  });
+
+  it('returns null for a scope mismatch', async () => {
+    const t = convexTest(schema);
+    const { authed } = await setupUser(t);
+
+    const rawKey = await authed.action(api.apiKeys.generate, {
+      name: 'Scoped Key',
+      scopes: ['mcp'],
+    });
+
+    const encoded = new TextEncoder().encode(rawKey);
+    const hashBuffer = await crypto.subtle.digest('SHA-256', encoded);
+    const hashedKey = Array.from(new Uint8Array(hashBuffer), (b) =>
+      b.toString(16).padStart(2, '0'),
+    ).join('');
+
+    const result = await t.run(async (ctx) => {
+      return ctx.runMutation(internal.apiKeys.validateAndTouch, {
+        hashedKey,
+        scope: 'other',
       });
     });
 
@@ -264,7 +290,10 @@ describe('apiKeys.validateByHash (internal)', () => {
     ).join('');
 
     const result = await t.run(async (ctx) => {
-      return ctx.runQuery(internal.apiKeys.validateByHash, { hashedKey });
+      return ctx.runMutation(internal.apiKeys.validateAndTouch, {
+        hashedKey,
+        scope: 'mcp',
+      });
     });
 
     expect(result).toBeNull();

@@ -499,19 +499,13 @@ http.route({
 
     const hashedKey = await hashApiKey(apiKey);
 
-    const keyDoc = await ctx.runQuery(internal.apiKeys.validateByHash, {
+    const result = await ctx.runMutation(internal.apiKeys.validateAndTouch, {
       hashedKey,
+      scope,
     });
-    if (!keyDoc) return jsonError('Invalid API key', 401);
-    // Return same 401 for scope mismatch to prevent key enumeration
-    if (!keyDoc.scopes.includes(scope))
-      return jsonError('Invalid API key', 401);
+    if (!result) return jsonError('Invalid API key', 401);
 
-    await ctx.runMutation(internal.apiKeys.updateLastUsedAt, {
-      keyId: keyDoc._id,
-    });
-
-    return new Response(JSON.stringify({ userId: keyDoc.userId }), {
+    return new Response(JSON.stringify({ userId: result.userId }), {
       status: 200,
       headers: { 'Content-Type': 'application/json' },
     });

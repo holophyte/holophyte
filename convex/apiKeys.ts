@@ -147,6 +147,13 @@ export const revokeAndInsert = internalMutation({
     expiresAt: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
+    const oldKey = await ctx.db.get(args.oldKeyId);
+    if (!oldKey) throw new Error('API key not found');
+    if (oldKey.userId !== args.userId)
+      throw new Error('Not authorized to regenerate this key');
+    if (oldKey.revokedAt !== undefined)
+      throw new Error('Cannot regenerate a revoked key');
+
     await ctx.db.patch(args.oldKeyId, { revokedAt: Date.now() });
     return await ctx.db.insert('apiKeys', {
       userId: args.userId,
@@ -238,13 +245,14 @@ export const list = query({
 });
 
 /**
- * Internal query to look up an API key by its SHA-256 hash.
- * Returns the full doc (including userId) or null if not found / revoked.
- * Used by the HTTP exchange endpoint.
+ * Internal mutation to validate an API key by hash and update `lastUsedAt` atomically.
+ * Returns `{ keyId, userId }` on success, or `null` if the key is invalid/revoked/expired.
+ * Combining validation and the touch into one mutation prevents TOCTOU races.
  */
-export const validateByHash = internalQuery({
+export const validateAndTouch = internalMutation({
   args: {
     hashedKey: v.string(),
+    scope: v.string(),
   },
   handler: async (ctx, args) => {
     const key = await ctx.db
@@ -255,20 +263,9 @@ export const validateByHash = internalQuery({
     if (!key) return null;
     if (key.revokedAt !== undefined) return null;
     if (key.expiresAt !== undefined && key.expiresAt < Date.now()) return null;
+    if (!key.scopes.includes(args.scope)) return null;
 
-    return key;
-  },
-});
-
-/**
- * Internal mutation to update `lastUsedAt` on an API key.
- * Called after a successful key validation in the HTTP exchange endpoint.
- */
-export const updateLastUsedAt = internalMutation({
-  args: {
-    keyId: v.id('apiKeys'),
-  },
-  handler: async (ctx, args) => {
-    await ctx.db.patch(args.keyId, { lastUsedAt: Date.now() });
+    await ctx.db.patch(key._id, { lastUsedAt: Date.now() });
+    return { keyId: key._id, userId: key.userId };
   },
 });
