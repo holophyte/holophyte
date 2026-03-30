@@ -356,7 +356,6 @@ export async function startSession(opts: {
   const sdkEnv = { ...process.env };
   delete sdkEnv.CLAUDECODE;
   delete sdkEnv.CLAUDE_CODE_ENTRYPOINT;
-  delete sdkEnv.CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS;
 
   const sdkOptions: Parameters<typeof sdkQuery>[0]['options'] = {
     cwd: opts.repoPath,
