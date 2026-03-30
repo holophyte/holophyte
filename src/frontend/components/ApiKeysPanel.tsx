@@ -517,7 +517,9 @@ function KeyRow({
                     'p-1 text-muted-foreground transition-colors rounded',
                     regenerating && 'animate-spin cursor-default',
                     !anyRegenerating && 'hover:text-ring cursor-pointer',
-                    anyRegenerating && !regenerating && 'cursor-not-allowed opacity-50',
+                    anyRegenerating &&
+                      !regenerating &&
+                      'cursor-not-allowed opacity-50',
                   )}
                   onClick={() => !anyRegenerating && onRegenerate(apiKey._id)}
                   disabled={anyRegenerating}
