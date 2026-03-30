@@ -112,7 +112,7 @@ export function Sidebar() {
           <Plus className="h-3.5 w-3.5" />
         </Button>
       </div>
-      <ScrollArea className="flex-1">
+      <ScrollArea className="flex-1 [&>div>div]:!block">
         <div className="p-2 space-y-1">
           {repos === undefined &&
             [1, 2, 3].map((i) => (
@@ -168,7 +168,7 @@ export function Sidebar() {
                           })
                         }
                         className={cn(
-                          'w-full text-left rounded-md px-2 py-1 transition-colors flex items-center gap-1.5',
+                          'w-full min-w-0 text-left rounded-md px-2 py-1 transition-colors flex items-center gap-1.5',
                           selectedTaskId === task._id
                             ? 'bg-accent'
                             : 'hover:bg-accent/50',
