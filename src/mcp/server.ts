@@ -13,7 +13,7 @@ console.log = (...args: unknown[]) => console.error(...args);
 
 import { api } from '@convex/_generated/api';
 import type { Id } from '@convex/_generated/dataModel';
-import { TaskStatus } from '@convex/schema';
+import { TaskPriority, TaskStatus } from '@convex/schema';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { ConvexHttpClient } from 'convex/browser';
@@ -135,6 +135,14 @@ const taskStatusEnum = z.enum([
   TaskStatus.InProgress,
   TaskStatus.Review,
   TaskStatus.Done,
+]);
+
+const taskPriorityEnum = z.enum([
+  TaskPriority.None,
+  TaskPriority.Low,
+  TaskPriority.Medium,
+  TaskPriority.High,
+  TaskPriority.Urgent,
 ]);
 
 const taskStatusWithArchivedEnum = z.enum([
@@ -269,8 +277,15 @@ server.tool(
     status: taskStatusEnum
       .optional()
       .describe('Initial status (default: backlog)'),
+    priority: taskPriorityEnum
+      .optional()
+      .describe('Task priority (default: none)'),
+    labels: z
+      .array(z.string())
+      .optional()
+      .describe('Label IDs to attach to the task'),
   },
-  async ({ repoId, title, prompt, description, status }) => {
+  async ({ repoId, title, prompt, description, status, priority, labels }) => {
     const client = requireClient();
     const taskId = await client.mutation(api.tasks.create, {
       repoId: repoId as Id<'repos'>,
@@ -278,8 +293,16 @@ server.tool(
       prompt,
       description,
       status,
+      priority,
+      labelIds: labels as Id<'labels'>[] | undefined,
     });
-    return jsonResponse({ id: taskId, title, status: status ?? 'backlog' });
+    return jsonResponse({
+      id: taskId,
+      title,
+      status: status ?? 'backlog',
+      priority: priority ?? 'none',
+      labels: labels ?? [],
+    });
   },
 );
 
@@ -287,29 +310,38 @@ server.tool(
 
 server.tool(
   'holophyte_update_task',
-  'Update a task (title, prompt, description, or status)',
+  'Update a task (title, prompt, description, status, priority, or labels). Labels are replaced wholesale — pass the full desired label set.',
   {
     id: z.string().describe('Task ID'),
     title: z.string().optional().describe('New title'),
     prompt: z.string().optional().describe('New prompt'),
     description: z.string().optional().describe('New description'),
     status: taskStatusWithArchivedEnum.optional().describe('New status'),
+    priority: taskPriorityEnum.optional().describe('New priority'),
+    labels: z
+      .array(z.string())
+      .optional()
+      .describe('Label IDs to set on the task (replaces all existing labels)'),
   },
-  async ({ id, title, prompt, description, status }) => {
+  async ({ id, title, prompt, description, status, priority, labels }) => {
     const client = requireClient();
     const taskId = id as Id<'tasks'>;
 
-    // Update fields (title, prompt, description)
+    // Update fields (title, prompt, description, priority, labels)
     if (
       title !== undefined ||
       prompt !== undefined ||
-      description !== undefined
+      description !== undefined ||
+      priority !== undefined ||
+      labels !== undefined
     ) {
       await client.mutation(api.tasks.update, {
         id: taskId,
         title,
         prompt,
         description,
+        priority,
+        labelIds: labels as Id<'labels'>[] | undefined,
       });
     }
 
