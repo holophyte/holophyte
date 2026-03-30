@@ -93,7 +93,7 @@ test.describe('Settings page - API Keys', () => {
     // MCP scope checkbox should be checked by default
     const mcpCheckbox = dialog.locator('input[type="checkbox"]');
     await expect(mcpCheckbox).toBeChecked();
-    await expect(dialog.locator('text=MCP')).toBeVisible();
+    await expect(dialog.getByText('MCP', { exact: true })).toBeVisible();
   });
 
   test('Generate Key button is disabled without a name', async ({ page }) => {
@@ -212,12 +212,19 @@ test.describe('Settings page - API Keys', () => {
     });
 
     // Should show "active" badge and "mcp" scope badge
-    const keyRow = page.locator('div').filter({ hasText: keyName }).first();
-    await expect(keyRow.locator('text=active')).toBeVisible({ timeout: 5000 });
-    await expect(keyRow.locator('text=mcp')).toBeVisible({ timeout: 5000 });
+    const keyRow = page
+      .locator('div.rounded-md.border.p-4')
+      .filter({ has: page.locator(`text=${keyName}`) })
+      .first();
+    await expect(keyRow.getByText('active', { exact: true })).toBeVisible({
+      timeout: 5000,
+    });
+    await expect(keyRow.getByText('mcp', { exact: true })).toBeVisible({
+      timeout: 5000,
+    });
 
     // Created date should be visible
-    await expect(page.locator('text=/Created/')).toBeVisible();
+    await expect(keyRow.locator('text=/Created/')).toBeVisible();
   });
 
   test('key list shows name, scopes, and created date', async ({ page }) => {
@@ -244,13 +251,12 @@ test.describe('Settings page - API Keys', () => {
 
     // The row should contain the expected metadata
     const keyRow = page
-      .locator('div')
+      .locator('div.rounded-md.border.p-4')
       .filter({ has: page.locator(`text=${keyName}`) })
-      .filter({ has: page.locator('text=active') })
       .first();
 
-    await expect(keyRow.locator('text=active')).toBeVisible();
-    await expect(keyRow.locator('text=mcp')).toBeVisible();
+    await expect(keyRow.getByText('active', { exact: true })).toBeVisible();
+    await expect(keyRow.getByText('mcp', { exact: true })).toBeVisible();
     // Created date in the format "Created <Month> <Day>, <Year>"
     await expect(keyRow.locator('text=/^Created/')).toBeVisible();
   });
@@ -280,9 +286,8 @@ test.describe('Settings page - API Keys', () => {
 
     // Find the Revoke button for this specific key row
     const keyRow = page
-      .locator('div')
+      .locator('div.rounded-md.border.p-4')
       .filter({ has: page.locator(`text=${keyName}`) })
-      .filter({ has: page.locator('text=active') })
       .first();
 
     const revokeButton = keyRow.locator('button', { hasText: 'Revoke' });
@@ -292,10 +297,10 @@ test.describe('Settings page - API Keys', () => {
     // After revoking, the "revoked" badge should appear
     await expect(page.locator(`text=${keyName}`)).toBeVisible();
     const revokedRow = page
-      .locator('div')
+      .locator('div.rounded-md.border.p-4')
       .filter({ has: page.locator(`text=${keyName}`) })
       .first();
-    await expect(revokedRow.locator('text=revoked')).toBeVisible({
+    await expect(revokedRow.getByText('revoked', { exact: true })).toBeVisible({
       timeout: 8000,
     });
 
