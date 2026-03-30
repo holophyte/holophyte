@@ -299,9 +299,9 @@ server.tool(
     return jsonResponse({
       id: taskId,
       title,
-      status: status ?? 'backlog',
-      priority: priority ?? 'none',
-      labels: labels ?? [],
+      status: status ?? TaskStatus.Backlog,
+      priority: priority ?? TaskPriority.None,
+      labelIds: labels ?? [],
     });
   },
 );

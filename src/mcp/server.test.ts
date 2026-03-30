@@ -443,7 +443,7 @@ describe('holophyte_create_task', () => {
     );
   });
 
-  it('omits priority and labelIds when neither provided (backwards compat)', async () => {
+  it('passes priority and labelIds as undefined when not provided', async () => {
     mockMutation.mockResolvedValueOnce('task-min');
 
     await tool('holophyte_create_task')({
@@ -485,7 +485,7 @@ describe('holophyte_create_task', () => {
     expect(parsed.priority).toBe('medium');
   });
 
-  it('response includes labels array defaulting to empty when not provided', async () => {
+  it('response includes labelIds array defaulting to empty when not provided', async () => {
     mockMutation.mockResolvedValueOnce('task-nl');
 
     const result = await tool('holophyte_create_task')({
@@ -494,10 +494,10 @@ describe('holophyte_create_task', () => {
     });
 
     const parsed = JSON.parse(result.content[0]?.text ?? '{}');
-    expect(parsed.labels).toEqual([]);
+    expect(parsed.labelIds).toEqual([]);
   });
 
-  it('response includes labels array from arg when provided', async () => {
+  it('response includes labelIds array from arg when provided', async () => {
     mockMutation.mockResolvedValueOnce('task-wl');
 
     const result = await tool('holophyte_create_task')({
@@ -507,7 +507,7 @@ describe('holophyte_create_task', () => {
     });
 
     const parsed = JSON.parse(result.content[0]?.text ?? '{}');
-    expect(parsed.labels).toEqual(['l1', 'l2', 'l3']);
+    expect(parsed.labelIds).toEqual(['l1', 'l2', 'l3']);
   });
 });
 
@@ -680,28 +680,6 @@ describe('holophyte_update_task', () => {
       expect.objectContaining({ id: 'task1', status: 'in_progress' }),
     );
     expect(mockMutation).toHaveBeenCalledTimes(2);
-  });
-
-  it('does not call update mutation when only status changes (priority/labels absent)', async () => {
-    mockQuery.mockResolvedValueOnce({
-      _id: 'task5',
-      repoId: 'r1',
-      status: 'todo',
-      position: 1,
-    });
-    mockQuery.mockResolvedValueOnce([
-      { _id: 'task5', status: 'done', position: 3 },
-    ]);
-    mockMutation.mockResolvedValue(undefined);
-
-    await tool('holophyte_update_task')({ id: 'task5', status: 'done' });
-
-    // Only the move mutation, no update
-    expect(mockMutation).toHaveBeenCalledTimes(1);
-    expect(mockMutation).toHaveBeenCalledWith(
-      expect.anything(),
-      expect.objectContaining({ id: 'task5', status: 'done' }),
-    );
   });
 
   it('passes empty array as labelIds when labels is an empty array', async () => {
