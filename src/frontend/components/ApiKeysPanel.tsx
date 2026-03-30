@@ -115,6 +115,7 @@ function GenerateKeyDialog({ open, onOpenChange }: GenerateKeyDialogProps) {
   };
 
   const handleClose = () => {
+    if (submitting) return;
     setName('');
     setMcpScope(true);
     setExpiryDays(90);
@@ -126,7 +127,11 @@ function GenerateKeyDialog({ open, onOpenChange }: GenerateKeyDialogProps) {
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent
+        className="max-w-2xl"
+        onEscapeKeyDown={(e) => submitting && e.preventDefault()}
+        onPointerDownOutside={(e) => submitting && e.preventDefault()}
+      >
         {generatedKey ? (
           <>
             <DialogHeader>
@@ -192,7 +197,12 @@ function GenerateKeyDialog({ open, onOpenChange }: GenerateKeyDialogProps) {
               {error && <p className="text-sm text-destructive">{error}</p>}
             </div>
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={handleClose}>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleClose}
+                disabled={submitting}
+              >
                 Cancel
               </Button>
               <Button type="submit" disabled={!name.trim() || submitting}>
@@ -399,6 +409,7 @@ interface KeyRowProps {
   revoking: boolean;
   onRegenerate: (keyId: ApiKeyDoc['_id']) => void;
   regenerating: boolean;
+  anyRegenerating: boolean;
 }
 
 function KeyRow({
@@ -407,6 +418,7 @@ function KeyRow({
   revoking,
   onRegenerate,
   regenerating,
+  anyRegenerating,
 }: KeyRowProps) {
   const isRevoked = apiKey.revokedAt !== undefined;
   const [editOpen, setEditOpen] = useState(false);
@@ -502,11 +514,13 @@ function KeyRow({
                 <button
                   type="button"
                   className={cn(
-                    'p-1 text-muted-foreground hover:text-ring transition-colors cursor-pointer rounded',
-                    regenerating && 'animate-spin',
+                    'p-1 text-muted-foreground transition-colors rounded',
+                    regenerating && 'animate-spin cursor-default',
+                    !anyRegenerating && 'hover:text-ring cursor-pointer',
+                    anyRegenerating && !regenerating && 'cursor-not-allowed opacity-50',
                   )}
-                  onClick={() => onRegenerate(apiKey._id)}
-                  disabled={regenerating}
+                  onClick={() => !anyRegenerating && onRegenerate(apiKey._id)}
+                  disabled={anyRegenerating}
                   title="Regenerate key"
                   aria-label="Regenerate key"
                 >
@@ -621,6 +635,7 @@ function KeysList({
               revoking={revokingId === key._id}
               onRegenerate={onRegenerate}
               regenerating={regeneratingId === key._id}
+              anyRegenerating={regeneratingId !== null}
             />
           ))}
         </div>
@@ -661,6 +676,7 @@ function KeysList({
                     revoking={revokingId === key._id}
                     onRegenerate={onRegenerate}
                     regenerating={regeneratingId === key._id}
+                    anyRegenerating={regeneratingId !== null}
                   />
                 ))}
               </div>

@@ -31,7 +31,8 @@ export const generate = action({
     const userId = await getAuthUserId(ctx);
     if (!userId) throw new Error('Not authenticated');
 
-    if (!args.name.trim() || args.name.length > 256)
+    const name = args.name.trim();
+    if (!name || name.length > 256)
       throw new Error('Name must be between 1 and 256 characters');
 
     // Validate scopes against known values
@@ -55,7 +56,7 @@ export const generate = action({
     await ctx.runMutation(internal.apiKeys.insertKey, {
       userId,
       hashedKey,
-      name: args.name,
+      name,
       scopes: args.scopes,
       ...(args.expiresAt !== undefined && { expiresAt: args.expiresAt }),
     });
