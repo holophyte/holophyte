@@ -123,6 +123,7 @@ rmSync('./dist', { recursive: true, force: true });
 const result = await Bun.build({
   entrypoints: ['./public/index.html'],
   outdir: './dist',
+  publicPath: '/',
   minify: true,
   sourcemap: 'linked',
   plugins: [tailwindPlugin],
