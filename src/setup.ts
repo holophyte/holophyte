@@ -156,7 +156,7 @@ async function loadSiteUrl(convexUrl: string): Promise<string> {
     .replace(/\/$/, '');
 }
 
-/** Prompts for an API key, validates it, and writes to disk. */
+/** Prompts for an MCP API key, validates it against the server, and writes it to disk. */
 async function setupApiKey(siteUrl: string): Promise<void> {
   const API_KEY_REGEX = /^holo_[0-9a-f]{64}$/;
 
