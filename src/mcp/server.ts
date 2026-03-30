@@ -88,10 +88,7 @@ async function bootstrapAuth(convexUrl: string): Promise<void> {
         // If anonymous auth isn't available, fall through to other auth methods
       } else if (resp.status === 401 || resp.status === 403) {
         console.error(
-          `API key validation failed (${resp.status}) — refusing to start`,
-        );
-        throw new Error(
-          `API key authentication failed with status ${resp.status}`,
+          `API key validation failed (${resp.status}) — falling through to other auth methods`,
         );
       } else {
         console.error(
@@ -99,13 +96,6 @@ async function bootstrapAuth(convexUrl: string): Promise<void> {
         );
       }
     } catch (err) {
-      // Re-throw auth failures; treat network errors as fall-through
-      if (
-        err instanceof Error &&
-        err.message.startsWith('API key authentication failed')
-      ) {
-        throw err;
-      }
       console.error(
         'API key exchange unreachable — falling through to other auth methods:',
         err,
