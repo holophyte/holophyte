@@ -168,7 +168,7 @@ export function Sidebar() {
                           })
                         }
                         className={cn(
-                          'w-full text-left rounded-md px-2 py-1 transition-colors flex items-center gap-1.5',
+                          'w-full min-w-0 text-left rounded-md px-2 py-1 transition-colors flex items-center gap-1.5',
                           selectedTaskId === task._id
                             ? 'bg-accent'
                             : 'hover:bg-accent/50',
