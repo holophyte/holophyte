@@ -112,7 +112,7 @@ export function Sidebar() {
           <Plus className="h-3.5 w-3.5" />
         </Button>
       </div>
-      <ScrollArea className="flex-1">
+      <ScrollArea className="flex-1 [&>div>div]:!block">
         <div className="p-2 space-y-1">
           {repos === undefined &&
             [1, 2, 3].map((i) => (
