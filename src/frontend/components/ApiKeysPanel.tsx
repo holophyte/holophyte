@@ -9,9 +9,11 @@ import {
   EyeOff,
   KeyRound,
   Loader2,
+  Pencil,
   TriangleAlert,
+  X,
 } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { cn } from '@/frontend/lib/utils';
 import Badge from './ui/Badge';
 import Button from './ui/Button';
@@ -227,15 +229,50 @@ interface KeyRowProps {
 
 function KeyRow({ apiKey, onRevoke, revoking }: KeyRowProps) {
   const isRevoked = apiKey.revokedAt !== undefined;
+  const [editing, setEditing] = useState(false);
+  const [editName, setEditName] = useState(apiKey.name);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const rename = useMutation(api.apiKeys.rename);
+
+  const handleStartEdit = () => {
+    if (isRevoked) return;
+    setEditName(apiKey.name);
+    setEditing(true);
+    setTimeout(() => inputRef.current?.select(), 0);
+  };
+
+  const handleSave = async () => {
+    const trimmed = editName.trim();
+    if (trimmed && trimmed !== apiKey.name) {
+      await rename({ keyId: apiKey._id, name: trimmed });
+    }
+    setEditing(false);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') handleSave();
+    if (e.key === 'Escape') setEditing(false);
+  };
 
   return (
     <div
       className={cn(
-        'grid grid-cols-[minmax(6rem,1fr)_4rem_max-content_max-content_max-content] items-center gap-x-4 gap-y-0 px-4 py-3 text-sm transition-colors hover:bg-muted/30',
+        'grid grid-cols-[3fr_1fr_2fr_2fr_2fr] items-center gap-x-4 gap-y-0 px-4 py-3 text-sm transition-colors hover:bg-muted/30',
         isRevoked && 'opacity-50',
       )}
     >
-      <span className="truncate font-medium">{apiKey.name}</span>
+      {editing ? (
+        <input
+          ref={inputRef}
+          className="truncate font-medium bg-transparent border-b border-primary outline-none py-0"
+          value={editName}
+          onChange={(e) => setEditName(e.target.value)}
+          onBlur={handleSave}
+          onKeyDown={handleKeyDown}
+        />
+      ) : (
+        <span className="truncate font-medium">{apiKey.name}</span>
+      )}
       <div className="flex items-center gap-1">
         {apiKey.scopes.map((scope) => (
           <Badge
@@ -253,21 +290,33 @@ function KeyRow({ apiKey, onRevoke, revoking }: KeyRowProps) {
       <span className="text-xs text-muted-foreground whitespace-nowrap">
         {apiKey.lastUsedAt !== undefined ? formatDate(apiKey.lastUsedAt) : '—'}
       </span>
-      <div>
+      <div className="flex items-center justify-end gap-1.5">
         {!isRevoked ? (
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-7 text-xs text-destructive border-destructive/30 bg-destructive/5 hover:text-destructive hover:border-destructive/50 hover:bg-destructive/10"
-            onClick={() => onRevoke(apiKey._id)}
-            disabled={revoking}
-          >
-            {revoking ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            ) : (
-              'Revoke'
-            )}
-          </Button>
+          <>
+            <button
+              type="button"
+              className="p-1 text-muted-foreground hover:text-foreground transition-colors cursor-pointer rounded"
+              onClick={handleStartEdit}
+              title="Rename"
+            >
+              <Pencil className="h-4 w-4" />
+            </button>
+            <button
+              type="button"
+              className="p-1 text-muted-foreground hover:text-destructive transition-colors cursor-pointer rounded"
+              onClick={() => onRevoke(apiKey._id)}
+              disabled={revoking}
+              title="Revoke"
+            >
+              {revoking ? (
+                <Loader2 className="h-4.5 w-4.5 animate-spin" />
+              ) : (
+                <span className="relative flex h-4.5 w-4.5 items-center justify-center rounded-full bg-current opacity-80">
+                  <X className="h-3 w-3 text-background" strokeWidth={3} />
+                </span>
+              )}
+            </button>
+          </>
         ) : (
           <span className="text-xs text-muted-foreground">
             {apiKey.revokedAt !== undefined ? formatDate(apiKey.revokedAt) : ''}
@@ -280,12 +329,12 @@ function KeyRow({ apiKey, onRevoke, revoking }: KeyRowProps) {
 
 function KeyTableHeader({ revoked = false }: { revoked?: boolean }) {
   return (
-    <div className="grid grid-cols-[minmax(6rem,1fr)_4rem_max-content_max-content_max-content] items-center gap-x-4 border-b px-4 py-2.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+    <div className="grid grid-cols-[3fr_1fr_2fr_2fr_2fr] items-center gap-x-4 border-b px-4 py-2.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
       <span>Name</span>
       <span>Scopes</span>
       <span>Created</span>
       <span>Last used</span>
-      <span>{revoked ? 'Revoked' : 'Action'}</span>
+      <span>{revoked ? 'Revoked' : ''}</span>
     </div>
   );
 }
