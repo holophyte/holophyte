@@ -61,7 +61,7 @@ export async function readApiKeyFile(): Promise<string | null> {
   try {
     const content = await Bun.file(API_KEY_FILE).text();
     const key = content.trim();
-    return key.startsWith('holo_') ? key : null;
+    return /^holo_[0-9a-f]{64}$/.test(key) ? key : null;
   } catch {
     return null;
   }

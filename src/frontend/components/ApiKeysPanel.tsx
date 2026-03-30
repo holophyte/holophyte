@@ -14,7 +14,7 @@ import {
   TriangleAlert,
   X,
 } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { cn } from '@/frontend/lib/utils';
 import Badge from './ui/Badge';
 import Button from './ui/Button';
@@ -67,6 +67,10 @@ function GenerateKeyDialog({ open, onOpenChange }: GenerateKeyDialogProps) {
   const [generatedKey, setGeneratedKey] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [keyVisible, setKeyVisible] = useState(false);
+  // Track whether the dialog is open so in-flight generate() calls don't set
+  // state after the dialog has been closed (stale key shown on next open).
+  const isOpenRef = useRef(open);
+  isOpenRef.current = open;
 
   const generate = useAction(api.apiKeys.generate);
 
@@ -92,11 +96,18 @@ function GenerateKeyDialog({ open, onOpenChange }: GenerateKeyDialogProps) {
         scopes,
         expiresAt,
       });
-      setGeneratedKey(rawKey);
+      // Guard against the dialog being closed while generate() was in-flight.
+      // Without this check, setGeneratedKey would overwrite the null set by
+      // handleClose and show the stale key next time the dialog opens.
+      if (isOpenRef.current) {
+        setGeneratedKey(rawKey);
+      }
     } catch (err) {
-      const message =
-        err instanceof Error ? err.message : 'Failed to generate key.';
-      setError(message);
+      if (isOpenRef.current) {
+        const message =
+          err instanceof Error ? err.message : 'Failed to generate key.';
+        setError(message);
+      }
     } finally {
       setSubmitting(false);
     }
@@ -155,6 +166,7 @@ function GenerateKeyDialog({ open, onOpenChange }: GenerateKeyDialogProps) {
                   className="h-7 w-7 shrink-0 text-muted-foreground hover:text-foreground"
                   onClick={() => setKeyVisible((v) => !v)}
                   title={keyVisible ? 'Hide key' : 'Show key'}
+                  aria-label={keyVisible ? 'Hide key' : 'Show key'}
                 >
                   {keyVisible ? (
                     <EyeOff className="h-3.5 w-3.5" />
@@ -169,6 +181,7 @@ function GenerateKeyDialog({ open, onOpenChange }: GenerateKeyDialogProps) {
                   className="h-7 w-7 shrink-0 text-muted-foreground hover:text-foreground"
                   onClick={handleCopy}
                   title="Copy to clipboard"
+                  aria-label="Copy to clipboard"
                 >
                   {copied ? (
                     <Check className="h-3.5 w-3.5 text-green-600" />
@@ -279,6 +292,8 @@ function EditKeyDialog({ apiKey, open, onOpenChange }: EditKeyDialogProps) {
     try {
       await update({ keyId: apiKey._id, name: trimmed, scopes });
       onOpenChange(false);
+    } catch (err) {
+      console.error('Failed to update API key:', err);
     } finally {
       setSaving(false);
     }
@@ -400,6 +415,7 @@ function RegeneratedKeyDialog({
               className="h-7 w-7 shrink-0 text-muted-foreground hover:text-foreground"
               onClick={() => setKeyVisible((v) => !v)}
               title={keyVisible ? 'Hide key' : 'Show key'}
+              aria-label={keyVisible ? 'Hide key' : 'Show key'}
             >
               {keyVisible ? (
                 <EyeOff className="h-3.5 w-3.5" />
@@ -414,6 +430,7 @@ function RegeneratedKeyDialog({
               className="h-7 w-7 shrink-0 text-muted-foreground hover:text-foreground"
               onClick={handleCopy}
               title="Copy to clipboard"
+              aria-label="Copy to clipboard"
             >
               {copied ? (
                 <Check className="h-3.5 w-3.5 text-green-600" />
@@ -455,6 +472,8 @@ function KeyRow({ apiKey, onRevoke, revoking }: KeyRowProps) {
     try {
       const rawKey = await regenerate({ keyId: apiKey._id });
       setRegeneratedKey(rawKey);
+    } catch (err) {
+      console.error('Failed to regenerate API key:', err);
     } finally {
       setRegenerating(false);
     }
@@ -538,6 +557,7 @@ function KeyRow({ apiKey, onRevoke, revoking }: KeyRowProps) {
                   className="p-1 text-muted-foreground hover:text-ring transition-colors cursor-pointer rounded"
                   onClick={() => setEditOpen(true)}
                   title="Edit"
+                  aria-label="Edit"
                 >
                   <Pencil className="h-4 w-4" />
                 </button>
@@ -550,6 +570,7 @@ function KeyRow({ apiKey, onRevoke, revoking }: KeyRowProps) {
                   onClick={handleRegenerate}
                   disabled={regenerating}
                   title="Regenerate key"
+                  aria-label="Regenerate key"
                 >
                   <RefreshCw className="h-4 w-4" />
                 </button>
@@ -558,6 +579,7 @@ function KeyRow({ apiKey, onRevoke, revoking }: KeyRowProps) {
                   className="p-1 text-muted-foreground hover:text-destructive transition-colors cursor-pointer rounded"
                   onClick={() => setConfirmRevoke(true)}
                   title="Revoke"
+                  aria-label="Revoke"
                 >
                   <span className="relative flex h-4.5 w-4.5 items-center justify-center rounded-full bg-current opacity-80">
                     <X className="h-3 w-3 text-background" strokeWidth={3} />
@@ -714,6 +736,8 @@ export default function ApiKeysPanel() {
     setRevokingId(keyId);
     try {
       await revoke({ keyId });
+    } catch (err) {
+      console.error('Failed to revoke API key:', err);
     } finally {
       setRevokingId(null);
     }

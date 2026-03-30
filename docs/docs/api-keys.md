@@ -11,7 +11,7 @@ Currently the only supported scope is `mcp`, which authorizes a key to validate 
 
 ## How It Works
 
-```
+```text
 Web UI → generates key → stores SHA-256 hash in Convex
 Companion / MCP server → reads key from ~/.holophyte/api-key
                        → POSTs { apiKey, scope } to /api/keys/exchange
@@ -34,7 +34,7 @@ The raw key is only ever held in memory during generation and returned once to t
 
 Key format: `holo_` followed by 64 lowercase hex characters (69 characters total).
 
-```
+```text
 holo_4a3bc1d2e5f60789abcd1234ef567890abcd1234ef567890abcd1234ef567890
 ```
 
@@ -54,7 +54,7 @@ bun run setup:companion apikey
 
 Paste the key when prompted. The script validates the key against the `/api/keys/exchange` endpoint and writes it to `~/.holophyte/api-key` with `0o600` permissions (owner read/write only).
 
-```bash
+```text
 Holophyte Setup — Companion Authentication
 
 ℹ Convex URL: https://your-deployment.convex.cloud
@@ -123,7 +123,7 @@ There is no in-place rotation. To rotate:
 
 **File permissions.** `setup:companion` writes `~/.holophyte/api-key` with mode `0o600` (owner read/write). The `~/.holophyte/` directory itself is created with `0o700`. Do not change these permissions or add the file to version control.
 
-**Scope enforcement.** Each key is issued with a specific set of scopes. The `/api/keys/exchange` endpoint checks that the requested scope is in the key's scope list — a key without the `mcp` scope will be rejected with a `403` even if the key itself is valid.
+**Scope enforcement.** Each key is issued with a specific set of scopes. The `/api/keys/exchange` endpoint checks that the requested scope is in the key's scope list — a key without the `mcp` scope will be rejected with a `401` even if the key itself is valid.
 
 **Hash algorithm.** Keys are hashed with SHA-256 using the Web Crypto API (`crypto.subtle.digest`). The hash is stored as a 64-character lowercase hex string. The `by_hashed_key` index on the `apiKeys` table makes lookups O(log n).
 
