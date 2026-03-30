@@ -296,7 +296,13 @@ server.tool(
       priority,
       labelIds: labels as Id<'labels'>[] | undefined,
     });
-    return jsonResponse({ id: taskId, title, status: status ?? 'backlog' });
+    return jsonResponse({
+      id: taskId,
+      title,
+      status: status ?? 'backlog',
+      priority: priority ?? 'none',
+      labels: labels ?? [],
+    });
   },
 );
 
