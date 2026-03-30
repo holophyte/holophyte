@@ -65,12 +65,13 @@ function GenerateKeyDialog({ open, onOpenChange }: GenerateKeyDialogProps) {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [generatedKey, setGeneratedKey] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
-  const [keyVisible, setKeyVisible] = useState(false);
   // Track whether the dialog is open so in-flight generate() calls don't set
   // state after the dialog has been closed (stale key shown on next open).
   const isOpenRef = useRef(open);
   isOpenRef.current = open;
+  // Per-request ID so a close+reopen during an in-flight call doesn't let the
+  // stale response clobber fresh state or clear submitting for the new request.
+  const requestIdRef = useRef(0);
 
   const generate = useAction(api.apiKeys.generate);
 
@@ -84,6 +85,7 @@ function GenerateKeyDialog({ open, onOpenChange }: GenerateKeyDialogProps) {
       return;
     }
 
+    const requestId = ++requestIdRef.current;
     setError(null);
     setSubmitting(true);
     try {
@@ -96,31 +98,19 @@ function GenerateKeyDialog({ open, onOpenChange }: GenerateKeyDialogProps) {
         scopes,
         expiresAt,
       });
-      // Guard against the dialog being closed while generate() was in-flight.
-      // Without this check, setGeneratedKey would overwrite the null set by
-      // handleClose and show the stale key next time the dialog opens.
-      if (isOpenRef.current) {
+      if (isOpenRef.current && requestId === requestIdRef.current) {
         setGeneratedKey(rawKey);
       }
     } catch (err) {
-      if (isOpenRef.current) {
+      if (isOpenRef.current && requestId === requestIdRef.current) {
         const message =
           err instanceof Error ? err.message : 'Failed to generate key.';
         setError(message);
       }
     } finally {
-      setSubmitting(false);
-    }
-  };
-
-  const handleCopy = async () => {
-    if (!generatedKey) return;
-    try {
-      await navigator.clipboard.writeText(generatedKey);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch {
-      // Clipboard API unavailable (e.g. non-HTTPS context)
+      if (requestId === requestIdRef.current) {
+        setSubmitting(false);
+      }
     }
   };
 
@@ -131,8 +121,6 @@ function GenerateKeyDialog({ open, onOpenChange }: GenerateKeyDialogProps) {
     setSubmitting(false);
     setError(null);
     setGeneratedKey(null);
-    setCopied(false);
-    setKeyVisible(false);
     onOpenChange(false);
   };
 
@@ -147,50 +135,7 @@ function GenerateKeyDialog({ open, onOpenChange }: GenerateKeyDialogProps) {
                 Copy this key now — it won't be shown again.
               </DialogDescription>
             </DialogHeader>
-            <div className="space-y-4 py-2">
-              <div className="flex items-start gap-2.5 rounded-md border border-amber-500/20 bg-amber-500/5 px-3 py-2.5 text-sm text-amber-700 dark:text-amber-400">
-                <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0 opacity-80" />
-                <p>
-                  Store this key securely. You won't be able to view it again
-                  after closing this dialog.
-                </p>
-              </div>
-              <div className="flex items-center gap-1 rounded-md border bg-muted/40 px-3 py-3">
-                <code className="flex-1 truncate font-mono text-xs select-all text-foreground/90">
-                  {keyVisible ? generatedKey : `holo_${'•'.repeat(24)}`}
-                </code>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className="h-7 w-7 shrink-0 text-muted-foreground hover:text-foreground"
-                  onClick={() => setKeyVisible((v) => !v)}
-                  title={keyVisible ? 'Hide key' : 'Show key'}
-                  aria-label={keyVisible ? 'Hide key' : 'Show key'}
-                >
-                  {keyVisible ? (
-                    <EyeOff className="h-3.5 w-3.5" />
-                  ) : (
-                    <Eye className="h-3.5 w-3.5" />
-                  )}
-                </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className="h-7 w-7 shrink-0 text-muted-foreground hover:text-foreground"
-                  onClick={handleCopy}
-                  title="Copy to clipboard"
-                  aria-label="Copy to clipboard"
-                >
-                  {copied ? (
-                    <Check className="h-3.5 w-3.5 text-green-600" />
-                  ) : (
-                    <Copy className="h-3.5 w-3.5" />
-                  )}
-                </Button>
-              </div>
-            </div>
+            <OneTimeKeyViewer rawKey={generatedKey} />
             <DialogFooter>
               <Button onClick={handleClose}>Done</Button>
             </DialogFooter>
@@ -359,6 +304,69 @@ function EditKeyDialog({ apiKey, open, onOpenChange }: EditKeyDialogProps) {
   );
 }
 
+/** Shared key display: warning banner, masked key with visibility toggle, copy button. */
+function OneTimeKeyViewer({ rawKey }: { rawKey: string }) {
+  const [copied, setCopied] = useState(false);
+  const [keyVisible, setKeyVisible] = useState(false);
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(rawKey);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // Clipboard API unavailable (e.g. non-HTTPS context)
+    }
+  };
+
+  return (
+    <div className="space-y-4 py-2">
+      <div className="flex items-start gap-2.5 rounded-md border border-amber-500/20 bg-amber-500/5 px-3 py-2.5 text-sm text-amber-700 dark:text-amber-400">
+        <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0 opacity-80" />
+        <p>
+          Store this key securely. You won't be able to view it again after
+          closing this dialog.
+        </p>
+      </div>
+      <div className="flex items-center gap-1 rounded-md border bg-muted/40 px-3 py-3">
+        <code className="flex-1 truncate font-mono text-xs select-all text-foreground/90">
+          {keyVisible ? rawKey : `holo_${'•'.repeat(24)}`}
+        </code>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="h-7 w-7 shrink-0 text-muted-foreground hover:text-foreground"
+          onClick={() => setKeyVisible((v) => !v)}
+          title={keyVisible ? 'Hide key' : 'Show key'}
+          aria-label={keyVisible ? 'Hide key' : 'Show key'}
+        >
+          {keyVisible ? (
+            <EyeOff className="h-3.5 w-3.5" />
+          ) : (
+            <Eye className="h-3.5 w-3.5" />
+          )}
+        </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="h-7 w-7 shrink-0 text-muted-foreground hover:text-foreground"
+          onClick={handleCopy}
+          title="Copy to clipboard"
+          aria-label="Copy to clipboard"
+        >
+          {copied ? (
+            <Check className="h-3.5 w-3.5 text-green-600" />
+          ) : (
+            <Copy className="h-3.5 w-3.5" />
+          )}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 function RegeneratedKeyDialog({
   rawKey,
   onClose,
@@ -366,28 +374,8 @@ function RegeneratedKeyDialog({
   rawKey: string | null;
   onClose: () => void;
 }) {
-  const [copied, setCopied] = useState(false);
-  const [keyVisible, setKeyVisible] = useState(false);
-
-  const handleCopy = async () => {
-    if (!rawKey) return;
-    try {
-      await navigator.clipboard.writeText(rawKey);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch {
-      // Clipboard API unavailable
-    }
-  };
-
-  const handleClose = () => {
-    setCopied(false);
-    setKeyVisible(false);
-    onClose();
-  };
-
   return (
-    <Dialog open={rawKey !== null} onOpenChange={handleClose}>
+    <Dialog open={rawKey !== null} onOpenChange={onClose}>
       <DialogContent className="max-w-2xl">
         <DialogHeader>
           <DialogTitle>Key Regenerated</DialogTitle>
@@ -396,52 +384,9 @@ function RegeneratedKeyDialog({
             shown again.
           </DialogDescription>
         </DialogHeader>
-        <div className="space-y-4 py-2">
-          <div className="flex items-start gap-2.5 rounded-md border border-amber-500/20 bg-amber-500/5 p-3 text-sm text-amber-700 dark:text-amber-400">
-            <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0 opacity-80" />
-            <p>
-              Store this key securely. You won't be able to view it again after
-              closing this dialog.
-            </p>
-          </div>
-          <div className="flex items-center gap-1 rounded-md border bg-muted/40 px-3 py-3">
-            <code className="flex-1 truncate font-mono text-xs text-foreground/90 select-all">
-              {keyVisible ? rawKey : `holo_${'•'.repeat(24)}`}
-            </code>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="h-7 w-7 shrink-0 text-muted-foreground hover:text-foreground"
-              onClick={() => setKeyVisible((v) => !v)}
-              title={keyVisible ? 'Hide key' : 'Show key'}
-              aria-label={keyVisible ? 'Hide key' : 'Show key'}
-            >
-              {keyVisible ? (
-                <EyeOff className="h-3.5 w-3.5" />
-              ) : (
-                <Eye className="h-3.5 w-3.5" />
-              )}
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="h-7 w-7 shrink-0 text-muted-foreground hover:text-foreground"
-              onClick={handleCopy}
-              title="Copy to clipboard"
-              aria-label="Copy to clipboard"
-            >
-              {copied ? (
-                <Check className="h-3.5 w-3.5 text-green-600" />
-              ) : (
-                <Copy className="h-3.5 w-3.5" />
-              )}
-            </Button>
-          </div>
-        </div>
+        {rawKey !== null && <OneTimeKeyViewer rawKey={rawKey} />}
         <DialogFooter>
-          <Button onClick={handleClose}>Done</Button>
+          <Button onClick={onClose}>Done</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
