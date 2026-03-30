@@ -393,6 +393,122 @@ describe('holophyte_create_task', () => {
     const parsed = JSON.parse(result.content[0]?.text ?? '{}');
     expect(parsed.status).toBe('backlog');
   });
+
+  it('passes priority to api.tasks.create mutation', async () => {
+    mockMutation.mockResolvedValueOnce('task-p1');
+
+    await tool('holophyte_create_task')({
+      repoId: 'r1',
+      title: 'High Priority Task',
+      priority: 'high',
+    });
+
+    expect(mockMutation).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ priority: 'high' }),
+    );
+  });
+
+  it('passes labels as labelIds to api.tasks.create mutation', async () => {
+    mockMutation.mockResolvedValueOnce('task-l1');
+
+    await tool('holophyte_create_task')({
+      repoId: 'r1',
+      title: 'Labelled Task',
+      labels: ['label-a', 'label-b'],
+    });
+
+    expect(mockMutation).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ labelIds: ['label-a', 'label-b'] }),
+    );
+  });
+
+  it('passes both priority and labels when both are provided', async () => {
+    mockMutation.mockResolvedValueOnce('task-pl1');
+
+    await tool('holophyte_create_task')({
+      repoId: 'r1',
+      title: 'Full Task',
+      priority: 'urgent',
+      labels: ['label-x'],
+    });
+
+    expect(mockMutation).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        priority: 'urgent',
+        labelIds: ['label-x'],
+      }),
+    );
+  });
+
+  it('omits priority and labelIds when neither provided (backwards compat)', async () => {
+    mockMutation.mockResolvedValueOnce('task-min');
+
+    await tool('holophyte_create_task')({
+      repoId: 'r1',
+      title: 'Minimal Task No Priority',
+    });
+
+    expect(mockMutation).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        priority: undefined,
+        labelIds: undefined,
+      }),
+    );
+  });
+
+  it('response includes priority field defaulting to "none" when not provided', async () => {
+    mockMutation.mockResolvedValueOnce('task-np');
+
+    const result = await tool('holophyte_create_task')({
+      repoId: 'r1',
+      title: 'No Priority Task',
+    });
+
+    const parsed = JSON.parse(result.content[0]?.text ?? '{}');
+    expect(parsed.priority).toBe('none');
+  });
+
+  it('response includes priority from arg when provided', async () => {
+    mockMutation.mockResolvedValueOnce('task-mp');
+
+    const result = await tool('holophyte_create_task')({
+      repoId: 'r1',
+      title: 'Medium Priority',
+      priority: 'medium',
+    });
+
+    const parsed = JSON.parse(result.content[0]?.text ?? '{}');
+    expect(parsed.priority).toBe('medium');
+  });
+
+  it('response includes labels array defaulting to empty when not provided', async () => {
+    mockMutation.mockResolvedValueOnce('task-nl');
+
+    const result = await tool('holophyte_create_task')({
+      repoId: 'r1',
+      title: 'No Labels Task',
+    });
+
+    const parsed = JSON.parse(result.content[0]?.text ?? '{}');
+    expect(parsed.labels).toEqual([]);
+  });
+
+  it('response includes labels array from arg when provided', async () => {
+    mockMutation.mockResolvedValueOnce('task-wl');
+
+    const result = await tool('holophyte_create_task')({
+      repoId: 'r1',
+      title: 'With Labels Task',
+      labels: ['l1', 'l2', 'l3'],
+    });
+
+    const parsed = JSON.parse(result.content[0]?.text ?? '{}');
+    expect(parsed.labels).toEqual(['l1', 'l2', 'l3']);
+  });
 });
 
 // ── holophyte_update_task ─────────────────────────────────────────────
@@ -477,6 +593,129 @@ describe('holophyte_update_task', () => {
 
     expect(result.content[0]?.text).toContain('task42');
     expect(result.content[0]?.text).toContain('updated successfully');
+  });
+
+  it('passes priority to api.tasks.update mutation', async () => {
+    mockMutation.mockResolvedValue(undefined);
+
+    await tool('holophyte_update_task')({
+      id: 'task1',
+      priority: 'high',
+    });
+
+    expect(mockMutation).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ id: 'task1', priority: 'high' }),
+    );
+  });
+
+  it('passes labels as labelIds to api.tasks.update mutation', async () => {
+    mockMutation.mockResolvedValue(undefined);
+
+    await tool('holophyte_update_task')({
+      id: 'task1',
+      labels: ['label-1', 'label-2'],
+    });
+
+    expect(mockMutation).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        id: 'task1',
+        labelIds: ['label-1', 'label-2'],
+      }),
+    );
+  });
+
+  it('calls update mutation when both priority and labels are provided without status', async () => {
+    mockMutation.mockResolvedValue(undefined);
+
+    await tool('holophyte_update_task')({
+      id: 'task1',
+      priority: 'urgent',
+      labels: ['l1'],
+    });
+
+    expect(mockMutation).toHaveBeenCalledTimes(1);
+    expect(mockMutation).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        id: 'task1',
+        priority: 'urgent',
+        labelIds: ['l1'],
+      }),
+    );
+  });
+
+  it('calls both update and move when priority, labels, and status are all provided', async () => {
+    mockQuery.mockResolvedValueOnce({
+      _id: 'task1',
+      repoId: 'r1',
+      status: 'backlog',
+      position: 0,
+    });
+    mockQuery.mockResolvedValueOnce([
+      { _id: 'other', status: 'in_progress', position: 2 },
+    ]);
+    mockMutation.mockResolvedValue(undefined);
+
+    await tool('holophyte_update_task')({
+      id: 'task1',
+      priority: 'medium',
+      labels: ['l1'],
+      status: 'in_progress',
+    });
+
+    // update called for priority + labels
+    expect(mockMutation).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        id: 'task1',
+        priority: 'medium',
+        labelIds: ['l1'],
+      }),
+    );
+    // move called for status change
+    expect(mockMutation).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ id: 'task1', status: 'in_progress' }),
+    );
+    expect(mockMutation).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not call update mutation when only status changes (priority/labels absent)', async () => {
+    mockQuery.mockResolvedValueOnce({
+      _id: 'task5',
+      repoId: 'r1',
+      status: 'todo',
+      position: 1,
+    });
+    mockQuery.mockResolvedValueOnce([
+      { _id: 'task5', status: 'done', position: 3 },
+    ]);
+    mockMutation.mockResolvedValue(undefined);
+
+    await tool('holophyte_update_task')({ id: 'task5', status: 'done' });
+
+    // Only the move mutation, no update
+    expect(mockMutation).toHaveBeenCalledTimes(1);
+    expect(mockMutation).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ id: 'task5', status: 'done' }),
+    );
+  });
+
+  it('passes empty array as labelIds when labels is an empty array', async () => {
+    mockMutation.mockResolvedValue(undefined);
+
+    await tool('holophyte_update_task')({
+      id: 'task1',
+      labels: [],
+    });
+
+    expect(mockMutation).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ id: 'task1', labelIds: [] }),
+    );
   });
 });
 
