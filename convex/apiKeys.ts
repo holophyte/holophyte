@@ -30,6 +30,9 @@ export const generate = action({
     const userId = await getAuthUserId(ctx);
     if (!userId) throw new Error('Not authenticated');
 
+    if (!args.name.trim() || args.name.length > 256)
+      throw new Error('Name must be between 1 and 256 characters');
+
     // Validate scopes against known values
     const VALID_SCOPES = ['mcp'];
     const invalid = args.scopes.filter((s) => !VALID_SCOPES.includes(s));

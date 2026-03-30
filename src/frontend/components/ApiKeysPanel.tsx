@@ -89,7 +89,7 @@ function GenerateKeyDialog({ open, onOpenChange }: GenerateKeyDialogProps) {
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="max-w-xl">
         {generatedKey ? (
           <>
             <DialogHeader>
@@ -305,18 +305,17 @@ export default function ApiKeysPanel() {
 
   return (
     <section className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-base font-semibold">API Keys</h2>
-          <p className="text-sm text-muted-foreground">
-            Manage keys for authenticating external tools and MCP servers.
-          </p>
-        </div>
-        <Button onClick={() => setDialogOpen(true)}>
-          <KeyRound className="h-4 w-4" />
-          Generate Key
-        </Button>
+      <div>
+        <h2 className="text-base font-semibold">API Keys</h2>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Manage keys for authenticating external tools and MCP servers.
+        </p>
       </div>
+
+      <Button size="sm" onClick={() => setDialogOpen(true)}>
+        <KeyRound className="h-4 w-4" />
+        Generate Key
+      </Button>
 
       <KeysList keys={keys} onRevoke={handleRevoke} revokingId={revokingId} />
 
