@@ -1,5 +1,10 @@
 import { expect, test } from '@playwright/test';
 
+// Skip until E2E auth infrastructure is fixed (#216).
+// The shared storage-state refresh token goes stale between tests,
+// causing "Refresh token used outside of reuse window" failures on CI.
+test.skip();
+
 // Wait for app to hydrate
 async function waitForApp(page: import('@playwright/test').Page) {
   await page.goto('/');
