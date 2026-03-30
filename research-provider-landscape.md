@@ -136,21 +136,23 @@ const kilo = await createKilo({
 
 #### Potential Approaches
 
-**Option A: Kilo as the universal adapter**
-- Replace both Claude SDK and Codex app-server with Kilo
-- One integration, all models
-- Lose provider-specific features (Claude's `canUseTool` callback nuances, Codex's collaboration mode)
+#### Decision: Kilo as a First-Class Provider
 
-**Option B: Kilo as a third provider**
-- Keep Claude SDK and Codex app-server for their native integrations
-- Add Kilo as a third option for "everything else" (Gemini, Ollama, OpenRouter, etc.)
-- `provider: 'claude' | 'codex' | 'kilo'` on sessions
+Kilo is not just a model router — it's a full agent harness with its own session management, approval flow, tool execution, and MCP layer. It should be treated as its own provider (`provider: 'kilo'`), not as an "other" catch-all.
 
-**Option C: Watch and wait**
-- Kilo is interesting but we don't use it yet
-- Revisit when we've built the Codex integration and understand the real abstraction needs
+Three first-class providers, each with their own session manager and auth story:
 
-**Recommendation: Option B or C.** Keep Claude and Codex as first-class providers with native SDK integrations. If there's demand for other models, Kilo is the best path to supporting them without building individual adapters.
+| Provider | Auth | Integration | Models |
+|--|--|--|--|
+| **Claude** | Subscription (OAuth token) | Native SDK (`@anthropic-ai/claude-agent-sdk`) | Claude family |
+| **Codex** | Subscription (`codex login`) or API key | App-server JSON-RPC (`codex-app-server-client`) | GPT/Codex family |
+| **Kilo** | BYOK API keys per model provider | REST API (`@kilocode/sdk`) | 400+ (Anthropic, OpenAI, Google, Groq, Ollama, OpenRouter, etc.) |
+
+Claude and Codex are first-class with subscription auth passthrough — zero friction for users already paying for Claude Max or ChatGPT Pro. Kilo fills the BYOK gap for everything else: Gemini, Ollama, local models, OpenRouter, etc. Users who want to use a model not covered by Claude or Codex subscriptions go through Kilo with their own API keys.
+
+The session schema would be: `provider: 'claude' | 'codex' | 'kilo'`
+
+For Kilo sessions, the UI needs a deeper config surface: pick provider (OpenAI, Google, Groq, etc.) → pick model → provide API key (stored per-provider in settings, set once). This is a UI design problem, not a technical one — the Kilo REST API handles model routing.
 
 ---
 
@@ -234,8 +236,10 @@ All three can be used as **model providers** through Kilo, OpenRouter, or any Op
 
 ## Summary: Holophyte Multi-Provider Roadmap
 
-**Phase 1 (Current):** Claude Code via `@anthropic-ai/claude-agent-sdk`
-**Phase 2 (Planned):** Codex via `codex app-server` + `codex-app-server-client`
-**Phase 3 (Evaluate):** Kilo as third provider for multi-model access (400+ models via one integration)
-**Phase 4 (Watch):** Gemini CLI SDK when published to npm
+**Phase 1 (Current):** Claude Code via `@anthropic-ai/claude-agent-sdk` — subscription auth
+**Phase 2 (Planned):** Codex via `codex app-server` + `codex-app-server-client` — subscription auth
+**Phase 3 (Evaluate):** Kilo as third first-class provider via `@kilocode/sdk` — BYOK auth, 400+ models
+**Phase 4 (Watch):** Gemini CLI SDK when published to npm (may become its own provider or fold into Kilo)
 **Not planned:** Cursor (closed source), Crush (restrictive license), Aider/Goose (no SDK)
+
+Schema: `provider: 'claude' | 'codex' | 'kilo'` on the sessions table. Each provider gets its own session manager in the companion. All normalize events into the shared `sessionEvents` Convex table.
