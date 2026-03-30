@@ -464,7 +464,7 @@ function KeyRow({ apiKey, onRevoke, revoking }: KeyRowProps) {
     <>
       <div
         className={cn(
-          'grid grid-cols-[minmax(8rem,1fr)_3.5rem_11rem_11rem_11rem_6rem] items-center gap-x-4 gap-y-0 px-4 py-3 text-sm transition-colors hover:bg-muted/30',
+          'grid h-12 grid-cols-[minmax(8rem,1fr)_3.5rem_10rem_10rem_10rem_6rem] items-center gap-x-4 px-4 text-sm transition-colors hover:bg-muted/30',
           isRevoked && 'opacity-50',
         )}
       >
@@ -502,7 +502,7 @@ function KeyRow({ apiKey, onRevoke, revoking }: KeyRowProps) {
               : formatDate(apiKey.expiresAt)
             : 'Never'}
         </span>
-        <div className="flex items-center justify-end gap-1.5">
+        <div className="flex h-8 items-center justify-end gap-1.5">
           {!isRevoked ? (
             confirmRevoke ? (
               <div className="flex items-center gap-1.5">
@@ -591,7 +591,7 @@ function KeyRow({ apiKey, onRevoke, revoking }: KeyRowProps) {
 
 function KeyTableHeader({ revoked = false }: { revoked?: boolean }) {
   return (
-    <div className="grid grid-cols-[minmax(8rem,1fr)_3.5rem_11rem_11rem_11rem_6rem] items-center gap-x-4 border-b px-4 py-2.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+    <div className="grid grid-cols-[minmax(8rem,1fr)_3.5rem_10rem_10rem_10rem_6rem] items-center gap-x-4 border-b px-4 py-2.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
       <span>Name</span>
       <span>Scopes</span>
       <span>Created</span>
