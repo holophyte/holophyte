@@ -42,7 +42,6 @@ export default function CompanionStatus() {
     <TooltipProvider>
       <Tooltip>
         <TooltipTrigger asChild>
-          {/* biome-ignore lint/a11y/useSemanticElements: status indicator, not a form output */}
           <div
             className="flex items-center gap-2 px-2 py-1.5 rounded-md text-xs text-muted-foreground"
             role="status"
