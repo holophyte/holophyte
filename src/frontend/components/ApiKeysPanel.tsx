@@ -29,11 +29,17 @@ import Label from './ui/Label';
 type ApiKeyDoc = Omit<Doc<'apiKeys'>, 'hashedKey'>;
 
 function formatDate(timestamp: number): string {
-  return new Date(timestamp).toLocaleDateString(undefined, {
+  const d = new Date(timestamp);
+  const date = d.toLocaleDateString(undefined, {
     year: 'numeric',
     month: 'short',
     day: 'numeric',
   });
+  const time = d.toLocaleTimeString(undefined, {
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+  return `${date}, ${time}`;
 }
 
 interface GenerateKeyDialogProps {
@@ -225,7 +231,7 @@ function KeyRow({ apiKey, onRevoke, revoking }: KeyRowProps) {
   return (
     <div
       className={cn(
-        'grid grid-cols-[1fr_5rem_7rem_6rem_5.5rem] items-center gap-x-4 gap-y-0 px-4 py-3 text-sm transition-colors hover:bg-muted/30',
+        'grid grid-cols-[minmax(6rem,1fr)_4rem_max-content_max-content_max-content] items-center gap-x-4 gap-y-0 px-4 py-3 text-sm transition-colors hover:bg-muted/30',
         isRevoked && 'opacity-50',
       )}
     >
@@ -252,7 +258,7 @@ function KeyRow({ apiKey, onRevoke, revoking }: KeyRowProps) {
           <Button
             variant="outline"
             size="sm"
-            className="h-7 text-xs text-destructive hover:text-destructive hover:border-destructive/50 hover:bg-destructive/5"
+            className="h-7 text-xs text-destructive border-destructive/30 bg-destructive/5 hover:text-destructive hover:border-destructive/50 hover:bg-destructive/10"
             onClick={() => onRevoke(apiKey._id)}
             disabled={revoking}
           >
@@ -272,14 +278,14 @@ function KeyRow({ apiKey, onRevoke, revoking }: KeyRowProps) {
   );
 }
 
-function KeyTableHeader() {
+function KeyTableHeader({ revoked = false }: { revoked?: boolean }) {
   return (
-    <div className="grid grid-cols-[1fr_5rem_7rem_6rem_5.5rem] items-center gap-x-4 border-b px-4 py-2.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+    <div className="grid grid-cols-[minmax(6rem,1fr)_4rem_max-content_max-content_max-content] items-center gap-x-4 border-b px-4 py-2.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
       <span>Name</span>
       <span>Scopes</span>
       <span>Created</span>
       <span>Last used</span>
-      <span>Action</span>
+      <span>{revoked ? 'Revoked' : 'Action'}</span>
     </div>
   );
 }
@@ -338,13 +344,13 @@ function KeysList({ keys, onRevoke, revokingId, onGenerate }: KeysListProps) {
               revoking={revokingId === key._id}
             />
           ))}
-          <div className="flex justify-end border-t px-4 py-3">
-            <Button size="sm" onClick={onGenerate}>
-              <KeyRound className="h-4 w-4" />
-              Generate Key
-            </Button>
-          </div>
         </div>
+      </div>
+      <div className="flex justify-end">
+        <Button variant="outline" size="sm" onClick={onGenerate}>
+          <KeyRound className="h-4 w-4" />
+          Generate Key
+        </Button>
       </div>
       {revoked.length > 0 && (
         <div>
@@ -366,6 +372,7 @@ function KeysList({ keys, onRevoke, revokingId, onGenerate }: KeysListProps) {
           </button>
           {historyOpen && (
             <div className="mt-2 rounded-md border">
+              <KeyTableHeader revoked />
               <div className="divide-y">
                 {revoked.map((key) => (
                   <KeyRow
