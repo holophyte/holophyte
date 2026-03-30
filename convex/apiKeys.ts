@@ -99,25 +99,43 @@ export const revoke = mutation({
 });
 
 /**
- * Renames an API key. Verifies ownership before updating.
+ * Updates an API key's name and/or scopes. Verifies ownership before updating.
  */
-export const rename = mutation({
+export const update = mutation({
   args: {
     keyId: v.id('apiKeys'),
-    name: v.string(),
+    name: v.optional(v.string()),
+    scopes: v.optional(v.array(v.string())),
   },
   handler: async (ctx, args) => {
     const userId = await requireAuth(ctx);
 
-    if (!args.name.trim() || args.name.length > 256)
-      throw new Error('Name must be between 1 and 256 characters');
-
     const key = await ctx.db.get(args.keyId);
     if (!key) throw new Error('API key not found');
     if (key.userId !== userId)
-      throw new Error('Not authorized to rename this key');
+      throw new Error('Not authorized to update this key');
 
-    await ctx.db.patch(args.keyId, { name: args.name.trim() });
+    const patch: Record<string, unknown> = {};
+
+    if (args.name !== undefined) {
+      if (!args.name.trim() || args.name.length > 256)
+        throw new Error('Name must be between 1 and 256 characters');
+      patch.name = args.name.trim();
+    }
+
+    if (args.scopes !== undefined) {
+      const VALID_SCOPES = ['mcp'];
+      const invalid = args.scopes.filter((s) => !VALID_SCOPES.includes(s));
+      if (invalid.length > 0)
+        throw new Error(`Invalid scopes: ${invalid.join(', ')}`);
+      if (args.scopes.length === 0)
+        throw new Error('At least one scope required');
+      patch.scopes = args.scopes;
+    }
+
+    if (Object.keys(patch).length > 0) {
+      await ctx.db.patch(args.keyId, patch);
+    }
   },
 });
 

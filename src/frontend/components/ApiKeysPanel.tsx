@@ -13,7 +13,7 @@ import {
   TriangleAlert,
   X,
 } from 'lucide-react';
-import { useMemo, useRef, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { cn } from '@/frontend/lib/utils';
 import Badge from './ui/Badge';
 import Button from './ui/Button';
@@ -221,6 +221,95 @@ function GenerateKeyDialog({ open, onOpenChange }: GenerateKeyDialogProps) {
   );
 }
 
+interface EditKeyDialogProps {
+  apiKey: ApiKeyDoc;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}
+
+function EditKeyDialog({ apiKey, open, onOpenChange }: EditKeyDialogProps) {
+  const [name, setName] = useState(apiKey.name);
+  const [mcpScope, setMcpScope] = useState(apiKey.scopes.includes('mcp'));
+  const [saving, setSaving] = useState(false);
+  const update = useMutation(api.apiKeys.update);
+
+  const handleSave = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const trimmed = name.trim();
+    if (!trimmed) return;
+
+    const scopes = mcpScope ? ['mcp'] : [];
+    if (scopes.length === 0) return;
+
+    setSaving(true);
+    try {
+      await update({ keyId: apiKey._id, name: trimmed, scopes });
+      onOpenChange(false);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-sm">
+        <form onSubmit={handleSave}>
+          <DialogHeader>
+            <DialogTitle>Edit API Key</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="edit-key-name">Name</Label>
+              <Input
+                id="edit-key-name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Scopes</Label>
+              <label className="flex items-center gap-2 text-sm cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={mcpScope}
+                  onChange={(e) => setMcpScope(e.target.checked)}
+                  className="h-4 w-4 rounded border border-input"
+                />
+                <span>MCP</span>
+                <span className="text-xs text-muted-foreground">
+                  — allows use as an MCP server credential
+                </span>
+              </label>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => onOpenChange(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              disabled={!name.trim() || !mcpScope || saving}
+            >
+              {saving ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                'Save'
+              )}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 interface KeyRowProps {
   apiKey: ApiKeyDoc;
   onRevoke: (keyId: ApiKeyDoc['_id']) => void;
@@ -229,101 +318,110 @@ interface KeyRowProps {
 
 function KeyRow({ apiKey, onRevoke, revoking }: KeyRowProps) {
   const isRevoked = apiKey.revokedAt !== undefined;
-  const [editing, setEditing] = useState(false);
-  const [editName, setEditName] = useState(apiKey.name);
-  const inputRef = useRef<HTMLInputElement>(null);
-  const rename = useMutation(api.apiKeys.rename);
+  const [editOpen, setEditOpen] = useState(false);
+  const [confirmRevoke, setConfirmRevoke] = useState(false);
 
-  const handleStartEdit = () => {
-    if (isRevoked) return;
-    setEditName(apiKey.name);
-    setEditing(true);
-    setTimeout(() => inputRef.current?.select(), 0);
-  };
-
-  const handleSave = async () => {
-    const trimmed = editName.trim();
-    if (trimmed && trimmed !== apiKey.name) {
-      await rename({ keyId: apiKey._id, name: trimmed });
-    }
-    setEditing(false);
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') handleSave();
-    if (e.key === 'Escape') setEditing(false);
+  const handleRevoke = () => {
+    onRevoke(apiKey._id);
+    setConfirmRevoke(false);
   };
 
   return (
-    <div
-      className={cn(
-        'grid grid-cols-[3fr_1fr_2fr_2fr_2fr] items-center gap-x-4 gap-y-0 px-4 py-3 text-sm transition-colors hover:bg-muted/30',
-        isRevoked && 'opacity-50',
-      )}
-    >
-      {editing ? (
-        <input
-          ref={inputRef}
-          className="truncate font-medium bg-transparent border-b border-primary outline-none py-0"
-          value={editName}
-          onChange={(e) => setEditName(e.target.value)}
-          onBlur={handleSave}
-          onKeyDown={handleKeyDown}
-        />
-      ) : (
-        <span className="truncate font-medium">{apiKey.name}</span>
-      )}
-      <div className="flex items-center gap-1">
-        {apiKey.scopes.map((scope) => (
-          <Badge
-            key={scope}
-            variant="secondary"
-            className="rounded-full px-2 py-0 text-[11px] font-medium"
-          >
-            {scope}
-          </Badge>
-        ))}
-      </div>
-      <span className="text-xs text-muted-foreground whitespace-nowrap">
-        {formatDate(apiKey._creationTime)}
-      </span>
-      <span className="text-xs text-muted-foreground whitespace-nowrap">
-        {apiKey.lastUsedAt !== undefined ? formatDate(apiKey.lastUsedAt) : '—'}
-      </span>
-      <div className="flex items-center justify-end gap-1.5">
-        {!isRevoked ? (
-          <>
-            <button
-              type="button"
-              className="p-1 text-muted-foreground hover:text-foreground transition-colors cursor-pointer rounded"
-              onClick={handleStartEdit}
-              title="Rename"
-            >
-              <Pencil className="h-4 w-4" />
-            </button>
-            <button
-              type="button"
-              className="p-1 text-muted-foreground hover:text-destructive transition-colors cursor-pointer rounded"
-              onClick={() => onRevoke(apiKey._id)}
-              disabled={revoking}
-              title="Revoke"
-            >
-              {revoking ? (
-                <Loader2 className="h-4.5 w-4.5 animate-spin" />
-              ) : (
-                <span className="relative flex h-4.5 w-4.5 items-center justify-center rounded-full bg-current opacity-80">
-                  <X className="h-3 w-3 text-background" strokeWidth={3} />
-                </span>
-              )}
-            </button>
-          </>
-        ) : (
-          <span className="text-xs text-muted-foreground">
-            {apiKey.revokedAt !== undefined ? formatDate(apiKey.revokedAt) : ''}
-          </span>
+    <>
+      <div
+        className={cn(
+          'grid grid-cols-[3fr_1fr_2fr_2fr_2fr] items-center gap-x-4 gap-y-0 px-4 py-3 text-sm transition-colors hover:bg-muted/30',
+          isRevoked && 'opacity-50',
         )}
+      >
+        <span className="truncate font-medium">{apiKey.name}</span>
+        <div className="flex items-center gap-1">
+          {apiKey.scopes.map((scope) => (
+            <Badge
+              key={scope}
+              variant="secondary"
+              className="rounded-full px-2 py-0 text-[11px] font-medium"
+            >
+              {scope}
+            </Badge>
+          ))}
+        </div>
+        <span className="text-xs text-muted-foreground whitespace-nowrap">
+          {formatDate(apiKey._creationTime)}
+        </span>
+        <span className="text-xs text-muted-foreground whitespace-nowrap">
+          {apiKey.lastUsedAt !== undefined
+            ? formatDate(apiKey.lastUsedAt)
+            : '—'}
+        </span>
+        <div className="flex items-center justify-end gap-1.5">
+          {!isRevoked ? (
+            confirmRevoke ? (
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs text-destructive whitespace-nowrap">
+                  Revoke?
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-6 px-2 text-xs text-destructive border-destructive/30 bg-destructive/5 hover:bg-destructive/10"
+                  onClick={handleRevoke}
+                  disabled={revoking}
+                >
+                  {revoking ? (
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                  ) : (
+                    'Yes'
+                  )}
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 px-2 text-xs"
+                  onClick={() => setConfirmRevoke(false)}
+                >
+                  No
+                </Button>
+              </div>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  className="p-1 text-muted-foreground hover:text-ring transition-colors cursor-pointer rounded"
+                  onClick={() => setEditOpen(true)}
+                  title="Edit"
+                >
+                  <Pencil className="h-4 w-4" />
+                </button>
+                <button
+                  type="button"
+                  className="p-1 text-muted-foreground hover:text-destructive transition-colors cursor-pointer rounded"
+                  onClick={() => setConfirmRevoke(true)}
+                  title="Revoke"
+                >
+                  <span className="relative flex h-4.5 w-4.5 items-center justify-center rounded-full bg-current opacity-80">
+                    <X className="h-3 w-3 text-background" strokeWidth={3} />
+                  </span>
+                </button>
+              </>
+            )
+          ) : (
+            <span className="text-xs text-muted-foreground">
+              {apiKey.revokedAt !== undefined
+                ? formatDate(apiKey.revokedAt)
+                : ''}
+            </span>
+          )}
+        </div>
       </div>
-    </div>
+      {editOpen && (
+        <EditKeyDialog
+          apiKey={apiKey}
+          open={editOpen}
+          onOpenChange={setEditOpen}
+        />
+      )}
+    </>
   );
 }
 
