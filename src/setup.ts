@@ -16,7 +16,7 @@ import {
 } from './server/auth-token';
 
 const PROVIDERS = ['github', 'google'] as const;
-type Provider = (typeof PROVIDERS)[number] | 'apikey';
+type Provider = (typeof PROVIDERS)[number];
 
 function die(msg: string): never {
   console.error(`\x1b[31mError:\x1b[0m ${msg}`);
@@ -117,14 +117,13 @@ async function loadConfig(): Promise<{
 /** Prompts the user to select an authentication provider. */
 async function selectProvider(): Promise<Provider> {
   const arg = process.argv[2]?.toLowerCase();
-  if (arg === 'github' || arg === 'google' || arg === 'apikey') {
+  if (arg === 'github' || arg === 'google') {
     return arg as Provider;
   }
 
   console.log('\nSelect an authentication provider:');
   console.log('  1) GitHub');
   console.log('  2) Google');
-  console.log('  3) API Key (paste a key generated from the web UI)');
   process.stdout.write('\nChoice [1]: ');
 
   while (true) {
@@ -136,8 +135,7 @@ async function selectProvider(): Promise<Provider> {
     const choice = line.trim() || '1';
     if (choice === '1' || choice === 'github') return 'github';
     if (choice === '2' || choice === 'google') return 'google';
-    if (choice === '3' || choice === 'apikey') return 'apikey';
-    process.stdout.write('Invalid choice. Enter 1, 2, or 3: ');
+    process.stdout.write('Invalid choice. Enter 1 or 2: ');
   }
 }
 
@@ -153,15 +151,13 @@ async function loadSiteUrl(convexUrl: string): Promise<string> {
 
   if (siteUrl) return siteUrl.replace(/\/$/, '');
 
-  // Derive from CONVEX_URL for cloud deployments
   return convexUrl
     .replace(/\.convex\.cloud$/, '.convex.site')
     .replace(/\/$/, '');
 }
 
-/** Sets up API key authentication by prompting for a key and writing it to disk. */
+/** Prompts for an MCP API key, validates it against the server, and writes it to disk. */
 async function setupApiKey(siteUrl: string): Promise<void> {
-  // Validate format: holo_ prefix + 64 hex chars = 69 chars total
   const API_KEY_REGEX = /^holo_[0-9a-f]{64}$/;
 
   process.stdout.write('\nPaste your API key: ');
@@ -235,15 +231,6 @@ async function main() {
 
   const provider = await selectProvider();
   info(`Provider: ${provider}`);
-
-  // API Key flow — no OAuth required
-  if (provider === 'apikey') {
-    const siteUrl = await loadSiteUrl(convexUrl);
-    info(`Convex Site URL: ${siteUrl}`);
-    await setupApiKey(siteUrl);
-    if (_stdinReader) await _stdinReader.cancel();
-    return;
-  }
 
   // Start ephemeral HTTP server to receive the OAuth callback
   const {
@@ -341,7 +328,19 @@ async function main() {
 
     success(`Token saved to ${getTokensFilePath()} [${deployment}]`);
     console.log('\nThe companion will use this token on next startup.');
-    console.log('Run `bun run companion` to start the companion.\n');
+
+    // Offer optional MCP API key setup
+    console.log('');
+    process.stdout.write(
+      'Set up an MCP API key? (generate one in Settings > API Keys) [y/N]: ',
+    );
+    const mcpAnswer = await readLine();
+    if (mcpAnswer?.trim().toLowerCase() === 'y') {
+      const siteUrl = await loadSiteUrl(convexUrl);
+      await setupApiKey(siteUrl);
+    }
+
+    console.log('\nRun `bun run companion` to start the companion.\n');
   } finally {
     if (timeoutId) clearTimeout(timeoutId);
     await callbackServer.stop();
