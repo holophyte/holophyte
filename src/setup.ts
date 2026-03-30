@@ -8,13 +8,15 @@
 import { api } from '@convex/_generated/api';
 import { ConvexHttpClient } from 'convex/browser';
 import {
+  getApiKeyFilePath,
   getTokensFilePath,
   readTokenFile,
+  writeApiKeyFile,
   writeTokenFile,
 } from './server/auth-token';
 
 const PROVIDERS = ['github', 'google'] as const;
-type Provider = (typeof PROVIDERS)[number];
+type Provider = (typeof PROVIDERS)[number] | 'apikey';
 
 function die(msg: string): never {
   console.error(`\x1b[31mError:\x1b[0m ${msg}`);
@@ -65,6 +67,29 @@ async function readLine(): Promise<string | null> {
   }
 }
 
+/**
+ * Parses .env.companion and returns a map of key-value pairs.
+ * Returns an empty map if the file doesn't exist.
+ */
+async function readEnvCompanion(): Promise<Map<string, string>> {
+  const vars = new Map<string, string>();
+  try {
+    const envFile = await Bun.file('.env.companion').text();
+    for (const line of envFile.split('\n')) {
+      const [key, ...rest] = line.split('=');
+      const value = rest
+        .join('=')
+        .trim()
+        .replace(/^(['"])(.*)\1$/, '$2');
+      const trimmedKey = key?.trim();
+      if (trimmedKey && value) vars.set(trimmedKey, value);
+    }
+  } catch {
+    // .env.companion doesn't exist, that's OK
+  }
+  return vars;
+}
+
 /** Reads CONVEX_URL and CONVEX_DEPLOYMENT from env or .env.companion. */
 async function loadConfig(): Promise<{
   convexUrl: string;
@@ -73,23 +98,10 @@ async function loadConfig(): Promise<{
   let convexUrl = process.env.CONVEX_URL;
   let deployment = process.env.CONVEX_DEPLOYMENT;
 
-  // Fall back to .env.companion
   if (!convexUrl || !deployment) {
-    try {
-      const envFile = await Bun.file('.env.companion').text();
-      for (const line of envFile.split('\n')) {
-        const [key, ...rest] = line.split('=');
-        const value = rest
-          .join('=')
-          .trim()
-          .replace(/^(['"])(.*)\1$/, '$2');
-        if (key?.trim() === 'CONVEX_URL' && !convexUrl) convexUrl = value;
-        if (key?.trim() === 'CONVEX_DEPLOYMENT' && !deployment)
-          deployment = value;
-      }
-    } catch {
-      // .env.companion doesn't exist, that's OK
-    }
+    const vars = await readEnvCompanion();
+    if (!convexUrl) convexUrl = vars.get('CONVEX_URL');
+    if (!deployment) deployment = vars.get('CONVEX_DEPLOYMENT');
   }
 
   if (!convexUrl)
@@ -102,16 +114,17 @@ async function loadConfig(): Promise<{
   return { convexUrl: convexUrl.replace(/\/$/, ''), deployment };
 }
 
-/** Prompts the user to select an OAuth provider. */
+/** Prompts the user to select an authentication provider. */
 async function selectProvider(): Promise<Provider> {
   const arg = process.argv[2]?.toLowerCase();
-  if (arg && PROVIDERS.includes(arg as Provider)) {
+  if (arg === 'github' || arg === 'google' || arg === 'apikey') {
     return arg as Provider;
   }
 
   console.log('\nSelect an authentication provider:');
   console.log('  1) GitHub');
   console.log('  2) Google');
+  console.log('  3) API Key (paste a key generated from the web UI)');
   process.stdout.write('\nChoice [1]: ');
 
   while (true) {
@@ -123,8 +136,66 @@ async function selectProvider(): Promise<Provider> {
     const choice = line.trim() || '1';
     if (choice === '1' || choice === 'github') return 'github';
     if (choice === '2' || choice === 'google') return 'google';
-    process.stdout.write('Invalid choice. Enter 1 or 2: ');
+    if (choice === '3' || choice === 'apikey') return 'apikey';
+    process.stdout.write('Invalid choice. Enter 1, 2, or 3: ');
   }
+}
+
+/**
+ * Derives the Convex HTTP site URL from env or .env.companion.
+ * Uses CONVEX_SITE_URL if set; for cloud, derives from CONVEX_URL
+ * by replacing .convex.cloud with .convex.site.
+ */
+async function loadSiteUrl(convexUrl: string): Promise<string> {
+  const siteUrl =
+    process.env.CONVEX_SITE_URL ??
+    (await readEnvCompanion()).get('CONVEX_SITE_URL');
+
+  if (siteUrl) return siteUrl.replace(/\/$/, '');
+
+  // Derive from CONVEX_URL for cloud deployments
+  return convexUrl
+    .replace(/\.convex\.cloud$/, '.convex.site')
+    .replace(/\/$/, '');
+}
+
+/** Sets up API key authentication by prompting for a key and writing it to disk. */
+async function setupApiKey(siteUrl: string): Promise<void> {
+  // Validate format: holo_ prefix + 64 hex chars = 69 chars total
+  const API_KEY_REGEX = /^holo_[0-9a-f]{64}$/;
+
+  process.stdout.write('\nPaste your API key: ');
+  const input = await readLine();
+  if (!input) {
+    die('Aborted (no input).');
+  }
+  const key = input.trim();
+
+  if (!API_KEY_REGEX.test(key)) {
+    die(
+      'Invalid API key format. Keys must start with holo_ and be 69 characters total (holo_ + 64 hex chars).',
+    );
+  }
+
+  info('Validating API key...');
+  let resp: Response;
+  try {
+    resp = await fetch(`${siteUrl}/api/keys/exchange`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ apiKey: key, scope: 'mcp' }),
+    });
+  } catch (err) {
+    die(`Could not reach Convex endpoint: ${err}`);
+  }
+
+  if (!resp.ok) {
+    const body = (await resp.json().catch(() => ({}))) as { error?: string };
+    die(`API key validation failed: ${body.error ?? resp.statusText}`);
+  }
+
+  await writeApiKeyFile(key);
+  success(`API key saved to ${getApiKeyFilePath()}`);
 }
 
 /** Opens a URL in the default browser. */
@@ -164,6 +235,15 @@ async function main() {
 
   const provider = await selectProvider();
   info(`Provider: ${provider}`);
+
+  // API Key flow — no OAuth required
+  if (provider === 'apikey') {
+    const siteUrl = await loadSiteUrl(convexUrl);
+    info(`Convex Site URL: ${siteUrl}`);
+    await setupApiKey(siteUrl);
+    if (_stdinReader) await _stdinReader.cancel();
+    return;
+  }
 
   // Start ephemeral HTTP server to receive the OAuth callback
   const {

@@ -235,6 +235,20 @@ export default defineSchema({
     batchIndex: v.number(),
   }).index('by_session_batch', ['sessionId', 'batchIndex']),
 
+  apiKeys: defineTable({
+    userId: v.id('users'),
+    hashedKey: v.string(),
+    name: v.string(),
+    // Only valid scope for now is 'mcp' — extensible in the future
+    scopes: v.array(v.string()),
+    // NO createdAt — use _creationTime
+    expiresAt: v.optional(v.number()),
+    lastUsedAt: v.optional(v.number()),
+    revokedAt: v.optional(v.number()),
+  })
+    .index('by_user', ['userId'])
+    .index('by_hashed_key', ['hashedKey']),
+
   companion: defineTable({
     orgId: v.id('organizations'),
     lastSeen: v.number(),

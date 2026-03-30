@@ -5,6 +5,8 @@ const sidebars: SidebarsConfig = {
     'intro',
     'sessions',
     'local-development',
+    'api-keys',
+    'mcp-server',
     {
       type: 'category',
       label: 'Testing',

@@ -2,6 +2,7 @@ import { httpRouter } from 'convex/server';
 import { internal } from './_generated/api';
 import { httpAction } from './_generated/server';
 import { auth } from './auth';
+import { hashApiKey } from './lib/apiKeyHash';
 import { validateSecret } from './lib/validateSecret';
 
 const http = httpRouter();
@@ -465,6 +466,49 @@ http.route({
       console.error('getNextBatchIndex failed:', err);
       return jsonError('Query failed', 400);
     }
+  }),
+});
+
+// ── API key exchange ─────────────────────────────────────────────────
+
+/**
+ * POST /api/keys/exchange
+ *
+ * Validates a raw API key and returns the associated userId.
+ * This endpoint IS the auth mechanism — no Bearer token required.
+ *
+ * Body: { apiKey: string, scope: string }
+ * Returns: { userId: string } on success, or 401/403 on failure.
+ */
+http.route({
+  path: '/api/keys/exchange',
+  method: 'POST',
+  handler: httpAction(async (ctx, request) => {
+    const body = await parseBody(request);
+    if (body instanceof Response) return body;
+
+    const { apiKey, scope } = body;
+    if (typeof apiKey !== 'string' || typeof scope !== 'string') {
+      return jsonError('apiKey and scope are required strings', 400);
+    }
+
+    // Reject obviously invalid keys before hashing (prevents DoS via large strings)
+    if (!/^holo_[0-9a-f]{64}$/.test(apiKey)) {
+      return jsonError('Invalid API key', 401);
+    }
+
+    const hashedKey = await hashApiKey(apiKey);
+
+    const result = await ctx.runMutation(internal.apiKeys.validateAndTouch, {
+      hashedKey,
+      scope,
+    });
+    if (!result) return jsonError('Invalid API key', 401);
+
+    return new Response(JSON.stringify({ userId: result.userId }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    });
   }),
 });
 

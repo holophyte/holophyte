@@ -8,11 +8,13 @@
  * @module
  */
 
+import type * as apiKeys from "../apiKeys.js";
 import type * as auth from "../auth.js";
 import type * as companion from "../companion.js";
 import type * as crons from "../crons.js";
 import type * as http from "../http.js";
 import type * as labels from "../labels.js";
+import type * as lib_apiKeyHash from "../lib/apiKeyHash.js";
 import type * as lib_auth from "../lib/auth.js";
 import type * as lib_validateSecret from "../lib/validateSecret.js";
 import type * as memberships from "../memberships.js";
@@ -36,11 +38,13 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  apiKeys: typeof apiKeys;
   auth: typeof auth;
   companion: typeof companion;
   crons: typeof crons;
   http: typeof http;
   labels: typeof labels;
+  "lib/apiKeyHash": typeof lib_apiKeyHash;
   "lib/auth": typeof lib_auth;
   "lib/validateSecret": typeof lib_validateSecret;
   memberships: typeof memberships;

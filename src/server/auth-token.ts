@@ -39,9 +39,41 @@ const TOKEN_DIR = join(homedir(), '.holophyte');
 const LEGACY_TOKEN_FILE = join(TOKEN_DIR, 'token.json');
 /** Current deployment-keyed token file path. */
 const TOKENS_FILE = join(TOKEN_DIR, 'tokens.json');
+/** API key file path — plain text, one key per file. */
+const API_KEY_FILE = join(TOKEN_DIR, 'api-key');
 
+/** Returns the absolute path to the deployment-keyed tokens file (`~/.holophyte/tokens.json`). */
 export function getTokensFilePath(): string {
   return TOKENS_FILE;
+}
+
+/** Returns the absolute path to the API key file (`~/.holophyte/api-key`). */
+export function getApiKeyFilePath(): string {
+  return API_KEY_FILE;
+}
+
+/**
+ * Reads the API key from ~/.holophyte/api-key.
+ * Returns the trimmed key if it starts with 'holo_', else null.
+ * Handles missing file gracefully (returns null, no throw).
+ */
+export async function readApiKeyFile(): Promise<string | null> {
+  try {
+    const content = await Bun.file(API_KEY_FILE).text();
+    const key = content.trim();
+    return /^holo_[0-9a-f]{64}$/.test(key) ? key : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Writes an API key to ~/.holophyte/api-key with 0o600 permissions.
+ * Ensures the ~/.holophyte directory exists.
+ */
+export async function writeApiKeyFile(key: string): Promise<void> {
+  await mkdir(TOKEN_DIR, { recursive: true });
+  await writeFile(API_KEY_FILE, `${key}\n`, { mode: 0o600 });
 }
 
 /**

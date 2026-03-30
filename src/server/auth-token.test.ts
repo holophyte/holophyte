@@ -23,11 +23,14 @@ vi.stubGlobal('Bun', {
 import {
   createFetchToken,
   deriveEnvironment,
+  getApiKeyFilePath,
   getTokensFilePath,
+  readApiKeyFile,
   readTokenFile,
   refreshAuthToken,
   signInAnonymous,
   type TokenFileData,
+  writeApiKeyFile,
   writeTokenFile,
 } from './auth-token';
 
@@ -768,5 +771,156 @@ describe('createFetchToken', () => {
 
     expect(tokenData.token).toBe('rotated-jwt');
     expect(tokenData.refreshToken).toBe('rotated-refresh');
+  });
+});
+
+// ── Valid API key for use in tests ───────────────────────────────────
+const VALID_API_KEY = `holo_${'a'.repeat(64)}`;
+
+describe('getApiKeyFilePath', () => {
+  it('returns a path ending in .holophyte/api-key', () => {
+    const path = getApiKeyFilePath();
+    expect(path).toMatch(/\.holophyte[/\\]api-key$/);
+  });
+});
+
+describe('readApiKeyFile', () => {
+  beforeEach(() => {
+    mockBunFile.mockReset();
+  });
+
+  it('returns null when the file does not exist', async () => {
+    mockBunFile.mockReturnValue({
+      text: vi.fn().mockRejectedValue(new Error('ENOENT: no such file')),
+    });
+
+    const result = await readApiKeyFile();
+    expect(result).toBeNull();
+  });
+
+  it('returns the trimmed key when it starts with holo_', async () => {
+    mockBunFile.mockReturnValue({
+      text: vi.fn().mockResolvedValue(`${VALID_API_KEY}\n`),
+    });
+
+    const result = await readApiKeyFile();
+    expect(result).toBe(VALID_API_KEY);
+  });
+
+  it('returns null when the key does not start with holo_', async () => {
+    mockBunFile.mockReturnValue({
+      text: vi.fn().mockResolvedValue('sk-1234567890abcdef\n'),
+    });
+
+    const result = await readApiKeyFile();
+    expect(result).toBeNull();
+  });
+
+  it('returns null when the file is empty', async () => {
+    mockBunFile.mockReturnValue({
+      text: vi.fn().mockResolvedValue('   \n'),
+    });
+
+    const result = await readApiKeyFile();
+    expect(result).toBeNull();
+  });
+
+  it('trims surrounding whitespace before checking prefix', async () => {
+    mockBunFile.mockReturnValue({
+      text: vi.fn().mockResolvedValue(`  ${VALID_API_KEY}  \n`),
+    });
+
+    const result = await readApiKeyFile();
+    expect(result).toBe(VALID_API_KEY);
+  });
+
+  it('reads from the path returned by getApiKeyFilePath()', async () => {
+    mockBunFile.mockReturnValue({
+      text: vi.fn().mockResolvedValue(VALID_API_KEY),
+    });
+
+    await readApiKeyFile();
+
+    expect(mockBunFile).toHaveBeenCalledWith(getApiKeyFilePath());
+  });
+});
+
+describe('writeApiKeyFile', () => {
+  beforeEach(() => {
+    vi.mocked(mkdir).mockReset().mockResolvedValue(undefined);
+    vi.mocked(writeFile).mockReset().mockResolvedValue(undefined);
+  });
+
+  it('creates the ~/.holophyte directory with recursive flag', async () => {
+    await writeApiKeyFile(VALID_API_KEY);
+
+    expect(mkdir).toHaveBeenCalledWith(expect.stringMatching(/\.holophyte$/), {
+      recursive: true,
+    });
+  });
+
+  it('writes the key followed by a newline', async () => {
+    await writeApiKeyFile(VALID_API_KEY);
+
+    expect(writeFile).toHaveBeenCalledWith(
+      getApiKeyFilePath(),
+      `${VALID_API_KEY}\n`,
+      { mode: 0o600 },
+    );
+  });
+
+  it('writes with restricted permissions (0o600)', async () => {
+    await writeApiKeyFile(VALID_API_KEY);
+
+    expect(writeFile).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.any(String),
+      { mode: 0o600 },
+    );
+  });
+
+  it('writes to the path returned by getApiKeyFilePath()', async () => {
+    await writeApiKeyFile(VALID_API_KEY);
+
+    expect(writeFile).toHaveBeenCalledWith(
+      getApiKeyFilePath(),
+      expect.any(String),
+      expect.any(Object),
+    );
+  });
+});
+
+describe('API key format validation', () => {
+  // These tests verify the regex used in setupApiKey (setup.ts).
+  // The regex is: /^holo_[0-9a-f]{64}$/
+  const API_KEY_REGEX = /^holo_[0-9a-f]{64}$/;
+
+  it('accepts a valid 69-char key with holo_ prefix and 64 hex chars', () => {
+    expect(API_KEY_REGEX.test(VALID_API_KEY)).toBe(true);
+    expect(API_KEY_REGEX.test(`holo_${'f'.repeat(64)}`)).toBe(true);
+    expect(API_KEY_REGEX.test(`holo_${'0'.repeat(64)}`)).toBe(true);
+  });
+
+  it('rejects keys without holo_ prefix', () => {
+    expect(API_KEY_REGEX.test(`sk_${'a'.repeat(64)}`)).toBe(false);
+    expect(API_KEY_REGEX.test(`${'a'.repeat(69)}`)).toBe(false);
+  });
+
+  it('rejects keys that are too short', () => {
+    expect(API_KEY_REGEX.test(`holo_${'a'.repeat(63)}`)).toBe(false);
+  });
+
+  it('rejects keys that are too long', () => {
+    expect(API_KEY_REGEX.test(`holo_${'a'.repeat(65)}`)).toBe(false);
+  });
+
+  it('rejects keys with uppercase hex chars', () => {
+    expect(API_KEY_REGEX.test(`holo_${'A'.repeat(64)}`)).toBe(false);
+    expect(API_KEY_REGEX.test(`holo_${'F'.repeat(64)}`)).toBe(false);
+  });
+
+  it('rejects keys with non-hex chars in the hex portion', () => {
+    expect(API_KEY_REGEX.test(`holo_${'g'.repeat(64)}`)).toBe(false);
+    expect(API_KEY_REGEX.test(`holo_${'z'.repeat(64)}`)).toBe(false);
   });
 });
