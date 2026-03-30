@@ -301,7 +301,7 @@ server.tool(
       title,
       status: status ?? 'backlog',
       priority: priority ?? 'none',
-      labels: labels ?? [],
+      labelIds: labels ?? [],
     });
   },
 );
