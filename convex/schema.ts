@@ -242,6 +242,7 @@ export default defineSchema({
     // Only valid scope for now is 'mcp' — extensible in the future
     scopes: v.array(v.string()),
     // NO createdAt — use _creationTime
+    expiresAt: v.optional(v.number()),
     lastUsedAt: v.optional(v.number()),
     revokedAt: v.optional(v.number()),
   })

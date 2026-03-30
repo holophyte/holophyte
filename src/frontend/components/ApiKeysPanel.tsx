@@ -10,6 +10,7 @@ import {
   KeyRound,
   Loader2,
   Pencil,
+  RefreshCw,
   TriangleAlert,
   X,
 } from 'lucide-react';
@@ -49,9 +50,18 @@ interface GenerateKeyDialogProps {
   onOpenChange: (open: boolean) => void;
 }
 
+const EXPIRY_OPTIONS = [
+  { label: '7 days', days: 7 },
+  { label: '30 days', days: 30 },
+  { label: '90 days', days: 90 },
+  { label: '1 year', days: 365 },
+  { label: 'No expiration', days: 0 },
+] as const;
+
 function GenerateKeyDialog({ open, onOpenChange }: GenerateKeyDialogProps) {
   const [name, setName] = useState('');
   const [mcpScope, setMcpScope] = useState(true);
+  const [expiryDays, setExpiryDays] = useState(90);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [generatedKey, setGeneratedKey] = useState<string | null>(null);
@@ -73,7 +83,15 @@ function GenerateKeyDialog({ open, onOpenChange }: GenerateKeyDialogProps) {
     setError(null);
     setSubmitting(true);
     try {
-      const rawKey = await generate({ name: name.trim(), scopes });
+      const expiresAt =
+        expiryDays > 0
+          ? Date.now() + expiryDays * 24 * 60 * 60 * 1000
+          : undefined;
+      const rawKey = await generate({
+        name: name.trim(),
+        scopes,
+        expiresAt,
+      });
       setGeneratedKey(rawKey);
     } catch (err) {
       const message =
@@ -98,6 +116,7 @@ function GenerateKeyDialog({ open, onOpenChange }: GenerateKeyDialogProps) {
   const handleClose = () => {
     setName('');
     setMcpScope(true);
+    setExpiryDays(90);
     setSubmitting(false);
     setError(null);
     setGeneratedKey(null);
@@ -196,6 +215,21 @@ function GenerateKeyDialog({ open, onOpenChange }: GenerateKeyDialogProps) {
                     — allows use as an MCP server credential
                   </span>
                 </label>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="key-expiry">Expiration</Label>
+                <select
+                  id="key-expiry"
+                  value={expiryDays}
+                  onChange={(e) => setExpiryDays(Number(e.target.value))}
+                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                >
+                  {EXPIRY_OPTIONS.map((opt) => (
+                    <option key={opt.days} value={opt.days}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </select>
               </div>
               {error && <p className="text-sm text-destructive">{error}</p>}
             </div>
@@ -310,6 +344,93 @@ function EditKeyDialog({ apiKey, open, onOpenChange }: EditKeyDialogProps) {
   );
 }
 
+function RegeneratedKeyDialog({
+  rawKey,
+  onClose,
+}: {
+  rawKey: string | null;
+  onClose: () => void;
+}) {
+  const [copied, setCopied] = useState(false);
+  const [keyVisible, setKeyVisible] = useState(false);
+
+  const handleCopy = async () => {
+    if (!rawKey) return;
+    try {
+      await navigator.clipboard.writeText(rawKey);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // Clipboard API unavailable
+    }
+  };
+
+  const handleClose = () => {
+    setCopied(false);
+    setKeyVisible(false);
+    onClose();
+  };
+
+  return (
+    <Dialog open={rawKey !== null} onOpenChange={handleClose}>
+      <DialogContent className="max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>Key Regenerated</DialogTitle>
+          <DialogDescription>
+            Your old key has been revoked. Copy the new key now — it won't be
+            shown again.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4 py-2">
+          <div className="flex items-start gap-2.5 rounded-md border border-amber-500/20 bg-amber-500/5 p-3 text-sm text-amber-700 dark:text-amber-400">
+            <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0 opacity-80" />
+            <p>
+              Store this key securely. You won't be able to view it again after
+              closing this dialog.
+            </p>
+          </div>
+          <div className="flex items-center gap-1 rounded-md border bg-muted/40 px-3 py-3">
+            <code className="flex-1 truncate font-mono text-xs text-foreground/90 select-all">
+              {keyVisible ? rawKey : `holo_${'•'.repeat(24)}`}
+            </code>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7 shrink-0 text-muted-foreground hover:text-foreground"
+              onClick={() => setKeyVisible((v) => !v)}
+              title={keyVisible ? 'Hide key' : 'Show key'}
+            >
+              {keyVisible ? (
+                <EyeOff className="h-3.5 w-3.5" />
+              ) : (
+                <Eye className="h-3.5 w-3.5" />
+              )}
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7 shrink-0 text-muted-foreground hover:text-foreground"
+              onClick={handleCopy}
+              title="Copy to clipboard"
+            >
+              {copied ? (
+                <Check className="h-3.5 w-3.5 text-green-600" />
+              ) : (
+                <Copy className="h-3.5 w-3.5" />
+              )}
+            </Button>
+          </div>
+        </div>
+        <DialogFooter>
+          <Button onClick={handleClose}>Done</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 interface KeyRowProps {
   apiKey: ApiKeyDoc;
   onRevoke: (keyId: ApiKeyDoc['_id']) => void;
@@ -320,17 +441,30 @@ function KeyRow({ apiKey, onRevoke, revoking }: KeyRowProps) {
   const isRevoked = apiKey.revokedAt !== undefined;
   const [editOpen, setEditOpen] = useState(false);
   const [confirmRevoke, setConfirmRevoke] = useState(false);
+  const [regeneratedKey, setRegeneratedKey] = useState<string | null>(null);
+  const [regenerating, setRegenerating] = useState(false);
+  const regenerate = useAction(api.apiKeys.regenerate);
 
   const handleRevoke = () => {
     onRevoke(apiKey._id);
     setConfirmRevoke(false);
   };
 
+  const handleRegenerate = async () => {
+    setRegenerating(true);
+    try {
+      const rawKey = await regenerate({ keyId: apiKey._id });
+      setRegeneratedKey(rawKey);
+    } finally {
+      setRegenerating(false);
+    }
+  };
+
   return (
     <>
       <div
         className={cn(
-          'grid grid-cols-[3fr_1fr_2fr_2fr_2fr] items-center gap-x-4 gap-y-0 px-4 py-3 text-sm transition-colors hover:bg-muted/30',
+          'grid grid-cols-[minmax(8rem,1fr)_3.5rem_11rem_11rem_11rem_6rem] items-center gap-x-4 gap-y-0 px-4 py-3 text-sm transition-colors hover:bg-muted/30',
           isRevoked && 'opacity-50',
         )}
       >
@@ -353,6 +487,20 @@ function KeyRow({ apiKey, onRevoke, revoking }: KeyRowProps) {
           {apiKey.lastUsedAt !== undefined
             ? formatDate(apiKey.lastUsedAt)
             : '—'}
+        </span>
+        <span
+          className={cn(
+            'text-xs whitespace-nowrap',
+            apiKey.expiresAt !== undefined && apiKey.expiresAt < Date.now()
+              ? 'text-destructive'
+              : 'text-muted-foreground',
+          )}
+        >
+          {apiKey.expiresAt !== undefined
+            ? apiKey.expiresAt < Date.now()
+              ? 'Expired'
+              : formatDate(apiKey.expiresAt)
+            : 'Never'}
         </span>
         <div className="flex items-center justify-end gap-1.5">
           {!isRevoked ? (
@@ -395,6 +543,18 @@ function KeyRow({ apiKey, onRevoke, revoking }: KeyRowProps) {
                 </button>
                 <button
                   type="button"
+                  className={cn(
+                    'p-1 text-muted-foreground hover:text-ring transition-colors cursor-pointer rounded',
+                    regenerating && 'animate-spin',
+                  )}
+                  onClick={handleRegenerate}
+                  disabled={regenerating}
+                  title="Regenerate key"
+                >
+                  <RefreshCw className="h-4 w-4" />
+                </button>
+                <button
+                  type="button"
                   className="p-1 text-muted-foreground hover:text-destructive transition-colors cursor-pointer rounded"
                   onClick={() => setConfirmRevoke(true)}
                   title="Revoke"
@@ -421,17 +581,22 @@ function KeyRow({ apiKey, onRevoke, revoking }: KeyRowProps) {
           onOpenChange={setEditOpen}
         />
       )}
+      <RegeneratedKeyDialog
+        rawKey={regeneratedKey}
+        onClose={() => setRegeneratedKey(null)}
+      />
     </>
   );
 }
 
 function KeyTableHeader({ revoked = false }: { revoked?: boolean }) {
   return (
-    <div className="grid grid-cols-[3fr_1fr_2fr_2fr_2fr] items-center gap-x-4 border-b px-4 py-2.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+    <div className="grid grid-cols-[minmax(8rem,1fr)_3.5rem_11rem_11rem_11rem_6rem] items-center gap-x-4 border-b px-4 py-2.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
       <span>Name</span>
       <span>Scopes</span>
       <span>Created</span>
       <span>Last used</span>
+      <span>Expires</span>
       <span>{revoked ? 'Revoked' : ''}</span>
     </div>
   );

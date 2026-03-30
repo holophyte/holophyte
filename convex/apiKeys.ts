@@ -25,6 +25,7 @@ export const generate = action({
   args: {
     name: v.string(),
     scopes: v.array(v.string()),
+    expiresAt: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
     const userId = await getAuthUserId(ctx);
@@ -56,6 +57,7 @@ export const generate = action({
       hashedKey,
       name: args.name,
       scopes: args.scopes,
+      ...(args.expiresAt !== undefined && { expiresAt: args.expiresAt }),
     });
 
     return rawKey;
@@ -72,9 +74,87 @@ export const insertKey = internalMutation({
     hashedKey: v.string(),
     name: v.string(),
     scopes: v.array(v.string()),
+    expiresAt: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
     return await ctx.db.insert('apiKeys', args);
+  },
+});
+
+/**
+ * Regenerates an API key: revokes the old one and creates a new key
+ * with the same name, scopes, and expiry duration. Returns the new raw key.
+ */
+export const regenerate = action({
+  args: {
+    keyId: v.id('apiKeys'),
+  },
+  handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) throw new Error('Not authenticated');
+
+    const oldKey = await ctx.runQuery(internal.apiKeys.getKey, {
+      keyId: args.keyId,
+    });
+    if (!oldKey) throw new Error('API key not found');
+    if (oldKey.userId !== userId)
+      throw new Error('Not authorized to regenerate this key');
+
+    // Calculate new expiresAt based on old key's duration
+    let expiresAt: number | undefined;
+    if (oldKey.expiresAt !== undefined) {
+      const duration = oldKey.expiresAt - oldKey._creationTime;
+      expiresAt = Date.now() + duration;
+    }
+
+    const bytes = new Uint8Array(32);
+    crypto.getRandomValues(bytes);
+    const hex = Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join(
+      '',
+    );
+    const rawKey = `holo_${hex}`;
+    const hashedKey = await hashApiKey(rawKey);
+
+    await ctx.runMutation(internal.apiKeys.revokeAndInsert, {
+      oldKeyId: args.keyId,
+      userId,
+      hashedKey,
+      name: oldKey.name,
+      scopes: oldKey.scopes,
+      expiresAt,
+    });
+
+    return rawKey;
+  },
+});
+
+/** Internal query to get a key doc by ID. */
+export const getKey = internalQuery({
+  args: { keyId: v.id('apiKeys') },
+  handler: async (ctx, args) => {
+    return await ctx.db.get(args.keyId);
+  },
+});
+
+/** Internal mutation to revoke old key and insert new one atomically. */
+export const revokeAndInsert = internalMutation({
+  args: {
+    oldKeyId: v.id('apiKeys'),
+    userId: v.id('users'),
+    hashedKey: v.string(),
+    name: v.string(),
+    scopes: v.array(v.string()),
+    expiresAt: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    await ctx.db.patch(args.oldKeyId, { revokedAt: Date.now() });
+    return await ctx.db.insert('apiKeys', {
+      userId: args.userId,
+      hashedKey: args.hashedKey,
+      name: args.name,
+      scopes: args.scopes,
+      ...(args.expiresAt !== undefined && { expiresAt: args.expiresAt }),
+    });
   },
 });
 
@@ -174,6 +254,7 @@ export const validateByHash = internalQuery({
 
     if (!key) return null;
     if (key.revokedAt !== undefined) return null;
+    if (key.expiresAt !== undefined && key.expiresAt < Date.now()) return null;
 
     return key;
   },
