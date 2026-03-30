@@ -89,6 +89,7 @@ beforeEach(async () => {
 
   // auth-token: prevent filesystem reads
   vi.doMock('@/server/auth-token', () => ({
+    readApiKeyFile: vi.fn().mockResolvedValue(null),
     readTokenFile: vi.fn().mockResolvedValue({ status: 'missing' }),
     signInAnonymous: vi.fn().mockResolvedValue(null),
   }));
@@ -765,6 +766,7 @@ describe('bootstrapAuth', () => {
     }));
 
     vi.doMock('@/server/auth-token', () => ({
+      readApiKeyFile: vi.fn().mockResolvedValue(null),
       readTokenFile: vi.fn().mockResolvedValue({
         status: 'ok',
         data: {
@@ -818,6 +820,7 @@ describe('bootstrapAuth', () => {
     const mockSetAuthFresh = vi.fn();
 
     vi.doMock('@/server/auth-token', () => ({
+      readApiKeyFile: vi.fn().mockResolvedValue(null),
       readTokenFile: vi.fn().mockResolvedValue({ status: 'missing' }),
       signInAnonymous: mockSignInAnonymous,
     }));

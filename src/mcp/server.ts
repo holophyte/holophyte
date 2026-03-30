@@ -19,7 +19,11 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { ConvexHttpClient } from 'convex/browser';
 import { z } from 'zod';
 import { DEFAULT_MODEL } from '@/constants';
-import { readTokenFile, signInAnonymous } from '@/server/auth-token';
+import {
+  readApiKeyFile,
+  readTokenFile,
+  signInAnonymous,
+} from '@/server/auth-token';
 
 // ── Types ────────────────────────────────────────────────────────────
 
@@ -37,13 +41,73 @@ let httpClient: ConvexHttpClient | null = null;
 let defaultOrgId: Id<'organizations'> | null = null;
 
 /**
+ * Derives the Convex HTTP site URL from env vars.
+ * Uses CONVEX_SITE_URL if set; for cloud deployments, derives from CONVEX_URL
+ * by replacing .convex.cloud with .convex.site.
+ */
+function deriveSiteUrl(convexUrl: string): string {
+  if (process.env.CONVEX_SITE_URL) {
+    return process.env.CONVEX_SITE_URL.replace(/\/$/, '');
+  }
+  // Cloud: https://foo.convex.cloud → https://foo.convex.site
+  return convexUrl
+    .replace(/\.convex\.cloud$/, '.convex.site')
+    .replace(/\/$/, '');
+}
+
+/**
  * Bootstraps auth and initializes the ConvexHttpClient.
- * Replicates the companion's auth flow: token file → anonymous fallback.
+ * Auth priority: API key file → token file → anonymous fallback.
  */
 async function bootstrapAuth(convexUrl: string): Promise<void> {
   const deployment = process.env.CONVEX_DEPLOYMENT;
+  const siteUrl = deriveSiteUrl(convexUrl);
+
+  // 1. Try API key from ~/.holophyte/api-key
+  const apiKey = await readApiKeyFile();
+  if (apiKey) {
+    try {
+      const resp = await fetch(`${siteUrl}/api/keys/exchange`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ apiKey, scope: 'mcp' }),
+      });
+      if (resp.ok) {
+        const body = (await resp.json()) as { userId?: string };
+        console.log(
+          `MCP server authenticated via API key (userId: ${body.userId ?? 'unknown'})`,
+        );
+        // API key is a valid identity gate; proceed with remaining auth for Convex client
+      } else if (resp.status === 401 || resp.status === 403) {
+        console.error(
+          `API key validation failed (${resp.status}) — refusing to start`,
+        );
+        throw new Error(
+          `API key authentication failed with status ${resp.status}`,
+        );
+      } else {
+        console.error(
+          `API key exchange returned unexpected status ${resp.status} — falling through to other auth methods`,
+        );
+      }
+    } catch (err) {
+      // Re-throw auth failures; treat network errors as fall-through
+      if (
+        err instanceof Error &&
+        err.message.startsWith('API key authentication failed')
+      ) {
+        throw err;
+      }
+      console.error(
+        'API key exchange unreachable — falling through to other auth methods:',
+        err,
+      );
+    }
+  }
 
   let token: string | null = null;
+
+  // 2. Try token file
   if (deployment) {
     const result = await readTokenFile(deployment);
     if (result.status === 'ok') {
@@ -57,7 +121,7 @@ async function bootstrapAuth(convexUrl: string): Promise<void> {
     }
   }
 
-  // Anonymous auth fallback
+  // 3. Anonymous auth fallback
   if (!token && process.env.ALLOW_ANONYMOUS_AUTH === '1') {
     const anonResult = await signInAnonymous(convexUrl);
     if (anonResult) {
