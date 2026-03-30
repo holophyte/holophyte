@@ -452,31 +452,24 @@ interface KeyRowProps {
   apiKey: ApiKeyDoc;
   onRevoke: (keyId: ApiKeyDoc['_id']) => void;
   revoking: boolean;
+  onRegenerate: (keyId: ApiKeyDoc['_id']) => void;
+  regenerating: boolean;
 }
 
-function KeyRow({ apiKey, onRevoke, revoking }: KeyRowProps) {
+function KeyRow({
+  apiKey,
+  onRevoke,
+  revoking,
+  onRegenerate,
+  regenerating,
+}: KeyRowProps) {
   const isRevoked = apiKey.revokedAt !== undefined;
   const [editOpen, setEditOpen] = useState(false);
   const [confirmRevoke, setConfirmRevoke] = useState(false);
-  const [regeneratedKey, setRegeneratedKey] = useState<string | null>(null);
-  const [regenerating, setRegenerating] = useState(false);
-  const regenerate = useAction(api.apiKeys.regenerate);
 
   const handleRevoke = () => {
     onRevoke(apiKey._id);
     setConfirmRevoke(false);
-  };
-
-  const handleRegenerate = async () => {
-    setRegenerating(true);
-    try {
-      const rawKey = await regenerate({ keyId: apiKey._id });
-      setRegeneratedKey(rawKey);
-    } catch (err) {
-      console.error('Failed to regenerate API key:', err);
-    } finally {
-      setRegenerating(false);
-    }
   };
 
   return (
@@ -567,7 +560,7 @@ function KeyRow({ apiKey, onRevoke, revoking }: KeyRowProps) {
                     'p-1 text-muted-foreground hover:text-ring transition-colors cursor-pointer rounded',
                     regenerating && 'animate-spin',
                   )}
-                  onClick={handleRegenerate}
+                  onClick={() => onRegenerate(apiKey._id)}
                   disabled={regenerating}
                   title="Regenerate key"
                   aria-label="Regenerate key"
@@ -603,10 +596,6 @@ function KeyRow({ apiKey, onRevoke, revoking }: KeyRowProps) {
           onOpenChange={setEditOpen}
         />
       )}
-      <RegeneratedKeyDialog
-        rawKey={regeneratedKey}
-        onClose={() => setRegeneratedKey(null)}
-      />
     </>
   );
 }
@@ -629,9 +618,18 @@ interface KeysListProps {
   onRevoke: (keyId: ApiKeyDoc['_id']) => void;
   revokingId: ApiKeyDoc['_id'] | null;
   onGenerate: () => void;
+  onRegenerate: (keyId: ApiKeyDoc['_id']) => void;
+  regeneratingId: ApiKeyDoc['_id'] | null;
 }
 
-function KeysList({ keys, onRevoke, revokingId, onGenerate }: KeysListProps) {
+function KeysList({
+  keys,
+  onRevoke,
+  revokingId,
+  onGenerate,
+  onRegenerate,
+  regeneratingId,
+}: KeysListProps) {
   const [historyOpen, setHistoryOpen] = useState(false);
 
   const { active, revoked } = useMemo(() => {
@@ -676,6 +674,8 @@ function KeysList({ keys, onRevoke, revokingId, onGenerate }: KeysListProps) {
               apiKey={key}
               onRevoke={onRevoke}
               revoking={revokingId === key._id}
+              onRegenerate={onRegenerate}
+              regenerating={regeneratingId === key._id}
             />
           ))}
         </div>
@@ -714,6 +714,8 @@ function KeysList({ keys, onRevoke, revokingId, onGenerate }: KeysListProps) {
                     apiKey={key}
                     onRevoke={onRevoke}
                     revoking={revokingId === key._id}
+                    onRegenerate={onRegenerate}
+                    regenerating={regeneratingId === key._id}
                   />
                 ))}
               </div>
@@ -728,9 +730,14 @@ function KeysList({ keys, onRevoke, revokingId, onGenerate }: KeysListProps) {
 export default function ApiKeysPanel() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [revokingId, setRevokingId] = useState<ApiKeyDoc['_id'] | null>(null);
+  const [regeneratingId, setRegeneratingId] = useState<ApiKeyDoc['_id'] | null>(
+    null,
+  );
+  const [regeneratedKey, setRegeneratedKey] = useState<string | null>(null);
 
   const keys = useQuery(api.apiKeys.list);
   const revoke = useMutation(api.apiKeys.revoke);
+  const regenerate = useAction(api.apiKeys.regenerate);
 
   const handleRevoke = async (keyId: ApiKeyDoc['_id']) => {
     setRevokingId(keyId);
@@ -740,6 +747,18 @@ export default function ApiKeysPanel() {
       console.error('Failed to revoke API key:', err);
     } finally {
       setRevokingId(null);
+    }
+  };
+
+  const handleRegenerate = async (keyId: ApiKeyDoc['_id']) => {
+    setRegeneratingId(keyId);
+    try {
+      const rawKey = await regenerate({ keyId });
+      setRegeneratedKey(rawKey);
+    } catch (err) {
+      console.error('Failed to regenerate API key:', err);
+    } finally {
+      setRegeneratingId(null);
     }
   };
 
@@ -757,9 +776,15 @@ export default function ApiKeysPanel() {
         onRevoke={handleRevoke}
         revokingId={revokingId}
         onGenerate={() => setDialogOpen(true)}
+        onRegenerate={handleRegenerate}
+        regeneratingId={regeneratingId}
       />
 
       <GenerateKeyDialog open={dialogOpen} onOpenChange={setDialogOpen} />
+      <RegeneratedKeyDialog
+        rawKey={regeneratedKey}
+        onClose={() => setRegeneratedKey(null)}
+      />
     </section>
   );
 }
