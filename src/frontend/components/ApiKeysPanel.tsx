@@ -524,14 +524,14 @@ function KeyRow({ apiKey, onRevoke, revoking }: KeyRowProps) {
         <div className="flex h-8 items-center justify-end gap-1.5">
           {!isRevoked ? (
             confirmRevoke ? (
-              <div className="flex items-center gap-1.5">
+              <div className="flex items-center gap-2 pl-2">
                 <span className="text-xs text-destructive whitespace-nowrap">
                   Revoke?
                 </span>
                 <Button
                   variant="outline"
                   size="sm"
-                  className="h-6 px-2 text-xs text-destructive border-destructive/30 bg-destructive/5 hover:bg-destructive/10"
+                  className="h-6 px-2 text-xs text-destructive border-destructive/40 bg-destructive/5 hover:bg-destructive/10"
                   onClick={handleRevoke}
                   disabled={revoking}
                 >
@@ -542,7 +542,7 @@ function KeyRow({ apiKey, onRevoke, revoking }: KeyRowProps) {
                   )}
                 </Button>
                 <Button
-                  variant="ghost"
+                  variant="outline"
                   size="sm"
                   className="h-6 px-2 text-xs"
                   onClick={() => setConfirmRevoke(false)}
