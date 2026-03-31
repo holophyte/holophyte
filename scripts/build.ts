@@ -140,7 +140,8 @@ if (!result.success) {
 const config = {
   convexUrl,
   e2eTest: false, // Dev-only feature — never enabled in static/Vercel builds.
-  allowAnonymousAuth: isPreview, // Enabled on preview builds for testing via ?auth param.
+  allowAnonymousAuth: isPreview, // Kept for MCP server fallback on preview backends.
+  allowPasswordAuth: isPreview, // Preview builds auto-login as dev@holophyte.test; use ?signin to suppress.
 };
 
 await Bun.write(
