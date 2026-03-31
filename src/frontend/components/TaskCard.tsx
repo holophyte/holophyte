@@ -126,7 +126,7 @@ export function TaskCard({ task, repoName }: TaskCardProps) {
         </div>
       )}
       <div className="flex items-start justify-between gap-2 pr-8">
-        <h3 className="text-sm font-medium leading-snug break-words overflow-hidden text-ellipsis">
+        <h3 className="text-sm font-medium leading-snug break-words line-clamp-2">
           {task.title}
         </h3>
       </div>
