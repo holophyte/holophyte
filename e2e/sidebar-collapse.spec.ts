@@ -74,8 +74,8 @@ test('Cmd+B keyboard shortcut toggles sidebar', async ({ page }) => {
   });
   await expect(collapseBtn).toBeVisible({ timeout: 10000 });
 
-  // Press Cmd+B (Meta+B)
-  await page.keyboard.press('Meta+b');
+  // Press Ctrl+B (works on Linux CI; Meta+B on Mac)
+  await page.keyboard.press('ControlOrMeta+b');
 
   // Should be collapsed
   await expect(
@@ -83,7 +83,7 @@ test('Cmd+B keyboard shortcut toggles sidebar', async ({ page }) => {
   ).toBeVisible({ timeout: 5000 });
 
   // Press again to expand
-  await page.keyboard.press('Meta+b');
+  await page.keyboard.press('ControlOrMeta+b');
 
   // Should be expanded again
   await expect(page.locator('aside').locator('text=Projects')).toBeVisible({
