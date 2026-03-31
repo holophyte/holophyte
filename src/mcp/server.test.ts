@@ -416,12 +416,12 @@ describe('holophyte_create_task', () => {
     await tool('holophyte_create_task')({
       repoId: 'r1',
       title: 'Labelled Task',
-      labels: ['label-a', 'label-b'],
+      labels: ['j57labela', 'j57labelb'],
     });
 
     expect(mockMutation).toHaveBeenCalledWith(
       expect.anything(),
-      expect.objectContaining({ labelIds: ['label-a', 'label-b'] }),
+      expect.objectContaining({ labelIds: ['j57labela', 'j57labelb'] }),
     );
   });
 
@@ -432,14 +432,14 @@ describe('holophyte_create_task', () => {
       repoId: 'r1',
       title: 'Full Task',
       priority: 'urgent',
-      labels: ['label-x'],
+      labels: ['j57labelx'],
     });
 
     expect(mockMutation).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
         priority: 'urgent',
-        labelIds: ['label-x'],
+        labelIds: ['j57labelx'],
       }),
     );
   });
@@ -615,14 +615,14 @@ describe('holophyte_update_task', () => {
 
     await tool('holophyte_update_task')({
       id: 'task1',
-      labels: ['label-1', 'label-2'],
+      labels: ['j57label1', 'j57label2'],
     });
 
     expect(mockMutation).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
         id: 'task1',
-        labelIds: ['label-1', 'label-2'],
+        labelIds: ['j57label1', 'j57label2'],
       }),
     );
   });
@@ -837,20 +837,34 @@ describe('label name resolution', () => {
     );
   });
 
-  it('passes unmatched labels through as IDs', async () => {
+  it('passes Convex ID-like labels through without resolution', async () => {
     mockQuery.mockResolvedValueOnce([]);
     mockMutation.mockResolvedValueOnce('task-id-passthrough');
 
     await tool('holophyte_create_task')({
       repoId: 'r1',
       title: 'ID Passthrough',
-      labels: ['some-label-id'],
+      labels: ['j57abc123def'],
     });
 
     expect(mockMutation).toHaveBeenCalledWith(
       expect.anything(),
-      expect.objectContaining({ labelIds: ['some-label-id'] }),
+      expect.objectContaining({ labelIds: ['j57abc123def'] }),
     );
+  });
+
+  it('throws error for unresolved label names that are not valid IDs', async () => {
+    mockQuery.mockResolvedValueOnce([
+      { _id: 'lid1', name: 'bug', color: 'red' },
+    ]);
+
+    await expect(
+      tool('holophyte_create_task')({
+        repoId: 'r1',
+        title: 'Bad Label',
+        labels: ['My Typo Label!'],
+      }),
+    ).rejects.toThrow(/Unknown label\(s\): My Typo Label!/);
   });
 
   it('resolves label names to IDs in holophyte_update_task', async () => {

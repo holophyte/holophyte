@@ -380,10 +380,14 @@ server.tool(
 
 // ── Label name resolution ───────────────────────────────────────────
 
+/** Convex document IDs are base32-encoded and always start with a specific set of chars. */
+const CONVEX_ID_PATTERN = /^[a-z0-9][a-z0-9_|]+$/;
+
 /**
  * Resolves an array of label identifiers (IDs or names) to label IDs.
  * Names are matched case-insensitively against the org's labels.
- * Inputs that don't match any label name are assumed to be IDs.
+ * Inputs that look like Convex IDs (alphanumeric) pass through directly.
+ * Inputs that don't match a name and don't look like IDs throw an error.
  */
 async function resolveLabels(
   client: ConvexHttpClient,
@@ -398,12 +402,29 @@ async function resolveLabels(
     ]),
   );
 
-  return labelInputs.map((input) => {
-    const resolved = labelsByName.get(input.toLowerCase());
-    if (resolved) return resolved as Id<'labels'>;
-    // Not found as a name — treat as an ID
-    return input as Id<'labels'>;
-  });
+  const resolved: Id<'labels'>[] = [];
+  const unresolved: string[] = [];
+
+  for (const input of labelInputs) {
+    const byName = labelsByName.get(input.toLowerCase());
+    if (byName) {
+      resolved.push(byName as Id<'labels'>);
+    } else if (CONVEX_ID_PATTERN.test(input)) {
+      // Looks like a Convex ID — pass through
+      resolved.push(input as Id<'labels'>);
+    } else {
+      unresolved.push(input);
+    }
+  }
+
+  if (unresolved.length) {
+    const available = allLabels.map((l: { name: string }) => l.name).join(', ');
+    throw new Error(
+      `Unknown label(s): ${unresolved.join(', ')}. Available labels: ${available || '(none)'}`,
+    );
+  }
+
+  return resolved;
 }
 
 // ── Tool: holophyte_create_task ──────────────────────────────────────
