@@ -6,27 +6,30 @@ async function waitForApp(page: import('@playwright/test').Page) {
   await page.waitForSelector('text=Holophyte', { timeout: 30000 });
 }
 
-// Navigate to the settings page via the UserMenu "API Keys" link
+// Navigate to the settings page via the UserMenu "API Keys" link.
+// Under heavy parallel load (7 workers), the Radix popover can fail to open
+// on the first click. Retry the trigger click if the popover doesn't appear.
 async function navigateToSettingsViaUserMenu(
   page: import('@playwright/test').Page,
 ) {
-  // Wait for the user name to load before interacting with the menu
   const userMenuTrigger = page
     .locator('aside')
-    .locator('button')
-    .filter({ hasText: 'Dev User' })
+    .locator('button[aria-label*="User menu"]')
     .first();
   await expect(userMenuTrigger).toBeVisible({ timeout: 10000 });
-  await userMenuTrigger.click();
 
-  // Wait for the "API Keys" button to appear in the popover and click it.
-  // Use page-level locator — scoping to the popover wrapper can miss it
-  // if Radix portals the content outside the wrapper briefly.
   const apiKeysButton = page.getByRole('button', { name: 'API Keys' });
-  await expect(apiKeysButton).toBeVisible({ timeout: 5000 });
+  for (let attempt = 0; attempt < 3; attempt++) {
+    await userMenuTrigger.click();
+    try {
+      await expect(apiKeysButton).toBeVisible({ timeout: 3000 });
+      break;
+    } catch {
+      // Popover didn't open — retry click
+    }
+  }
   await apiKeysButton.click();
 
-  // Wait for the settings page to load
   await expect(page.locator('h1', { hasText: 'Settings' })).toBeVisible({
     timeout: 10000,
   });
