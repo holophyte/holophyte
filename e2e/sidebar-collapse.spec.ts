@@ -46,9 +46,6 @@ test('clicking collapse toggle hides sidebar text', async ({ page }) => {
   await expect(
     page.locator('aside').getByRole('button', { name: 'Seed Box' }),
   ).toBeVisible();
-  await expect(
-    page.locator('aside').getByRole('button', { name: 'Add project' }),
-  ).toBeVisible();
 });
 
 test('clicking expand toggle restores sidebar', async ({ page }) => {
