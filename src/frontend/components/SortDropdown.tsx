@@ -50,7 +50,7 @@ export default function SortDropdown({ value, onChange }: SortDropdownProps) {
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-44 p-1" align="end">
-        <div role="listbox" aria-label="Sort order" className="space-y-0.5">
+        <div role="menu" aria-label="Sort order" className="space-y-0.5">
           {SORT_OPTIONS.map((option) => {
             const Icon = option.icon;
             const isActive = option.value === value;
@@ -58,8 +58,8 @@ export default function SortDropdown({ value, onChange }: SortDropdownProps) {
               <button
                 key={option.value}
                 type="button"
-                role="option"
-                aria-selected={isActive}
+                role="menuitemradio"
+                aria-checked={isActive}
                 onClick={() => {
                   onChange(option.value);
                   setOpen(false);
