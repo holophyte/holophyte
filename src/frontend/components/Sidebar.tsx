@@ -37,16 +37,14 @@ import {
 
 const isMac = /Mac|iPhone|iPad/.test(navigator.platform);
 
-/** Wraps a button with a tooltip that only renders when the sidebar is collapsed. */
-function SidebarTooltip({
-  label,
-  collapsed,
-  children,
-}: {
+interface SidebarTooltipProps {
   label: string;
   collapsed: boolean;
   children: React.ReactNode;
-}) {
+}
+
+/** Wraps a button with a tooltip that only renders when the sidebar is collapsed. */
+function SidebarTooltip({ label, collapsed, children }: SidebarTooltipProps) {
   if (!collapsed) return children;
   return (
     <Tooltip>
@@ -167,38 +165,30 @@ export function Sidebar() {
 
         <Separator />
 
-        {/* Projects */}
-        {!collapsed && (
-          <div className="flex items-center justify-between px-4 py-2">
+        {/* Projects header */}
+        <div
+          className={cn(
+            'flex items-center',
+            collapsed ? 'justify-center p-2' : 'justify-between px-4 py-2',
+          )}
+        >
+          {!collapsed && (
             <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
               Projects
             </span>
+          )}
+          <SidebarTooltip label="Add project" collapsed={collapsed}>
             <Button
               variant="ghost"
               size="icon"
-              className="h-11 w-11"
+              className={collapsed ? 'w-full h-8' : 'h-11 w-11'}
               onClick={() => setAddRepoOpen(true)}
               aria-label="Add project"
             >
               <Plus className="h-3.5 w-3.5" />
             </Button>
-          </div>
-        )}
-        {collapsed && (
-          <div className="p-2">
-            <SidebarTooltip label="Add project" collapsed={collapsed}>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="w-full h-8"
-                onClick={() => setAddRepoOpen(true)}
-                aria-label="Add project"
-              >
-                <Plus className="h-3.5 w-3.5" />
-              </Button>
-            </SidebarTooltip>
-          </div>
-        )}
+          </SidebarTooltip>
+        </div>
 
         <ScrollArea className="flex-1 [&>div>div]:!block">
           <div className="p-2 space-y-1">
@@ -252,7 +242,7 @@ export function Sidebar() {
                       variant={
                         selectedRepoId === repo._id ? 'secondary' : 'ghost'
                       }
-                      className={cn('w-full justify-start gap-2 text-sm pr-8')}
+                      className="w-full justify-start gap-2 text-sm pr-8"
                       onClick={() =>
                         void navigate({
                           to: '/repos/$repoId',
