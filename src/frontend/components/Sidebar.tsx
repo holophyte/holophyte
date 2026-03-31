@@ -8,11 +8,14 @@ import {
   FolderGit2,
   LayoutDashboard,
   Lightbulb,
+  PanelLeftClose,
+  PanelLeftOpen,
   Plus,
   Sprout,
   Trash2,
 } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { isEditableElement } from '@/frontend/lib/dom';
 import { cn } from '@/frontend/lib/utils';
 import { useAppStore } from '@/frontend/stores/app';
 import { AddRepoDialog } from './AddRepoDialog';
@@ -25,9 +28,38 @@ import PageHeader from './ui/PageHeader';
 import ScrollArea from './ui/ScrollArea';
 import Separator from './ui/Separator';
 import Skeleton from './ui/Skeleton';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from './ui/Tooltip';
+
+const isMac = /Mac|iPhone|iPad/.test(navigator.platform);
+
+/** Wraps a button with a tooltip that only renders when the sidebar is collapsed. */
+function SidebarTooltip({
+  label,
+  collapsed,
+  children,
+}: {
+  label: string;
+  collapsed: boolean;
+  children: React.ReactNode;
+}) {
+  if (!collapsed) return children;
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>{children}</TooltipTrigger>
+      <TooltipContent side="right">{label}</TooltipContent>
+    </Tooltip>
+  );
+}
 
 export function Sidebar() {
   const selectedOrgId = useAppStore((s) => s.selectedOrgId);
+  const collapsed = useAppStore((s) => s.sidebarCollapsed);
+  const toggleSidebar = useAppStore((s) => s.toggleSidebar);
   const repos = useQuery(
     api.repos.list,
     selectedOrgId ? { orgId: selectedOrgId } : 'skip',
@@ -44,6 +76,20 @@ export function Sidebar() {
   const homeMatch = useMatch({ from: '/', shouldThrow: false });
   const seedsMatch = useMatch({ from: '/seeds', shouldThrow: false });
   const [addRepoOpen, setAddRepoOpen] = useState(false);
+
+  // Cmd+B / Ctrl+B keyboard shortcut
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (isEditableElement(e.target)) return;
+      const mod = isMac ? e.metaKey : e.ctrlKey;
+      if (mod && e.key === 'b') {
+        e.preventDefault();
+        toggleSidebar();
+      }
+    };
+    document.addEventListener('keydown', handler);
+    return () => document.removeEventListener('keydown', handler);
+  }, [toggleSidebar]);
 
   const handleRemove = async (e: React.MouseEvent, repoId: Id<'repos'>) => {
     e.stopPropagation();
@@ -63,170 +109,289 @@ export function Sidebar() {
   }
 
   return (
-    <aside
-      className="w-64 border-r bg-muted/30 flex flex-col"
-      aria-label="Navigation"
-    >
-      <PageHeader
-        data-testid="sidebar-header"
-        className="gap-2 font-semibold text-lg"
+    <TooltipProvider>
+      <aside
+        className={cn(
+          'border-r bg-muted/30 flex flex-col transition-[width] duration-300 ease-in-out overflow-hidden shrink-0',
+          collapsed ? 'w-12' : 'w-64',
+        )}
+        aria-label="Navigation"
       >
-        <HolophyteIcon className="h-7 w-7" />
-        Holophyte
-      </PageHeader>
-      <div className="px-2 py-1">
-        <OrgSwitcher />
-      </div>
-      <Separator />
-      <div className="p-2 space-y-1">
-        <Button
-          variant={homeMatch ? 'secondary' : 'ghost'}
-          className="w-full justify-start gap-2"
-          onClick={() => void navigate({ to: '/' })}
+        {/* Header */}
+        <PageHeader
+          data-testid="sidebar-header"
+          className={cn(
+            'gap-2 font-semibold text-lg',
+            collapsed && 'justify-center px-0',
+          )}
         >
-          <LayoutDashboard className="h-4 w-4" />
-          All Tasks
-        </Button>
-        <Button
-          variant={seedsMatch ? 'secondary' : 'ghost'}
-          className="w-full justify-start gap-2"
-          onClick={() => void navigate({ to: '/seeds' })}
-        >
-          <Lightbulb className="h-4 w-4" />
-          Seed Box
-        </Button>
-      </div>
+          <HolophyteIcon className="h-7 w-7 shrink-0" />
+          {!collapsed && 'Holophyte'}
+        </PageHeader>
 
-      <Separator />
-      <div className="flex items-center justify-between px-4 py-2">
-        <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-          Projects
-        </span>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-11 w-11"
-          onClick={() => setAddRepoOpen(true)}
-          aria-label="Add project"
-        >
-          <Plus className="h-3.5 w-3.5" />
-        </Button>
-      </div>
-      <ScrollArea className="flex-1 [&>div>div]:!block">
+        {/* Org switcher */}
+        <div className={cn('py-1', collapsed ? 'px-1' : 'px-2')}>
+          <OrgSwitcher collapsed={collapsed} />
+        </div>
+        <Separator />
+
+        {/* Nav buttons */}
         <div className="p-2 space-y-1">
-          {repos === undefined &&
-            [1, 2, 3].map((i) => (
-              <div key={i} className="flex items-center gap-2 px-3 py-2">
-                <Skeleton className="h-4 w-4 shrink-0 rounded" />
-                <Skeleton className="h-4 flex-1" />
-              </div>
-            ))}
-          {repos?.map((repo) => {
-            const repoActiveTasks =
-              activeTasksByRepo.get(String(repo._id)) ?? [];
-            return (
-              <div key={repo._id}>
-                <div className="group relative">
-                  <Button
-                    variant={
-                      selectedRepoId === repo._id ? 'secondary' : 'ghost'
-                    }
-                    className={cn('w-full justify-start gap-2 text-sm pr-8')}
-                    onClick={() =>
-                      void navigate({
-                        to: '/repos/$repoId',
-                        params: { repoId: repo._id },
-                      })
-                    }
-                  >
-                    <FolderGit2 className="h-4 w-4 shrink-0" />
-                    <span className="truncate">{repo.name}</span>
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive"
-                    onClick={(e) => handleRemove(e, repo._id)}
-                    aria-label={`Delete ${repo.name}`}
-                  >
-                    <Trash2 className="h-3 w-3" />
-                  </Button>
+          <SidebarTooltip label="All Tasks" collapsed={collapsed}>
+            <Button
+              variant={homeMatch ? 'secondary' : 'ghost'}
+              className={cn(
+                'w-full gap-2',
+                collapsed ? 'justify-center px-0' : 'justify-start',
+              )}
+              onClick={() => void navigate({ to: '/' })}
+            >
+              <LayoutDashboard className="h-4 w-4 shrink-0" />
+              {!collapsed && 'All Tasks'}
+            </Button>
+          </SidebarTooltip>
+          <SidebarTooltip label="Seed Box" collapsed={collapsed}>
+            <Button
+              variant={seedsMatch ? 'secondary' : 'ghost'}
+              className={cn(
+                'w-full gap-2',
+                collapsed ? 'justify-center px-0' : 'justify-start',
+              )}
+              onClick={() => void navigate({ to: '/seeds' })}
+            >
+              <Lightbulb className="h-4 w-4 shrink-0" />
+              {!collapsed && 'Seed Box'}
+            </Button>
+          </SidebarTooltip>
+        </div>
+
+        <Separator />
+
+        {/* Projects */}
+        {!collapsed && (
+          <div className="flex items-center justify-between px-4 py-2">
+            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+              Projects
+            </span>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-11 w-11"
+              onClick={() => setAddRepoOpen(true)}
+              aria-label="Add project"
+            >
+              <Plus className="h-3.5 w-3.5" />
+            </Button>
+          </div>
+        )}
+        {collapsed && (
+          <div className="p-2">
+            <SidebarTooltip label="Add project" collapsed={collapsed}>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="w-full h-8"
+                onClick={() => setAddRepoOpen(true)}
+                aria-label="Add project"
+              >
+                <Plus className="h-3.5 w-3.5" />
+              </Button>
+            </SidebarTooltip>
+          </div>
+        )}
+
+        <ScrollArea className="flex-1 [&>div>div]:!block">
+          <div className="p-2 space-y-1">
+            {repos === undefined &&
+              [1, 2, 3].map((i) => (
+                <div
+                  key={i}
+                  className={cn(
+                    'flex items-center gap-2 py-2',
+                    collapsed ? 'justify-center px-0' : 'px-3',
+                  )}
+                >
+                  <Skeleton className="h-4 w-4 shrink-0 rounded" />
+                  {!collapsed && <Skeleton className="h-4 flex-1" />}
                 </div>
-                {repoActiveTasks.length > 0 && (
-                  <div className="ml-4 pl-2 border-l border-border/50 space-y-0.5 my-0.5">
-                    {repoActiveTasks.map((task) => (
-                      <button
-                        key={task._id}
-                        type="button"
-                        onClick={() =>
-                          void navigate({
-                            to: '/repos/$repoId/tasks/$taskId/page',
-                            params: {
-                              repoId: String(task.repoId),
-                              taskId: task._id,
-                            },
-                          })
-                        }
-                        className={cn(
-                          'w-full min-w-0 text-left rounded-md px-2 py-1 transition-colors flex items-center gap-1.5',
-                          selectedTaskId === task._id
-                            ? 'bg-accent'
-                            : 'hover:bg-accent/50',
-                        )}
-                      >
-                        {task.status === TaskStatus.InProgress ? (
-                          <Sprout
-                            className={cn(
-                              'h-3 w-3 shrink-0 text-green-500',
-                              task.hasRunningSession && 'animate-pulse',
-                            )}
-                            aria-label={
-                              task.hasRunningSession
-                                ? 'Running session'
-                                : 'In progress'
-                            }
-                          />
-                        ) : (
-                          <Eye
-                            className="h-3 w-3 shrink-0 text-amber-500"
-                            aria-label="In review"
-                          />
-                        )}
-                        <span className="truncate text-xs text-muted-foreground">
-                          {task.title}
-                        </span>
-                      </button>
-                    ))}
+              ))}
+            {repos?.map((repo) => {
+              const repoActiveTasks =
+                activeTasksByRepo.get(String(repo._id)) ?? [];
+
+              if (collapsed) {
+                return (
+                  <SidebarTooltip
+                    key={repo._id}
+                    label={repo.name}
+                    collapsed={collapsed}
+                  >
+                    <Button
+                      variant={
+                        selectedRepoId === repo._id ? 'secondary' : 'ghost'
+                      }
+                      size="icon"
+                      className="w-full h-8"
+                      onClick={() =>
+                        void navigate({
+                          to: '/repos/$repoId',
+                          params: { repoId: repo._id },
+                        })
+                      }
+                    >
+                      <FolderGit2 className="h-4 w-4 shrink-0" />
+                    </Button>
+                  </SidebarTooltip>
+                );
+              }
+
+              return (
+                <div key={repo._id}>
+                  <div className="group relative">
+                    <Button
+                      variant={
+                        selectedRepoId === repo._id ? 'secondary' : 'ghost'
+                      }
+                      className={cn('w-full justify-start gap-2 text-sm pr-8')}
+                      onClick={() =>
+                        void navigate({
+                          to: '/repos/$repoId',
+                          params: { repoId: repo._id },
+                        })
+                      }
+                    >
+                      <FolderGit2 className="h-4 w-4 shrink-0" />
+                      <span className="truncate">{repo.name}</span>
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive"
+                      onClick={(e) => handleRemove(e, repo._id)}
+                      aria-label={`Delete ${repo.name}`}
+                    >
+                      <Trash2 className="h-3 w-3" />
+                    </Button>
                   </div>
-                )}
-              </div>
-            );
-          })}
-          {repos?.length === 0 && (
-            <p className="text-xs text-muted-foreground px-2 py-4 text-center">
-              No projects added yet.
-              <br />
-              Click + to add one.
-            </p>
+                  {repoActiveTasks.length > 0 && (
+                    <div className="ml-4 pl-2 border-l border-border/50 space-y-0.5 my-0.5">
+                      {repoActiveTasks.map((task) => (
+                        <button
+                          key={task._id}
+                          type="button"
+                          onClick={() =>
+                            void navigate({
+                              to: '/repos/$repoId/tasks/$taskId/page',
+                              params: {
+                                repoId: String(task.repoId),
+                                taskId: task._id,
+                              },
+                            })
+                          }
+                          className={cn(
+                            'w-full min-w-0 text-left rounded-md px-2 py-1 transition-colors flex items-center gap-1.5',
+                            selectedTaskId === task._id
+                              ? 'bg-accent'
+                              : 'hover:bg-accent/50',
+                          )}
+                        >
+                          {task.status === TaskStatus.InProgress ? (
+                            <Sprout
+                              className={cn(
+                                'h-3 w-3 shrink-0 text-green-500',
+                                task.hasRunningSession && 'animate-pulse',
+                              )}
+                              aria-label={
+                                task.hasRunningSession
+                                  ? 'Running session'
+                                  : 'In progress'
+                              }
+                            />
+                          ) : (
+                            <Eye
+                              className="h-3 w-3 shrink-0 text-amber-500"
+                              aria-label="In review"
+                            />
+                          )}
+                          <span className="truncate text-xs text-muted-foreground">
+                            {task.title}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+            {repos?.length === 0 && !collapsed && (
+              <p className="text-xs text-muted-foreground px-2 py-4 text-center">
+                No projects added yet.
+                <br />
+                Click + to add one.
+              </p>
+            )}
+          </div>
+        </ScrollArea>
+
+        <Separator />
+
+        {/* Command palette hint */}
+        <div className="flex items-center justify-center px-2 py-1.5">
+          {collapsed ? (
+            <SidebarTooltip label="Command palette" collapsed={collapsed}>
+              <kbd className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs text-muted-foreground cursor-default">
+                {isMac ? '⌘' : '⌃'}
+              </kbd>
+            </SidebarTooltip>
+          ) : (
+            <span className="text-xs text-muted-foreground">
+              <kbd className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs">
+                {isMac ? '⌘K' : 'Ctrl+K'}
+              </kbd>{' '}
+              Command palette
+            </span>
           )}
         </div>
-      </ScrollArea>
-      <Separator />
-      <div className="flex items-center justify-center px-2 py-1.5">
-        <span className="text-xs text-muted-foreground">
-          <kbd className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs">
-            {/Mac|iPhone|iPad/.test(navigator.platform) ? '⌘K' : 'Ctrl+K'}
-          </kbd>{' '}
-          Command palette
-        </span>
-      </div>
-      <Separator />
-      <CompanionStatus />
-      <Separator />
-      <div className="p-2">
-        <UserMenu />
-      </div>
-      <AddRepoDialog open={addRepoOpen} onOpenChange={setAddRepoOpen} />
-    </aside>
+
+        <Separator />
+        <CompanionStatus collapsed={collapsed} />
+        <Separator />
+
+        {/* User menu */}
+        <div className={cn('p-2', collapsed && 'flex justify-center')}>
+          <UserMenu collapsed={collapsed} />
+        </div>
+
+        {/* Collapse toggle */}
+        <Separator />
+        <div className="p-2">
+          <SidebarTooltip
+            label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            collapsed={collapsed}
+          >
+            <Button
+              variant="ghost"
+              size="icon"
+              className={cn('w-full h-8', !collapsed && 'justify-start gap-2')}
+              onClick={toggleSidebar}
+              aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            >
+              {collapsed ? (
+                <PanelLeftOpen className="h-4 w-4 shrink-0" />
+              ) : (
+                <>
+                  <PanelLeftClose className="h-4 w-4 shrink-0" />
+                  <span className="text-xs text-muted-foreground">
+                    {isMac ? '⌘B' : 'Ctrl+B'}
+                  </span>
+                </>
+              )}
+            </Button>
+          </SidebarTooltip>
+        </div>
+
+        <AddRepoDialog open={addRepoOpen} onOpenChange={setAddRepoOpen} />
+      </aside>
+    </TooltipProvider>
   );
 }

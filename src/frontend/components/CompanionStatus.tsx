@@ -25,15 +25,24 @@ const labels: Record<CompanionState, string> = {
   offline: 'Offline',
 };
 
-export default function CompanionStatus() {
+interface CompanionStatusProps {
+  collapsed?: boolean;
+}
+
+export default function CompanionStatus({ collapsed }: CompanionStatusProps) {
   const selectedOrgId = useAppStore((s) => s.selectedOrgId);
   const { state, status } = useCompanionStatus(selectedOrgId);
 
   if (state === 'loading') {
     return (
-      <div className="flex items-center gap-2 px-2 py-1.5">
+      <div
+        className={cn(
+          'flex items-center gap-2 px-2 py-1.5',
+          collapsed && 'justify-center',
+        )}
+      >
         <Skeleton className="h-3.5 w-3.5 rounded" />
-        <Skeleton className="h-3.5 w-16" />
+        {!collapsed && <Skeleton className="h-3.5 w-16" />}
       </div>
     );
   }
@@ -43,7 +52,10 @@ export default function CompanionStatus() {
       <Tooltip>
         <TooltipTrigger asChild>
           <div
-            className="flex items-center gap-2 px-2 py-1.5 rounded-md text-xs text-muted-foreground"
+            className={cn(
+              'flex items-center gap-2 px-2 py-1.5 rounded-md text-xs text-muted-foreground',
+              collapsed && 'justify-center',
+            )}
             role="status"
             aria-label={`Companion ${labels[state]}`}
           >
@@ -52,7 +64,7 @@ export default function CompanionStatus() {
               aria-hidden="true"
               className={cn('h-2 w-2 shrink-0 rounded-full', dotStyles[state])}
             />
-            <span>{labels[state]}</span>
+            {!collapsed && <span>{labels[state]}</span>}
           </div>
         </TooltipTrigger>
         <TooltipContent side="right">
