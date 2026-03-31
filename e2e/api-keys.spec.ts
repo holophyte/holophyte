@@ -222,9 +222,13 @@ test.describe('Settings page - API Keys', () => {
       timeout: 5000,
     });
 
-    // Created date should be visible (formatted as "Mar 31, 2026" etc.)
+    // Created date should be visible (formatted as "Mar 31, 2026, 9:29 AM" etc.)
     await expect(
-      keyRow.locator('span', { hasText: /\w{3}\s+\d{1,2},\s+\d{4}/ }),
+      keyRow
+        .locator('span.text-muted-foreground', {
+          hasText: /\w{3}\s+\d{1,2},\s+\d{4}/,
+        })
+        .first(),
     ).toBeVisible();
   });
 
@@ -258,7 +262,11 @@ test.describe('Settings page - API Keys', () => {
     // Should show "mcp" scope badge and a created date
     await expect(keyRow.getByText('mcp', { exact: true })).toBeVisible();
     await expect(
-      keyRow.locator('span', { hasText: /\w{3}\s+\d{1,2},\s+\d{4}/ }),
+      keyRow
+        .locator('span.text-muted-foreground', {
+          hasText: /\w{3}\s+\d{1,2},\s+\d{4}/,
+        })
+        .first(),
     ).toBeVisible();
   });
 
@@ -295,9 +303,11 @@ test.describe('Settings page - API Keys', () => {
     await expect(revokeButton).toBeVisible({ timeout: 5000 });
     await revokeButton.click();
 
-    // The key should move from active to revoked — it disappears from the
-    // main table and appears under the "Revoked keys" collapsible section.
-    // The key name should still be visible somewhere on the page.
+    // Inline confirmation appears: "Revoke? Yes / No"
+    await expect(keyRow.getByText('Revoke?')).toBeVisible({ timeout: 3000 });
+    await keyRow.locator('button', { hasText: 'Yes' }).click();
+
+    // The key moves from active to the "Revoked keys" collapsible section.
     await expect(
       page.locator('button', { hasText: 'Revoked keys' }),
     ).toBeVisible({ timeout: 8000 });
