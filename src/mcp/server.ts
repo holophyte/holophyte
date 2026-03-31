@@ -326,6 +326,107 @@ server.tool(
   },
 );
 
+// ── Tool: holophyte_list_labels ──────────────────────────────────────
+
+server.tool(
+  'holophyte_list_labels',
+  'List labels for an organization',
+  {
+    orgId: z
+      .string()
+      .optional()
+      .describe('Organization ID (uses default org if omitted)'),
+  },
+  async ({ orgId }) => {
+    const client = requireClient();
+    const labels = await client.query(api.labels.list, {
+      orgId: requireOrgId(orgId),
+    });
+    return jsonResponse(
+      labels.map((l) => ({ id: l._id, name: l.name, color: l.color })),
+    );
+  },
+);
+
+// ── Tool: holophyte_create_label ─────────────────────────────────────
+
+server.tool(
+  'holophyte_create_label',
+  'Create a new label in an organization',
+  {
+    name: z.string().describe('Label name'),
+    color: z.string().describe('Label color (e.g. "#ff0000" or "red")'),
+    orgId: z
+      .string()
+      .optional()
+      .describe('Organization ID (uses default org if omitted)'),
+    personal: z
+      .boolean()
+      .optional()
+      .describe('If true, label is only visible to the creating user'),
+  },
+  async ({ name, color, orgId, personal }) => {
+    const client = requireClient();
+    const resolvedOrgId = requireOrgId(orgId);
+    const labelId = await client.mutation(api.labels.create, {
+      name,
+      color,
+      orgId: resolvedOrgId,
+      personal,
+    });
+    return jsonResponse({ id: labelId, name, color });
+  },
+);
+
+// ── Label name resolution ───────────────────────────────────────────
+
+/** Convex document IDs are base32-encoded and always start with a specific set of chars. */
+const CONVEX_ID_PATTERN = /^[a-z0-9][a-z0-9_|]+$/;
+
+/**
+ * Resolves an array of label identifiers (IDs or names) to label IDs.
+ * Names are matched case-insensitively against the org's labels.
+ * Inputs that look like Convex IDs (alphanumeric) pass through directly.
+ * Inputs that don't match a name and don't look like IDs throw an error.
+ */
+async function resolveLabels(
+  client: ConvexHttpClient,
+  labelInputs: string[],
+  orgId: Id<'organizations'>,
+): Promise<Id<'labels'>[]> {
+  const allLabels = await client.query(api.labels.list, { orgId });
+  const labelsByName = new Map(
+    allLabels.map((l: { _id: string; name: string }) => [
+      l.name.toLowerCase(),
+      l._id,
+    ]),
+  );
+
+  const resolved: Id<'labels'>[] = [];
+  const unresolved: string[] = [];
+
+  for (const input of labelInputs) {
+    const byName = labelsByName.get(input.toLowerCase());
+    if (byName) {
+      resolved.push(byName as Id<'labels'>);
+    } else if (CONVEX_ID_PATTERN.test(input)) {
+      // Looks like a Convex ID — pass through
+      resolved.push(input as Id<'labels'>);
+    } else {
+      unresolved.push(input);
+    }
+  }
+
+  if (unresolved.length) {
+    const available = allLabels.map((l: { name: string }) => l.name).join(', ');
+    throw new Error(
+      `Unknown label(s): ${unresolved.join(', ')}. Available labels: ${available || '(none)'}`,
+    );
+  }
+
+  return resolved;
+}
+
 // ── Tool: holophyte_create_task ──────────────────────────────────────
 
 server.tool(
@@ -345,10 +446,16 @@ server.tool(
     labels: z
       .array(z.string())
       .optional()
-      .describe('Label IDs to attach to the task'),
+      .describe(
+        'Label IDs or names to attach to the task (names are resolved to IDs)',
+      ),
   },
   async ({ repoId, title, prompt, description, status, priority, labels }) => {
     const client = requireClient();
+    let labelIds: Id<'labels'>[] | undefined;
+    if (labels?.length) {
+      labelIds = await resolveLabels(client, labels, requireOrgId());
+    }
     const taskId = await client.mutation(api.tasks.create, {
       repoId: repoId as Id<'repos'>,
       title,
@@ -356,14 +463,14 @@ server.tool(
       description,
       status,
       priority,
-      labelIds: labels as Id<'labels'>[] | undefined,
+      labelIds,
     });
     return jsonResponse({
       id: taskId,
       title,
       status: status ?? TaskStatus.Backlog,
       priority: priority ?? TaskPriority.None,
-      labelIds: labels ?? [],
+      labelIds: labelIds ?? [],
     });
   },
 );
@@ -383,11 +490,21 @@ server.tool(
     labels: z
       .array(z.string())
       .optional()
-      .describe('Label IDs to set on the task (replaces all existing labels)'),
+      .describe(
+        'Label IDs or names to set on the task (names are resolved to IDs, replaces all existing labels)',
+      ),
   },
   async ({ id, title, prompt, description, status, priority, labels }) => {
     const client = requireClient();
     const taskId = id as Id<'tasks'>;
+
+    // Resolve label names to IDs if provided
+    let labelIds: Id<'labels'>[] | undefined;
+    if (labels !== undefined) {
+      labelIds = labels.length
+        ? await resolveLabels(client, labels, requireOrgId())
+        : [];
+    }
 
     // Update fields (title, prompt, description, priority, labels)
     if (
@@ -395,7 +512,7 @@ server.tool(
       prompt !== undefined ||
       description !== undefined ||
       priority !== undefined ||
-      labels !== undefined
+      labelIds !== undefined
     ) {
       await client.mutation(api.tasks.update, {
         id: taskId,
@@ -403,7 +520,7 @@ server.tool(
         prompt,
         description,
         priority,
-        labelIds: labels as Id<'labels'>[] | undefined,
+        labelIds,
       });
     }
 

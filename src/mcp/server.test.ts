@@ -416,12 +416,12 @@ describe('holophyte_create_task', () => {
     await tool('holophyte_create_task')({
       repoId: 'r1',
       title: 'Labelled Task',
-      labels: ['label-a', 'label-b'],
+      labels: ['j57labela', 'j57labelb'],
     });
 
     expect(mockMutation).toHaveBeenCalledWith(
       expect.anything(),
-      expect.objectContaining({ labelIds: ['label-a', 'label-b'] }),
+      expect.objectContaining({ labelIds: ['j57labela', 'j57labelb'] }),
     );
   });
 
@@ -432,14 +432,14 @@ describe('holophyte_create_task', () => {
       repoId: 'r1',
       title: 'Full Task',
       priority: 'urgent',
-      labels: ['label-x'],
+      labels: ['j57labelx'],
     });
 
     expect(mockMutation).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
         priority: 'urgent',
-        labelIds: ['label-x'],
+        labelIds: ['j57labelx'],
       }),
     );
   });
@@ -615,14 +615,14 @@ describe('holophyte_update_task', () => {
 
     await tool('holophyte_update_task')({
       id: 'task1',
-      labels: ['label-1', 'label-2'],
+      labels: ['j57label1', 'j57label2'],
     });
 
     expect(mockMutation).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
         id: 'task1',
-        labelIds: ['label-1', 'label-2'],
+        labelIds: ['j57label1', 'j57label2'],
       }),
     );
   });
@@ -648,6 +648,8 @@ describe('holophyte_update_task', () => {
   });
 
   it('calls both update and move when priority, labels, and status are all provided', async () => {
+    // labels.list for resolveLabels (no matching names → inputs pass through as IDs)
+    mockQuery.mockResolvedValueOnce([]);
     mockQuery.mockResolvedValueOnce({
       _id: 'task1',
       repoId: 'r1',
@@ -694,6 +696,191 @@ describe('holophyte_update_task', () => {
     expect(mockMutation).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({ id: 'task1', labelIds: [] }),
+    );
+  });
+});
+
+// ── holophyte_list_labels ────────────────────────────────────────────
+
+describe('holophyte_list_labels', () => {
+  it('calls api.labels.list with default orgId when none provided', async () => {
+    mockQuery.mockResolvedValueOnce([]);
+
+    await tool('holophyte_list_labels')({});
+
+    expect(mockQuery).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ orgId: 'org123' }),
+    );
+  });
+
+  it('uses provided orgId over default org', async () => {
+    mockQuery.mockResolvedValueOnce([]);
+
+    await tool('holophyte_list_labels')({ orgId: 'custom-org' });
+
+    expect(mockQuery).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ orgId: 'custom-org' }),
+    );
+  });
+
+  it('returns labels formatted with id, name, color', async () => {
+    mockQuery.mockResolvedValueOnce([
+      { _id: 'l1', name: 'bug', color: 'red', orgId: 'org123', extra: true },
+      { _id: 'l2', name: 'feature', color: 'blue', orgId: 'org123' },
+    ]);
+
+    const result = await tool('holophyte_list_labels')({});
+    const parsed = JSON.parse(result.content[0]?.text ?? '[]');
+
+    expect(parsed).toHaveLength(2);
+    expect(parsed[0]).toEqual({ id: 'l1', name: 'bug', color: 'red' });
+    expect(parsed[1]).toEqual({ id: 'l2', name: 'feature', color: 'blue' });
+  });
+});
+
+// ── holophyte_create_label ───────────────────────────────────────────
+
+describe('holophyte_create_label', () => {
+  it('calls api.labels.create with name, color, and default orgId', async () => {
+    mockMutation.mockResolvedValueOnce('label-new');
+
+    const result = await tool('holophyte_create_label')({
+      name: 'urgent',
+      color: '#ff0000',
+    });
+
+    expect(mockMutation).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        name: 'urgent',
+        color: '#ff0000',
+        orgId: 'org123',
+      }),
+    );
+    const parsed = JSON.parse(result.content[0]?.text ?? '{}');
+    expect(parsed.id).toBe('label-new');
+    expect(parsed.name).toBe('urgent');
+    expect(parsed.color).toBe('#ff0000');
+  });
+
+  it('passes personal flag when provided', async () => {
+    mockMutation.mockResolvedValueOnce('label-p');
+
+    await tool('holophyte_create_label')({
+      name: 'my-label',
+      color: 'green',
+      personal: true,
+    });
+
+    expect(mockMutation).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ personal: true }),
+    );
+  });
+
+  it('uses provided orgId over default org', async () => {
+    mockMutation.mockResolvedValueOnce('label-x');
+
+    await tool('holophyte_create_label')({
+      name: 'test',
+      color: 'blue',
+      orgId: 'other-org',
+    });
+
+    expect(mockMutation).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ orgId: 'other-org' }),
+    );
+  });
+});
+
+// ── Label name resolution in create/update task ─────────────────────
+
+describe('label name resolution', () => {
+  it('resolves label names to IDs in holophyte_create_task', async () => {
+    // labels.list returns available labels
+    mockQuery.mockResolvedValueOnce([
+      { _id: 'lid-1', name: 'bug', color: 'red' },
+      { _id: 'lid-2', name: 'feature', color: 'blue' },
+    ]);
+    mockMutation.mockResolvedValueOnce('task-resolved');
+
+    await tool('holophyte_create_task')({
+      repoId: 'r1',
+      title: 'Resolved Labels Task',
+      labels: ['bug', 'feature'],
+    });
+
+    expect(mockMutation).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ labelIds: ['lid-1', 'lid-2'] }),
+    );
+  });
+
+  it('resolves label names case-insensitively', async () => {
+    mockQuery.mockResolvedValueOnce([
+      { _id: 'lid-1', name: 'Bug', color: 'red' },
+    ]);
+    mockMutation.mockResolvedValueOnce('task-ci');
+
+    await tool('holophyte_create_task')({
+      repoId: 'r1',
+      title: 'Case Insensitive',
+      labels: ['BUG'],
+    });
+
+    expect(mockMutation).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ labelIds: ['lid-1'] }),
+    );
+  });
+
+  it('passes Convex ID-like labels through without resolution', async () => {
+    mockQuery.mockResolvedValueOnce([]);
+    mockMutation.mockResolvedValueOnce('task-id-passthrough');
+
+    await tool('holophyte_create_task')({
+      repoId: 'r1',
+      title: 'ID Passthrough',
+      labels: ['j57abc123def'],
+    });
+
+    expect(mockMutation).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ labelIds: ['j57abc123def'] }),
+    );
+  });
+
+  it('throws error for unresolved label names that are not valid IDs', async () => {
+    mockQuery.mockResolvedValueOnce([
+      { _id: 'lid1', name: 'bug', color: 'red' },
+    ]);
+
+    await expect(
+      tool('holophyte_create_task')({
+        repoId: 'r1',
+        title: 'Bad Label',
+        labels: ['My Typo Label!'],
+      }),
+    ).rejects.toThrow(/Unknown label\(s\): My Typo Label!/);
+  });
+
+  it('resolves label names to IDs in holophyte_update_task', async () => {
+    mockQuery.mockResolvedValueOnce([
+      { _id: 'lid-3', name: 'wontfix', color: 'gray' },
+    ]);
+    mockMutation.mockResolvedValue(undefined);
+
+    await tool('holophyte_update_task')({
+      id: 'task1',
+      labels: ['wontfix'],
+    });
+
+    expect(mockMutation).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ labelIds: ['lid-3'] }),
     );
   });
 });
