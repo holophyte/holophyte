@@ -39,13 +39,18 @@ export default function SortDropdown({ value, onChange }: SortDropdownProps) {
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <Button size="sm" variant="ghost" className="h-8 px-2 gap-1.5">
-          <ArrowUpDown className="h-3.5 w-3.5" />
+        <Button
+          size="sm"
+          variant="ghost"
+          className="h-8 px-2 gap-1.5"
+          aria-label="Sort tasks"
+        >
+          <ArrowUpDown className="h-3.5 w-3.5" aria-hidden="true" />
           <span>{current?.label}</span>
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-44 p-1" align="end">
-        <div className="space-y-0.5">
+        <div role="listbox" aria-label="Sort order" className="space-y-0.5">
           {SORT_OPTIONS.map((option) => {
             const Icon = option.icon;
             const isActive = option.value === value;
@@ -53,6 +58,8 @@ export default function SortDropdown({ value, onChange }: SortDropdownProps) {
               <button
                 key={option.value}
                 type="button"
+                role="option"
+                aria-selected={isActive}
                 onClick={() => {
                   onChange(option.value);
                   setOpen(false);
@@ -62,10 +69,16 @@ export default function SortDropdown({ value, onChange }: SortDropdownProps) {
                   isActive && 'bg-muted',
                 )}
               >
-                <Icon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                <Icon
+                  className="h-3.5 w-3.5 text-muted-foreground shrink-0"
+                  aria-hidden="true"
+                />
                 <span className="flex-1">{option.label}</span>
                 {isActive && (
-                  <Check className="h-3.5 w-3.5 text-primary shrink-0" />
+                  <Check
+                    className="h-3.5 w-3.5 text-primary shrink-0"
+                    aria-hidden="true"
+                  />
                 )}
               </button>
             );
