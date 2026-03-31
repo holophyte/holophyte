@@ -14,7 +14,7 @@ async function navigateToSettingsViaUserMenu(
   const userMenuTrigger = page
     .locator('aside')
     .locator('button')
-    .filter({ hasText: /Loading|e2e@holophyte\.test/ })
+    .filter({ hasText: /Loading|Dev User/ })
     .first();
   await userMenuTrigger.click();
 

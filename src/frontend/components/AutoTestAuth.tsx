@@ -1,17 +1,13 @@
 import { useAuthActions } from '@convex-dev/auth/react';
 import { useConvexAuth } from 'convex/react';
 import { useEffect, useRef } from 'react';
-
-/**
- * Known test credentials — used by E2E global-setup and dev `?auth` mode.
- * Only functional when the server sets `allowPasswordAuth: true` (requires
- * `ALLOW_PASSWORD_AUTH=1` on Convex + non-production `NODE_ENV`).
- */
-const TEST_EMAIL = 'e2e@holophyte.test';
-const TEST_PASSWORD = 'holophyte-e2e-2024';
+import { DEV_USER_EMAIL, DEV_USER_PASSWORD } from '@/constants';
 
 /**
  * Auto-signs in with password credentials for E2E tests and dev `?auth` mode.
+ *
+ * Uses the same dev user as `seed-dev-user.sh` (dev@holophyte.test / password).
+ * Only functional when `ALLOW_PASSWORD_AUTH=1` is set on the Convex backend.
  *
  * Unlike anonymous auth, re-authenticating with the same email always returns
  * the same user (same org, same repos), avoiding the stale-token problem where
@@ -30,14 +26,15 @@ export default function AutoTestAuth() {
 
     void signIn('password', {
       flow: 'signIn',
-      email: TEST_EMAIL,
-      password: TEST_PASSWORD,
+      email: DEV_USER_EMAIL,
+      password: DEV_USER_PASSWORD,
     })
       .catch(() =>
         signIn('password', {
           flow: 'signUp',
-          email: TEST_EMAIL,
-          password: TEST_PASSWORD,
+          email: DEV_USER_EMAIL,
+          password: DEV_USER_PASSWORD,
+          name: 'Dev User',
         }),
       )
       .catch((err: unknown) =>

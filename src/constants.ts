@@ -14,3 +14,11 @@ export const QUEUED_SESSION_TIMEOUT_MS = 10 * 60 * 1000; // 10 minutes
  * online within one or two poll cycles).
  */
 export const QUEUED_WARNING_THRESHOLD_MS = 30 * 1000; // 30 seconds
+
+/**
+ * Dev/test user credentials — shared between `AutoTestAuth`, `seed-dev-user.sh`,
+ * and E2E global setup. Only functional when `ALLOW_PASSWORD_AUTH=1` is set on
+ * the Convex backend (local dev and E2E only, never production).
+ */
+export const DEV_USER_EMAIL = 'dev@holophyte.test';
+export const DEV_USER_PASSWORD = 'password';
