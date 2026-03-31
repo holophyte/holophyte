@@ -41,6 +41,7 @@ function AuthenticatedLayout() {
 
 export default function RootLayout() {
   useTheme();
+  const hasAuthQuery = new URLSearchParams(window.location.search).has('auth');
 
   const spinner = (
     <div className="flex h-screen items-center justify-center bg-background">
@@ -50,13 +51,10 @@ export default function RootLayout() {
 
   return (
     <>
-      {allowPasswordAuth &&
-        (e2eTest || window.location.search.includes('auth')) && (
-          <AutoTestAuth />
-        )}
-      {!allowPasswordAuth &&
-        allowAnonymousAuth &&
-        window.location.search.includes('auth') && <AutoAnonymousAuth />}
+      {allowPasswordAuth && (e2eTest || hasAuthQuery) && <AutoTestAuth />}
+      {!allowPasswordAuth && allowAnonymousAuth && hasAuthQuery && (
+        <AutoAnonymousAuth />
+      )}
       <AuthLoading>{spinner}</AuthLoading>
       <Unauthenticated>
         {e2eTest && !allowPasswordAuth ? spinner : <SignInPage />}
