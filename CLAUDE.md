@@ -168,8 +168,9 @@ scripts/                   → Shared shell scripts (convex-local, dev-local, wo
 - `bun run test:e2e` — fully self-contained, spins up an ephemeral Convex backend automatically. Each run gets a fresh database — no cleanup needed
 - Dev Convex (`bun run convex:local`) must NOT be running — use `bun run test:e2e:isolated` to avoid stopping it
 - Use `waitForApp(page)` helper to wait for hydration before assertions
+- **E2E auth**: `AutoTestAuth` auto-signs-in with `dev@holophyte.test` / `password` (same credentials as `seed-dev-user.sh`, shared via `DEV_USER_EMAIL`/`DEV_USER_PASSWORD` in `src/constants.ts`). On fresh DB, falls back to sign-up. Password auth avoids the stale refresh token problem that anonymous auth had — re-authenticating always returns the same user.
 - Runs on CI automatically via `.github/workflows/e2e.yml` using `CONVEX_AGENT_MODE=anonymous` (no secrets needed). `CONVEX_DEPLOY_KEY` must NOT be in the env — it overrides local mode
-- **Manual testing** requires `?auth` in URL — `http://localhost:<port>?auth`; without it the app stalls
+- **Manual testing** requires `?auth` in URL — `http://localhost:<port>?auth`; auto-logs in as `dev@holophyte.test` when `ALLOW_PASSWORD_AUTH=1` is set
 - See `docs/docs/testing/playwright-manual.md` for the full guide
 
 ## Error Handling
@@ -241,7 +242,7 @@ Server configuration lives in environment variables with sensible defaults:
 - **`CONVEX_AGENT_MODE=anonymous`** — undocumented Convex CLI env var that enables anonymous local development without login prompts. Required for CI/non-interactive environments. Beta feature per CLI output.
 - **`convex dev --local` silently connects to cloud** if `.dev-ports` is missing `CONVEX_TEAM`/`CONVEX_PROJECT` — always include both
 - **Stop `convex:local` before running E2E tests** — `bun run test:e2e` spins up its own ephemeral Convex; the CLI refuses to provision if another local backend is active. Alternatively, use `bun run test:e2e:isolated` which runs in a temp worktree and doesn't touch the main repo's `.env.local`
-- **Manual testing requires `ALLOW_ANONYMOUS_AUTH=1`** on Convex env — `bunx convex env set ALLOW_ANONYMOUS_AUTH 1` (auto-set by `worktree:create` for new worktrees)
-- **Manual testing requires `?auth` in URL** — `http://localhost:<port>?auth` triggers anonymous auth; without it the app silently stalls
+- **Manual testing requires `ALLOW_PASSWORD_AUTH=1`** on Convex env — `bunx convex env set ALLOW_PASSWORD_AUTH 1` (auto-set by `worktree:create` for new worktrees). `ALLOW_ANONYMOUS_AUTH` is still set as a fallback.
+- **Manual testing requires `?auth` in URL** — `http://localhost:<port>?auth` triggers auto-login with the dev user (`dev@holophyte.test`); without it you see the sign-in page
 - **`bunx @convex-dev/auth` needs a running backend** — start `convex:local` first, then run auth setup in another terminal
 - See `docs/docs/local-development.md` for the full worktree guide and troubleshooting

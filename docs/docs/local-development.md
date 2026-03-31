@@ -174,7 +174,8 @@ These are set on the Convex deployment itself (via `bunx convex env set`), not i
 
 | Variable | Set By | Description |
 |----------|--------|-------------|
-| `ALLOW_ANONYMOUS_AUTH` | `setup:local`, `dev-local.sh` (process env), `worktree-create.sh` (Convex env) | Enables anonymous auth for local dev / manual testing via `?auth` |
+| `ALLOW_PASSWORD_AUTH` | `setup:local`, `dev-local.sh` (process env), `worktree-create.sh` (Convex env) | Enables password auth for local dev and E2E tests. Powers `?auth` auto-login with `dev@holophyte.test` / `password`. Required for the `AutoTestAuth` component and `bun run test:e2e`. |
+| `ALLOW_ANONYMOUS_AUTH` | `setup:local`, `dev-local.sh` (process env), `worktree-create.sh` (Convex env) | Enables anonymous auth as a fallback (e.g. MCP server local dev). `bun run dev:local` sets both `ALLOW_PASSWORD_AUTH` and `ALLOW_ANONYMOUS_AUTH`. |
 | `INTERNAL_API_SECRET` | `setup:local`, `convex-local.sh`, `worktree-create.sh` | Must match the value in `.env` — used to authenticate companion HTTP calls |
 | `SITE_URL` | `setup:local`, `worktree-create.sh` | OAuth redirect base URL (e.g. `http://localhost:8082`) |
 | `JWT_PRIVATE_KEY` | `bunx @convex-dev/auth` | Auth token signing key |
@@ -195,10 +196,10 @@ Only needed if you're testing OAuth login locally. Set these in `.dev-ports` to 
 
 | Script | What it configures |
 |--------|-------------------|
-| `setup:local` | `.dev-ports`, local Convex provisioning, `INTERNAL_API_SECRET`, auth keys, `ALLOW_ANONYMOUS_AUTH`, `SITE_URL`, OAuth credentials |
+| `setup:local` | `.dev-ports`, local Convex provisioning, `INTERNAL_API_SECRET`, auth keys, `ALLOW_PASSWORD_AUTH`, `ALLOW_ANONYMOUS_AUTH`, `SITE_URL`, OAuth credentials |
 | `convex-local.sh` | `INTERNAL_API_SECRET` (in `.env` + Convex env), stale deployment detection/reconfiguration |
-| `dev-local.sh` | `ALLOW_ANONYMOUS_AUTH` (process env), starts app server + Convex via `convex-local.sh` |
-| `worktree-create.sh` | `.dev-ports` (port allocation), Convex provisioning, `INTERNAL_API_SECRET`, `SITE_URL`, `ALLOW_ANONYMOUS_AUTH`, auth keys, OAuth credentials |
+| `dev-local.sh` | `ALLOW_PASSWORD_AUTH` + `ALLOW_ANONYMOUS_AUTH` (process env), starts app server + Convex via `convex-local.sh` |
+| `worktree-create.sh` | `.dev-ports` (port allocation), Convex provisioning, `INTERNAL_API_SECRET`, `SITE_URL`, `ALLOW_PASSWORD_AUTH`, `ALLOW_ANONYMOUS_AUTH`, auth keys, OAuth credentials |
 
 ## Troubleshooting
 
