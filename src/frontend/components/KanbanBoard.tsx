@@ -5,6 +5,8 @@ import { useParams } from '@tanstack/react-router';
 import { useMutation, useQuery } from 'convex/react';
 import { Archive, ChevronsRight, FolderGit2 } from 'lucide-react';
 import { useMemo, useState } from 'react';
+import type { SortPreference } from '@/frontend/lib/taskSort';
+import { sortTasks } from '@/frontend/lib/taskSort';
 import { cn } from '@/frontend/lib/utils';
 import { useAppStore } from '@/frontend/stores/app';
 import { ArchivePanel } from './ArchivePanel';
@@ -12,6 +14,7 @@ import BulkActionBar from './BulkActionBar';
 import { CreateTaskDialog } from './CreateTaskDialog';
 import { KanbanColumn } from './KanbanColumn';
 import { SearchFilterBar } from './SearchFilterBar';
+import SortDropdown from './SortDropdown';
 import Button from './ui/Button';
 import PageHeader from './ui/PageHeader';
 
@@ -118,6 +121,17 @@ export function KanbanBoard() {
   );
   const repoMap = new Map(repos?.map((r) => [r._id, r]) ?? []);
 
+  const currentRepo = selectedRepoId ? repoMap.get(selectedRepoId) : undefined;
+  const sortPreference: SortPreference =
+    currentRepo?.sortPreference ?? 'manual';
+
+  const updateSortPreference = useMutation(api.repos.updateSortPreference);
+
+  const handleSortChange = (pref: SortPreference) => {
+    if (!selectedRepoId) return;
+    updateSortPreference({ id: selectedRepoId, sortPreference: pref });
+  };
+
   const labels = useQuery(
     api.labels.list,
     selectedOrgId ? { orgId: selectedOrgId } : 'skip',
@@ -169,7 +183,7 @@ export function KanbanBoard() {
       );
     }
 
-    return filtered.sort((a, b) => a.position - b.position);
+    return sortTasks(filtered, sortPreference);
   };
 
   const archiveAllDone = useMutation(api.tasks.archiveAllDone);
@@ -199,6 +213,9 @@ export function KanbanBoard() {
         </h1>
         <SearchFilterBar />
         <div className="flex items-center gap-2 shrink-0">
+          {selectedRepoId && (
+            <SortDropdown value={sortPreference} onChange={handleSortChange} />
+          )}
           <Button
             size="sm"
             variant={showArchive ? 'secondary' : 'ghost'}
@@ -231,6 +248,7 @@ export function KanbanBoard() {
                 variant={
                   col.status === TaskStatus.Backlog ? 'backlog' : 'default'
                 }
+                sortActive={sortPreference !== 'manual'}
                 onCollapse={
                   col.status === TaskStatus.Backlog ? toggleBacklog : undefined
                 }

@@ -1,6 +1,7 @@
 import { v } from 'convex/values';
 import { mutation, query } from './_generated/server';
 import { requireOrgMembership, requireRole } from './lib/auth';
+import { sortPreferenceValidator } from './schema';
 
 export const list = query({
   args: { orgId: v.id('organizations') },
@@ -59,6 +60,20 @@ export const update = mutation({
     const { membership } = await requireOrgMembership(ctx, repo.orgId);
     requireRole(membership, 'member');
     await ctx.db.patch(args.id, { name: args.name });
+  },
+});
+
+export const updateSortPreference = mutation({
+  args: {
+    id: v.id('repos'),
+    sortPreference: sortPreferenceValidator,
+  },
+  handler: async (ctx, args) => {
+    const repo = await ctx.db.get(args.id);
+    if (!repo) throw new Error('Repo not found');
+    const { membership } = await requireOrgMembership(ctx, repo.orgId);
+    requireRole(membership, 'member');
+    await ctx.db.patch(args.id, { sortPreference: args.sortPreference });
   },
 });
 

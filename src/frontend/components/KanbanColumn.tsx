@@ -17,6 +17,7 @@ interface KanbanColumnProps {
   showRepoBadge: boolean;
   collapsible?: boolean;
   variant?: 'default' | 'backlog';
+  sortActive?: boolean;
   onCollapse?: () => void;
   onArchiveAll?: () => void;
   onAddTask?: () => void;
@@ -30,6 +31,7 @@ export function KanbanColumn({
   showRepoBadge,
   collapsible,
   variant = 'default',
+  sortActive = false,
   onCollapse,
   onArchiveAll,
   onAddTask,
@@ -39,6 +41,7 @@ export function KanbanColumn({
   const [dragOver, setDragOver] = useState(false);
   const [dropIndex, setDropIndex] = useState<number | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const draggingFromThisColumn = useRef(false);
 
   const bulkSelectedTaskIds = useAppStore((s) => s.bulkSelectedTaskIds);
   const bulkSelectAll = useAppStore((s) => s.bulkSelectAll);
@@ -87,11 +90,25 @@ export function KanbanColumn({
     return (prevPos + nextPos) / 2;
   };
 
+  const handleDragStart = () => {
+    draggingFromThisColumn.current = true;
+  };
+
+  const handleDragEnd = () => {
+    draggingFromThisColumn.current = false;
+  };
+
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
-    e.dataTransfer.dropEffect = 'move';
-    setDragOver(true);
-    setDropIndex(getDropIndex(e.clientY));
+    const sameColumnReorder = draggingFromThisColumn.current && sortActive;
+    e.dataTransfer.dropEffect = sameColumnReorder ? 'none' : 'move';
+    if (!sameColumnReorder) {
+      setDragOver(true);
+      setDropIndex(getDropIndex(e.clientY));
+    } else {
+      setDragOver(false);
+      setDropIndex(null);
+    }
   };
 
   const handleDragLeave = (e: React.DragEvent) => {
@@ -119,11 +136,17 @@ export function KanbanColumn({
     const newPosition = computePosition(insertAt);
 
     if (sourceStatus === status) {
-      // Same column: just reorder
+      // Same column: skip reorder when a non-manual sort is active
+      if (sortActive) return;
       await reorderTask({ id: taskId, position: newPosition });
     } else {
-      // Different column: move with status change
-      await moveTask({ id: taskId, status, position: newPosition });
+      // Different column: move with status change.
+      // When sortActive, visual order doesn't reflect position order, so
+      // midpoint insertion could collide. Append to end instead.
+      const position = sortActive
+        ? Math.max(0, ...tasks.map((t) => t.position)) + 1
+        : newPosition;
+      await moveTask({ id: taskId, status, position });
     }
   };
 
@@ -145,6 +168,8 @@ export function KanbanColumn({
         dragOver && 'ring-2 ring-primary/50 bg-muted/80',
       )}
       onMouseDown={handleBackgroundClick}
+      onDragStart={handleDragStart}
+      onDragEnd={handleDragEnd}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
