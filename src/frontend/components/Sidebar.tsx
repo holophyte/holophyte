@@ -80,7 +80,7 @@ export function Sidebar() {
     const handler = (e: KeyboardEvent) => {
       if (isEditableElement(e.target)) return;
       const mod = isMac ? e.metaKey : e.ctrlKey;
-      if (mod && e.key === 'b') {
+      if (mod && e.key.toLowerCase() === 'b') {
         e.preventDefault();
         toggleSidebar();
       }
