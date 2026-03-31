@@ -2,7 +2,11 @@ import { useAuthActions } from '@convex-dev/auth/react';
 import { useConvexAuth } from 'convex/react';
 import { useEffect, useRef } from 'react';
 
-/** Known test credentials — used by E2E global-setup and dev `?auth` mode. */
+/**
+ * Known test credentials — used by E2E global-setup and dev `?auth` mode.
+ * Only functional when the server sets `allowPasswordAuth: true` (requires
+ * `ALLOW_PASSWORD_AUTH=1` on Convex + non-production `NODE_ENV`).
+ */
 const TEST_EMAIL = 'e2e@holophyte.test';
 const TEST_PASSWORD = 'holophyte-e2e-2024';
 
@@ -28,13 +32,17 @@ export default function AutoTestAuth() {
       flow: 'signIn',
       email: TEST_EMAIL,
       password: TEST_PASSWORD,
-    }).catch(() =>
-      signIn('password', {
-        flow: 'signUp',
-        email: TEST_EMAIL,
-        password: TEST_PASSWORD,
-      }),
-    );
+    })
+      .catch(() =>
+        signIn('password', {
+          flow: 'signUp',
+          email: TEST_EMAIL,
+          password: TEST_PASSWORD,
+        }),
+      )
+      .catch((err: unknown) =>
+        console.error('AutoTestAuth: sign-in/sign-up failed:', err),
+      );
   }, [isLoading, isAuthenticated, signIn]);
 
   return null;

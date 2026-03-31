@@ -8,9 +8,13 @@ export default async function globalSetup(config: FullConfig) {
   try {
     const page = await browser.newPage({ baseURL });
 
-    // Navigate — AutoTestAuth auto-signs-up on a fresh database
+    // Navigate — AutoTestAuth auto-signs-up on a fresh database.
+    // Wait for an authenticated-only element (sidebar "All Tasks" button)
+    // since "Holophyte" text also appears on the sign-in page.
     await page.goto('/');
-    await page.waitForSelector('text=Holophyte', { timeout: 30000 });
+    await page.waitForSelector('aside button:has-text("All Tasks")', {
+      timeout: 30000,
+    });
 
     // Create a temp directory to use as a fake repo
     const repoName = `e2e-${randomUUID().slice(0, 8)}`;
