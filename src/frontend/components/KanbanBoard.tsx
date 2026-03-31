@@ -123,7 +123,7 @@ export function KanbanBoard() {
 
   const currentRepo = selectedRepoId ? repoMap.get(selectedRepoId) : undefined;
   const sortPreference: SortPreference =
-    (currentRepo?.sortPreference as SortPreference) ?? 'manual';
+    currentRepo?.sortPreference ?? 'manual';
 
   const updateSortPreference = useMutation(api.repos.updateSortPreference);
 

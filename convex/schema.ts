@@ -57,6 +57,13 @@ export const PRIORITY_CONFIG: Record<
   [TaskPriority.Urgent]: { label: 'Urgent', color: '#ef4444' },
 };
 
+export type SortPreference =
+  | 'manual'
+  | 'priority'
+  | 'dueDate'
+  | 'newest'
+  | 'oldest';
+
 export const sortPreferenceValidator = v.union(
   v.literal('manual'),
   v.literal('priority'),

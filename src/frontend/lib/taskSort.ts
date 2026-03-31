@@ -1,9 +1,6 @@
-export type SortPreference =
-  | 'manual'
-  | 'priority'
-  | 'dueDate'
-  | 'newest'
-  | 'oldest';
+import type { SortPreference } from '@convex/schema';
+
+export type { SortPreference };
 
 const PRIORITY_ORDER: Record<string, number> = {
   urgent: 4,
@@ -38,10 +35,14 @@ export function sortTasks<
         if (da !== db) return da - db; // earliest first
         return a.position - b.position; // tie-break
       }
-      case 'newest':
-        return b.createdAt - a.createdAt;
-      case 'oldest':
-        return a.createdAt - b.createdAt;
+      case 'newest': {
+        const diff = b.createdAt - a.createdAt;
+        return diff !== 0 ? diff : a.position - b.position;
+      }
+      case 'oldest': {
+        const diff = a.createdAt - b.createdAt;
+        return diff !== 0 ? diff : a.position - b.position;
+      }
       default:
         return 0;
     }
