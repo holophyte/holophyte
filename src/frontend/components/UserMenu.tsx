@@ -3,18 +3,13 @@ import { useAuthActions } from '@convex-dev/auth/react';
 import { useNavigate } from '@tanstack/react-router';
 import { useQuery } from 'convex/react';
 import { KeyRound, LogOut } from 'lucide-react';
-import { cn } from '@/frontend/lib/utils';
 import { useAppStore } from '@/frontend/stores/app';
 import { ThemeSwitcher } from './ThemeSwitcher';
 import Avatar from './ui/Avatar';
 import Button from './ui/Button';
 import { Popover, PopoverContent, PopoverTrigger } from './ui/Popover';
 
-interface UserMenuProps {
-  collapsed?: boolean;
-}
-
-export default function UserMenu({ collapsed }: UserMenuProps) {
+export default function UserMenu() {
   const authActions = useAuthActions();
   const navigate = useNavigate();
   const user = useQuery(api.users.viewer);
@@ -25,10 +20,7 @@ export default function UserMenu({ collapsed }: UserMenuProps) {
       <PopoverTrigger asChild>
         <button
           type="button"
-          className={cn(
-            'flex items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-muted/50 transition-colors',
-            collapsed ? 'justify-center w-auto' : 'w-full',
-          )}
+          className="flex items-center gap-2 w-full rounded-md px-2 py-1.5 text-sm hover:bg-muted/50 transition-colors whitespace-nowrap"
           aria-label={user?.name ? `User menu for ${user.name}` : 'User menu'}
         >
           <Avatar
@@ -36,11 +28,9 @@ export default function UserMenu({ collapsed }: UserMenuProps) {
             name={user?.name}
             className="h-6 w-6 text-[10px] shrink-0"
           />
-          {!collapsed && (
-            <span className="truncate flex-1 text-left">
-              {user?.name ?? 'Loading...'}
-            </span>
-          )}
+          <span className="truncate flex-1 text-left">
+            {user?.name ?? 'Loading...'}
+          </span>
         </button>
       </PopoverTrigger>
       <PopoverContent className="w-56 p-2" align="start" side="top">

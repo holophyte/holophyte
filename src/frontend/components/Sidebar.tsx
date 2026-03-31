@@ -43,26 +43,6 @@ interface SidebarTooltipProps {
   children: React.ReactNode;
 }
 
-/** Text that fades out when the sidebar collapses instead of abruptly disappearing. */
-function SidebarLabel({
-  collapsed,
-  children,
-}: {
-  collapsed: boolean;
-  children: React.ReactNode;
-}) {
-  return (
-    <span
-      className={cn(
-        'whitespace-nowrap transition-opacity duration-200 motion-reduce:transition-none',
-        collapsed ? 'opacity-0 w-0 overflow-hidden' : 'opacity-100',
-      )}
-    >
-      {children}
-    </span>
-  );
-}
-
 /** Wraps a button with a tooltip that only renders when the sidebar is collapsed. */
 function SidebarTooltip({ label, collapsed, children }: SidebarTooltipProps) {
   if (!collapsed) return children;
@@ -135,18 +115,13 @@ export function Sidebar() {
         )}
         aria-label="Navigation"
       >
-        {/* Header */}
+        {/* Header — fixed px-3 so logo stays at same x-position */}
         <PageHeader
           data-testid="sidebar-header"
-          className={cn(
-            'gap-2 font-semibold text-lg',
-            collapsed ? 'justify-center px-0' : 'justify-between',
-          )}
+          className="gap-2 font-semibold text-lg whitespace-nowrap px-3"
         >
-          <div className="flex items-center gap-2">
-            <HolophyteIcon className="h-7 w-7 shrink-0" aria-hidden="true" />
-            <SidebarLabel collapsed={collapsed}>Holophyte</SidebarLabel>
-          </div>
+          <HolophyteIcon className="h-7 w-7 shrink-0" aria-hidden="true" />
+          <span className="flex-1 truncate">Holophyte</span>
           <SidebarTooltip
             label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
             collapsed={collapsed}
@@ -168,39 +143,33 @@ export function Sidebar() {
         </PageHeader>
 
         {/* Org switcher */}
-        <div className={cn('py-1', collapsed ? 'px-1' : 'px-2')}>
-          <OrgSwitcher collapsed={collapsed} />
+        <div className="px-2 py-1">
+          <OrgSwitcher />
         </div>
         <Separator />
 
-        {/* Nav buttons */}
-        <div className="p-2 space-y-1">
+        {/* Nav buttons — fixed padding, icons stay in place */}
+        <div className="px-2 py-2 space-y-1">
           <SidebarTooltip label="All Tasks" collapsed={collapsed}>
             <Button
               variant={homeMatch ? 'secondary' : 'ghost'}
-              className={cn(
-                'w-full gap-2',
-                collapsed ? 'justify-center px-0' : 'justify-start',
-              )}
+              className="w-full justify-start gap-2 whitespace-nowrap"
               onClick={() => void navigate({ to: '/' })}
               aria-label="All Tasks"
             >
               <LayoutDashboard className="h-4 w-4 shrink-0" />
-              <SidebarLabel collapsed={collapsed}>All Tasks</SidebarLabel>
+              All Tasks
             </Button>
           </SidebarTooltip>
           <SidebarTooltip label="Seed Box" collapsed={collapsed}>
             <Button
               variant={seedsMatch ? 'secondary' : 'ghost'}
-              className={cn(
-                'w-full gap-2',
-                collapsed ? 'justify-center px-0' : 'justify-start',
-              )}
+              className="w-full justify-start gap-2 whitespace-nowrap"
               onClick={() => void navigate({ to: '/seeds' })}
               aria-label="Seed Box"
             >
               <Lightbulb className="h-4 w-4 shrink-0" />
-              <SidebarLabel collapsed={collapsed}>Seed Box</SidebarLabel>
+              Seed Box
             </Button>
           </SidebarTooltip>
         </div>
@@ -208,22 +177,15 @@ export function Sidebar() {
         <Separator />
 
         {/* Projects header */}
-        <div
-          className={cn(
-            'flex items-center',
-            collapsed ? 'justify-center p-2' : 'justify-between px-4 py-2',
-          )}
-        >
-          <SidebarLabel collapsed={collapsed}>
-            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-              Projects
-            </span>
-          </SidebarLabel>
+        <div className="flex items-center justify-between px-4 py-2 whitespace-nowrap">
+          <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+            Projects
+          </span>
           <SidebarTooltip label="Add project" collapsed={collapsed}>
             <Button
               variant="ghost"
               size="icon"
-              className={collapsed ? 'w-full h-8' : 'h-11 w-11'}
+              className="h-8 w-8 shrink-0"
               onClick={() => setAddRepoOpen(true)}
               aria-label="Add project"
             >
@@ -233,80 +195,51 @@ export function Sidebar() {
         </div>
 
         <ScrollArea className="flex-1 [&>div>div]:!block">
-          <div className="p-2 space-y-1">
+          <div className="px-2 py-2 space-y-1">
             {repos === undefined &&
               [1, 2, 3].map((i) => (
-                <div
-                  key={i}
-                  className={cn(
-                    'flex items-center gap-2 py-2',
-                    collapsed ? 'justify-center px-0' : 'px-3',
-                  )}
-                >
+                <div key={i} className="flex items-center gap-2 px-3 py-2">
                   <Skeleton className="h-4 w-4 shrink-0 rounded" />
-                  {!collapsed && <Skeleton className="h-4 flex-1" />}
+                  <Skeleton className="h-4 flex-1" />
                 </div>
               ))}
             {repos?.map((repo) => {
               const repoActiveTasks =
                 activeTasksByRepo.get(String(repo._id)) ?? [];
-
-              if (collapsed) {
-                return (
-                  <SidebarTooltip
-                    key={repo._id}
-                    label={repo.name}
-                    collapsed={collapsed}
-                  >
-                    <Button
-                      variant={
-                        selectedRepoId === repo._id ? 'secondary' : 'ghost'
-                      }
-                      size="icon"
-                      className="w-full h-8"
-                      onClick={() =>
-                        void navigate({
-                          to: '/repos/$repoId',
-                          params: { repoId: repo._id },
-                        })
-                      }
-                      aria-label={repo.name}
-                    >
-                      <FolderGit2 className="h-4 w-4 shrink-0" />
-                    </Button>
-                  </SidebarTooltip>
-                );
-              }
-
               return (
                 <div key={repo._id}>
                   <div className="group relative">
-                    <Button
-                      variant={
-                        selectedRepoId === repo._id ? 'secondary' : 'ghost'
-                      }
-                      className="w-full justify-start gap-2 text-sm pr-8"
-                      onClick={() =>
-                        void navigate({
-                          to: '/repos/$repoId',
-                          params: { repoId: repo._id },
-                        })
-                      }
-                    >
-                      <FolderGit2 className="h-4 w-4 shrink-0" />
-                      <span className="truncate">{repo.name}</span>
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive"
-                      onClick={(e) => handleRemove(e, repo._id)}
-                      aria-label={`Delete ${repo.name}`}
-                    >
-                      <Trash2 className="h-3 w-3" />
-                    </Button>
+                    <SidebarTooltip label={repo.name} collapsed={collapsed}>
+                      <Button
+                        variant={
+                          selectedRepoId === repo._id ? 'secondary' : 'ghost'
+                        }
+                        className="w-full justify-start gap-2 text-sm pr-8 whitespace-nowrap"
+                        onClick={() =>
+                          void navigate({
+                            to: '/repos/$repoId',
+                            params: { repoId: repo._id },
+                          })
+                        }
+                        aria-label={repo.name}
+                      >
+                        <FolderGit2 className="h-4 w-4 shrink-0" />
+                        <span className="truncate">{repo.name}</span>
+                      </Button>
+                    </SidebarTooltip>
+                    {!collapsed && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive"
+                        onClick={(e) => handleRemove(e, repo._id)}
+                        aria-label={`Delete ${repo.name}`}
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </Button>
+                    )}
                   </div>
-                  {repoActiveTasks.length > 0 && (
+                  {!collapsed && repoActiveTasks.length > 0 && (
                     <div className="ml-4 pl-2 border-l border-border/50 space-y-0.5 my-0.5">
                       {repoActiveTasks.map((task) => (
                         <button
@@ -369,43 +302,22 @@ export function Sidebar() {
         <Separator />
 
         {/* Command palette hint */}
-        <div className="flex items-center justify-center px-2 py-1.5">
-          {collapsed ? (
-            <SidebarTooltip label="Command palette" collapsed={collapsed}>
-              <button
-                type="button"
-                className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs text-muted-foreground cursor-default hover:bg-muted/80 transition-colors"
-                aria-label="Command palette"
-                onClick={() =>
-                  document.dispatchEvent(
-                    new KeyboardEvent('keydown', {
-                      key: 'k',
-                      metaKey: isMac,
-                      ctrlKey: !isMac,
-                    }),
-                  )
-                }
-              >
-                {isMac ? '⌘' : '⌃'}
-              </button>
-            </SidebarTooltip>
-          ) : (
-            <span className="text-xs text-muted-foreground">
-              <kbd className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs">
-                {isMac ? '⌘K' : 'Ctrl+K'}
-              </kbd>{' '}
-              Command palette
-            </span>
-          )}
+        <div className="flex items-center px-3 py-1.5 whitespace-nowrap">
+          <span className="text-xs text-muted-foreground">
+            <kbd className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs">
+              {isMac ? '⌘K' : 'Ctrl+K'}
+            </kbd>{' '}
+            Command palette
+          </span>
         </div>
 
         <Separator />
-        <CompanionStatus collapsed={collapsed} />
+        <CompanionStatus />
         <Separator />
 
         {/* User menu */}
-        <div className={cn('p-2', collapsed && 'flex justify-center')}>
-          <UserMenu collapsed={collapsed} />
+        <div className="px-2 py-2">
+          <UserMenu />
         </div>
 
         <AddRepoDialog open={addRepoOpen} onOpenChange={setAddRepoOpen} />

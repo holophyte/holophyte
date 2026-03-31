@@ -7,11 +7,7 @@ import { useAppStore } from '@/frontend/stores/app';
 import Button from './ui/Button';
 import { Popover, PopoverContent, PopoverTrigger } from './ui/Popover';
 
-interface OrgSwitcherProps {
-  collapsed?: boolean;
-}
-
-export default function OrgSwitcher({ collapsed }: OrgSwitcherProps) {
+export default function OrgSwitcher() {
   const orgs = useQuery(api.organizations.listByUser);
   const selectedOrgId = useAppStore((s) => s.selectedOrgId);
   const setSelectedOrgId = useAppStore((s) => s.setSelectedOrgId);
@@ -36,10 +32,7 @@ export default function OrgSwitcher({ collapsed }: OrgSwitcherProps) {
       <PopoverTrigger asChild>
         <Button
           variant="ghost"
-          className={cn(
-            'w-full gap-2 text-sm',
-            collapsed ? 'justify-center px-0' : 'justify-between px-2',
-          )}
+          className="w-full justify-between gap-2 text-sm px-2 whitespace-nowrap"
           aria-label={
             selectedOrg
               ? `Current organization: ${selectedOrg.name}`
@@ -51,18 +44,14 @@ export default function OrgSwitcher({ collapsed }: OrgSwitcherProps) {
               className="h-4 w-4 shrink-0 text-muted-foreground"
               aria-hidden="true"
             />
-            {!collapsed && (
-              <span className="truncate">
-                {selectedOrg?.name ?? 'Select org...'}
-              </span>
-            )}
+            <span className="truncate">
+              {selectedOrg?.name ?? 'Select org...'}
+            </span>
           </div>
-          {!collapsed && (
-            <ChevronsUpDown
-              className="h-3.5 w-3.5 shrink-0 text-muted-foreground"
-              aria-hidden="true"
-            />
-          )}
+          <ChevronsUpDown
+            className="h-3.5 w-3.5 shrink-0 text-muted-foreground"
+            aria-hidden="true"
+          />
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-56 p-1" align="start">
