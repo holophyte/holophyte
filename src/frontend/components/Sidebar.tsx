@@ -110,7 +110,7 @@ export function Sidebar() {
     <TooltipProvider>
       <aside
         className={cn(
-          'border-r bg-muted/30 flex flex-col transition-[width] duration-300 ease-in-out motion-reduce:transition-none overflow-hidden shrink-0',
+          'border-r bg-muted/30 flex flex-col transition-[width] duration-300 ease-in-out motion-reduce:transition-none overflow-hidden shrink-0 [&_*]:min-w-0',
           collapsed ? 'w-12' : 'w-64',
         )}
         aria-label="Navigation"
@@ -118,7 +118,7 @@ export function Sidebar() {
         {/* Header */}
         <PageHeader
           data-testid="sidebar-header"
-          className="gap-2 font-semibold text-lg whitespace-nowrap px-4"
+          className="gap-2 font-semibold text-lg whitespace-nowrap px-4 overflow-hidden"
         >
           <HolophyteIcon className="h-7 w-7 shrink-0" aria-hidden="true" />
           <span className="flex-1 truncate">Holophyte</span>
@@ -153,23 +153,23 @@ export function Sidebar() {
           <SidebarTooltip label="All Tasks" collapsed={collapsed}>
             <Button
               variant={homeMatch ? 'secondary' : 'ghost'}
-              className="w-full justify-start gap-2 whitespace-nowrap"
+              className="w-full justify-start gap-2 whitespace-nowrap overflow-hidden"
               onClick={() => void navigate({ to: '/' })}
               aria-label="All Tasks"
             >
               <LayoutDashboard className="h-4 w-4 shrink-0" />
-              All Tasks
+              <span className="truncate">All Tasks</span>
             </Button>
           </SidebarTooltip>
           <SidebarTooltip label="Seed Box" collapsed={collapsed}>
             <Button
               variant={seedsMatch ? 'secondary' : 'ghost'}
-              className="w-full justify-start gap-2 whitespace-nowrap"
+              className="w-full justify-start gap-2 whitespace-nowrap overflow-hidden"
               onClick={() => void navigate({ to: '/seeds' })}
               aria-label="Seed Box"
             >
               <Lightbulb className="h-4 w-4 shrink-0" />
-              Seed Box
+              <span className="truncate">Seed Box</span>
             </Button>
           </SidebarTooltip>
         </div>
@@ -214,7 +214,7 @@ export function Sidebar() {
                         variant={
                           selectedRepoId === repo._id ? 'secondary' : 'ghost'
                         }
-                        className="w-full justify-start gap-2 text-sm pr-8 whitespace-nowrap"
+                        className="w-full justify-start gap-2 text-sm pr-8 whitespace-nowrap overflow-hidden"
                         onClick={() =>
                           void navigate({
                             to: '/repos/$repoId',

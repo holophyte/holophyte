@@ -43,7 +43,7 @@ export default function CompanionStatus() {
       <Tooltip>
         <TooltipTrigger asChild>
           <div
-            className="flex items-center gap-2 px-4 py-1.5 rounded-md text-xs text-muted-foreground whitespace-nowrap"
+            className="flex items-center gap-2 px-4 py-1.5 rounded-md text-xs text-muted-foreground whitespace-nowrap overflow-hidden"
             role="status"
             aria-label={`Companion ${labels[state]}`}
           >
