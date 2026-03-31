@@ -10,19 +10,19 @@ async function waitForApp(page: import('@playwright/test').Page) {
 async function navigateToSettingsViaUserMenu(
   page: import('@playwright/test').Page,
 ) {
-  // Open the UserMenu popover (avatar/name button at the bottom of the sidebar)
+  // Wait for the user name to load before interacting with the menu
   const userMenuTrigger = page
     .locator('aside')
     .locator('button')
-    .filter({ hasText: /Loading|Dev User/ })
+    .filter({ hasText: 'Dev User' })
     .first();
+  await expect(userMenuTrigger).toBeVisible({ timeout: 10000 });
   await userMenuTrigger.click();
 
-  // Click "API Keys" in the popover
-  await page
-    .locator('[data-radix-popper-content-wrapper]')
-    .locator('button', { hasText: 'API Keys' })
-    .click();
+  // Wait for the popover to open, then click "API Keys"
+  const popover = page.locator('[data-radix-popper-content-wrapper]');
+  await expect(popover).toBeVisible({ timeout: 5000 });
+  await popover.locator('button', { hasText: 'API Keys' }).click();
 
   // Wait for the settings page to load
   await expect(page.locator('h1', { hasText: 'Settings' })).toBeVisible({
