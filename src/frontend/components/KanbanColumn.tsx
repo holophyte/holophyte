@@ -17,6 +17,7 @@ interface KanbanColumnProps {
   showRepoBadge: boolean;
   collapsible?: boolean;
   variant?: 'default' | 'backlog';
+  sortActive?: boolean;
   onCollapse?: () => void;
   onArchiveAll?: () => void;
   onAddTask?: () => void;
@@ -30,6 +31,7 @@ export function KanbanColumn({
   showRepoBadge,
   collapsible,
   variant = 'default',
+  sortActive = false,
   onCollapse,
   onArchiveAll,
   onAddTask,
@@ -119,7 +121,8 @@ export function KanbanColumn({
     const newPosition = computePosition(insertAt);
 
     if (sourceStatus === status) {
-      // Same column: just reorder
+      // Same column: skip reorder when a non-manual sort is active
+      if (sortActive) return;
       await reorderTask({ id: taskId, position: newPosition });
     } else {
       // Different column: move with status change
