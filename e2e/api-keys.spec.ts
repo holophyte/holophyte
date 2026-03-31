@@ -19,10 +19,12 @@ async function navigateToSettingsViaUserMenu(
   await expect(userMenuTrigger).toBeVisible({ timeout: 10000 });
   await userMenuTrigger.click();
 
-  // Wait for the popover to open, then click "API Keys"
-  const popover = page.locator('[data-radix-popper-content-wrapper]');
-  await expect(popover).toBeVisible({ timeout: 5000 });
-  await popover.locator('button', { hasText: 'API Keys' }).click();
+  // Wait for the "API Keys" button to appear in the popover and click it.
+  // Use page-level locator — scoping to the popover wrapper can miss it
+  // if Radix portals the content outside the wrapper briefly.
+  const apiKeysButton = page.getByRole('button', { name: 'API Keys' });
+  await expect(apiKeysButton).toBeVisible({ timeout: 5000 });
+  await apiKeysButton.click();
 
   // Wait for the settings page to load
   await expect(page.locator('h1', { hasText: 'Settings' })).toBeVisible({
