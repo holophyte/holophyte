@@ -5,22 +5,9 @@ import { expect, test } from '@playwright/test';
 // Each test runs serially because sign-up mutates server state.
 test.describe.configure({ mode: 'serial' });
 
-// Override the config to disable E2E auto-auth so the sign-in page renders
-// instead of being bypassed by AutoTestAuth.
+// Navigate to /?signin to show the sign-in page without triggering AutoTestAuth.
 async function gotoSignIn(page: import('@playwright/test').Page) {
-  await page.route('**/config.js', async (route) => {
-    const response = await route.fetch();
-    const body = await response.text();
-    // Flip e2eTest to false so AutoTestAuth doesn't fire
-    const patched = body.replace('"e2eTest":true', '"e2eTest":false');
-    if (patched === body) {
-      throw new Error(
-        'gotoSignIn: config patch failed — "e2eTest":true not found in /config.js response',
-      );
-    }
-    await route.fulfill({ response, body: patched });
-  });
-  await page.goto('/');
+  await page.goto('/?signin');
   await page.waitForSelector('text=Sign in to manage your projects', {
     timeout: 15000,
   });

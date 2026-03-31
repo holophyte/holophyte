@@ -174,7 +174,7 @@ These are set on the Convex deployment itself (via `bunx convex env set`), not i
 
 | Variable | Set By | Description |
 |----------|--------|-------------|
-| `ALLOW_PASSWORD_AUTH` | `setup:local`, `dev-local.sh` (process env), `worktree-create.sh` (Convex env) | Enables password auth for local dev and E2E tests. Powers `?auth` auto-login with `dev@holophyte.test` / `password`. Required for the `AutoTestAuth` component and `bun run test:e2e`. |
+| `ALLOW_PASSWORD_AUTH` | `setup:local`, `dev-local.sh` (process env), `worktree-create.sh` (Convex env) | Enables password auth for local dev and E2E tests. When set, auto-login as `dev@holophyte.test` / `password` happens on any page load. Use `?signin` to suppress auto-login. Required for the `AutoTestAuth` component and `bun run test:e2e`. |
 | `ALLOW_ANONYMOUS_AUTH` | `setup:local`, `dev-local.sh` (process env), `worktree-create.sh` (Convex env) | Enables anonymous auth as a fallback (e.g. MCP server local dev). `bun run dev:local` sets both `ALLOW_PASSWORD_AUTH` and `ALLOW_ANONYMOUS_AUTH`. |
 | `INTERNAL_API_SECRET` | `setup:local`, `convex-local.sh`, `worktree-create.sh` | Must match the value in `.env` — used to authenticate companion HTTP calls |
 | `SITE_URL` | `setup:local`, `worktree-create.sh` | OAuth redirect base URL (e.g. `http://localhost:8082`) |

@@ -74,5 +74,5 @@ Watch for these anti-patterns in yourself:
 - Check Convex dashboard for function errors (queries, mutations, actions)
 - For real-time data issues, check **both** Convex dashboard logs and browser console
 - For E2E failures, check if `convex:local` is running (conflicts with test ephemeral Convex)
-- For auth issues, verify `ALLOW_PASSWORD_AUTH=1` is set and URL includes `?auth` (auto-logs in as `dev@holophyte.test`)
+- For auth issues, verify `ALLOW_PASSWORD_AUTH=1` is set on both the Bun server and Convex — when set, auto-login as `dev@holophyte.test` happens on any page load. Use `?signin` to suppress auto-login and see the sign-in page.
 - SDK sessions: strip `CLAUDECODE` env var from child processes — see `manager.ts`
