@@ -102,8 +102,8 @@ export function KanbanColumn({
     e.preventDefault();
     const sameColumnReorder = draggingFromThisColumn.current && sortActive;
     e.dataTransfer.dropEffect = sameColumnReorder ? 'none' : 'move';
-    setDragOver(true);
     if (!sameColumnReorder) {
+      setDragOver(true);
       setDropIndex(getDropIndex(e.clientY));
     }
   };
