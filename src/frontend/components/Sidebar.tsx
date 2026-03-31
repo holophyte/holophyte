@@ -43,6 +43,26 @@ interface SidebarTooltipProps {
   children: React.ReactNode;
 }
 
+/** Text that fades out when the sidebar collapses instead of abruptly disappearing. */
+function SidebarLabel({
+  collapsed,
+  children,
+}: {
+  collapsed: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <span
+      className={cn(
+        'whitespace-nowrap transition-opacity duration-200 motion-reduce:transition-none',
+        collapsed ? 'opacity-0 w-0 overflow-hidden' : 'opacity-100',
+      )}
+    >
+      {children}
+    </span>
+  );
+}
+
 /** Wraps a button with a tooltip that only renders when the sidebar is collapsed. */
 function SidebarTooltip({ label, collapsed, children }: SidebarTooltipProps) {
   if (!collapsed) return children;
@@ -120,11 +140,31 @@ export function Sidebar() {
           data-testid="sidebar-header"
           className={cn(
             'gap-2 font-semibold text-lg',
-            collapsed && 'justify-center px-0',
+            collapsed ? 'justify-center px-0' : 'justify-between',
           )}
         >
-          <HolophyteIcon className="h-7 w-7 shrink-0" aria-hidden="true" />
-          {!collapsed && 'Holophyte'}
+          <div className="flex items-center gap-2">
+            <HolophyteIcon className="h-7 w-7 shrink-0" aria-hidden="true" />
+            <SidebarLabel collapsed={collapsed}>Holophyte</SidebarLabel>
+          </div>
+          <SidebarTooltip
+            label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            collapsed={collapsed}
+          >
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7 shrink-0"
+              onClick={toggleSidebar}
+              aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            >
+              {collapsed ? (
+                <PanelLeftOpen className="h-4 w-4" />
+              ) : (
+                <PanelLeftClose className="h-4 w-4" />
+              )}
+            </Button>
+          </SidebarTooltip>
         </PageHeader>
 
         {/* Org switcher */}
@@ -146,7 +186,7 @@ export function Sidebar() {
               aria-label="All Tasks"
             >
               <LayoutDashboard className="h-4 w-4 shrink-0" />
-              {!collapsed && 'All Tasks'}
+              <SidebarLabel collapsed={collapsed}>All Tasks</SidebarLabel>
             </Button>
           </SidebarTooltip>
           <SidebarTooltip label="Seed Box" collapsed={collapsed}>
@@ -160,7 +200,7 @@ export function Sidebar() {
               aria-label="Seed Box"
             >
               <Lightbulb className="h-4 w-4 shrink-0" />
-              {!collapsed && 'Seed Box'}
+              <SidebarLabel collapsed={collapsed}>Seed Box</SidebarLabel>
             </Button>
           </SidebarTooltip>
         </div>
@@ -174,11 +214,11 @@ export function Sidebar() {
             collapsed ? 'justify-center p-2' : 'justify-between px-4 py-2',
           )}
         >
-          {!collapsed && (
+          <SidebarLabel collapsed={collapsed}>
             <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
               Projects
             </span>
-          )}
+          </SidebarLabel>
           <SidebarTooltip label="Add project" collapsed={collapsed}>
             <Button
               variant="ghost"
@@ -366,34 +406,6 @@ export function Sidebar() {
         {/* User menu */}
         <div className={cn('p-2', collapsed && 'flex justify-center')}>
           <UserMenu collapsed={collapsed} />
-        </div>
-
-        {/* Collapse toggle */}
-        <Separator />
-        <div className="p-2">
-          <SidebarTooltip
-            label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-            collapsed={collapsed}
-          >
-            <Button
-              variant="ghost"
-              size="icon"
-              className={cn('w-full h-8', !collapsed && 'justify-start gap-2')}
-              onClick={toggleSidebar}
-              aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-            >
-              {collapsed ? (
-                <PanelLeftOpen className="h-4 w-4 shrink-0" />
-              ) : (
-                <>
-                  <PanelLeftClose className="h-4 w-4 shrink-0" />
-                  <span className="text-xs text-muted-foreground">
-                    {isMac ? '⌘B' : 'Ctrl+B'}
-                  </span>
-                </>
-              )}
-            </Button>
-          </SidebarTooltip>
         </div>
 
         <AddRepoDialog open={addRepoOpen} onOpenChange={setAddRepoOpen} />
