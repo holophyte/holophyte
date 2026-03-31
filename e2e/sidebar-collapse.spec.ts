@@ -3,6 +3,11 @@ import { expect, test } from '@playwright/test';
 async function waitForApp(page: import('@playwright/test').Page) {
   await page.goto('/');
   await page.waitForSelector('text=Holophyte', { timeout: 30000 });
+  // Wait for sidebar to stabilize after Convex queries resolve
+  await page
+    .locator('aside')
+    .getByRole('button', { name: /sidebar/i })
+    .waitFor({ state: 'visible', timeout: 10000 });
 }
 
 test('sidebar collapse toggle button is visible', async ({ page }) => {
@@ -63,8 +68,11 @@ test('clicking expand toggle restores sidebar', async ({ page }) => {
 test('Cmd+B keyboard shortcut toggles sidebar', async ({ page }) => {
   await waitForApp(page);
 
-  // Verify expanded
-  await expect(page.locator('aside').locator('text=Projects')).toBeVisible();
+  // Wait for sidebar to stabilize after hydration
+  const collapseBtn = page.locator('aside').getByRole('button', {
+    name: 'Collapse sidebar',
+  });
+  await expect(collapseBtn).toBeVisible({ timeout: 10000 });
 
   // Press Cmd+B (Meta+B)
   await page.keyboard.press('Meta+b');
@@ -110,10 +118,11 @@ test('collapsed state persists across page reload', async ({ page }) => {
 test('collapsed sidebar still shows navigation icons', async ({ page }) => {
   await waitForApp(page);
 
-  // Collapse
+  // Wait for sidebar to stabilize, then collapse
   const toggle = page.locator('aside').getByRole('button', {
     name: 'Collapse sidebar',
   });
+  await expect(toggle).toBeVisible({ timeout: 10000 });
   await toggle.click();
   await expect(
     page.locator('aside').getByRole('button', { name: 'Expand sidebar' }),
