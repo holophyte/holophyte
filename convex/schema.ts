@@ -57,6 +57,14 @@ export const PRIORITY_CONFIG: Record<
   [TaskPriority.Urgent]: { label: 'Urgent', color: '#ef4444' },
 };
 
+export const sortPreferenceValidator = v.union(
+  v.literal('manual'),
+  v.literal('priority'),
+  v.literal('dueDate'),
+  v.literal('newest'),
+  v.literal('oldest'),
+);
+
 export const roleValidator = v.union(
   v.literal('owner'),
   v.literal('admin'),
@@ -87,6 +95,7 @@ export default defineSchema({
     path: v.string(),
     createdAt: v.number(),
     orgId: v.id('organizations'),
+    sortPreference: v.optional(sortPreferenceValidator),
   })
     .index('by_path', ['path'])
     .index('by_org', ['orgId']),
