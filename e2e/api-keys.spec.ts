@@ -206,25 +206,26 @@ test.describe('Settings page - API Keys', () => {
     await dialog.locator('button', { hasText: 'Done' }).click();
     await expect(dialog).toBeHidden({ timeout: 5000 });
 
-    // The key should now appear in the list with its name
+    // The key should now appear in the table with its name
     await expect(page.locator(`text=${keyName}`)).toBeVisible({
       timeout: 8000,
     });
 
-    // Should show "active" badge and "mcp" scope badge
+    // The key row is a grid div inside the table — find it by the key name
     const keyRow = page
-      .locator('div.rounded-md.border.p-4')
-      .filter({ has: page.locator(`text=${keyName}`) })
+      .locator('.divide-y > div')
+      .filter({ hasText: keyName })
       .first();
-    await expect(keyRow.getByText('active', { exact: true })).toBeVisible({
-      timeout: 5000,
-    });
+
+    // Should show "mcp" scope badge
     await expect(keyRow.getByText('mcp', { exact: true })).toBeVisible({
       timeout: 5000,
     });
 
-    // Created date should be visible
-    await expect(keyRow.locator('text=/Created/')).toBeVisible();
+    // Created date should be visible (formatted as "Mar 31, 2026" etc.)
+    await expect(
+      keyRow.locator('span', { hasText: /\w{3}\s+\d{1,2},\s+\d{4}/ }),
+    ).toBeVisible();
   });
 
   test('key list shows name, scopes, and created date', async ({ page }) => {
@@ -244,21 +245,21 @@ test.describe('Settings page - API Keys', () => {
     await dialog.locator('button', { hasText: 'Done' }).click();
     await expect(dialog).toBeHidden({ timeout: 5000 });
 
-    // Find the key row by name
+    // Find the key row by name in the table
     await expect(page.locator(`text=${keyName}`)).toBeVisible({
       timeout: 8000,
     });
 
-    // The row should contain the expected metadata
     const keyRow = page
-      .locator('div.rounded-md.border.p-4')
-      .filter({ has: page.locator(`text=${keyName}`) })
+      .locator('.divide-y > div')
+      .filter({ hasText: keyName })
       .first();
 
-    await expect(keyRow.getByText('active', { exact: true })).toBeVisible();
+    // Should show "mcp" scope badge and a created date
     await expect(keyRow.getByText('mcp', { exact: true })).toBeVisible();
-    // Created date in the format "Created <Month> <Day>, <Year>"
-    await expect(keyRow.locator('text=/^Created/')).toBeVisible();
+    await expect(
+      keyRow.locator('span', { hasText: /\w{3}\s+\d{1,2},\s+\d{4}/ }),
+    ).toBeVisible();
   });
 
   test('can revoke a key and see it marked as revoked', async ({ page }) => {
@@ -284,35 +285,37 @@ test.describe('Settings page - API Keys', () => {
       timeout: 8000,
     });
 
-    // Find the Revoke button for this specific key row
+    // Find the Revoke icon button for this specific key row
     const keyRow = page
-      .locator('div.rounded-md.border.p-4')
-      .filter({ has: page.locator(`text=${keyName}`) })
+      .locator('.divide-y > div')
+      .filter({ hasText: keyName })
       .first();
 
-    const revokeButton = keyRow.locator('button', { hasText: 'Revoke' });
+    const revokeButton = keyRow.locator('button[aria-label="Revoke"]');
     await expect(revokeButton).toBeVisible({ timeout: 5000 });
     await revokeButton.click();
 
-    // After revoking, the "revoked" badge should appear
-    await expect(page.locator(`text=${keyName}`)).toBeVisible();
-    const revokedRow = page
-      .locator('div.rounded-md.border.p-4')
-      .filter({ has: page.locator(`text=${keyName}`) })
-      .first();
-    await expect(revokedRow.getByText('revoked', { exact: true })).toBeVisible({
-      timeout: 8000,
-    });
-
-    // The Revoke button should no longer be present for this key
+    // The key should move from active to revoked — it disappears from the
+    // main table and appears under the "Revoked keys" collapsible section.
+    // The key name should still be visible somewhere on the page.
     await expect(
-      revokedRow.locator('button', { hasText: 'Revoke' }),
-    ).toBeHidden();
+      page.locator('button', { hasText: 'Revoked keys' }),
+    ).toBeVisible({ timeout: 8000 });
 
-    // A "Revoked <date>" metadata line should appear
-    await expect(revokedRow.locator('text=/^Revoked/')).toBeVisible({
-      timeout: 5000,
-    });
+    // Open the revoked keys section
+    await page.locator('button', { hasText: 'Revoked keys' }).click();
+
+    // The revoked key should appear with reduced opacity
+    const revokedRow = page
+      .locator('.divide-y > div')
+      .filter({ hasText: keyName })
+      .first();
+    await expect(revokedRow).toBeVisible({ timeout: 5000 });
+
+    // The revoke icon button should no longer be present for this key
+    await expect(
+      revokedRow.locator('button[aria-label="Revoke"]'),
+    ).toBeHidden();
   });
 
   test('Cancel button closes the dialog without creating a key', async ({
