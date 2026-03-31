@@ -31,7 +31,7 @@ export default function CompanionStatus() {
 
   if (state === 'loading') {
     return (
-      <div className="flex items-center gap-2 px-2 py-1.5">
+      <div className="flex items-center gap-2 px-4 py-1.5">
         <Skeleton className="h-3.5 w-3.5 rounded" />
         <Skeleton className="h-3.5 w-16" />
       </div>
@@ -43,7 +43,7 @@ export default function CompanionStatus() {
       <Tooltip>
         <TooltipTrigger asChild>
           <div
-            className="flex items-center gap-2 px-2 py-1.5 rounded-md text-xs text-muted-foreground"
+            className="flex items-center gap-2 px-4 py-1.5 rounded-md text-xs text-muted-foreground whitespace-nowrap overflow-hidden"
             role="status"
             aria-label={`Companion ${labels[state]}`}
           >

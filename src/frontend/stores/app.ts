@@ -44,6 +44,9 @@ interface AppState {
   // Last repo used when creating a task from the "All Tasks" view
   lastUsedRepoId: Id<'repos'> | null;
 
+  // Sidebar
+  sidebarCollapsed: boolean;
+
   // Bulk selection state
   bulkSelectedTaskIds: Id<'tasks'>[];
 
@@ -73,6 +76,9 @@ interface AppState {
   toggleArchive: () => void;
   toggleDoneCollapsed: () => void;
 
+  // Sidebar actions
+  toggleSidebar: () => void;
+
   // Bulk selection actions
   toggleBulkSelectTask: (id: Id<'tasks'>) => void;
   bulkSelectAll: (ids: Id<'tasks'>[]) => void;
@@ -96,6 +102,8 @@ export const useAppStore = create<AppState>()(
       theme: DEFAULT_THEME,
 
       lastUsedRepoId: null,
+
+      sidebarCollapsed: false,
 
       bulkSelectedTaskIds: [],
 
@@ -143,6 +151,9 @@ export const useAppStore = create<AppState>()(
           bulkSelectedTaskIds: [],
         })),
 
+      toggleSidebar: () =>
+        set((state) => ({ sidebarCollapsed: !state.sidebarCollapsed })),
+
       toggleBulkSelectTask: (id) =>
         set((state) => ({
           bulkSelectedTaskIds: state.bulkSelectedTaskIds.includes(id)
@@ -168,7 +179,7 @@ export const useAppStore = create<AppState>()(
     }),
     {
       name: 'holophyte-app',
-      version: 3,
+      version: 4,
       migrate: (persisted) => {
         const state = persisted as Record<string, unknown>;
         if (
@@ -182,11 +193,16 @@ export const useAppStore = create<AppState>()(
         delete state.selectedRepoId;
         delete state.selectedTaskId;
         delete state.viewMode;
+        // Default sidebarCollapsed for users upgrading from v3 or earlier
+        if (typeof state.sidebarCollapsed !== 'boolean') {
+          state.sidebarCollapsed = false;
+        }
         return state as unknown as AppState;
       },
       partialize: (state) => ({
         backlogCollapsed: state.backlogCollapsed,
         taskPageDetailCollapsed: state.taskPageDetailCollapsed,
+        sidebarCollapsed: state.sidebarCollapsed,
         showArchive: state.showArchive,
         doneColumnCollapsed: state.doneColumnCollapsed,
         lastUsedRepoId: state.lastUsedRepoId,
