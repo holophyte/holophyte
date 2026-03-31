@@ -24,6 +24,7 @@ export function sortTasks<
       case 'manual':
         return a.position - b.position;
       case 'priority': {
+        // Unknown priorities sort last (0) — same as 'none'
         const pa = PRIORITY_ORDER[a.priority ?? 'none'] ?? 0;
         const pb = PRIORITY_ORDER[b.priority ?? 'none'] ?? 0;
         if (pb !== pa) return pb - pa; // high to low

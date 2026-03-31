@@ -105,6 +105,9 @@ export function KanbanColumn({
     if (!sameColumnReorder) {
       setDragOver(true);
       setDropIndex(getDropIndex(e.clientY));
+    } else {
+      setDragOver(false);
+      setDropIndex(null);
     }
   };
 
