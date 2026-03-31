@@ -110,7 +110,7 @@ export function Sidebar() {
     <TooltipProvider>
       <aside
         className={cn(
-          'border-r bg-muted/30 flex flex-col transition-[width] duration-300 ease-in-out overflow-hidden shrink-0',
+          'border-r bg-muted/30 flex flex-col transition-[width] duration-300 ease-in-out motion-reduce:transition-none overflow-hidden shrink-0',
           collapsed ? 'w-12' : 'w-64',
         )}
         aria-label="Navigation"
@@ -123,7 +123,7 @@ export function Sidebar() {
             collapsed && 'justify-center px-0',
           )}
         >
-          <HolophyteIcon className="h-7 w-7 shrink-0" />
+          <HolophyteIcon className="h-7 w-7 shrink-0" aria-hidden="true" />
           {!collapsed && 'Holophyte'}
         </PageHeader>
 
@@ -143,6 +143,7 @@ export function Sidebar() {
                 collapsed ? 'justify-center px-0' : 'justify-start',
               )}
               onClick={() => void navigate({ to: '/' })}
+              aria-label="All Tasks"
             >
               <LayoutDashboard className="h-4 w-4 shrink-0" />
               {!collapsed && 'All Tasks'}
@@ -156,6 +157,7 @@ export function Sidebar() {
                 collapsed ? 'justify-center px-0' : 'justify-start',
               )}
               onClick={() => void navigate({ to: '/seeds' })}
+              aria-label="Seed Box"
             >
               <Lightbulb className="h-4 w-4 shrink-0" />
               {!collapsed && 'Seed Box'}
@@ -228,6 +230,7 @@ export function Sidebar() {
                           params: { repoId: repo._id },
                         })
                       }
+                      aria-label={repo.name}
                     >
                       <FolderGit2 className="h-4 w-4 shrink-0" />
                     </Button>
@@ -329,9 +332,22 @@ export function Sidebar() {
         <div className="flex items-center justify-center px-2 py-1.5">
           {collapsed ? (
             <SidebarTooltip label="Command palette" collapsed={collapsed}>
-              <kbd className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs text-muted-foreground cursor-default">
+              <button
+                type="button"
+                className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs text-muted-foreground cursor-default hover:bg-muted/80 transition-colors"
+                aria-label="Command palette"
+                onClick={() =>
+                  document.dispatchEvent(
+                    new KeyboardEvent('keydown', {
+                      key: 'k',
+                      metaKey: isMac,
+                      ctrlKey: !isMac,
+                    }),
+                  )
+                }
+              >
                 {isMac ? '⌘' : '⌃'}
-              </kbd>
+              </button>
             </SidebarTooltip>
           ) : (
             <span className="text-xs text-muted-foreground">

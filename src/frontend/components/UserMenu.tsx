@@ -29,6 +29,7 @@ export default function UserMenu({ collapsed }: UserMenuProps) {
             'flex items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-muted/50 transition-colors',
             collapsed ? 'justify-center w-auto' : 'w-full',
           )}
+          aria-label={user?.name ? `User menu for ${user.name}` : 'User menu'}
         >
           <Avatar
             src={user?.image}
