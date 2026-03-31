@@ -38,6 +38,17 @@ test('clicking collapse toggle hides sidebar text', async ({ page }) => {
   await expect(
     page.locator('aside').locator('text=Projects'),
   ).not.toBeVisible();
+
+  // Icon-only buttons should still be accessible by aria-label
+  await expect(
+    page.locator('aside').getByRole('button', { name: 'All Tasks' }),
+  ).toBeVisible();
+  await expect(
+    page.locator('aside').getByRole('button', { name: 'Seed Box' }),
+  ).toBeVisible();
+  await expect(
+    page.locator('aside').getByRole('button', { name: 'Add project' }),
+  ).toBeVisible();
 });
 
 test('clicking expand toggle restores sidebar', async ({ page }) => {
@@ -113,29 +124,4 @@ test('collapsed state persists across page reload', async ({ page }) => {
   await expect(
     page.locator('aside').getByRole('button', { name: 'Expand sidebar' }),
   ).toBeVisible({ timeout: 10000 });
-});
-
-test('collapsed sidebar still shows navigation icons', async ({ page }) => {
-  await waitForApp(page);
-
-  // Wait for sidebar to stabilize, then collapse
-  const toggle = page.locator('aside').getByRole('button', {
-    name: 'Collapse sidebar',
-  });
-  await expect(toggle).toBeVisible({ timeout: 10000 });
-  await toggle.click();
-  await expect(
-    page.locator('aside').getByRole('button', { name: 'Expand sidebar' }),
-  ).toBeVisible({ timeout: 5000 });
-
-  // Icon-only buttons should still be accessible
-  await expect(
-    page.locator('aside').getByRole('button', { name: 'All Tasks' }),
-  ).toBeVisible();
-  await expect(
-    page.locator('aside').getByRole('button', { name: 'Seed Box' }),
-  ).toBeVisible();
-  await expect(
-    page.locator('aside').getByRole('button', { name: 'Add project' }),
-  ).toBeVisible();
 });
