@@ -115,10 +115,10 @@ export function Sidebar() {
         )}
         aria-label="Navigation"
       >
-        {/* Header — fixed px-3 so logo stays at same x-position */}
+        {/* Header */}
         <PageHeader
           data-testid="sidebar-header"
-          className="gap-2 font-semibold text-lg whitespace-nowrap px-3"
+          className="gap-2 font-semibold text-lg whitespace-nowrap px-4"
         >
           <HolophyteIcon className="h-7 w-7 shrink-0" aria-hidden="true" />
           <span className="flex-1 truncate">Holophyte</span>
@@ -143,13 +143,13 @@ export function Sidebar() {
         </PageHeader>
 
         {/* Org switcher */}
-        <div className="px-2 py-1">
+        <div className="py-1">
           <OrgSwitcher />
         </div>
         <Separator />
 
-        {/* Nav buttons — fixed padding, icons stay in place */}
-        <div className="px-2 py-2 space-y-1">
+        {/* Nav buttons — no container padding; buttons have px-4 which centers icons in 48px */}
+        <div className="py-2 space-y-1">
           <SidebarTooltip label="All Tasks" collapsed={collapsed}>
             <Button
               variant={homeMatch ? 'secondary' : 'ghost'}
@@ -177,11 +177,11 @@ export function Sidebar() {
         <Separator />
 
         {/* Projects header */}
-        <div className="flex items-center justify-between px-4 py-2 whitespace-nowrap">
-          <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-            Projects
-          </span>
-          <SidebarTooltip label="Add project" collapsed={collapsed}>
+        {!collapsed && (
+          <div className="flex items-center justify-between px-4 py-2 whitespace-nowrap">
+            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+              Projects
+            </span>
             <Button
               variant="ghost"
               size="icon"
@@ -191,11 +191,11 @@ export function Sidebar() {
             >
               <Plus className="h-3.5 w-3.5" />
             </Button>
-          </SidebarTooltip>
-        </div>
+          </div>
+        )}
 
         <ScrollArea className="flex-1 [&>div>div]:!block">
-          <div className="px-2 py-2 space-y-1">
+          <div className="py-2 space-y-1">
             {repos === undefined &&
               [1, 2, 3].map((i) => (
                 <div key={i} className="flex items-center gap-2 px-3 py-2">
@@ -302,21 +302,24 @@ export function Sidebar() {
         <Separator />
 
         {/* Command palette hint */}
-        <div className="flex items-center px-3 py-1.5 whitespace-nowrap">
-          <span className="text-xs text-muted-foreground">
-            <kbd className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs">
-              {isMac ? '⌘K' : 'Ctrl+K'}
-            </kbd>{' '}
-            Command palette
-          </span>
-        </div>
-
-        <Separator />
+        {!collapsed && (
+          <>
+            <div className="flex items-center justify-center px-2 py-1.5">
+              <span className="text-xs text-muted-foreground whitespace-nowrap">
+                <kbd className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs">
+                  {isMac ? '⌘K' : 'Ctrl+K'}
+                </kbd>{' '}
+                Command palette
+              </span>
+            </div>
+            <Separator />
+          </>
+        )}
         <CompanionStatus />
         <Separator />
 
         {/* User menu */}
-        <div className="px-2 py-2">
+        <div className="py-2">
           <UserMenu />
         </div>
 

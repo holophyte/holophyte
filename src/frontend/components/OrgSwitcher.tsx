@@ -32,7 +32,7 @@ export default function OrgSwitcher() {
       <PopoverTrigger asChild>
         <Button
           variant="ghost"
-          className="w-full justify-between gap-2 text-sm px-2 whitespace-nowrap"
+          className="w-full justify-between gap-2 text-sm px-4 whitespace-nowrap"
           aria-label={
             selectedOrg
               ? `Current organization: ${selectedOrg.name}`
