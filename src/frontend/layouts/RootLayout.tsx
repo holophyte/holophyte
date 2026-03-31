@@ -8,6 +8,7 @@ import {
   e2eTest,
 } from '@/frontend/lib/config';
 import AutoAnonymousAuth from '../components/AutoAnonymousAuth';
+import AutoTestAuth from '../components/AutoTestAuth';
 import { CommandPalette } from '../components/CommandPalette';
 import { Sidebar } from '../components/Sidebar';
 import SignInPage from '../components/SignInPage';
@@ -49,10 +50,13 @@ export default function RootLayout() {
 
   return (
     <>
-      {(e2eTest ||
-        (allowAnonymousAuth && window.location.search.includes('auth'))) && (
-        <AutoAnonymousAuth />
-      )}
+      {allowPasswordAuth &&
+        (e2eTest || window.location.search.includes('auth')) && (
+          <AutoTestAuth />
+        )}
+      {!allowPasswordAuth &&
+        allowAnonymousAuth &&
+        window.location.search.includes('auth') && <AutoAnonymousAuth />}
       <AuthLoading>{spinner}</AuthLoading>
       <Unauthenticated>
         {e2eTest && !allowPasswordAuth ? spinner : <SignInPage />}

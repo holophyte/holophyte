@@ -8,7 +8,7 @@ export default async function globalSetup(config: FullConfig) {
   try {
     const page = await browser.newPage({ baseURL });
 
-    // Wait for anonymous auth to complete
+    // Navigate — AutoTestAuth auto-signs-up on a fresh database
     await page.goto('/');
     await page.waitForSelector('text=Holophyte', { timeout: 30000 });
 

@@ -6,12 +6,12 @@ import { expect, test } from '@playwright/test';
 test.describe.configure({ mode: 'serial' });
 
 // Override the config to disable E2E auto-auth so the sign-in page renders
-// instead of being bypassed by AutoAnonymousAuth.
+// instead of being bypassed by AutoTestAuth.
 async function gotoSignIn(page: import('@playwright/test').Page) {
   await page.route('**/config.js', async (route) => {
     const response = await route.fetch();
     const body = await response.text();
-    // Flip e2eTest to false so AutoAnonymousAuth doesn't fire
+    // Flip e2eTest to false so AutoTestAuth doesn't fire
     const patched = body.replace('"e2eTest":true', '"e2eTest":false');
     if (patched === body) {
       throw new Error(
