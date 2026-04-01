@@ -2,6 +2,9 @@
 set -euo pipefail
 
 # Seed a dev user (dev@holophyte.test / password) for local development.
+# Credentials match DEV_USER_EMAIL/DEV_USER_PASSWORD in src/constants.ts
+# and AutoTestAuth.tsx — keep them in sync.
+#
 # Requires a running local Convex backend with the Password provider deployed.
 #
 # Usage:

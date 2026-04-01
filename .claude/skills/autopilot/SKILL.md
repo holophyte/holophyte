@@ -141,7 +141,7 @@ If writing E2E tests, use the `e2e-tester` subagent:
 > Follow the existing E2E patterns in `e2e/app.spec.ts` and `e2e/all-tasks-create.spec.ts`:
 > - Import `{ expect, test }` from `@playwright/test`
 > - Use `waitForApp(page)` helper: `page.goto('/')` + `page.waitForSelector('text=Holophyte', { timeout: 30000 })`
-> - Global setup creates an e2e repo (name matches `/e2e-/`) and saves auth state — tests reuse this via `storageState`
+> - Global setup auto-signs-in via `AutoTestAuth` (password auth with `dev@holophyte.test`), creates an e2e repo (name matches `/e2e-/`), and saves auth state via `storageState`
 > - Use generous timeouts for visibility checks (5-10s) — Convex queries are async
 > - Scope dialog assertions to `[role="dialog"]` to avoid strict mode collisions
 > - Use `{ exact: true }` for ambiguous text matches

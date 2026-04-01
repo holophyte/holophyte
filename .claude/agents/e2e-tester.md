@@ -37,7 +37,7 @@ test('user can create a task', async ({ page }) => {
 
 - Import `{ expect, test }` from `@playwright/test`
 - Use `waitForApp(page)` helper: `page.goto('/')` + `page.waitForSelector('text=Holophyte', { timeout: 30000 })`
-- Global setup creates an e2e repo (name matches `/e2e-/`) and saves auth state — tests reuse this via `storageState`
+- Global setup auto-signs-in via `AutoTestAuth` (password auth with `dev@holophyte.test`), creates an e2e repo (name matches `/e2e-/`), and saves auth state via `storageState`
 - Use generous timeouts for visibility checks (5-10s) — Convex queries are async
 - Scope dialog assertions to `[role="dialog"]` to avoid strict mode collisions
 - Use `{ exact: true }` for ambiguous text matches

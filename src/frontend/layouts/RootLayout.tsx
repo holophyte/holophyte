@@ -2,12 +2,8 @@ import { Outlet, useMatch } from '@tanstack/react-router';
 import { Authenticated, AuthLoading, Unauthenticated } from 'convex/react';
 import { Loader2 } from 'lucide-react';
 import { useTheme } from '@/frontend/hooks/useTheme';
-import {
-  allowAnonymousAuth,
-  allowPasswordAuth,
-  e2eTest,
-} from '@/frontend/lib/config';
-import AutoAnonymousAuth from '../components/AutoAnonymousAuth';
+import { allowPasswordAuth, e2eTest } from '@/frontend/lib/config';
+import AutoTestAuth from '../components/AutoTestAuth';
 import { CommandPalette } from '../components/CommandPalette';
 import { Sidebar } from '../components/Sidebar';
 import SignInPage from '../components/SignInPage';
@@ -40,6 +36,9 @@ function AuthenticatedLayout() {
 
 export default function RootLayout() {
   useTheme();
+  const hasSigninQuery = new URLSearchParams(window.location.search).has(
+    'signin',
+  );
 
   const spinner = (
     <div className="flex h-screen items-center justify-center bg-background">
@@ -49,10 +48,7 @@ export default function RootLayout() {
 
   return (
     <>
-      {(e2eTest ||
-        (allowAnonymousAuth && window.location.search.includes('auth'))) && (
-        <AutoAnonymousAuth />
-      )}
+      {allowPasswordAuth && !hasSigninQuery && <AutoTestAuth />}
       <AuthLoading>{spinner}</AuthLoading>
       <Unauthenticated>
         {e2eTest && !allowPasswordAuth ? spinner : <SignInPage />}

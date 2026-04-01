@@ -25,9 +25,9 @@ The Playwright MCP server is configured in the project. Claude Code can use it d
 
 **Prerequisites:**
 
-1. Start the dev server: `bun run dev:local` (auto-enables `ALLOW_ANONYMOUS_AUTH` for the Bun server)
-2. Ensure Convex has anonymous auth: `bunx convex env set ALLOW_ANONYMOUS_AUTH 1` (auto-set by `worktree:create`)
-3. Navigate to `http://localhost:<port>?auth` — the `?auth` query param triggers anonymous auth
+1. Start the dev server: `bun run dev:local` (auto-enables `ALLOW_PASSWORD_AUTH` and `ALLOW_ANONYMOUS_AUTH`)
+2. Ensure Convex has password auth: `bunx convex env set ALLOW_PASSWORD_AUTH 1` (auto-set by `worktree:create`)
+3. Navigate to `http://localhost:<port>` — when `ALLOW_PASSWORD_AUTH=1` is set, auto-login as `dev@holophyte.test` / `password` happens automatically. To see the sign-in page instead, add `?signin` to the URL.
 
 ## Testing Flow
 
@@ -127,22 +127,24 @@ This creates a temporary detached-HEAD worktree under `~/.holophyte-dev/e2e-<tim
 bun run test:e2e:isolated --grep "create task"
 ```
 
-### Anonymous auth not set up (manual testing)
+### Dev auth not set up (manual testing)
 
-Manual testing requires `ALLOW_ANONYMOUS_AUTH=1` in two places:
+Manual testing requires `ALLOW_PASSWORD_AUTH=1` in two places:
 
-1. **Bun server process** — `bun run dev:local` sets this automatically. If running the server directly (`bun src/server.ts`), prefix with `ALLOW_ANONYMOUS_AUTH=1`.
-2. **Convex environment** — `bunx convex env set ALLOW_ANONYMOUS_AUTH 1`. Auto-set by `bun run worktree:create` for new worktrees.
+1. **Bun server process** — `bun run dev:local` sets this automatically. If running the server directly (`bun src/server.ts`), prefix with `ALLOW_PASSWORD_AUTH=1`.
+2. **Convex environment** — `bunx convex env set ALLOW_PASSWORD_AUTH 1`. Auto-set by `bun run worktree:create` for new worktrees.
 
-Without both, auth never completes and the app appears stuck. E2E tests (`bun run test:e2e`) handle both automatically via the ephemeral backend.
+Without both, auto-login won't work. The app falls back to anonymous auth if only `ALLOW_ANONYMOUS_AUTH` is set, or shows the sign-in page. E2E tests (`bun run test:e2e`) handle both automatically via the ephemeral backend.
 
-### Missing `?auth` query param
+### Auto-login not triggering
 
-For manual testing (outside the E2E infrastructure), you must include `?auth` in the URL: `http://localhost:<port>?auth`. Without it, anonymous auth never triggers and you get a blank/stuck state with no error message. The E2E test suite handles this internally via `E2E_TEST=1`.
+When `ALLOW_PASSWORD_AUTH=1` is set on both the Bun server and Convex, auto-login as `dev@holophyte.test` happens on any page load — no query param required. If you see the sign-in page and don't want to, check that both locations have the variable set (see [Dev auth not set up](#dev-auth-not-set-up-manual-testing) above).
+
+To intentionally see the sign-in page (e.g. to test the sign-in flow), add `?signin` to the URL: `http://localhost:<port>?signin`. This suppresses auto-login.
 
 ### Password auth tests use a separate Playwright project
 
-`password-auth.spec.ts` runs in a dedicated Playwright project (`password-auth` in `playwright.config.ts`) with empty `storageState` — no pre-authenticated session. Tests use a `gotoSignIn()` helper that intercepts `/config.js` to disable auto-anonymous-auth so the sign-in page renders. If you're adding new auth tests, follow this pattern.
+`password-auth.spec.ts` runs in a dedicated Playwright project (`password-auth` in `playwright.config.ts`) with empty `storageState` — no pre-authenticated session. Tests use a `gotoSignIn()` helper that navigates to `/?signin` to suppress `AutoTestAuth` so the sign-in page renders. If you're adding new auth tests, follow this pattern.
 
 ### Sessions completing too fast
 
