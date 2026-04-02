@@ -107,7 +107,9 @@ describe('KanbanColumn', () => {
     );
 
     expect(
-      screen.getByRole('button', { name: 'Add task disabled for To Do' }),
+      screen.getByRole('button', {
+        name: 'Add task to To Do — add a repository first',
+      }),
     ).toBeDisabled();
   });
 });

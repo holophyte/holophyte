@@ -251,7 +251,7 @@ export function KanbanColumn({
             className="w-full flex items-center justify-center gap-1 py-1.5 rounded-md text-xs text-muted-foreground bg-muted/60 hover:bg-muted hover:text-foreground transition-colors border border-dashed border-muted-foreground/30 disabled:cursor-not-allowed disabled:border-muted-foreground/15 disabled:bg-muted/30 disabled:text-muted-foreground/50 disabled:opacity-100 disabled:hover:bg-muted/30 disabled:hover:text-muted-foreground/50"
             aria-label={
               addTaskDisabled
-                ? `Add task disabled for ${label}`
+                ? `Add task to ${label} — add a repository first`
                 : `Add task to ${label}`
             }
             title={
