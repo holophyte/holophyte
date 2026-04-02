@@ -20,6 +20,13 @@ const LABEL_COLORS = [
   { name: 'Gray', hex: '#6b7280' },
 ];
 
+function getRandomLabelColor() {
+  return (
+    LABEL_COLORS[Math.floor(Math.random() * LABEL_COLORS.length)]?.hex ??
+    '#ef4444'
+  );
+}
+
 interface LabelPickerProps {
   currentLabelIds: Id<'labels'>[];
   onChangeLabelIds: (labelIds: Id<'labels'>[]) => void;
@@ -39,7 +46,7 @@ export function LabelPicker({
   const removeLabel = useMutation(api.labels.remove);
   const [creating, setCreating] = useState(false);
   const [newName, setNewName] = useState('');
-  const [newColor, setNewColor] = useState(LABEL_COLORS[0]?.hex ?? '#ef4444');
+  const [newColor, setNewColor] = useState(getRandomLabelColor);
   const [editingId, setEditingId] = useState<Id<'labels'> | null>(null);
   const [editName, setEditName] = useState('');
   const [editColor, setEditColor] = useState('');
@@ -62,6 +69,7 @@ export function LabelPicker({
     });
     onChangeLabelIds([...currentLabelIds, id]);
     setNewName('');
+    setNewColor(getRandomLabelColor());
     setCreating(false);
   };
 
@@ -117,17 +125,17 @@ export function LabelPicker({
                   className="h-7 text-xs"
                   autoFocus
                 />
-                <div className="flex gap-1 flex-wrap">
+                <div className="flex gap-2 flex-wrap">
                   {LABEL_COLORS.map((c) => (
                     <button
                       key={c.hex}
                       type="button"
                       onClick={() => setEditColor(c.hex)}
                       className={cn(
-                        'h-5 w-5 rounded-sm border-2 transition-colors',
+                        'h-5 w-5 cursor-pointer rounded-sm transition-shadow ring-offset-2 ring-offset-background',
                         editColor === c.hex
-                          ? 'border-foreground'
-                          : 'border-transparent',
+                          ? 'ring-2 ring-ring'
+                          : 'ring-1 ring-transparent',
                       )}
                       style={{ backgroundColor: c.hex }}
                       title={c.name}
@@ -164,7 +172,7 @@ export function LabelPicker({
                 <button
                   type="button"
                   onClick={() => toggleLabel(label._id)}
-                  className="flex items-center gap-2 flex-1 min-w-0 text-left"
+                  className="flex cursor-pointer items-center gap-2 flex-1 min-w-0 text-left"
                 >
                   <span
                     className="h-3 w-3 rounded-sm shrink-0"
@@ -179,7 +187,7 @@ export function LabelPicker({
                   <button
                     type="button"
                     onClick={(e) => startEditing(label, e)}
-                    className="p-0.5 rounded text-muted-foreground hover:text-foreground transition-colors"
+                    className="cursor-pointer p-0.5 rounded text-muted-foreground hover:text-foreground transition-colors"
                     title="Edit tag"
                   >
                     <Pencil className="h-3 w-3" />
@@ -187,7 +195,7 @@ export function LabelPicker({
                   <button
                     type="button"
                     onClick={(e) => handleDelete(label._id, e)}
-                    className="p-0.5 rounded text-muted-foreground hover:text-red-500 transition-colors"
+                    className="cursor-pointer p-0.5 rounded text-muted-foreground hover:text-red-500 transition-colors"
                     title="Delete tag"
                   >
                     <Trash2 className="h-3 w-3" />
@@ -197,6 +205,11 @@ export function LabelPicker({
             ),
           )}
         </div>
+        {labels?.length === 0 && (
+          <p className="mt-1 text-xs text-muted-foreground">
+            No tags exist yet
+          </p>
+        )}
         {creating ? (
           <div className="mt-2 space-y-2 border-t pt-2">
             <Input
@@ -210,17 +223,17 @@ export function LabelPicker({
               className="h-7 text-xs"
               autoFocus
             />
-            <div className="flex gap-1 flex-wrap">
+            <div className="flex gap-2 flex-wrap">
               {LABEL_COLORS.map((c) => (
                 <button
                   key={c.hex}
                   type="button"
                   onClick={() => setNewColor(c.hex)}
                   className={cn(
-                    'h-5 w-5 rounded-sm border-2 transition-colors',
+                    'h-5 w-5 cursor-pointer rounded-sm transition-shadow ring-offset-2 ring-offset-background',
                     newColor === c.hex
-                      ? 'border-foreground'
-                      : 'border-transparent',
+                      ? 'ring-2 ring-ring'
+                      : 'ring-1 ring-transparent',
                   )}
                   style={{ backgroundColor: c.hex }}
                   title={c.name}
@@ -252,6 +265,7 @@ export function LabelPicker({
             onClick={() => {
               setCreating(true);
               setEditingId(null);
+              setNewColor(getRandomLabelColor());
             }}
             className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-sm text-muted-foreground hover:bg-muted transition-colors mt-1 border-t pt-2"
           >
