@@ -117,17 +117,17 @@ export function LabelPicker({
                   className="h-7 text-xs"
                   autoFocus
                 />
-                <div className="flex gap-1 flex-wrap">
+                <div className="flex gap-2 flex-wrap">
                   {LABEL_COLORS.map((c) => (
                     <button
                       key={c.hex}
                       type="button"
                       onClick={() => setEditColor(c.hex)}
                       className={cn(
-                        'h-5 w-5 rounded-sm border-2 transition-colors',
+                        'h-5 w-5 cursor-pointer rounded-sm transition-shadow ring-offset-2 ring-offset-background',
                         editColor === c.hex
-                          ? 'border-foreground'
-                          : 'border-transparent',
+                          ? 'ring-2 ring-ring'
+                          : 'ring-1 ring-transparent',
                       )}
                       style={{ backgroundColor: c.hex }}
                       title={c.name}
@@ -164,7 +164,7 @@ export function LabelPicker({
                 <button
                   type="button"
                   onClick={() => toggleLabel(label._id)}
-                  className="flex items-center gap-2 flex-1 min-w-0 text-left"
+                  className="flex cursor-pointer items-center gap-2 flex-1 min-w-0 text-left"
                 >
                   <span
                     className="h-3 w-3 rounded-sm shrink-0"
@@ -179,7 +179,7 @@ export function LabelPicker({
                   <button
                     type="button"
                     onClick={(e) => startEditing(label, e)}
-                    className="p-0.5 rounded text-muted-foreground hover:text-foreground transition-colors"
+                    className="cursor-pointer p-0.5 rounded text-muted-foreground hover:text-foreground transition-colors"
                     title="Edit tag"
                   >
                     <Pencil className="h-3 w-3" />
@@ -187,7 +187,7 @@ export function LabelPicker({
                   <button
                     type="button"
                     onClick={(e) => handleDelete(label._id, e)}
-                    className="p-0.5 rounded text-muted-foreground hover:text-red-500 transition-colors"
+                    className="cursor-pointer p-0.5 rounded text-muted-foreground hover:text-red-500 transition-colors"
                     title="Delete tag"
                   >
                     <Trash2 className="h-3 w-3" />
@@ -210,17 +210,17 @@ export function LabelPicker({
               className="h-7 text-xs"
               autoFocus
             />
-            <div className="flex gap-1 flex-wrap">
+            <div className="flex gap-2 flex-wrap">
               {LABEL_COLORS.map((c) => (
                 <button
                   key={c.hex}
                   type="button"
                   onClick={() => setNewColor(c.hex)}
                   className={cn(
-                    'h-5 w-5 rounded-sm border-2 transition-colors',
+                    'h-5 w-5 cursor-pointer rounded-sm transition-shadow ring-offset-2 ring-offset-background',
                     newColor === c.hex
-                      ? 'border-foreground'
-                      : 'border-transparent',
+                      ? 'ring-2 ring-ring'
+                      : 'ring-1 ring-transparent',
                   )}
                   style={{ backgroundColor: c.hex }}
                   title={c.name}
@@ -279,7 +279,7 @@ export function LabelDots({
       {visible.map((label) => (
         <span
           key={label._id}
-          className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium text-white"
+          className="inline-flex cursor-pointer items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium text-white"
           style={{ backgroundColor: label.color }}
         >
           {label.name}
