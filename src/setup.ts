@@ -402,8 +402,8 @@ async function main() {
 
     // Validate existing local key against the server
     const localKey = await readApiKeyFile();
-    // null = no key on disk, true = active, false = invalid/expired/revoked
-    let keyStatus: boolean | null = localKey ? null : null;
+    // null = unknown (no key or network error), true = active, false = invalid/expired/revoked
+    let keyStatus: boolean | null = null;
 
     if (localKey) {
       const siteUrl = await loadSiteUrl(convexUrl);
