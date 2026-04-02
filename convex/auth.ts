@@ -72,7 +72,9 @@ export const { auth, signIn, signOut, store, isAuthenticated } = convexAuth({
 
       // Case a: existing account re-sign-in — patch and return
       if (args.existingUserId !== null) {
-        await ctx.db.patch(args.existingUserId, userData);
+        if (Object.keys(userData).length > 0) {
+          await ctx.db.patch(args.existingUserId, userData);
+        }
         return args.existingUserId;
       }
 
