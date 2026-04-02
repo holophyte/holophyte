@@ -211,7 +211,9 @@ export function KanbanBoard() {
 
   const hasNoRepos =
     !selectedRepoId && repos !== undefined && repos.length === 0;
-  const canAddTask = currentRepo !== undefined || (repos?.length ?? 0) > 0;
+  const canAddTask = selectedRepoId
+    ? currentRepo !== undefined
+    : (repos?.length ?? 0) > 0;
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden relative">

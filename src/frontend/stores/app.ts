@@ -149,10 +149,10 @@ export const useAppStore = create<AppState>()(
           const collapsedColumns = new Set(state.collapsedColumns);
           if (collapsedColumns.has(columnId)) {
             collapsedColumns.delete(columnId);
-          } else {
-            collapsedColumns.add(columnId);
+            return { collapsedColumns };
           }
-          return { collapsedColumns };
+          collapsedColumns.add(columnId);
+          return { collapsedColumns, bulkSelectedTaskIds: [] };
         }),
       toggleBacklog: () => get().toggleColumnCollapsed(TaskStatus.Backlog),
       toggleTaskPageDetail: () =>

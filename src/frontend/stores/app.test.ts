@@ -64,6 +64,27 @@ describe('toggleColumnCollapsed', () => {
       false,
     );
   });
+
+  it('clears bulkSelectedTaskIds when collapsing a column', () => {
+    const fakeTaskId2 = 'task111' as Id<'tasks'>;
+    useAppStore.setState({ bulkSelectedTaskIds: [fakeTaskId, fakeTaskId2] });
+
+    // Collapse the Done column (currently expanded)
+    useAppStore.getState().toggleColumnCollapsed(TaskStatus.Done);
+
+    expect(useAppStore.getState().collapsedColumns.has(TaskStatus.Done)).toBe(
+      true,
+    );
+    expect(useAppStore.getState().bulkSelectedTaskIds).toEqual([]);
+
+    // Expand the Done column — bulk selection should remain empty (not restored)
+    useAppStore.getState().toggleColumnCollapsed(TaskStatus.Done);
+
+    expect(useAppStore.getState().collapsedColumns.has(TaskStatus.Done)).toBe(
+      false,
+    );
+    expect(useAppStore.getState().bulkSelectedTaskIds).toEqual([]);
+  });
 });
 
 describe('session actions', () => {
