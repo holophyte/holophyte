@@ -19,6 +19,7 @@ const ApiKey = ConvexCredentials({
   id: 'api-key',
   authorize: async (credentials, ctx) => {
     if (
+      !credentials ||
       typeof credentials.apiKey !== 'string' ||
       typeof credentials.scope !== 'string'
     ) {

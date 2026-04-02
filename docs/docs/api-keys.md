@@ -7,16 +7,16 @@ title: API Keys
 
 API keys let external tools — primarily the companion process and the MCP server — authenticate with Holophyte without going through the browser OAuth flow. They are the preferred auth method for headless and scripted environments.
 
-Currently the only supported scope is `mcp`, which authorizes a key to validate against the `/api/keys/exchange` endpoint used by `setup:companion` and the MCP server.
+Each key can be labeled with a **usage** (e.g. `mcp`) to describe its intended purpose. Usage labels are informational only — a key grants a full user session regardless of which labels are attached.
 
 ## How It Works
 
 ```text
 Web UI → generates key → stores SHA-256 hash in Convex
 Companion / MCP server → reads key from ~/.holophyte/api-key
-                       → POSTs { apiKey, scope } to /api/keys/exchange
-                       → receives { userId } on success
-                       → proceeds with normal token-based Convex auth
+                       → calls auth:signIn (api-key Convex Auth provider)
+                       → receives JWT for the key's owner
+                       → uses JWT with ConvexHttpClient for all calls
 ```
 
 The raw key is only ever held in memory during generation and returned once to the browser. After the dialog is closed, no party — including the server — can recover it. The Convex database stores only the SHA-256 hash.
@@ -26,7 +26,7 @@ The raw key is only ever held in memory during generation and returned once to t
 1. Open the Holophyte web UI and go to **Settings**.
 2. In the **API Keys** section, click **Generate Key**.
 3. Enter a descriptive name (e.g. `My MCP client`).
-4. Check the **MCP** scope (currently the only scope available).
+4. Optionally enter a **Usage** label (e.g. `mcp`) to describe what the key is for.
 5. Click **Generate Key**.
 6. A dialog shows the raw key with a copy button.
 
@@ -52,7 +52,7 @@ When prompted, select option **3** (API Key) or pass `apikey` as an argument:
 bun run setup:companion apikey
 ```
 
-Paste the key when prompted. The script validates the key against the `/api/keys/exchange` endpoint and writes it to `~/.holophyte/api-key` with `0o600` permissions (owner read/write only).
+Paste the key when prompted. The script writes it to `~/.holophyte/api-key` with `0o600` permissions (owner read/write only).
 
 ```text
 Holophyte Setup — Companion Authentication
@@ -77,17 +77,24 @@ The companion and MCP server read `~/.holophyte/api-key` automatically on startu
 
 ## Using the Key with the MCP Server
 
-The MCP server checks `~/.holophyte/api-key` before falling back to the stored OAuth token. If an API key is present and valid, the server validates it on startup and proceeds.
+The MCP server authenticates exclusively via API key. On startup it reads `~/.holophyte/api-key`, calls Convex's `auth:signIn` action using the `api-key` provider, and receives a JWT for the key's owner. That JWT is used for all subsequent Convex queries and mutations via `ConvexHttpClient`.
 
-If the key is revoked or invalid, the MCP server **refuses to start** rather than silently falling back to a different identity. This is intentional — a revoked key should not quietly grant access under a different credential.
+```text
+~/.holophyte/api-key
+        |
+        v
+  auth:signIn (api-key provider)
+        |
+        v
+      JWT
+        |
+        v
+  ConvexHttpClient
+```
 
-Auth priority order in the MCP server:
+To prevent expiry during long sessions, the JWT is refreshed every 30 minutes in the background.
 
-1. API key file (`~/.holophyte/api-key`)
-2. Stored OAuth token (`~/.holophyte/tokens.json` keyed by `CONVEX_DEPLOYMENT`)
-3. Anonymous fallback (only when `ALLOW_ANONYMOUS_AUTH=1`, for local dev)
-
-If you have both an API key file and a stored token, the API key takes precedence. The MCP server will still use the stored token for Convex client auth after API key validation (the exchange endpoint validates identity but does not itself issue a Convex JWT).
+If the key file is missing or the key is invalid (revoked or malformed), the server exits immediately with a clear error message. There is no fallback to a stored token or anonymous auth.
 
 To register the MCP server in Claude Code, see the [MCP Server](mcp-server) page.
 
@@ -99,9 +106,9 @@ The **Settings > API Keys** page lists all your keys with:
 
 - **Name** — the label you gave the key
 - **Status** — `active` or `revoked`
-- **Scopes** — badges showing which scopes the key is authorized for
+- **Usage** — label describing the key's intended purpose
 - **Created** — creation date
-- **Last used** — timestamp of the most recent successful `/api/keys/exchange` call
+- **Last used** — timestamp of the most recent successful authentication with this key
 
 ### Revoking a Key
 
@@ -123,7 +130,7 @@ There is no in-place rotation. To rotate:
 
 **File permissions.** `setup:companion` writes `~/.holophyte/api-key` with mode `0o600` (owner read/write). The `~/.holophyte/` directory itself is created with `0o700`. Do not change these permissions or add the file to version control.
 
-**Scope enforcement.** Each key is issued with a specific set of scopes. The `/api/keys/exchange` endpoint checks that the requested scope is in the key's scope list — a key without the `mcp` scope will be rejected with a `401` even if the key itself is valid.
+**Usage labels are not access restrictions.** The usage field (e.g. `mcp`) is a human-readable label for your own reference. It does not restrict what the key can do — a valid key always grants a full user session. Revoke a key to disable it; there is no partial-access mode.
 
 **Hash algorithm.** Keys are hashed with SHA-256 using the Web Crypto API (`crypto.subtle.digest`). The hash is stored as a 64-character lowercase hex string. The `by_hashed_key` index on the `apiKeys` table makes lookups O(log n).
 
