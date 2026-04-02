@@ -87,19 +87,19 @@ beforeEach(async () => {
     },
   }));
 
-  // auth-token: prevent filesystem reads
+  // auth-token: return a valid API key + JWT so bootstrapAuth succeeds
   vi.doMock('@/server/auth-token', () => ({
-    readApiKeyFile: vi.fn().mockResolvedValue(null),
-    readTokenFile: vi.fn().mockResolvedValue({ status: 'missing' }),
-    signInAnonymous: vi.fn().mockResolvedValue(null),
+    readApiKeyFile: vi.fn().mockResolvedValue(`holo_${'a'.repeat(64)}`),
+    signInWithApiKey: vi.fn().mockResolvedValue({
+      convexUrl: 'http://localhost:3210',
+      token: 'test-jwt',
+      refreshToken: 'test-refresh',
+      ephemeral: true,
+    }),
   }));
 
   // Ensure CONVEX_URL is set so main() doesn't exit early
   process.env.CONVEX_URL = 'http://localhost:3210';
-  // Clear CONVEX_DEPLOYMENT so bootstrapAuth skips token file read
-  delete process.env.CONVEX_DEPLOYMENT;
-  // Clear ALLOW_ANONYMOUS_AUTH so anonymous fallback is skipped
-  delete process.env.ALLOW_ANONYMOUS_AUTH;
 
   // Set up default org resolution — organizations.listByUser returns one org
   mockQuery.mockResolvedValue([
@@ -1148,8 +1148,7 @@ describe('holophyte_board_summary', () => {
 // ── bootstrapAuth behavior ────────────────────────────────────────────
 
 describe('bootstrapAuth', () => {
-  it('sets auth token on client when stored token matches convex url', async () => {
-    // Need a fresh module with deployment + token configured
+  it('authenticates via API key using signInWithApiKey', async () => {
     vi.resetModules();
 
     const mockSetAuthFresh = vi.fn();
@@ -1158,6 +1157,12 @@ describe('bootstrapAuth', () => {
       .mockResolvedValue([
         { _id: 'org1', name: 'Personal', personal: true, role: 'owner' },
       ]);
+    const mockSignInWithApiKey = vi.fn().mockResolvedValue({
+      convexUrl: 'http://localhost:3210',
+      token: 'api-key-jwt',
+      refreshToken: 'api-key-refresh',
+      ephemeral: true,
+    });
 
     vi.doMock('convex/browser', () => ({
       ConvexHttpClient: function ConvexHttpClient() {
@@ -1170,16 +1175,8 @@ describe('bootstrapAuth', () => {
     }));
 
     vi.doMock('@/server/auth-token', () => ({
-      readApiKeyFile: vi.fn().mockResolvedValue(null),
-      readTokenFile: vi.fn().mockResolvedValue({
-        status: 'ok',
-        data: {
-          convexUrl: 'http://localhost:3210',
-          token: 'stored-jwt',
-          refreshToken: 'stored-refresh',
-        },
-      }),
-      signInAnonymous: vi.fn().mockResolvedValue(null),
+      readApiKeyFile: vi.fn().mockResolvedValue(`holo_${'a'.repeat(64)}`),
+      signInWithApiKey: mockSignInWithApiKey,
     }));
 
     vi.doMock('@modelcontextprotocol/sdk/server/mcp.js', async () => {
@@ -1203,44 +1200,33 @@ describe('bootstrapAuth', () => {
     }));
 
     process.env.CONVEX_URL = 'http://localhost:3210';
-    process.env.CONVEX_DEPLOYMENT = 'local-ko_vial-holophyte-9133';
 
     await import('./server');
 
-    expect(mockSetAuthFresh).toHaveBeenCalledWith('stored-jwt');
-
-    delete process.env.CONVEX_DEPLOYMENT;
+    expect(mockSignInWithApiKey).toHaveBeenCalledWith(
+      'http://localhost:3210',
+      `holo_${'a'.repeat(64)}`,
+      'mcp',
+    );
+    expect(mockSetAuthFresh).toHaveBeenCalledWith('api-key-jwt');
   });
 
-  it('calls signInAnonymous when token missing and ALLOW_ANONYMOUS_AUTH=1', async () => {
+  it('exits with code 1 when no API key is found', async () => {
     vi.resetModules();
 
-    const mockSignInAnonymous = vi.fn().mockResolvedValue({
-      convexUrl: 'http://localhost:3210',
-      token: 'anon-jwt',
-      refreshToken: 'anon-refresh',
-      ephemeral: true,
-    });
-    const mockSetAuthFresh = vi.fn();
-
-    vi.doMock('@/server/auth-token', () => ({
-      readApiKeyFile: vi.fn().mockResolvedValue(null),
-      readTokenFile: vi.fn().mockResolvedValue({ status: 'missing' }),
-      signInAnonymous: mockSignInAnonymous,
-    }));
+    const mockExit = vi
+      .spyOn(process, 'exit')
+      .mockImplementation(() => undefined as never);
 
     vi.doMock('convex/browser', () => ({
       ConvexHttpClient: function ConvexHttpClient() {
-        return {
-          query: vi
-            .fn()
-            .mockResolvedValue([
-              { _id: 'org1', name: 'Personal', personal: true, role: 'owner' },
-            ]),
-          mutation: vi.fn(),
-          setAuth: mockSetAuthFresh,
-        };
+        return { query: vi.fn(), mutation: vi.fn(), setAuth: vi.fn() };
       },
+    }));
+
+    vi.doMock('@/server/auth-token', () => ({
+      readApiKeyFile: vi.fn().mockResolvedValue(null),
+      signInWithApiKey: vi.fn().mockResolvedValue(null),
     }));
 
     vi.doMock('@modelcontextprotocol/sdk/server/mcp.js', async () => {
@@ -1264,13 +1250,58 @@ describe('bootstrapAuth', () => {
     }));
 
     process.env.CONVEX_URL = 'http://localhost:3210';
-    process.env.ALLOW_ANONYMOUS_AUTH = '1';
 
     await import('./server');
 
-    expect(mockSignInAnonymous).toHaveBeenCalledWith('http://localhost:3210');
-    expect(mockSetAuthFresh).toHaveBeenCalledWith('anon-jwt');
+    expect(mockExit).toHaveBeenCalledWith(1);
 
-    delete process.env.ALLOW_ANONYMOUS_AUTH;
+    mockExit.mockRestore();
+  });
+
+  it('exits with code 1 when API key sign-in fails', async () => {
+    vi.resetModules();
+
+    const mockExit = vi
+      .spyOn(process, 'exit')
+      .mockImplementation(() => undefined as never);
+
+    vi.doMock('convex/browser', () => ({
+      ConvexHttpClient: function ConvexHttpClient() {
+        return { query: vi.fn(), mutation: vi.fn(), setAuth: vi.fn() };
+      },
+    }));
+
+    vi.doMock('@/server/auth-token', () => ({
+      readApiKeyFile: vi.fn().mockResolvedValue(`holo_${'a'.repeat(64)}`),
+      signInWithApiKey: vi.fn().mockResolvedValue(null),
+    }));
+
+    vi.doMock('@modelcontextprotocol/sdk/server/mcp.js', async () => {
+      const actual = await vi.importActual<
+        typeof import('@modelcontextprotocol/sdk/server/mcp.js')
+      >('@modelcontextprotocol/sdk/server/mcp.js');
+      return actual;
+    });
+
+    vi.doMock('@modelcontextprotocol/sdk/server/stdio.js', () => ({
+      StdioServerTransport: function StdioServerTransport() {
+        return {
+          start: vi.fn().mockResolvedValue(undefined),
+          close: vi.fn().mockResolvedValue(undefined),
+          onmessage: null,
+          onclose: null,
+          onerror: null,
+          send: vi.fn().mockResolvedValue(undefined),
+        };
+      },
+    }));
+
+    process.env.CONVEX_URL = 'http://localhost:3210';
+
+    await import('./server');
+
+    expect(mockExit).toHaveBeenCalledWith(1);
+
+    mockExit.mockRestore();
   });
 });
