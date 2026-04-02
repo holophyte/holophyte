@@ -54,7 +54,7 @@ function CollapsibleColumn({
           : 'w-[260px] min-w-[260px] max-w-[350px] flex-1',
       )}
     >
-      <div aria-hidden={!collapsed} className="contents">
+      <div aria-hidden={!collapsed || undefined} className="contents">
         <button
           type="button"
           onClick={onToggle}

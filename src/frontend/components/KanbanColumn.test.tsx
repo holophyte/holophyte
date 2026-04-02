@@ -63,7 +63,7 @@ describe('KanbanColumn', () => {
       />,
     );
 
-    const addButton = screen.getByRole('button', { name: 'Add' });
+    const addButton = screen.getByRole('button', { name: 'Add task to To Do' });
     const taskCard = screen.getByText('First task');
 
     expect(
@@ -107,7 +107,7 @@ describe('KanbanColumn', () => {
     );
 
     expect(
-      screen.getByRole('button', { name: 'Add disabled for To Do' }),
+      screen.getByRole('button', { name: 'Add task disabled for To Do' }),
     ).toBeDisabled();
   });
 });
