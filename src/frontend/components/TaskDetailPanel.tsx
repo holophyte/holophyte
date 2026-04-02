@@ -83,6 +83,13 @@ export default function TaskDetailPanel({
       const target = event.target;
       if (!(target instanceof HTMLElement) || !panelRef.current) return;
       if (panelRef.current.contains(target)) return;
+      // Radix UI portals render outside the panel DOM — skip clicks inside them
+      if (
+        target.closest(
+          '[data-radix-popper-content-wrapper], [data-radix-portal]',
+        )
+      )
+        return;
       if (
         event
           .composedPath()
