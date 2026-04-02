@@ -23,12 +23,18 @@ test('sidebar shows seed box and projects', async ({ page }) => {
 test('kanban columns are visible', async ({ page }) => {
   await waitForApp(page);
   // Backlog is collapsed by default, so only the other 4 columns show as headers
-  await expect(page.getByRole('heading', { name: 'To Do', exact: true })).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: 'To Do', exact: true }),
+  ).toBeVisible();
   await expect(
     page.getByRole('heading', { name: 'In Progress', exact: true }),
   ).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Review', exact: true })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Done', exact: true })).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: 'Review', exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: 'Done', exact: true }),
+  ).toBeVisible();
 });
 
 test('collapsed backlog strip is visible by default', async ({ page }) => {

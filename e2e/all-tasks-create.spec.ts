@@ -91,9 +91,9 @@ test.describe('All Tasks - Create Task with Repo Picker', () => {
     const taskTitle = `E2E All Tasks Create ${Date.now()}`;
 
     // Click Add on To Do column
-    const todoColumn = page
-      .locator('[role="group"]')
-      .filter({ has: page.getByRole('heading', { name: 'To Do', exact: true }) });
+    const todoColumn = page.locator('[role="group"]').filter({
+      has: page.getByRole('heading', { name: 'To Do', exact: true }),
+    });
     await todoColumn.locator('button', { hasText: 'Add' }).click();
     await expect(page.locator('[role="dialog"]')).toBeVisible({
       timeout: 5000,
