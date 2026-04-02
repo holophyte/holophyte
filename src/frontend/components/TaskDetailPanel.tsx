@@ -5,12 +5,13 @@ import { useNavigate, useParams } from '@tanstack/react-router';
 import { useMutation, useQuery } from 'convex/react';
 import type { FunctionReturnType } from 'convex/server';
 import { ChevronDown, Maximize2, X } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   dateInputToTimestamp,
   formatDuration,
   timestampToDateInput,
 } from '@/frontend/lib/dateUtils';
+import { isEditableElement } from '@/frontend/lib/dom';
 import { cn } from '@/frontend/lib/utils';
 import { ClaudeButton } from './ClaudeButton';
 import { LabelDots, LabelPicker } from './LabelPicker';
@@ -30,19 +31,66 @@ export type TaskDetailTask = NonNullable<
   FunctionReturnType<typeof api.tasks.get>
 >;
 
-export function TaskDetailPanel() {
+interface TaskDetailPanelProps {
+  isOpen?: boolean;
+}
+
+export function TaskDetailPanel({ isOpen = true }: TaskDetailPanelProps = {}) {
   const params = useParams({ strict: false });
   const navigate = useNavigate();
   const repoId = params.repoId as Id<'repos'> | undefined;
   const taskId = params.taskId as Id<'tasks'> | undefined;
   const task = useQuery(api.tasks.get, taskId ? { id: taskId } : 'skip');
+  const panelRef = useRef<HTMLDivElement>(null);
+
+  const closePanel = useCallback(() => {
+    if (!repoId) return;
+    void navigate({ to: '/repos/$repoId', params: { repoId } });
+  }, [navigate, repoId]);
 
   // Close the panel when the task has been deleted (query returns null, not undefined)
   useEffect(() => {
     if (task === null && repoId) {
-      void navigate({ to: '/repos/$repoId', params: { repoId } });
+      closePanel();
     }
-  }, [task, navigate, repoId]);
+  }, [closePanel, task, repoId]);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || event.key !== 'Escape') return;
+
+      const activeElement = document.activeElement;
+      if (
+        panelRef.current &&
+        activeElement &&
+        panelRef.current.contains(activeElement) &&
+        isEditableElement(activeElement)
+      ) {
+        return;
+      }
+
+      closePanel();
+    };
+
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [closePanel]);
+
+  useEffect(() => {
+    const onMouseDown = (event: MouseEvent) => {
+      const target = event.target;
+      if (!(target instanceof HTMLElement) || !panelRef.current) return;
+      if (panelRef.current.contains(target)) return;
+
+      // Let task-card clicks drive route changes without first collapsing the panel.
+      if (target.closest('[data-task-id]')) return;
+
+      closePanel();
+    };
+
+    document.addEventListener('mousedown', onMouseDown);
+    return () => document.removeEventListener('mousedown', onMouseDown);
+  }, [closePanel]);
 
   // Keep previous task visible while the next one loads (but not when deleted)
   const prevTaskRef = useRef<TaskDetailTask | null>(null);
@@ -50,7 +98,14 @@ export function TaskDetailPanel() {
   const displayTask = task === null ? null : (task ?? prevTaskRef.current);
 
   return (
-    <div className="absolute right-0 top-0 bottom-0 w-96 border-l bg-background flex flex-col overflow-hidden shadow-xl z-10">
+    <div
+      ref={panelRef}
+      className={cn(
+        'absolute right-0 top-0 bottom-0 z-10 w-96 border-l bg-background flex flex-col overflow-hidden shadow-xl',
+        'transition-transform duration-300 ease-in-out',
+        isOpen ? 'translate-x-0' : 'translate-x-full',
+      )}
+    >
       <PageHeader className="justify-between">
         <h2 className="font-semibold text-sm">Task Details</h2>
         <div className="flex items-center gap-1">
@@ -72,10 +127,7 @@ export function TaskDetailPanel() {
           <Button
             variant="ghost"
             size="icon"
-            onClick={() =>
-              repoId &&
-              void navigate({ to: '/repos/$repoId', params: { repoId } })
-            }
+            onClick={closePanel}
             aria-label="Close task details"
           >
             <X className="h-4 w-4" />

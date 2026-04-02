@@ -1,6 +1,7 @@
 import { Outlet, useMatch } from '@tanstack/react-router';
 import { Authenticated, AuthLoading, Unauthenticated } from 'convex/react';
 import { Loader2 } from 'lucide-react';
+import { useEffect, useState } from 'react';
 import { useTheme } from '@/frontend/hooks/useTheme';
 import { allowPasswordAuth, e2eTest } from '@/frontend/lib/config';
 import AutoTestAuth from '../components/AutoTestAuth';
@@ -8,6 +9,32 @@ import { CommandPalette } from '../components/CommandPalette';
 import { Sidebar } from '../components/Sidebar';
 import SignInPage from '../components/SignInPage';
 import { TaskDetailPanel } from '../components/TaskDetailPanel';
+
+const PANEL_TRANSITION_MS = 300;
+
+function AnimatedTaskDetailPanel({ open }: { open: boolean }) {
+  const [shouldRender, setShouldRender] = useState(open);
+  const [isVisible, setIsVisible] = useState(false);
+
+  useEffect(() => {
+    if (open) {
+      setShouldRender(true);
+      const frame = window.requestAnimationFrame(() => setIsVisible(true));
+      return () => window.cancelAnimationFrame(frame);
+    }
+
+    setIsVisible(false);
+    const timeoutId = window.setTimeout(
+      () => setShouldRender(false),
+      PANEL_TRANSITION_MS,
+    );
+    return () => window.clearTimeout(timeoutId);
+  }, [open]);
+
+  if (!shouldRender) return null;
+
+  return <TaskDetailPanel isOpen={isVisible} />;
+}
 
 function AuthenticatedLayout() {
   // Show TaskDetailPanel when on the task detail route but NOT on the task page route
@@ -25,10 +52,10 @@ function AuthenticatedLayout() {
   return (
     <div className="flex h-screen bg-background text-foreground relative">
       <Sidebar />
-      <main className="flex-1 flex flex-col overflow-hidden">
+      <main className="relative flex-1 flex flex-col overflow-hidden">
         <Outlet />
+        <AnimatedTaskDetailPanel open={showTaskDetailPanel} />
       </main>
-      {showTaskDetailPanel && <TaskDetailPanel />}
       <CommandPalette />
     </div>
   );
