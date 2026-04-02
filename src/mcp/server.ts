@@ -66,17 +66,27 @@ async function bootstrapAuth(convexUrl: string): Promise<void> {
 
   // Re-authenticate before JWT expires. Convex auth JWTs are short-lived (~1h),
   // but MCP stdio processes can run for hours (e.g. Claude Desktop).
-  // If re-auth fails (key revoked/expired), exit immediately rather than
-  // continuing with a stale JWT that will eventually expire anyway.
+  // Exit only after MAX_CONSECUTIVE_FAILURES in a row — transient network issues
+  // or brief Convex outages should not kill an otherwise healthy session.
   const REFRESH_INTERVAL_MS = 30 * 60 * 1000; // 30 minutes
+  const MAX_CONSECUTIVE_FAILURES = 3;
+  let consecutiveFailures = 0;
   setInterval(async () => {
     const fresh = await signInWithApiKey(convexUrl, apiKey, 'mcp');
     if (!fresh) {
-      console.error(
-        'API key re-authentication failed — key may have been revoked. Shutting down.',
+      consecutiveFailures++;
+      if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
+        console.error(
+          `API key re-authentication failed ${MAX_CONSECUTIVE_FAILURES} times — key may have been revoked. Shutting down.`,
+        );
+        process.exit(1);
+      }
+      console.warn(
+        `API key re-authentication failed (${consecutiveFailures}/${MAX_CONSECUTIVE_FAILURES}) — will retry at next interval.`,
       );
-      process.exit(1);
+      return;
     }
+    consecutiveFailures = 0;
     if (httpClient) {
       httpClient.setAuth(fresh.token);
     }
