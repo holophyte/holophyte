@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import type { Id } from '@convex/_generated/dataModel';
+import { TaskStatus } from '@convex/schema';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { useAppStore } from './app';
 
@@ -8,9 +9,16 @@ beforeEach(() => {
   localStorage.clear();
   useAppStore.setState({
     selectedOrgId: null,
-    backlogCollapsed: true,
+    collapsedColumns: new Set([TaskStatus.Backlog]),
     taskPageDetailCollapsed: false,
     activeSessionId: null,
+    searchQuery: '',
+    filterLabelIds: [],
+    showArchive: false,
+    theme: 'neon',
+    lastUsedRepoId: null,
+    sidebarCollapsed: false,
+    bulkSelectedTaskIds: [],
   });
 });
 
@@ -23,14 +31,38 @@ const fakeTaskId = 'task456' as Id<'tasks'>;
 const fakeOrgId = 'org789' as Id<'organizations'>;
 
 describe('toggleBacklog', () => {
-  it('toggles backlogCollapsed state', () => {
-    expect(useAppStore.getState().backlogCollapsed).toBe(true);
+  it('toggles backlog membership in collapsedColumns', () => {
+    expect(
+      useAppStore.getState().collapsedColumns.has(TaskStatus.Backlog),
+    ).toBe(true);
 
     useAppStore.getState().toggleBacklog();
-    expect(useAppStore.getState().backlogCollapsed).toBe(false);
+    expect(
+      useAppStore.getState().collapsedColumns.has(TaskStatus.Backlog),
+    ).toBe(false);
 
     useAppStore.getState().toggleBacklog();
-    expect(useAppStore.getState().backlogCollapsed).toBe(true);
+    expect(
+      useAppStore.getState().collapsedColumns.has(TaskStatus.Backlog),
+    ).toBe(true);
+  });
+});
+
+describe('toggleColumnCollapsed', () => {
+  it('toggles arbitrary column membership in collapsedColumns', () => {
+    expect(useAppStore.getState().collapsedColumns.has(TaskStatus.Done)).toBe(
+      false,
+    );
+
+    useAppStore.getState().toggleColumnCollapsed(TaskStatus.Done);
+    expect(useAppStore.getState().collapsedColumns.has(TaskStatus.Done)).toBe(
+      true,
+    );
+
+    useAppStore.getState().toggleColumnCollapsed(TaskStatus.Done);
+    expect(useAppStore.getState().collapsedColumns.has(TaskStatus.Done)).toBe(
+      false,
+    );
   });
 });
 
@@ -84,10 +116,14 @@ describe('clearOrgSelection', () => {
 describe('persist', () => {
   it('persists layout preferences', () => {
     useAppStore.getState().toggleBacklog();
+    useAppStore.getState().toggleColumnCollapsed(TaskStatus.Done);
     useAppStore.getState().toggleTaskPageDetail();
 
     const stored = JSON.parse(localStorage.getItem('holophyte-app') ?? '{}');
-    expect(stored.state.backlogCollapsed).toBe(false);
+    expect(stored.state.collapsedColumns).toEqual({
+      __type: 'Set',
+      values: [TaskStatus.Done],
+    });
     expect(stored.state.taskPageDetailCollapsed).toBe(true);
   });
 
@@ -102,6 +138,37 @@ describe('persist', () => {
     const stored = JSON.parse(localStorage.getItem('holophyte-app') ?? '{}');
     expect(stored.state?.selectedRepoId).toBeUndefined();
     expect(stored.state?.viewMode).toBeUndefined();
+  });
+
+  it('migrates legacy backlogCollapsed storage into collapsedColumns', async () => {
+    localStorage.setItem(
+      'holophyte-app',
+      JSON.stringify({
+        state: {
+          backlogCollapsed: true,
+          taskPageDetailCollapsed: false,
+          sidebarCollapsed: false,
+          showArchive: false,
+          lastUsedRepoId: null,
+          theme: 'neon',
+        },
+        version: 4,
+      }),
+    );
+
+    await useAppStore.persist.rehydrate();
+
+    expect(
+      useAppStore.getState().collapsedColumns.has(TaskStatus.Backlog),
+    ).toBe(true);
+
+    const stored = JSON.parse(localStorage.getItem('holophyte-app') ?? '{}');
+    expect(stored.version).toBe(5);
+    expect(stored.state.backlogCollapsed).toBeUndefined();
+    expect(stored.state.collapsedColumns).toEqual({
+      __type: 'Set',
+      values: [TaskStatus.Backlog],
+    });
   });
 });
 

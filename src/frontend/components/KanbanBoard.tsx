@@ -32,7 +32,7 @@ const COLUMNS = [
   { status: TaskStatus.Done, label: 'Done' },
 ];
 
-function BacklogColumn({
+function CollapsibleColumn({
   collapsed,
   onToggle,
   label,
@@ -54,7 +54,6 @@ function BacklogColumn({
           : 'w-[260px] min-w-[260px] max-w-[350px] flex-1',
       )}
     >
-      {/* Collapsed pill — always rendered, fades in/out */}
       <button
         type="button"
         onClick={onToggle}
@@ -77,7 +76,6 @@ function BacklogColumn({
         </span>
         <ChevronsRight className="h-3.5 w-3.5 text-muted-foreground" />
       </button>
-      {/* Expanded content — always rendered, fades in/out */}
       <div
         className={cn(
           'h-full transition-opacity duration-300',
@@ -94,8 +92,9 @@ export function KanbanBoard() {
   const selectedOrgId = useAppStore((s) => s.selectedOrgId);
   const { repoId } = useParams({ strict: false });
   const selectedRepoId = (repoId as Id<'repos'> | undefined) ?? null;
-  const backlogCollapsed = useAppStore((s) => s.backlogCollapsed);
+  const collapsedColumns = useAppStore((s) => s.collapsedColumns);
   const toggleBacklog = useAppStore((s) => s.toggleBacklog);
+  const toggleColumnCollapsed = useAppStore((s) => s.toggleColumnCollapsed);
   const showArchive = useAppStore((s) => s.showArchive);
   const toggleArchive = useAppStore((s) => s.toggleArchive);
   const searchQuery = useAppStore((s) => s.searchQuery);
@@ -199,6 +198,7 @@ export function KanbanBoard() {
 
   const hasNoRepos =
     !selectedRepoId && repos !== undefined && repos.length === 0;
+  const canAddTask = currentRepo !== undefined || (repos?.length ?? 0) > 0;
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden relative">
@@ -236,22 +236,26 @@ export function KanbanBoard() {
       ) : (
         <div className="flex-1 flex gap-4 p-4 overflow-x-auto">
           {COLUMNS.map((col) => {
+            const columnTasks = getColumnTasks(col.status);
+            const isCollapsed = collapsedColumns.has(col.status);
+            const handleToggleCollapse =
+              col.status === TaskStatus.Backlog
+                ? toggleBacklog
+                : () => toggleColumnCollapsed(col.status);
             const columnEl = (
               <KanbanColumn
                 key={col.status}
                 status={col.status}
                 label={col.label}
-                tasks={getColumnTasks(col.status)}
+                tasks={columnTasks}
                 repoMap={repoMap}
                 showRepoBadge={selectedRepoId === null}
-                collapsible={col.status === TaskStatus.Backlog}
+                collapsible={true}
                 variant={
                   col.status === TaskStatus.Backlog ? 'backlog' : 'default'
                 }
                 sortActive={sortPreference !== 'manual'}
-                onCollapse={
-                  col.status === TaskStatus.Backlog ? toggleBacklog : undefined
-                }
+                onCollapse={handleToggleCollapse}
                 onArchiveAll={
                   col.status === TaskStatus.Done && selectedRepoId
                     ? handleArchiveAll
@@ -261,24 +265,21 @@ export function KanbanBoard() {
                   setCreateDialogStatus(col.status);
                   setCreateDialogOpen(true);
                 }}
+                addTaskDisabled={!canAddTask}
               />
             );
 
-            if (col.status === TaskStatus.Backlog) {
-              return (
-                <BacklogColumn
-                  key={col.status}
-                  collapsed={backlogCollapsed}
-                  onToggle={toggleBacklog}
-                  label={col.label}
-                  count={getColumnTasks(col.status).length}
-                >
-                  {columnEl}
-                </BacklogColumn>
-              );
-            }
-
-            return columnEl;
+            return (
+              <CollapsibleColumn
+                key={col.status}
+                collapsed={isCollapsed}
+                onToggle={handleToggleCollapse}
+                label={col.label}
+                count={columnTasks.length}
+              >
+                {columnEl}
+              </CollapsibleColumn>
+            );
           })}
         </div>
       )}

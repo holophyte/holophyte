@@ -21,6 +21,7 @@ interface KanbanColumnProps {
   onCollapse?: () => void;
   onArchiveAll?: () => void;
   onAddTask?: () => void;
+  addTaskDisabled?: boolean;
 }
 
 export function KanbanColumn({
@@ -35,6 +36,7 @@ export function KanbanColumn({
   onCollapse,
   onArchiveAll,
   onAddTask,
+  addTaskDisabled = false,
 }: KanbanColumnProps) {
   const moveTask = useMutation(api.tasks.move);
   const reorderTask = useMutation(api.tasks.reorder);
@@ -248,10 +250,29 @@ export function KanbanColumn({
           )}
         </div>
       </div>
+      {onAddTask && (
+        <div className="px-2 pb-2">
+          <button
+            type="button"
+            onClick={onAddTask}
+            disabled={addTaskDisabled}
+            className="w-full flex items-center justify-center gap-1 py-1.5 rounded-md text-xs text-muted-foreground bg-muted/60 hover:bg-muted hover:text-foreground transition-colors border border-dashed border-muted-foreground/30 disabled:cursor-not-allowed disabled:border-muted-foreground/15 disabled:bg-muted/30 disabled:text-muted-foreground/50 disabled:opacity-100 disabled:hover:bg-muted/30 disabled:hover:text-muted-foreground/50"
+            aria-label={addTaskDisabled ? `Add disabled for ${label}` : 'Add'}
+            title={
+              addTaskDisabled
+                ? 'Add a repository before creating tasks'
+                : undefined
+            }
+          >
+            <Plus className="h-3.5 w-3.5" />
+            Add
+          </button>
+        </div>
+      )}
       {/* biome-ignore lint/a11y/noStaticElementInteractions: mouse-only shortcut, collapse button handles keyboard a11y */}
       <div
         ref={containerRef}
-        className="overflow-y-auto p-2 space-y-2"
+        className="overflow-y-auto px-2 pb-2 space-y-2"
         onMouseDown={handleBackgroundClick}
       >
         {tasks.map((task, i) => (
@@ -269,16 +290,6 @@ export function KanbanColumn({
         ))}
         {dragOver && dropIndex === tasks.length && (
           <div className="h-0.5 bg-primary rounded-full mx-1" />
-        )}
-        {onAddTask && (
-          <button
-            type="button"
-            onClick={onAddTask}
-            className="w-full flex items-center justify-center gap-1 py-1.5 rounded-md text-xs text-muted-foreground bg-muted/60 hover:bg-muted hover:text-foreground transition-colors border border-dashed border-muted-foreground/30"
-          >
-            <Plus className="h-3.5 w-3.5" />
-            Add
-          </button>
         )}
       </div>
     </div>
