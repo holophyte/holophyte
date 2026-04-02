@@ -54,7 +54,8 @@ async function openTaskPage(
   await expect(
     page
       .locator('text=Claude Code Session')
-      .or(page.locator('text=No active session')),
+      .or(page.locator('text=No active session'))
+      .first(),
   ).toBeVisible({ timeout: 10000 });
 }
 
