@@ -16,6 +16,30 @@ function AnimatedTaskDetailPanel({ open }: { open: boolean }) {
   const [shouldRender, setShouldRender] = useState(open);
   const [isVisible, setIsVisible] = useState(open);
   const firstRenderRef = useRef(true);
+  const triggerRef = useRef<HTMLElement | null>(null);
+  const closeBtnRef = useRef<HTMLButtonElement | null>(null);
+
+  // Capture the trigger element on pointerdown, while the panel is not rendered.
+  // This is more reliable than capturing in the open effect (focus may have moved by then).
+  useEffect(() => {
+    if (shouldRender) return;
+    const onPointerDown = (e: PointerEvent) => {
+      const target = e.target;
+      triggerRef.current = target instanceof HTMLElement ? target : null;
+    };
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        const el = document.activeElement;
+        triggerRef.current = el instanceof HTMLElement ? el : null;
+      }
+    };
+    document.addEventListener('pointerdown', onPointerDown);
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('pointerdown', onPointerDown);
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [shouldRender]);
 
   useEffect(() => {
     if (firstRenderRef.current) {
@@ -27,21 +51,33 @@ function AnimatedTaskDetailPanel({ open }: { open: boolean }) {
 
     if (open) {
       setShouldRender(true);
-      const frame = window.requestAnimationFrame(() => setIsVisible(true));
-      return () => window.cancelAnimationFrame(frame);
+      let innerFrame = 0;
+      const outerFrame = window.requestAnimationFrame(() => {
+        setIsVisible(true);
+        innerFrame = window.requestAnimationFrame(() => {
+          closeBtnRef.current?.focus();
+        });
+      });
+      return () => {
+        window.cancelAnimationFrame(outerFrame);
+        window.cancelAnimationFrame(innerFrame);
+      };
     }
 
     setIsVisible(false);
-    const timeoutId = window.setTimeout(
-      () => setShouldRender(false),
-      PANEL_TRANSITION_MS,
-    );
+    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const duration = reduceMotion.matches ? 0 : PANEL_TRANSITION_MS;
+    const timeoutId = window.setTimeout(() => {
+      triggerRef.current?.focus();
+      triggerRef.current = null;
+      setShouldRender(false);
+    }, duration);
     return () => window.clearTimeout(timeoutId);
   }, [open]);
 
   if (!shouldRender) return null;
 
-  return <TaskDetailPanel isOpen={isVisible} />;
+  return <TaskDetailPanel isOpen={isVisible} closeBtnRef={closeBtnRef} />;
 }
 
 function AuthenticatedLayout() {
@@ -76,7 +112,11 @@ export default function RootLayout() {
   );
 
   const spinner = (
-    <div className="flex h-screen items-center justify-center bg-background">
+    <div
+      className="flex h-screen items-center justify-center bg-background"
+      role="status"
+      aria-label="Loading"
+    >
       <Loader2 className="h-8 w-8 motion-safe:animate-spin text-muted-foreground" />
     </div>
   );

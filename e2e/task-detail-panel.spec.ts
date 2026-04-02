@@ -92,7 +92,7 @@ test.describe('Task Detail Panel', () => {
     ).toBeVisible();
     const taskUrl = page.url();
 
-    // Open the label picker popover (portals outside panelRef via data-task-detail-portal)
+    // Open the label picker popover (portals outside panelRef via data-radix-popper-content-wrapper)
     await page.locator('button', { hasText: 'Tags' }).click();
     await page.locator('input[placeholder="Tag name"]').first().click();
     await page.keyboard.press('Escape');
@@ -122,6 +122,34 @@ test.describe('Task Detail Panel', () => {
       page.getByRole('heading', { name: 'Task Details' }),
     ).toBeHidden({ timeout: 2000 });
     await expect(page).toHaveURL(/\/repos\/[^/]+$/);
+  });
+
+  test('clicking inside a label picker portal does not close the panel', async ({
+    page,
+  }) => {
+    await createTask(page, 'E2E Label Picker Portal Click', 'prompt');
+    await page
+      .locator('[data-task-id]', { hasText: 'E2E Label Picker Portal Click' })
+      .first()
+      .click();
+    await expect(
+      page.getByRole('heading', { name: 'Task Details' }),
+    ).toBeVisible();
+    const taskUrl = page.url();
+
+    // Open the label picker popover — portal renders via data-radix-popper-content-wrapper outside panelRef
+    await page.locator('button', { hasText: 'Tags' }).click();
+    await expect(page.locator('input[placeholder="Tag name"]')).toBeVisible({
+      timeout: 5000,
+    });
+
+    // Simulate mousedown inside the portal (outside panelRef in the DOM)
+    await page.locator('input[placeholder="Tag name"]').click();
+
+    await expect(
+      page.getByRole('heading', { name: 'Task Details' }),
+    ).toBeVisible();
+    await expect(page).toHaveURL(taskUrl);
   });
 
   test('clicking another task card keeps the panel open and updates the route', async ({

@@ -96,10 +96,10 @@ describe('TaskDetailPanel', () => {
     expect(mockNavigate).not.toHaveBeenCalled();
   });
 
-  it('does not close when clicking inside a task detail portal', () => {
+  it('does not close when clicking inside a Radix portal wrapper', () => {
     render(
       <>
-        <div data-task-detail-portal="">
+        <div data-radix-popper-content-wrapper="">
           <button type="button">Portal action</button>
         </div>
         <TaskDetailPanel />
@@ -114,12 +114,9 @@ describe('TaskDetailPanel', () => {
   it('closes on Escape when focus is not in an editable control', () => {
     render(<TaskDetailPanel />);
 
-    fireEvent.keyDown(
-      screen.getByRole('button', { name: /close task details/i }),
-      {
-        key: 'Escape',
-      },
-    );
+    fireEvent.keyDown(screen.getByRole('button', { name: /close panel/i }), {
+      key: 'Escape',
+    });
 
     expect(mockNavigate).toHaveBeenCalledWith({
       to: '/repos/$repoId',

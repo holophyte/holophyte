@@ -45,11 +45,7 @@ export function PromptHistory({
           </span>
         </Button>
       </PopoverTrigger>
-      <PopoverContent
-        className="w-80 p-2"
-        align="start"
-        data-task-detail-portal=""
-      >
+      <PopoverContent className="w-80 p-2" align="start">
         <p className="text-xs font-medium text-muted-foreground px-2 pb-1.5">
           Prompt History
         </p>
