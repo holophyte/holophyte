@@ -89,7 +89,7 @@ function CollapsibleColumn({
         </button>
       </div>
       <div
-        aria-hidden={collapsed}
+        aria-hidden={collapsed || undefined}
         className={cn(
           'h-full transition-opacity duration-300',
           collapsed ? 'opacity-0 pointer-events-none' : 'opacity-100 delay-100',
