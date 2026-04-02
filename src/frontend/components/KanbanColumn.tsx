@@ -152,11 +152,6 @@ export function KanbanColumn({
     }
   };
 
-  const handleBackgroundClick = (e: React.MouseEvent) => {
-    if (!onCollapse || e.target !== e.currentTarget) return;
-    onCollapse();
-  };
-
   return (
     // biome-ignore lint/a11y/useSemanticElements: div with role needed for drag-and-drop
     <div
@@ -165,11 +160,10 @@ export function KanbanColumn({
       className={cn(
         'group flex flex-col rounded-lg border',
         variant === 'backlog'
-          ? 'bg-muted/30 border-dashed w-full h-full cursor-pointer'
+          ? 'bg-muted/30 border-dashed w-full h-full'
           : 'flex-1 min-w-[260px] max-w-[350px] bg-muted/50',
         dragOver && 'ring-2 ring-primary/50 bg-muted/80',
       )}
-      onMouseDown={handleBackgroundClick}
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
       onDragOver={handleDragOver}
@@ -269,12 +263,7 @@ export function KanbanColumn({
           </button>
         </div>
       )}
-      {/* biome-ignore lint/a11y/noStaticElementInteractions: mouse-only shortcut, collapse button handles keyboard a11y */}
-      <div
-        ref={containerRef}
-        className="overflow-y-auto px-2 pb-2 space-y-2"
-        onMouseDown={handleBackgroundClick}
-      >
+      <div ref={containerRef} className="overflow-y-auto px-2 pb-2 space-y-2">
         {tasks.map((task, i) => (
           <div key={task._id}>
             {dragOver && dropIndex === i && (

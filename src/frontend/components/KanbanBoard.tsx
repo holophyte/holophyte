@@ -93,7 +93,6 @@ export function KanbanBoard() {
   const { repoId } = useParams({ strict: false });
   const selectedRepoId = (repoId as Id<'repos'> | undefined) ?? null;
   const collapsedColumns = useAppStore((s) => s.collapsedColumns);
-  const toggleBacklog = useAppStore((s) => s.toggleBacklog);
   const toggleColumnCollapsed = useAppStore((s) => s.toggleColumnCollapsed);
   const showArchive = useAppStore((s) => s.showArchive);
   const toggleArchive = useAppStore((s) => s.toggleArchive);
@@ -238,10 +237,8 @@ export function KanbanBoard() {
           {COLUMNS.map((col) => {
             const columnTasks = getColumnTasks(col.status);
             const isCollapsed = collapsedColumns.has(col.status);
-            const handleToggleCollapse =
-              col.status === TaskStatus.Backlog
-                ? toggleBacklog
-                : () => toggleColumnCollapsed(col.status);
+            const handleToggleCollapse = () =>
+              toggleColumnCollapsed(col.status);
             const columnEl = (
               <KanbanColumn
                 key={col.status}
