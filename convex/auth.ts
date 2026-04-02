@@ -18,9 +18,13 @@ const providers = [GitHub, Google] as const;
 const ApiKey = ConvexCredentials({
   id: 'api-key',
   authorize: async (credentials, ctx) => {
-    const apiKey = credentials.apiKey as string | undefined;
-    const scope = credentials.scope as string | undefined;
-    if (!apiKey || !scope) return null;
+    if (
+      typeof credentials.apiKey !== 'string' ||
+      typeof credentials.scope !== 'string'
+    ) {
+      return null;
+    }
+    const { apiKey, scope } = credentials;
     if (!/^holo_[0-9a-f]{64}$/.test(apiKey)) return null;
 
     const hashedKey = await hashApiKey(apiKey);

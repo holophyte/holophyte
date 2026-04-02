@@ -403,10 +403,13 @@ export async function signInWithApiKey(
   apiKey: string,
   scope: string,
 ): Promise<TokenFileData | null> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 10_000);
   try {
     const res = await fetch(`${convexUrl}/api/action`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      signal: controller.signal,
       body: JSON.stringify({
         path: 'auth:signIn',
         args: {
@@ -432,8 +435,14 @@ export async function signInWithApiKey(
     }
     return { convexUrl, token, refreshToken, ephemeral: true };
   } catch (err) {
-    console.error('API key sign-in error:', err);
+    if (err instanceof DOMException && err.name === 'AbortError') {
+      console.error('API key sign-in timed out (10s)');
+    } else {
+      console.error('API key sign-in error:', err);
+    }
     return null;
+  } finally {
+    clearTimeout(timeout);
   }
 }
 

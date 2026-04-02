@@ -63,6 +63,16 @@ async function bootstrapAuth(convexUrl: string): Promise<void> {
   httpClient = new ConvexHttpClient(convexUrl);
   httpClient.setAuth(result.token);
   console.log('MCP server authenticated via API key');
+
+  // Re-authenticate before JWT expires. Convex auth JWTs are short-lived (~1h),
+  // but MCP stdio processes can run for hours (e.g. Claude Desktop).
+  const REFRESH_INTERVAL_MS = 30 * 60 * 1000; // 30 minutes
+  setInterval(async () => {
+    const fresh = await signInWithApiKey(convexUrl, apiKey, 'mcp');
+    if (fresh && httpClient) {
+      httpClient.setAuth(fresh.token);
+    }
+  }, REFRESH_INTERVAL_MS).unref();
 }
 
 /**
