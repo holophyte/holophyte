@@ -66,10 +66,18 @@ async function bootstrapAuth(convexUrl: string): Promise<void> {
 
   // Re-authenticate before JWT expires. Convex auth JWTs are short-lived (~1h),
   // but MCP stdio processes can run for hours (e.g. Claude Desktop).
+  // If re-auth fails (key revoked/expired), exit immediately rather than
+  // continuing with a stale JWT that will eventually expire anyway.
   const REFRESH_INTERVAL_MS = 30 * 60 * 1000; // 30 minutes
   setInterval(async () => {
     const fresh = await signInWithApiKey(convexUrl, apiKey, 'mcp');
-    if (fresh && httpClient) {
+    if (!fresh) {
+      console.error(
+        'API key re-authentication failed — key may have been revoked. Shutting down.',
+      );
+      process.exit(1);
+    }
+    if (httpClient) {
       httpClient.setAuth(fresh.token);
     }
   }, REFRESH_INTERVAL_MS).unref();

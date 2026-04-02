@@ -7,7 +7,7 @@ title: API Keys
 
 API keys let external tools — primarily the companion process and the MCP server — authenticate with Holophyte without going through the browser OAuth flow. They are the preferred auth method for headless and scripted environments.
 
-Each key can be labeled with a **usage** (e.g. `mcp`) to describe its intended purpose. Usage labels are informational only — a key grants a full user session regardless of which labels are attached.
+Each key carries one or more **usage** labels (e.g. `mcp`). The label is checked at authentication time — a key without the `mcp` label cannot authenticate with the MCP server. However, once authenticated, the resulting session has full user access; the label does not restrict which queries or mutations the session can call.
 
 ## How It Works
 
@@ -130,7 +130,7 @@ There is no in-place rotation. To rotate:
 
 **File permissions.** `setup:companion` writes `~/.holophyte/api-key` with mode `0o600` (owner read/write). The `~/.holophyte/` directory itself is created with `0o700`. Do not change these permissions or add the file to version control.
 
-**Usage labels are not access restrictions.** The usage field (e.g. `mcp`) is a human-readable label for your own reference. It does not restrict what the key can do — a valid key always grants a full user session. Revoke a key to disable it; there is no partial-access mode.
+**Usage labels gate authentication, not authorization.** The usage label (e.g. `mcp`) is checked at sign-in time — a key without the matching label will be rejected. However, once authenticated, the session has full user access. The label does not restrict which queries or mutations the session can call. Revoke a key to disable it entirely; there is no partial-access mode.
 
 **Hash algorithm.** Keys are hashed with SHA-256 using the Web Crypto API (`crypto.subtle.digest`). The hash is stored as a 64-character lowercase hex string. The `by_hashed_key` index on the `apiKeys` table makes lookups O(log n).
 
