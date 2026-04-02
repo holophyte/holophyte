@@ -197,6 +197,11 @@ export function LabelPicker({
             ),
           )}
         </div>
+        {labels?.length === 0 && (
+          <p className="mt-1 text-xs text-muted-foreground">
+            No tags exist yet
+          </p>
+        )}
         {creating ? (
           <div className="mt-2 space-y-2 border-t pt-2">
             <Input
