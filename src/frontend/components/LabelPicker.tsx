@@ -202,16 +202,18 @@ export function LabelPicker({
                     onClick={(e) => startEditing(label, e)}
                     className="cursor-pointer p-0.5 rounded text-muted-foreground hover:text-foreground transition-colors"
                     title="Edit tag"
+                    aria-label="Edit tag"
                   >
-                    <Pencil className="h-3 w-3" />
+                    <Pencil className="h-3 w-3" aria-hidden={true} />
                   </button>
                   <button
                     type="button"
                     onClick={(e) => handleDelete(label._id, e)}
                     className="cursor-pointer p-0.5 rounded text-muted-foreground hover:text-red-500 transition-colors"
                     title="Delete tag"
+                    aria-label={`Delete tag ${label.name}`}
                   >
-                    <Trash2 className="h-3 w-3" />
+                    <Trash2 className="h-3 w-3" aria-hidden={true} />
                   </button>
                 </div>
               </div>
