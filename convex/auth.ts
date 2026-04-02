@@ -1,16 +1,47 @@
 import GitHub from '@auth/core/providers/github';
 import Google from '@auth/core/providers/google';
 import { Anonymous } from '@convex-dev/auth/providers/Anonymous';
+import { ConvexCredentials } from '@convex-dev/auth/providers/ConvexCredentials';
 import { Password } from '@convex-dev/auth/providers/Password';
 import { convexAuth } from '@convex-dev/auth/server';
 import { internal } from './_generated/api';
 import type { MutationCtx } from './_generated/server';
+import { hashApiKey } from './lib/apiKeyHash';
 
 const providers = [GitHub, Google] as const;
+
+/**
+ * API key auth provider — validates a raw API key and returns the owning user.
+ * Called via `auth:signIn` with `{ provider: 'api-key', params: { apiKey, scope } }`.
+ * Returns a JWT session token for the key's owner, just like any other auth provider.
+ */
+const ApiKey = ConvexCredentials({
+  id: 'api-key',
+  authorize: async (credentials, ctx) => {
+    if (
+      !credentials ||
+      typeof credentials.apiKey !== 'string' ||
+      typeof credentials.scope !== 'string'
+    ) {
+      return null;
+    }
+    const { apiKey, scope } = credentials;
+    if (!/^holo_[0-9a-f]{64}$/.test(apiKey)) return null;
+
+    const hashedKey = await hashApiKey(apiKey);
+    const result = await ctx.runMutation(internal.apiKeys.validateAndTouch, {
+      hashedKey,
+      scope,
+    });
+    if (!result) return null;
+    return { userId: result.userId };
+  },
+});
 
 export const { auth, signIn, signOut, store, isAuthenticated } = convexAuth({
   providers: [
     ...providers,
+    ApiKey,
     ...(process.env.ALLOW_PASSWORD_AUTH === '1'
       ? [
           Password({
@@ -42,7 +73,9 @@ export const { auth, signIn, signOut, store, isAuthenticated } = convexAuth({
 
       // Case a: existing account re-sign-in — patch and return
       if (args.existingUserId !== null) {
-        await ctx.db.patch(args.existingUserId, userData);
+        if (Object.keys(userData).length > 0) {
+          await ctx.db.patch(args.existingUserId, userData);
+        }
         return args.existingUserId;
       }
 

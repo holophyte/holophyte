@@ -35,7 +35,7 @@ Restart Claude Code. The 10 Holophyte tools should appear in your tool list. Try
 
 The MCP server runs as a **stdio subprocess** spawned by the MCP client. It:
 
-1. Connects to Convex using the same auth flow as the companion (stored token or anonymous fallback)
+1. Authenticates with Convex using the API key from `~/.holophyte/api-key`
 2. Resolves your default organization (prefers personal org)
 3. Exposes 10 tools that map directly to existing Convex queries/mutations
 4. Returns structured JSON responses
@@ -44,12 +44,28 @@ The MCP server runs as a **stdio subprocess** spawned by the MCP client. It:
 
 ## Authentication
 
-The server uses the same auth flow as the companion process:
+The MCP server requires an API key. There is no fallback to anonymous auth or stored OAuth tokens.
 
-1. **Stored token** (from `bun run setup`) — checks `~/.holophyte/tokens.json` for the current `CONVEX_DEPLOYMENT`
-2. **Anonymous fallback** — if `ALLOW_ANONYMOUS_AUTH=1` is set (local dev mode), signs in anonymously
+```
+~/.holophyte/api-key
+        |
+        v
+  auth:signIn (api-key Convex Auth provider)
+        |
+        v
+      JWT
+        |
+        v
+  ConvexHttpClient
+```
 
-For local development with `bun run dev:local`, anonymous auth is automatically enabled.
+On startup the server reads `~/.holophyte/api-key`, calls Convex's `auth:signIn` action using the `api-key` provider, and receives a JWT for the key's owner. That JWT is used for all subsequent Convex queries and mutations via `ConvexHttpClient`.
+
+To prevent expiry during long sessions, the JWT is refreshed every 30 minutes via a background interval.
+
+If the key file is missing or the key is invalid (revoked, malformed), the server exits immediately with a clear error message rather than falling back to a different identity.
+
+To generate an API key, see the [API Keys](api-keys) page.
 
 ## Tools Reference
 
@@ -97,6 +113,7 @@ holophyte_board_summary {}
 
 ## Requirements
 
+- **API key** — An API key must be stored at `~/.holophyte/api-key`. Generate one from **Settings > API Keys** in the web UI and save it with `bun run setup:companion apikey`. The server will not start without a valid key.
 - **Convex backend running** — The MCP server needs a running Convex deployment. `CONVEX_URL` must be set in `.env.local`.
 - **Companion process for sessions** — `holophyte_launch_session` creates a queued session. A running companion (`bun run companion` or `bun run dev:local`) is needed to actually start the SDK process. The tool warns if the companion appears offline.
 
@@ -118,7 +135,7 @@ The MCP server uses `ConvexHttpClient` exclusively (no WebSocket subscriptions).
 
 **"CONVEX_URL not set"** — Ensure `bun run convex:local` or `bun run convex:dev` has been run to create `.env.local`.
 
-**Auth failures** — Run `bun run setup` to create a stored token, or set `ALLOW_ANONYMOUS_AUTH=1` for local dev.
+**Auth failures** — The MCP server requires a valid API key at `~/.holophyte/api-key`. If the file is missing, generate a key from **Settings > API Keys** in the web UI and save it with `bun run setup:companion apikey`. If the key exists but is rejected, it may have been revoked — generate a new one.
 
 **Session stays queued** — The companion process isn't running. Start it with `bun run dev:local` or `bun run companion`.
 

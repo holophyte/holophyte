@@ -19,11 +19,7 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { ConvexHttpClient } from 'convex/browser';
 import { z } from 'zod';
 import { DEFAULT_MODEL } from '@/constants';
-import {
-  readApiKeyFile,
-  readTokenFile,
-  signInAnonymous,
-} from '@/server/auth-token';
+import { readApiKeyFile, signInWithApiKey } from '@/server/auth-token';
 
 // ── Types ────────────────────────────────────────────────────────────
 
@@ -41,97 +37,60 @@ let httpClient: ConvexHttpClient | null = null;
 let defaultOrgId: Id<'organizations'> | null = null;
 
 /**
- * Derives the Convex HTTP site URL from env vars.
- * Uses CONVEX_SITE_URL if set; for cloud deployments, derives from CONVEX_URL
- * by replacing .convex.cloud with .convex.site.
- */
-function deriveSiteUrl(convexUrl: string): string {
-  if (process.env.CONVEX_SITE_URL) {
-    return process.env.CONVEX_SITE_URL.replace(/\/$/, '');
-  }
-  // Cloud: https://foo.convex.cloud → https://foo.convex.site
-  return convexUrl
-    .replace(/\.convex\.cloud$/, '.convex.site')
-    .replace(/\/$/, '');
-}
-
-/**
  * Bootstraps auth and initializes the ConvexHttpClient.
- * Auth priority: API key file → token file → anonymous fallback.
+ * Requires a valid API key in ~/.holophyte/api-key — exits if missing or invalid.
+ *
+ * The API key is exchanged for a proper JWT via the `api-key` Convex Auth provider,
+ * so the MCP client operates as the actual key owner.
  */
 async function bootstrapAuth(convexUrl: string): Promise<void> {
-  const deployment = process.env.CONVEX_DEPLOYMENT;
-  const siteUrl = deriveSiteUrl(convexUrl);
-
-  // 1. Try API key from ~/.holophyte/api-key
   const apiKey = await readApiKeyFile();
-  if (apiKey) {
-    try {
-      const resp = await fetch(`${siteUrl}/api/keys/exchange`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ apiKey, scope: 'mcp' }),
-      });
-      if (resp.ok) {
-        const body = (await resp.json()) as { userId?: string };
-        console.log(
-          `MCP server authenticated via API key (userId: ${body.userId ?? 'unknown'})`,
-        );
-        // API key validated identity — use anonymous auth for the Convex client session.
-        // The key proves who the user is; anonymous auth provides the transport token.
-        const anonResult = await signInAnonymous(convexUrl);
-        if (anonResult) {
-          httpClient = new ConvexHttpClient(convexUrl);
-          httpClient.setAuth(anonResult.token);
-          return;
-        }
-        // If anonymous auth isn't available, fall through to other auth methods
-      } else if (resp.status === 401 || resp.status === 403) {
-        console.error(
-          `API key validation failed (${resp.status}) — falling through to other auth methods`,
-        );
-      } else {
-        console.error(
-          `API key exchange returned unexpected status ${resp.status} — falling through to other auth methods`,
-        );
-      }
-    } catch (err) {
-      console.error(
-        'API key exchange unreachable — falling through to other auth methods:',
-        err,
-      );
-    }
+  if (!apiKey) {
+    console.error(
+      'No API key found. Run `holophyte setup` to generate one, or create one in Settings > API Keys and save it to ~/.holophyte/api-key',
+    );
+    process.exit(1);
   }
 
-  let token: string | null = null;
-
-  // 2. Try token file
-  if (deployment) {
-    const result = await readTokenFile(deployment);
-    if (result.status === 'ok') {
-      const normalize = (u: string) => u.replace(/\/$/, '');
-      if (normalize(result.data.convexUrl) === normalize(convexUrl)) {
-        token = result.data.token;
-        console.log('MCP server authenticated via stored token');
-      } else if (process.env.ALLOW_ANONYMOUS_AUTH === '1') {
-        console.log('Token URL mismatch, falling back to anonymous auth');
-      }
-    }
-  }
-
-  // 3. Anonymous auth fallback
-  if (!token && process.env.ALLOW_ANONYMOUS_AUTH === '1') {
-    const anonResult = await signInAnonymous(convexUrl);
-    if (anonResult) {
-      token = anonResult.token;
-      console.log('MCP server authenticated anonymously (local dev mode)');
-    }
+  const result = await signInWithApiKey(convexUrl, apiKey, 'mcp');
+  if (!result) {
+    console.error(
+      'API key authentication failed. The key may be revoked, expired, or missing the "mcp" scope. Generate a new key in Settings > API Keys.',
+    );
+    process.exit(1);
   }
 
   httpClient = new ConvexHttpClient(convexUrl);
-  if (token) {
-    httpClient.setAuth(token);
-  }
+  httpClient.setAuth(result.token);
+  console.log('MCP server authenticated via API key');
+
+  // Re-authenticate before JWT expires. Convex auth JWTs are short-lived (~1h),
+  // but MCP stdio processes can run for hours (e.g. Claude Desktop).
+  // Exit only after MAX_CONSECUTIVE_FAILURES in a row — transient network issues
+  // or brief Convex outages should not kill an otherwise healthy session.
+  const REFRESH_INTERVAL_MS = 30 * 60 * 1000; // 30 minutes
+  const MAX_CONSECUTIVE_FAILURES = 3;
+  let consecutiveFailures = 0;
+  setInterval(async () => {
+    const fresh = await signInWithApiKey(convexUrl, apiKey, 'mcp');
+    if (!fresh) {
+      consecutiveFailures++;
+      if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
+        console.error(
+          `API key re-authentication failed ${MAX_CONSECUTIVE_FAILURES} times — key may have been revoked. Shutting down.`,
+        );
+        process.exit(1);
+      }
+      console.warn(
+        `API key re-authentication failed (${consecutiveFailures}/${MAX_CONSECUTIVE_FAILURES}) — will retry at next interval.`,
+      );
+      return;
+    }
+    consecutiveFailures = 0;
+    if (httpClient) {
+      httpClient.setAuth(fresh.token);
+    }
+  }, REFRESH_INTERVAL_MS).unref();
 }
 
 /**

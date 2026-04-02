@@ -81,7 +81,7 @@ function GenerateKeyDialog({ open, onOpenChange }: GenerateKeyDialogProps) {
 
     const scopes = mcpScope ? ['mcp'] : [];
     if (scopes.length === 0) {
-      setError('Select at least one scope.');
+      setError('Select at least one usage type.');
       return;
     }
 
@@ -165,7 +165,7 @@ function GenerateKeyDialog({ open, onOpenChange }: GenerateKeyDialogProps) {
                 />
               </div>
               <div className="space-y-2">
-                <Label>Scopes</Label>
+                <Label>Usage</Label>
                 <label className="flex items-center gap-2 text-sm cursor-pointer">
                   <input
                     type="checkbox"
@@ -175,7 +175,7 @@ function GenerateKeyDialog({ open, onOpenChange }: GenerateKeyDialogProps) {
                   />
                   <span>MCP</span>
                   <span className="text-xs text-muted-foreground">
-                    — allows use as an MCP server credential
+                    — for MCP server authentication
                   </span>
                 </label>
               </div>
@@ -271,7 +271,7 @@ function EditKeyDialog({ apiKey, open, onOpenChange }: EditKeyDialogProps) {
               />
             </div>
             <div className="space-y-2">
-              <Label>Scopes</Label>
+              <Label>Usage</Label>
               <label className="flex items-center gap-2 text-sm cursor-pointer">
                 <input
                   type="checkbox"
@@ -281,7 +281,7 @@ function EditKeyDialog({ apiKey, open, onOpenChange }: EditKeyDialogProps) {
                 />
                 <span>MCP</span>
                 <span className="text-xs text-muted-foreground">
-                  — allows use as an MCP server credential
+                  — for MCP server authentication
                 </span>
               </label>
             </div>
@@ -565,7 +565,7 @@ function KeyTableHeader({ revoked = false }: { revoked?: boolean }) {
   return (
     <div className="grid grid-cols-[minmax(8rem,1fr)_3.5rem_10rem_10rem_10rem_6rem] items-center gap-x-4 border-b px-4 py-2.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
       <span>Name</span>
-      <span>Scopes</span>
+      <span>Usage</span>
       <span>Created</span>
       <span>Last used</span>
       <span>Expires</span>

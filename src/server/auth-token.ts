@@ -392,6 +392,61 @@ export async function signInAnonymous(
 }
 
 /**
+ * Signs in via the `api-key` Convex Auth provider.
+ * Exchanges a raw API key for a proper JWT session token.
+ *
+ * Does NOT write to disk — API key sessions are ephemeral (the key itself
+ * is the durable credential stored in ~/.holophyte/api-key).
+ */
+export async function signInWithApiKey(
+  convexUrl: string,
+  apiKey: string,
+  scope: string,
+): Promise<TokenFileData | null> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 10_000);
+  try {
+    const res = await fetch(`${convexUrl}/api/action`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      signal: controller.signal,
+      body: JSON.stringify({
+        path: 'auth:signIn',
+        args: {
+          provider: 'api-key',
+          params: { apiKey, scope },
+        },
+        format: 'json',
+      }),
+    });
+    if (!res.ok) {
+      console.error(`API key sign-in failed (${res.status})`);
+      return null;
+    }
+    const result = await res.json();
+    if (!result?.value?.tokens) {
+      console.error('API key sign-in returned no tokens');
+      return null;
+    }
+    const { token, refreshToken } = result.value.tokens;
+    if (typeof token !== 'string' || typeof refreshToken !== 'string') {
+      console.error('API key sign-in returned invalid token fields');
+      return null;
+    }
+    return { convexUrl, token, refreshToken, ephemeral: true };
+  } catch (err) {
+    if (err instanceof DOMException && err.name === 'AbortError') {
+      console.error('API key sign-in timed out (10s)');
+    } else {
+      console.error('API key sign-in error:', err);
+    }
+    return null;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+/**
  * Creates an AuthTokenFetcher compatible with ConvexClient.setAuth().
  * Handles token refresh when forceRefreshToken is true.
  *
