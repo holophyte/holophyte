@@ -82,7 +82,6 @@ describe('KanbanColumn', () => {
         tasks={[]}
         repoMap={new Map()}
         showRepoBadge={false}
-        collapsible={true}
         onCollapse={onCollapse}
       />,
     );

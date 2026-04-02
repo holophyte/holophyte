@@ -54,29 +54,42 @@ function CollapsibleColumn({
           : 'w-[260px] min-w-[260px] max-w-[350px] flex-1',
       )}
     >
-      <button
-        type="button"
-        onClick={onToggle}
-        aria-label={`Expand ${label} column (${count} tasks)`}
-        aria-hidden={!collapsed}
-        tabIndex={collapsed ? 0 : -1}
-        className={cn(
-          'absolute inset-0 w-10 rounded-lg bg-muted/30 border border-dashed',
-          'flex flex-col items-center justify-center gap-2',
-          'hover:bg-muted/80 cursor-pointer',
-          'transition-opacity duration-300',
-          collapsed ? 'opacity-100 delay-100' : 'opacity-0 pointer-events-none',
-        )}
-      >
-        <span className="text-xs text-muted-foreground bg-muted rounded-full px-1.5 py-0.5">
-          {count}
-        </span>
-        <span className="text-xs font-medium text-muted-foreground [writing-mode:vertical-lr] rotate-180">
-          {label}
-        </span>
-        <ChevronsRight className="h-3.5 w-3.5 text-muted-foreground" />
-      </button>
+      <div aria-hidden={!collapsed} className="contents">
+        <button
+          type="button"
+          onClick={onToggle}
+          aria-label={`Expand ${label} column (${count} tasks)`}
+          tabIndex={collapsed ? 0 : -1}
+          className={cn(
+            'absolute inset-0 w-10 rounded-lg bg-muted/30 border border-dashed',
+            'flex flex-col items-center justify-center gap-2',
+            'hover:bg-muted/80 cursor-pointer',
+            'transition-opacity duration-300',
+            collapsed
+              ? 'opacity-100 delay-100'
+              : 'opacity-0 pointer-events-none',
+          )}
+        >
+          <span
+            aria-hidden="true"
+            className="text-xs text-muted-foreground bg-muted rounded-full px-1.5 py-0.5"
+          >
+            {count}
+          </span>
+          <span
+            aria-hidden="true"
+            className="text-xs font-medium text-muted-foreground [writing-mode:vertical-lr] rotate-180"
+          >
+            {label}
+          </span>
+          <ChevronsRight
+            aria-hidden="true"
+            className="h-3.5 w-3.5 text-muted-foreground"
+          />
+        </button>
+      </div>
       <div
+        aria-hidden={collapsed}
         className={cn(
           'h-full transition-opacity duration-300',
           collapsed ? 'opacity-0 pointer-events-none' : 'opacity-100 delay-100',
@@ -241,13 +254,11 @@ export function KanbanBoard() {
               toggleColumnCollapsed(col.status);
             const columnEl = (
               <KanbanColumn
-                key={col.status}
                 status={col.status}
                 label={col.label}
                 tasks={columnTasks}
                 repoMap={repoMap}
                 showRepoBadge={selectedRepoId === null}
-                collapsible={true}
                 variant={
                   col.status === TaskStatus.Backlog ? 'backlog' : 'default'
                 }

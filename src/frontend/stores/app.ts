@@ -114,7 +114,7 @@ interface AppState {
 
 export const useAppStore = create<AppState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       selectedOrgId: null,
       collapsedColumns: new Set(DEFAULT_COLLAPSED_COLUMNS),
       taskPageDetailCollapsed: false,
@@ -154,16 +154,7 @@ export const useAppStore = create<AppState>()(
           }
           return { collapsedColumns };
         }),
-      toggleBacklog: () =>
-        set((state) => {
-          const collapsedColumns = new Set(state.collapsedColumns);
-          if (collapsedColumns.has(TaskStatus.Backlog)) {
-            collapsedColumns.delete(TaskStatus.Backlog);
-          } else {
-            collapsedColumns.add(TaskStatus.Backlog);
-          }
-          return { collapsedColumns };
-        }),
+      toggleBacklog: () => get().toggleColumnCollapsed(TaskStatus.Backlog),
       toggleTaskPageDetail: () =>
         set((state) => ({
           taskPageDetailCollapsed: !state.taskPageDetailCollapsed,
