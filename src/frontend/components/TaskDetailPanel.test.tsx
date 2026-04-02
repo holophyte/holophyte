@@ -58,7 +58,7 @@ vi.mock('./SubtaskList', () => ({
   SubtaskList: () => <div>Subtasks</div>,
 }));
 
-import { TaskDetailPanel } from './TaskDetailPanel';
+import TaskDetailPanel from './TaskDetailPanel';
 
 describe('TaskDetailPanel', () => {
   beforeEach(() => {
@@ -92,6 +92,21 @@ describe('TaskDetailPanel', () => {
     );
 
     fireEvent.mouseDown(screen.getByRole('button', { name: 'Another task' }));
+
+    expect(mockNavigate).not.toHaveBeenCalled();
+  });
+
+  it('does not close when clicking inside a task detail portal', () => {
+    render(
+      <>
+        <div data-task-detail-portal="">
+          <button type="button">Portal action</button>
+        </div>
+        <TaskDetailPanel />
+      </>,
+    );
+
+    fireEvent.mouseDown(screen.getByRole('button', { name: 'Portal action' }));
 
     expect(mockNavigate).not.toHaveBeenCalled();
   });

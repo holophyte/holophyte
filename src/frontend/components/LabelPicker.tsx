@@ -109,7 +109,11 @@ export function LabelPicker({
           )}
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-60 p-2" align="start">
+      <PopoverContent
+        className="w-60 p-2"
+        align="start"
+        data-task-detail-portal=""
+      >
         <div className="space-y-1">
           {labels?.map((label) =>
             editingId === label._id ? (

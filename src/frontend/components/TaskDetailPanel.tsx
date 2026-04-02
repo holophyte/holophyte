@@ -35,7 +35,9 @@ interface TaskDetailPanelProps {
   isOpen?: boolean;
 }
 
-export function TaskDetailPanel({ isOpen = true }: TaskDetailPanelProps = {}) {
+export default function TaskDetailPanel({
+  isOpen = true,
+}: TaskDetailPanelProps = {}) {
   const params = useParams({ strict: false });
   const navigate = useNavigate();
   const repoId = params.repoId as Id<'repos'> | undefined;
@@ -81,6 +83,17 @@ export function TaskDetailPanel({ isOpen = true }: TaskDetailPanelProps = {}) {
       const target = event.target;
       if (!(target instanceof HTMLElement) || !panelRef.current) return;
       if (panelRef.current.contains(target)) return;
+      if (
+        event
+          .composedPath()
+          .some(
+            (node) =>
+              node instanceof HTMLElement &&
+              node.hasAttribute('data-task-detail-portal'),
+          )
+      ) {
+        return;
+      }
 
       // Let task-card clicks drive route changes without first collapsing the panel.
       if (target.closest('[data-task-id]')) return;
@@ -319,7 +332,11 @@ export function TaskDetailContent({
                 <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
               </button>
             </PopoverTrigger>
-            <PopoverContent className="w-44 p-1" align="start">
+            <PopoverContent
+              className="w-44 p-1"
+              align="start"
+              data-task-detail-portal=""
+            >
               {Object.values(TaskPriority).map((p) => {
                 const config = PRIORITY_CONFIG[p];
                 return (

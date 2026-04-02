@@ -135,7 +135,11 @@ export function PromptTemplatePicker({
             Templates
           </Button>
         </PopoverTrigger>
-        <PopoverContent className="w-72 p-2" align="start">
+        <PopoverContent
+          className="w-72 p-2"
+          align="start"
+          data-task-detail-portal=""
+        >
           {templates && templates.length > 0 ? (
             <div className="space-y-0.5 max-h-60 overflow-y-auto">
               {templates.map((t) => (

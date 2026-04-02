@@ -1,22 +1,30 @@
 import { Outlet, useMatch } from '@tanstack/react-router';
 import { Authenticated, AuthLoading, Unauthenticated } from 'convex/react';
 import { Loader2 } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTheme } from '@/frontend/hooks/useTheme';
 import { allowPasswordAuth, e2eTest } from '@/frontend/lib/config';
 import AutoTestAuth from '../components/AutoTestAuth';
 import { CommandPalette } from '../components/CommandPalette';
 import { Sidebar } from '../components/Sidebar';
 import SignInPage from '../components/SignInPage';
-import { TaskDetailPanel } from '../components/TaskDetailPanel';
+import TaskDetailPanel from '../components/TaskDetailPanel';
 
 const PANEL_TRANSITION_MS = 300;
 
 function AnimatedTaskDetailPanel({ open }: { open: boolean }) {
   const [shouldRender, setShouldRender] = useState(open);
-  const [isVisible, setIsVisible] = useState(false);
+  const [isVisible, setIsVisible] = useState(open);
+  const firstRenderRef = useRef(true);
 
   useEffect(() => {
+    if (firstRenderRef.current) {
+      firstRenderRef.current = false;
+      setShouldRender(open);
+      setIsVisible(open);
+      return;
+    }
+
     if (open) {
       setShouldRender(true);
       const frame = window.requestAnimationFrame(() => setIsVisible(true));
