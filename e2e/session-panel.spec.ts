@@ -160,11 +160,12 @@ test.describe('Session Panel - Theme Rendering', () => {
     'arctic',
   ];
 
-  test.beforeEach(async ({ page }) => {
+  test.beforeEach(async ({ page }, testInfo) => {
     await waitForApp(page);
     await selectRepo(page);
-    await createTask(page, 'E2E Theme Test');
-    await openTaskPage(page, 'E2E Theme Test');
+    const taskTitle = `E2E Theme Test ${testInfo.title}`;
+    await createTask(page, taskTitle);
+    await openTaskPage(page, taskTitle);
   });
 
   for (const theme of themes) {
