@@ -20,6 +20,13 @@ const LABEL_COLORS = [
   { name: 'Gray', hex: '#6b7280' },
 ];
 
+function getRandomLabelColor() {
+  return (
+    LABEL_COLORS[Math.floor(Math.random() * LABEL_COLORS.length)]?.hex ??
+    '#ef4444'
+  );
+}
+
 interface LabelPickerProps {
   currentLabelIds: Id<'labels'>[];
   onChangeLabelIds: (labelIds: Id<'labels'>[]) => void;
@@ -39,7 +46,7 @@ export function LabelPicker({
   const removeLabel = useMutation(api.labels.remove);
   const [creating, setCreating] = useState(false);
   const [newName, setNewName] = useState('');
-  const [newColor, setNewColor] = useState(LABEL_COLORS[0]?.hex ?? '#ef4444');
+  const [newColor, setNewColor] = useState(getRandomLabelColor);
   const [editingId, setEditingId] = useState<Id<'labels'> | null>(null);
   const [editName, setEditName] = useState('');
   const [editColor, setEditColor] = useState('');
@@ -62,6 +69,7 @@ export function LabelPicker({
     });
     onChangeLabelIds([...currentLabelIds, id]);
     setNewName('');
+    setNewColor(getRandomLabelColor());
     setCreating(false);
   };
 
@@ -257,6 +265,7 @@ export function LabelPicker({
             onClick={() => {
               setCreating(true);
               setEditingId(null);
+              setNewColor(getRandomLabelColor());
             }}
             className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-sm text-muted-foreground hover:bg-muted transition-colors mt-1 border-t pt-2"
           >
@@ -284,7 +293,7 @@ export function LabelDots({
       {visible.map((label) => (
         <span
           key={label._id}
-          className="inline-flex cursor-pointer items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium text-white"
+          className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium text-white"
           style={{ backgroundColor: label.color }}
         >
           {label.name}
