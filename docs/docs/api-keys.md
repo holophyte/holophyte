@@ -26,7 +26,7 @@ The raw key is only ever held in memory during generation and returned once to t
 1. Open the Holophyte web UI and go to **Settings**.
 2. In the **API Keys** section, click **Generate Key**.
 3. Enter a descriptive name (e.g. `My MCP client`).
-4. Optionally enter a **Usage** label (e.g. `mcp`) to describe what the key is for.
+4. Select the **MCP** usage label — required for MCP server authentication.
 5. Click **Generate Key**.
 6. A dialog shows the raw key with a copy button.
 
