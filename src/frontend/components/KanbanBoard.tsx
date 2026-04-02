@@ -212,7 +212,7 @@ export function KanbanBoard() {
   const hasNoRepos =
     !selectedRepoId && repos !== undefined && repos.length === 0;
   const canAddTask = selectedRepoId
-    ? currentRepo !== undefined
+    ? repoTasks !== undefined // tasks query resolved → repo exists
     : (repos?.length ?? 0) > 0;
 
   return (
