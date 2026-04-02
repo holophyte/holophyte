@@ -39,6 +39,91 @@ test.describe('Task Detail Panel', () => {
     await selectRepo(page);
   });
 
+  test('Escape closes the panel', async ({ page }) => {
+    await createTask(page, 'E2E Escape Close', 'prompt');
+    await page
+      .locator('[data-task-id]', { hasText: 'E2E Escape Close' })
+      .first()
+      .click();
+    await expect(
+      page.getByRole('heading', { name: 'Task Details' }),
+    ).toBeVisible();
+
+    await page.keyboard.press('Escape');
+
+    await expect(
+      page.getByRole('heading', { name: 'Task Details' }),
+    ).toBeHidden({ timeout: 2000 });
+    await expect(page).toHaveURL(/\/repos\/[^/]+$/);
+  });
+
+  test('Escape does not close panel when title input is focused', async ({
+    page,
+  }) => {
+    await createTask(page, 'E2E Escape Focus', 'prompt');
+    await page
+      .locator('[data-task-id]', { hasText: 'E2E Escape Focus' })
+      .first()
+      .click();
+    await expect(
+      page.getByRole('heading', { name: 'Task Details' }),
+    ).toBeVisible();
+    const taskUrl = page.url();
+
+    await page.locator('#detail-title').click();
+    await page.keyboard.press('Escape');
+
+    await expect(page).toHaveURL(taskUrl);
+    await expect(
+      page.getByRole('heading', { name: 'Task Details' }),
+    ).toBeVisible();
+  });
+
+  test('Escape does not close panel when focused inside a label picker portal', async ({
+    page,
+  }) => {
+    await createTask(page, 'E2E Escape Portal', 'prompt');
+    await page
+      .locator('[data-task-id]', { hasText: 'E2E Escape Portal' })
+      .first()
+      .click();
+    await expect(
+      page.getByRole('heading', { name: 'Task Details' }),
+    ).toBeVisible();
+    const taskUrl = page.url();
+
+    // Open the label picker popover (portals outside panelRef via data-task-detail-portal)
+    await page.locator('button', { hasText: 'Tags' }).click();
+    await page.locator('input[placeholder="Tag name"]').first().click();
+    await page.keyboard.press('Escape');
+
+    await expect(page).toHaveURL(taskUrl);
+    await expect(
+      page.getByRole('heading', { name: 'Task Details' }),
+    ).toBeVisible();
+  });
+
+  test('clicking outside closes the panel', async ({ page }) => {
+    await createTask(page, 'E2E Outside Click', 'prompt');
+    await page
+      .locator('[data-task-id]', { hasText: 'E2E Outside Click' })
+      .first()
+      .click();
+    await expect(
+      page.getByRole('heading', { name: 'Task Details' }),
+    ).toBeVisible();
+
+    // Click on the kanban board background (outside the panel)
+    await page
+      .locator('main')
+      .click({ position: { x: 100, y: 100 }, force: true });
+
+    await expect(
+      page.getByRole('heading', { name: 'Task Details' }),
+    ).toBeHidden({ timeout: 2000 });
+    await expect(page).toHaveURL(/\/repos\/[^/]+$/);
+  });
+
   test('clicking another task card keeps the panel open and updates the route', async ({
     page,
   }) => {

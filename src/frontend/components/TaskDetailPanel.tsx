@@ -58,15 +58,19 @@ export default function TaskDetailPanel({
   }, [closePanel, task, repoId]);
 
   useEffect(() => {
+    if (!isOpen) return;
+
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.defaultPrevented || event.key !== 'Escape') return;
 
       const activeElement = document.activeElement;
       if (
-        panelRef.current &&
-        activeElement &&
-        panelRef.current.contains(activeElement) &&
-        isEditableElement(activeElement)
+        activeElement instanceof HTMLElement &&
+        isEditableElement(activeElement) &&
+        (panelRef.current?.contains(activeElement) ||
+          !!activeElement.closest(
+            '[data-radix-popper-content-wrapper], [data-radix-portal], [data-task-detail-portal]',
+          ))
       ) {
         return;
       }
@@ -76,9 +80,11 @@ export default function TaskDetailPanel({
 
     document.addEventListener('keydown', onKeyDown);
     return () => document.removeEventListener('keydown', onKeyDown);
-  }, [closePanel]);
+  }, [closePanel, isOpen]);
 
   useEffect(() => {
+    if (!isOpen) return;
+
     const onMouseDown = (event: MouseEvent) => {
       const target = event.target;
       if (!(target instanceof HTMLElement) || !panelRef.current) return;
@@ -110,7 +116,7 @@ export default function TaskDetailPanel({
 
     document.addEventListener('mousedown', onMouseDown);
     return () => document.removeEventListener('mousedown', onMouseDown);
-  }, [closePanel]);
+  }, [closePanel, isOpen]);
 
   // Keep previous task visible while the next one loads (but not when deleted)
   const prevTaskRef = useRef<TaskDetailTask | null>(null);
