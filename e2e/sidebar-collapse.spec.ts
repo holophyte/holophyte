@@ -6,7 +6,7 @@ async function waitForApp(page: import('@playwright/test').Page) {
   // Wait for sidebar to stabilize after Convex queries resolve
   await page
     .locator('aside')
-    .getByRole('button', { name: /sidebar/i })
+    .getByRole('button', { name: 'Collapse sidebar' })
     .waitFor({ state: 'visible', timeout: 10000 });
 }
 
