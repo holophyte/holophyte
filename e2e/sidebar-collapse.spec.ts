@@ -73,6 +73,23 @@ test('clicking expand toggle restores sidebar', async ({ page }) => {
   await expect(page.locator('aside').locator('text=All Tasks')).toBeVisible();
 });
 
+test('clicking the Holophyte logo toggles the sidebar', async ({ page }) => {
+  await waitForApp(page);
+
+  const brandToggle = page.getByTestId('sidebar-brand-toggle');
+  await expect(brandToggle).toBeVisible();
+
+  await brandToggle.click();
+  await expect(
+    page.locator('aside').getByRole('button', { name: 'Expand sidebar' }),
+  ).toBeVisible({ timeout: 5000 });
+
+  await page.getByTestId('sidebar-brand-toggle').click();
+  await expect(page.locator('aside').locator('text=Projects')).toBeVisible({
+    timeout: 5000,
+  });
+});
+
 test('Cmd+B keyboard shortcut toggles sidebar', async ({ page }) => {
   await waitForApp(page);
 
