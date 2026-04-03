@@ -23,6 +23,7 @@
     "seed:dev-user": "scripts/seed-dev-user.sh",
     "convex:deploy": "convex deploy",
     "worktree:create": "scripts/worktree-create.sh",
+    "worktree:cleanup": "scripts/worktree-cleanup.sh",
     "pr-comments": "scripts/pr-comments.sh",
     "storybook": "storybook dev -p 6006",
     "setup": "bun run src/setup.ts",

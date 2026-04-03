@@ -64,13 +64,13 @@ The allocation algorithm scans all `~/.holophyte-dev/*/.dev-ports` files and the
 
 ### Worktree Cleanup
 
-To remove a worktree:
-
 ```bash
-# From the main repo
-git worktree remove ~/.holophyte-dev/<feature-name>
-git branch -d feat/<feature-name>  # if branch was merged
+bun run worktree:cleanup <feature-name>   # remove worktree, branch, and kill Convex processes
+bun run worktree:cleanup --list            # show all worktrees with port allocations
+bun run worktree:cleanup --stale           # prune entries whose directories no longer exist
 ```
+
+The cleanup command handles everything: kills any Convex processes running on the worktree's ports, removes the git worktree and directory, prunes stale entries, and deletes the branch.
 
 The local Convex data persists in `~/.local/share/convex/` under the deployment name. This is harmless — it will be reused if you recreate a worktree with the same deployment, or ignored otherwise.
 
@@ -238,4 +238,4 @@ To run E2E without stopping dev Convex, use `bun run test:e2e:isolated` from the
 
 ### `bunx @convex-dev/auth` needs a running backend
 
-`bunx @convex-dev/auth` sets JWT keys on the Convex deployment over HTTP, so it requires a running backend. Fresh worktrees handle this automatically (`worktree-create.sh` starts a temporary backend, runs the command, then stops it). If you ever need to re-run it manually, start `bun run convex:local` in one terminal first, then run `bunx @convex-dev/auth` in another.
+`bunx @convex-dev/auth` sets JWT keys on the Convex deployment over HTTP, so it requires a running backend. Fresh worktrees generate JWT keys directly via `jose` (avoiding `@convex-dev/auth`'s interactive prompts). If you ever need to re-run it manually, start `bun run convex:local` in one terminal first, then run `bunx @convex-dev/auth` in another.
