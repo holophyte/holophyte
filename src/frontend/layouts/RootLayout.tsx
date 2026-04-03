@@ -124,7 +124,7 @@ function AuthenticatedLayout() {
   return (
     <div className="flex h-screen bg-background text-foreground relative">
       <Sidebar />
-      <main className="relative flex-1 flex flex-col overflow-hidden">
+      <main className="relative flex-1 min-w-0 flex flex-col overflow-clip">
         <Outlet />
         <AnimatedTaskDetailPanel
           open={showTaskDetailPanel}
