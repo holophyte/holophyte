@@ -13,7 +13,20 @@ async function selectRepo(page: import('@playwright/test').Page) {
     .filter({ hasText: /e2e-/ })
     .first();
   await repoButton.click();
-  await expect(page.locator('text=To Do')).toBeVisible({ timeout: 10000 });
+
+  // The Zustand store defaults backlogCollapsed: true, so the "To Do" column
+  // starts collapsed. KanbanBoard always renders both the collapsed label and
+  // the heading, so a broad text locator would hit two elements (strict mode
+  // violation). Expand the column first so tests can interact with it.
+  await page.waitForSelector('[role="group"]', { timeout: 10000 });
+  const expandBtn = page.getByRole('button', { name: /Expand To Do column/ });
+  if ((await expandBtn.count()) > 0) {
+    await expandBtn.click();
+  }
+
+  await expect(page.getByRole('heading', { name: 'To Do' })).toBeVisible({
+    timeout: 5000,
+  });
 }
 
 async function createTask(
