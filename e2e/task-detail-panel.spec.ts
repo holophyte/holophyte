@@ -94,6 +94,7 @@ test.describe('Task Detail Panel', () => {
 
     // Open the label picker popover (portals outside panelRef via data-radix-popper-content-wrapper)
     await page.locator('button', { hasText: 'Tags' }).click();
+    await page.locator('button', { hasText: 'Create new tag' }).click();
     await page.locator('input[placeholder="Tag name"]').first().click();
     await page.keyboard.press('Escape');
 
@@ -139,6 +140,7 @@ test.describe('Task Detail Panel', () => {
 
     // Open the label picker popover — portal renders via data-radix-popper-content-wrapper outside panelRef
     await page.locator('button', { hasText: 'Tags' }).click();
+    await page.locator('button', { hasText: 'Create new tag' }).click();
     await expect(page.locator('input[placeholder="Tag name"]')).toBeVisible({
       timeout: 5000,
     });

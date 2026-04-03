@@ -12,7 +12,15 @@ import TaskDetailPanel from '../components/TaskDetailPanel';
 
 const PANEL_TRANSITION_MS = 300;
 
-function AnimatedTaskDetailPanel({ open }: { open: boolean }) {
+function AnimatedTaskDetailPanel({
+  open,
+  taskId,
+  skipFocusRestore,
+}: {
+  open: boolean;
+  taskId?: string;
+  skipFocusRestore: boolean;
+}) {
   const [shouldRender, setShouldRender] = useState(open);
   const [isVisible, setIsVisible] = useState(open);
   const firstRenderRef = useRef(true);
@@ -41,11 +49,26 @@ function AnimatedTaskDetailPanel({ open }: { open: boolean }) {
     };
   }, [shouldRender]);
 
+  // Keep triggerRef in sync when the user switches task cards while the panel is already open.
+  useEffect(() => {
+    if (!shouldRender || !taskId) return;
+    const card = document.querySelector(`[data-task-id="${taskId}"]`);
+    if (card instanceof HTMLElement) {
+      triggerRef.current = card;
+    }
+  }, [taskId, shouldRender]);
+
   useEffect(() => {
     if (firstRenderRef.current) {
       firstRenderRef.current = false;
       setShouldRender(open);
       setIsVisible(open);
+      if (open) {
+        const innerFrame = window.requestAnimationFrame(() => {
+          closeBtnRef.current?.focus();
+        });
+        return () => window.cancelAnimationFrame(innerFrame);
+      }
       return;
     }
 
@@ -68,12 +91,14 @@ function AnimatedTaskDetailPanel({ open }: { open: boolean }) {
     const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
     const duration = reduceMotion.matches ? 0 : PANEL_TRANSITION_MS;
     const timeoutId = window.setTimeout(() => {
-      triggerRef.current?.focus();
+      if (!skipFocusRestore) {
+        triggerRef.current?.focus();
+      }
       triggerRef.current = null;
       setShouldRender(false);
     }, duration);
     return () => window.clearTimeout(timeoutId);
-  }, [open]);
+  }, [open, skipFocusRestore]);
 
   if (!shouldRender) return null;
 
@@ -92,13 +117,20 @@ function AuthenticatedLayout() {
   });
 
   const showTaskDetailPanel = !!taskDetailMatch && !taskPageMatch;
+  // Don't restore focus when closing due to "Expand to full page" navigation
+  const skipFocusRestore = !!taskPageMatch;
+  const taskId = taskDetailMatch?.params.taskId;
 
   return (
     <div className="flex h-screen bg-background text-foreground relative">
       <Sidebar />
       <main className="relative flex-1 flex flex-col overflow-hidden">
         <Outlet />
-        <AnimatedTaskDetailPanel open={showTaskDetailPanel} />
+        <AnimatedTaskDetailPanel
+          open={showTaskDetailPanel}
+          taskId={taskId}
+          skipFocusRestore={skipFocusRestore}
+        />
       </main>
       <CommandPalette />
     </div>
