@@ -216,11 +216,7 @@ export function KanbanBoard() {
       );
     }
 
-    return sortTasks(
-      filtered,
-      sortPreference,
-      sortOrder as string[] | undefined,
-    );
+    return sortTasks(filtered, sortPreference, sortOrder?.map(String));
   };
 
   const archiveAllDone = useMutation(api.tasks.archiveAllDone);

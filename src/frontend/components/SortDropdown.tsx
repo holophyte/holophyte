@@ -54,7 +54,9 @@ export default function SortDropdown({
           size="sm"
           variant="ghost"
           className="h-8 px-2 gap-1.5"
-          aria-label="Sort tasks"
+          aria-label={
+            value === 'auto' ? 'Sort tasks — AI auto sort active' : 'Sort tasks'
+          }
         >
           <ArrowUpDown className="h-3.5 w-3.5" aria-hidden="true" />
           <span>{current?.label}</span>
@@ -72,7 +74,9 @@ export default function SortDropdown({
             const isActive = option.value === value;
             return (
               <Fragment key={option.value}>
-                {option.value === 'auto' && <div className="border-t my-1" />}
+                {option.value === 'auto' && (
+                  <div role="none" className="border-t my-1" />
+                )}
                 <button
                   type="button"
                   role="menuitemradio"
@@ -104,10 +108,13 @@ export default function SortDropdown({
         </div>
         {value === 'auto' && (
           <>
-            <div className="border-t my-1" />
+            <div role="none" className="border-t my-1" />
             <button
               type="button"
               disabled={autoSortLoading}
+              aria-label={
+                autoSortLoading ? 'Sorting in progress' : 'Refresh auto sort'
+              }
               onClick={() => {
                 onRefreshAutoSort?.();
                 setOpen(false);

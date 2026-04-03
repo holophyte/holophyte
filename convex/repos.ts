@@ -78,16 +78,11 @@ export const updateSortPreference = mutation({
     if (!repo) throw new Error('Repo not found');
     const { membership } = await requireOrgMembership(ctx, repo.orgId);
     requireRole(membership, 'member');
-    const patch: {
-      sortPreference: typeof args.sortPreference;
-      sortOrder?: undefined;
-    } = {
+    await ctx.db.patch(args.id, {
       sortPreference: args.sortPreference,
-    };
-    if (args.sortPreference !== 'auto') {
-      patch.sortOrder = undefined;
-    }
-    await ctx.db.patch(args.id, patch);
+      // Clear stale AI sort order when switching away from auto
+      ...(args.sortPreference !== 'auto' && { sortOrder: undefined }),
+    });
   },
 });
 

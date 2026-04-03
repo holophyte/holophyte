@@ -185,4 +185,57 @@ describe('sortTasks', () => {
       expect(tasks).toEqual(original);
     });
   });
+
+  describe('auto', () => {
+    it('returns unsorted when no sortOrder provided', () => {
+      const tasks = [
+        makeTask({ _id: 'c', position: 1 }),
+        makeTask({ _id: 'a', position: 2 }),
+        makeTask({ _id: 'b', position: 3 }),
+      ];
+      const result = sortTasks(tasks, 'auto');
+      expect(result.map((t) => t._id)).toEqual(['c', 'a', 'b']);
+    });
+
+    it('sorts by sortOrder index', () => {
+      const tasks = [
+        makeTask({ _id: 'c', position: 1 }),
+        makeTask({ _id: 'a', position: 2 }),
+        makeTask({ _id: 'b', position: 3 }),
+      ];
+      const result = sortTasks(tasks, 'auto', ['a', 'b', 'c']);
+      expect(result.map((t) => t._id)).toEqual(['a', 'b', 'c']);
+    });
+
+    it('tasks not in sortOrder fall to end, ordered by position', () => {
+      const tasks = [
+        makeTask({ _id: 'x', position: 3 }),
+        makeTask({ _id: 'a', position: 2 }),
+        makeTask({ _id: 'y', position: 1 }),
+        makeTask({ _id: 'b', position: 4 }),
+      ];
+      const result = sortTasks(tasks, 'auto', ['a', 'b']);
+      expect(result.map((t) => t._id)).toEqual(['a', 'b', 'y', 'x']);
+    });
+
+    it('empty sortOrder returns tasks in original order', () => {
+      const tasks = [
+        makeTask({ _id: 'c', position: 1 }),
+        makeTask({ _id: 'a', position: 2 }),
+        makeTask({ _id: 'b', position: 3 }),
+      ];
+      const result = sortTasks(tasks, 'auto', []);
+      expect(result.map((t) => t._id)).toEqual(['c', 'a', 'b']);
+    });
+
+    it('does not mutate the input array', () => {
+      const tasks = [
+        makeTask({ _id: 'b', position: 1 }),
+        makeTask({ _id: 'a', position: 2 }),
+      ];
+      const original = [...tasks];
+      sortTasks(tasks, 'auto', ['a', 'b']);
+      expect(tasks).toEqual(original);
+    });
+  });
 });

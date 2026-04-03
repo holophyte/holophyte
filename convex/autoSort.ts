@@ -12,13 +12,11 @@ export const run = action({
     const userId = await getAuthUserId(ctx);
     if (!userId) throw new Error('Not authenticated');
 
-    // Verify user has access to this repo
     await ctx.runQuery(internal.repos.verifyRepoAccess, {
       repoId: args.repoId,
       userId,
     });
 
-    // Load visible, non-archived tasks
     const tasks = await ctx.runQuery(internal.tasks.listByRepoInternal, {
       repoId: args.repoId,
       userId,
@@ -32,7 +30,6 @@ export const run = action({
       return;
     }
 
-    // Build compact payload for Claude
     const taskPayload = tasks.map((t) => ({
       id: t._id,
       title: t.title,
@@ -44,13 +41,16 @@ export const run = action({
     }));
 
     const apiKey = process.env.ANTHROPIC_API_KEY;
-    if (!apiKey) throw new Error('ANTHROPIC_API_KEY not configured');
+    if (!apiKey)
+      throw new Error(
+        'ANTHROPIC_API_KEY not configured. Set it via: bunx convex env set ANTHROPIC_API_KEY <key>',
+      );
 
     const client = new Anthropic({ apiKey });
 
     const response = await client.messages.create({
       model: 'claude-haiku-4-5-20250315',
-      max_tokens: 4096,
+      max_tokens: 1024,
       system: `You are a task prioritization assistant. Given a list of tasks with their metadata, return them ordered for optimal focus and momentum:
 - High-priority and urgent tasks first
 - Quick wins (short description, clear scope) surfaced early within each priority tier
@@ -61,12 +61,11 @@ Return ONLY a JSON array of task ID strings in the optimal order. No explanation
       messages: [
         {
           role: 'user',
-          content: `Order these tasks for optimal focus and momentum. Return a JSON array of task IDs:\n\n${JSON.stringify(taskPayload, null, 2)}`,
+          content: JSON.stringify(taskPayload, null, 2),
         },
       ],
     });
 
-    // Parse response
     const textBlock = response.content.find((b) => b.type === 'text');
     if (!textBlock || textBlock.type !== 'text') {
       throw new Error('No text response from Claude');
@@ -79,11 +78,13 @@ Return ONLY a JSON array of task ID strings in the optimal order. No explanation
       throw new Error('Failed to parse Claude response as JSON');
     }
 
-    if (!Array.isArray(sortedIds)) {
-      throw new Error('Claude response is not an array');
+    if (
+      !Array.isArray(sortedIds) ||
+      !sortedIds.every((id) => typeof id === 'string')
+    ) {
+      throw new Error('Claude response is not an array of strings');
     }
 
-    // Validate all IDs exist in our task set and build a typed array
     const taskById = new Map(tasks.map((t) => [t._id as string, t._id]));
     const seen = new Set<string>();
     const finalOrder: Array<(typeof tasks)[number]['_id']> = [];
