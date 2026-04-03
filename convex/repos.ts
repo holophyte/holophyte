@@ -1,5 +1,10 @@
 import { v } from 'convex/values';
-import { mutation, query } from './_generated/server';
+import {
+  internalMutation,
+  internalQuery,
+  mutation,
+  query,
+} from './_generated/server';
 import { requireOrgMembership, requireRole } from './lib/auth';
 import { sortPreferenceValidator } from './schema';
 
@@ -73,7 +78,42 @@ export const updateSortPreference = mutation({
     if (!repo) throw new Error('Repo not found');
     const { membership } = await requireOrgMembership(ctx, repo.orgId);
     requireRole(membership, 'member');
-    await ctx.db.patch(args.id, { sortPreference: args.sortPreference });
+    const patch: {
+      sortPreference: typeof args.sortPreference;
+      sortOrder?: undefined;
+    } = {
+      sortPreference: args.sortPreference,
+    };
+    if (args.sortPreference !== 'auto') {
+      patch.sortOrder = undefined;
+    }
+    await ctx.db.patch(args.id, patch);
+  },
+});
+
+export const verifyRepoAccess = internalQuery({
+  args: { repoId: v.id('repos'), userId: v.id('users') },
+  handler: async (ctx, args) => {
+    const repo = await ctx.db.get(args.repoId);
+    if (!repo) throw new Error('Repo not found');
+    const membership = await ctx.db
+      .query('memberships')
+      .withIndex('by_user_org', (q) =>
+        q.eq('userId', args.userId).eq('orgId', repo.orgId),
+      )
+      .first();
+    if (!membership) throw new Error('Not a member of this organization');
+    return repo;
+  },
+});
+
+export const updateSortOrder = internalMutation({
+  args: {
+    id: v.id('repos'),
+    sortOrder: v.array(v.id('tasks')),
+  },
+  handler: async (ctx, args) => {
+    await ctx.db.patch(args.id, { sortOrder: args.sortOrder });
   },
 });
 

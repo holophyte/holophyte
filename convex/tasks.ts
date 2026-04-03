@@ -1,6 +1,6 @@
 import { v } from 'convex/values';
 import type { Doc, Id } from './_generated/dataModel';
-import { mutation, query } from './_generated/server';
+import { internalQuery, mutation, query } from './_generated/server';
 import { requireOrgMembership, requireRole } from './lib/auth';
 import { priorityValidator, TaskStatus, taskStatusValidator } from './schema';
 
@@ -15,6 +15,18 @@ function requirePrivateOwnership(task: Doc<'tasks'>, userId: Id<'users'>) {
     throw new Error("Cannot modify another user's private task");
   }
 }
+
+export const listByRepoInternal = internalQuery({
+  args: { repoId: v.id('repos'), userId: v.id('users') },
+  handler: async (ctx, args) => {
+    const tasks = await ctx.db
+      .query('tasks')
+      .withIndex('by_repo_status', (q) => q.eq('repoId', args.repoId))
+      .collect();
+    const visible = filterPrivate(tasks, args.userId);
+    return visible.filter((t) => t.status !== TaskStatus.Archived);
+  },
+});
 
 export const listByRepo = query({
   args: { repoId: v.id('repos'), includeArchived: v.optional(v.boolean()) },

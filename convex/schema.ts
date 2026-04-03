@@ -62,7 +62,8 @@ export type SortPreference =
   | 'priority'
   | 'dueDate'
   | 'newest'
-  | 'oldest';
+  | 'oldest'
+  | 'auto';
 
 export const sortPreferenceValidator = v.union(
   v.literal('manual'),
@@ -70,6 +71,7 @@ export const sortPreferenceValidator = v.union(
   v.literal('dueDate'),
   v.literal('newest'),
   v.literal('oldest'),
+  v.literal('auto'),
 );
 
 export const roleValidator = v.union(
@@ -103,6 +105,7 @@ export default defineSchema({
     createdAt: v.number(),
     orgId: v.id('organizations'),
     sortPreference: v.optional(sortPreferenceValidator),
+    sortOrder: v.optional(v.array(v.id('tasks'))),
   })
     .index('by_path', ['path'])
     .index('by_org', ['orgId']),

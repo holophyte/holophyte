@@ -10,6 +10,7 @@
 
 import type * as apiKeys from "../apiKeys.js";
 import type * as auth from "../auth.js";
+import type * as autoSort from "../autoSort.js";
 import type * as companion from "../companion.js";
 import type * as crons from "../crons.js";
 import type * as http from "../http.js";
@@ -40,6 +41,7 @@ import type {
 declare const fullApi: ApiFromModules<{
   apiKeys: typeof apiKeys;
   auth: typeof auth;
+  autoSort: typeof autoSort;
   companion: typeof companion;
   crons: typeof crons;
   http: typeof http;
