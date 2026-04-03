@@ -48,7 +48,7 @@ function CollapsibleColumn({
   return (
     <div
       className={cn(
-        'relative shrink-0 transition-[width,min-width,max-width,flex] duration-300 ease-in-out overflow-hidden',
+        'relative shrink-0 h-full transition-[width,min-width,max-width,flex] duration-300 ease-in-out overflow-hidden',
         collapsed
           ? 'w-10 min-w-[40px] max-w-[40px] flex-none'
           : 'w-[260px] min-w-[260px] max-w-[350px] flex-1',
