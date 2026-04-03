@@ -140,6 +140,7 @@ export function Sidebar() {
               className="h-7 w-7 shrink-0"
               onClick={toggleSidebar}
               aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+              data-testid="sidebar-toggle"
             >
               {collapsed ? (
                 <PanelLeftOpen className="h-4 w-4" />
