@@ -5,19 +5,26 @@ import { useNavigate, useParams } from '@tanstack/react-router';
 import { useMutation, useQuery } from 'convex/react';
 import type { FunctionReturnType } from 'convex/server';
 import { ChevronDown, Maximize2, X } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import {
+  type RefObject,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from 'react';
 import {
   dateInputToTimestamp,
   formatDuration,
   timestampToDateInput,
 } from '@/frontend/lib/dateUtils';
+import { isEditableElement } from '@/frontend/lib/dom';
 import { cn } from '@/frontend/lib/utils';
 import { ClaudeButton } from './ClaudeButton';
 import { LabelDots, LabelPicker } from './LabelPicker';
 import { PromptHistory } from './PromptHistory';
 import { PromptTemplatePicker } from './PromptTemplatePicker';
 import { SubtaskList } from './SubtaskList';
-import Button from './ui/Button';
+import Button, { buttonVariants } from './ui/Button';
 import Input from './ui/Input';
 import Label from './ui/Label';
 import PageHeader from './ui/PageHeader';
@@ -30,19 +37,83 @@ export type TaskDetailTask = NonNullable<
   FunctionReturnType<typeof api.tasks.get>
 >;
 
-export function TaskDetailPanel() {
+interface TaskDetailPanelProps {
+  isOpen?: boolean;
+  closeBtnRef?: RefObject<HTMLButtonElement | null>;
+}
+
+export default function TaskDetailPanel({
+  isOpen = true,
+  closeBtnRef,
+}: TaskDetailPanelProps) {
   const params = useParams({ strict: false });
   const navigate = useNavigate();
   const repoId = params.repoId as Id<'repos'> | undefined;
   const taskId = params.taskId as Id<'tasks'> | undefined;
   const task = useQuery(api.tasks.get, taskId ? { id: taskId } : 'skip');
+  const panelRef = useRef<HTMLElement>(null);
+
+  const closePanel = useCallback(() => {
+    if (!repoId) return;
+    void navigate({ to: '/repos/$repoId', params: { repoId } });
+  }, [navigate, repoId]);
 
   // Close the panel when the task has been deleted (query returns null, not undefined)
   useEffect(() => {
     if (task === null && repoId) {
-      void navigate({ to: '/repos/$repoId', params: { repoId } });
+      closePanel();
     }
-  }, [task, navigate, repoId]);
+  }, [closePanel, task, repoId]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || event.key !== 'Escape') return;
+
+      const activeElement = document.activeElement;
+      if (
+        activeElement instanceof HTMLElement &&
+        isEditableElement(activeElement) &&
+        (panelRef.current?.contains(activeElement) ||
+          !!activeElement.closest(
+            '[data-radix-popper-content-wrapper], [data-radix-portal]',
+          ))
+      ) {
+        return;
+      }
+
+      closePanel();
+    };
+
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [closePanel, isOpen]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const onMouseDown = (event: MouseEvent) => {
+      const target = event.target;
+      if (!(target instanceof Element) || !panelRef.current) return;
+      if (panelRef.current.contains(target)) return;
+      // Radix UI portals render outside the panel DOM — skip clicks inside them
+      if (
+        target.closest(
+          '[data-radix-popper-content-wrapper], [data-radix-portal]',
+        )
+      )
+        return;
+
+      // Let task-card clicks drive route changes without first collapsing the panel.
+      if (target.closest('[data-task-id]')) return;
+
+      closePanel();
+    };
+
+    document.addEventListener('mousedown', onMouseDown);
+    return () => document.removeEventListener('mousedown', onMouseDown);
+  }, [closePanel, isOpen]);
 
   // Keep previous task visible while the next one loads (but not when deleted)
   const prevTaskRef = useRef<TaskDetailTask | null>(null);
@@ -50,9 +121,19 @@ export function TaskDetailPanel() {
   const displayTask = task === null ? null : (task ?? prevTaskRef.current);
 
   return (
-    <div className="absolute right-0 top-0 bottom-0 w-96 border-l bg-background flex flex-col overflow-hidden shadow-xl z-10">
+    <section
+      ref={panelRef}
+      aria-labelledby="task-detail-heading"
+      className={cn(
+        'absolute right-0 top-0 bottom-0 z-10 w-96 border-l bg-background flex flex-col overflow-hidden shadow-xl',
+        'transition-transform duration-300 ease-in-out motion-reduce:transition-none',
+        isOpen ? 'translate-x-0' : 'translate-x-full',
+      )}
+    >
       <PageHeader className="justify-between">
-        <h2 className="font-semibold text-sm">Task Details</h2>
+        <h2 id="task-detail-heading" className="font-semibold text-sm">
+          Task Details
+        </h2>
         <div className="flex items-center gap-1">
           {taskId && repoId && (
             <Button
@@ -69,17 +150,15 @@ export function TaskDetailPanel() {
               <Maximize2 className="h-3.5 w-3.5" />
             </Button>
           )}
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() =>
-              repoId &&
-              void navigate({ to: '/repos/$repoId', params: { repoId } })
-            }
-            aria-label="Close task details"
+          <button
+            ref={closeBtnRef}
+            type="button"
+            onClick={closePanel}
+            aria-label="Close panel"
+            className={buttonVariants({ variant: 'ghost', size: 'icon' })}
           >
             <X className="h-4 w-4" />
-          </Button>
+          </button>
         </div>
       </PageHeader>
       {displayTask ? (
@@ -87,7 +166,7 @@ export function TaskDetailPanel() {
       ) : (
         <TaskDetailSkeleton />
       )}
-    </div>
+    </section>
   );
 }
 
@@ -213,6 +292,7 @@ export function TaskDetailContent({
     <>
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
         {/* Title at top */}
+        <Label htmlFor="detail-title">Title</Label>
         <Input
           id="detail-title"
           value={title}
@@ -224,7 +304,7 @@ export function TaskDetailContent({
 
         {task.repo && (
           <div>
-            <Label className="text-xs text-muted-foreground">Repository</Label>
+            <span className="text-xs text-muted-foreground">Repository</span>
             <p className="text-sm mt-1">{task.repo.name}</p>
             <p className="text-xs text-muted-foreground font-mono">
               {task.repo.path}
@@ -234,7 +314,7 @@ export function TaskDetailContent({
 
         {/* Tags */}
         <div className="flex items-center gap-2 flex-wrap">
-          <Label className="text-xs text-muted-foreground shrink-0">Tags</Label>
+          <span className="text-xs text-muted-foreground shrink-0">Tags</span>
           {task.labels && task.labels.length > 0 && (
             <LabelDots labels={task.labels} max={3} />
           )}
@@ -242,21 +322,24 @@ export function TaskDetailContent({
             <LabelPicker
               currentLabelIds={labelIds}
               onChangeLabelIds={handleLabelChange}
+              triggerAriaLabel="Tags"
             />
           </div>
         </div>
 
         {/* Priority dropdown */}
         <div className="space-y-2">
-          <Label className="text-xs text-muted-foreground">Priority</Label>
+          <span className="text-xs text-muted-foreground">Priority</span>
           <Popover open={priorityOpen} onOpenChange={setPriorityOpen}>
             <PopoverTrigger asChild>
               <button
                 type="button"
+                aria-label={`Priority: ${currentPriorityConfig.label}`}
                 className="flex items-center gap-2 px-2.5 py-1.5 rounded-md border text-sm hover:bg-muted/50 transition-colors w-full"
               >
                 {currentPriorityConfig.color && (
                   <span
+                    aria-hidden="true"
                     className="h-2.5 w-2.5 rounded-full shrink-0"
                     style={{ backgroundColor: currentPriorityConfig.color }}
                   />
@@ -264,7 +347,10 @@ export function TaskDetailContent({
                 <span className="flex-1 text-left">
                   {currentPriorityConfig.label}
                 </span>
-                <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+                <ChevronDown
+                  aria-hidden={true}
+                  className="h-3.5 w-3.5 text-muted-foreground"
+                />
               </button>
             </PopoverTrigger>
             <PopoverContent className="w-44 p-1" align="start">
@@ -282,11 +368,15 @@ export function TaskDetailContent({
                   >
                     {config.color ? (
                       <span
+                        aria-hidden="true"
                         className="h-2.5 w-2.5 rounded-full shrink-0"
                         style={{ backgroundColor: config.color }}
                       />
                     ) : (
-                      <span className="h-2.5 w-2.5 shrink-0" />
+                      <span
+                        aria-hidden="true"
+                        className="h-2.5 w-2.5 shrink-0"
+                      />
                     )}
                     {config.label}
                   </button>
@@ -300,9 +390,9 @@ export function TaskDetailContent({
         <div className="flex items-center gap-4">
           {totalTimeMs > 0 && (
             <div>
-              <Label className="text-xs text-muted-foreground">
+              <span className="text-xs text-muted-foreground">
                 Time in Progress
-              </Label>
+              </span>
               <p className="text-sm mt-0.5 font-mono">
                 {formatDuration(totalTimeMs)}
               </p>
@@ -399,18 +489,31 @@ export function TaskDetailContent({
         <Separator />
 
         {/* Subtasks */}
-        <div className="space-y-2">
-          <Label>Subtasks</Label>
+        <section aria-labelledby="detail-subtasks-label" className="space-y-2">
+          <span
+            id="detail-subtasks-label"
+            className="text-xs text-muted-foreground"
+          >
+            Subtasks
+          </span>
           <SubtaskList taskId={task._id} />
-        </div>
+        </section>
 
         {showSessionControls && (
           <>
             <Separator />
-            <div className="space-y-2">
-              <Label>Claude Code Session</Label>
+            <section
+              aria-labelledby="detail-session-label"
+              className="space-y-2"
+            >
+              <span
+                id="detail-session-label"
+                className="text-xs text-muted-foreground"
+              >
+                Claude Code Session
+              </span>
               <ClaudeButton task={task} />
-            </div>
+            </section>
           </>
         )}
       </div>

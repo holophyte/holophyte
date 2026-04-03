@@ -65,7 +65,8 @@ async function openTaskPage(
   await expect(
     page
       .locator('text=Claude Code Session')
-      .or(page.locator('text=No active session')),
+      .or(page.locator('text=No active session'))
+      .first(),
   ).toBeVisible({
     timeout: 10000,
   });
@@ -140,8 +141,8 @@ test.describe('Session Panel', () => {
     await openTaskPage(page, 'E2E Layout Test');
 
     // Left panel should show task detail fields
-    await expect(page.locator('#detail-title')).toBeVisible();
-    await expect(page.locator('#detail-description')).toBeVisible();
+    await expect(page.locator('#detail-title').first()).toBeVisible();
+    await expect(page.locator('#detail-description').first()).toBeVisible();
 
     // Right panel should show session panel (no-session state)
     await expect(page.locator('text=No active session')).toBeVisible();
