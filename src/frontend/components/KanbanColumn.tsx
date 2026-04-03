@@ -159,7 +159,7 @@ export function KanbanColumn({
         'group flex flex-col rounded-lg border',
         variant === 'backlog'
           ? 'bg-muted/30 border-dashed w-full h-full'
-          : 'flex-1 min-w-[260px] max-w-[350px] bg-muted/50',
+          : 'flex-1 min-w-[260px] max-w-[350px] h-full bg-muted/50',
         dragOver && 'ring-2 ring-primary/50 bg-muted/80',
       )}
       onDragStart={handleDragStart}
