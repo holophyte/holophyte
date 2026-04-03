@@ -30,6 +30,7 @@ bun run lint:fix         # Biome auto-fix
 bun run check            # lint + typecheck + test (all-in-one)
 bun run convex:deploy    # Deploy Convex to production
 bun run worktree:create <name>  # Create worktree with isolated local Convex
+bun run worktree:cleanup <name> # Remove worktree, branch, and directory (--list, --stale)
 bun run pr-comments      # Show unresolved PR review comments (--all, --poll, --resolve)
 ```
 
