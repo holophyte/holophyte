@@ -27,6 +27,7 @@ interface CreateTaskDialogProps {
   onOpenChange: (open: boolean) => void;
   repoId?: Id<'repos'>;
   initialStatus?: TaskStatus;
+  onTaskCreated?: () => void;
 }
 
 export function CreateTaskDialog({
@@ -34,6 +35,7 @@ export function CreateTaskDialog({
   onOpenChange,
   repoId,
   initialStatus,
+  onTaskCreated,
 }: CreateTaskDialogProps) {
   const selectedOrgId = useAppStore((s) => s.selectedOrgId);
   const lastUsedRepoId = useAppStore((s) => s.lastUsedRepoId);
@@ -85,6 +87,8 @@ export function CreateTaskDialog({
       status: initialStatus,
       priority: priority !== TaskPriority.None ? priority : undefined,
     });
+
+    onTaskCreated?.();
 
     // Remember the repo choice for next time
     if (!repoId && effectiveRepoId) {

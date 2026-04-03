@@ -2,9 +2,9 @@ import { api } from '@convex/_generated/api';
 import type { Doc, Id } from '@convex/_generated/dataModel';
 import { TaskStatus } from '@convex/schema';
 import { useParams } from '@tanstack/react-router';
-import { useMutation, useQuery } from 'convex/react';
+import { useAction, useMutation, useQuery } from 'convex/react';
 import { Archive, ChevronsRight, FolderGit2 } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import type { SortPreference } from '@/frontend/lib/taskSort';
 import { sortTasks } from '@/frontend/lib/taskSort';
 import { cn } from '@/frontend/lib/utils';
@@ -136,12 +136,33 @@ export function KanbanBoard() {
   const currentRepo = selectedRepoId ? repoMap.get(selectedRepoId) : undefined;
   const sortPreference: SortPreference =
     currentRepo?.sortPreference ?? 'manual';
+  const sortOrder = currentRepo?.sortOrder;
 
   const updateSortPreference = useMutation(api.repos.updateSortPreference);
+  const autoSortAction = useAction(api.autoSort.run);
+  const [sorting, setSorting] = useState(false);
+  const sortingRef = useRef(false);
+
+  const handleAutoSort = useCallback(async () => {
+    if (!selectedRepoId || sortingRef.current) return;
+    sortingRef.current = true;
+    setSorting(true);
+    try {
+      await autoSortAction({ repoId: selectedRepoId });
+    } catch (err) {
+      console.error('Auto sort failed:', err);
+    } finally {
+      sortingRef.current = false;
+      setSorting(false);
+    }
+  }, [selectedRepoId, autoSortAction]);
 
   const handleSortChange = (pref: SortPreference) => {
     if (!selectedRepoId) return;
     updateSortPreference({ id: selectedRepoId, sortPreference: pref });
+    if (pref === 'auto') {
+      handleAutoSort();
+    }
   };
 
   const labels = useQuery(
@@ -195,7 +216,11 @@ export function KanbanBoard() {
       );
     }
 
-    return sortTasks(filtered, sortPreference);
+    return sortTasks(
+      filtered,
+      sortPreference,
+      sortOrder as string[] | undefined,
+    );
   };
 
   const archiveAllDone = useMutation(api.tasks.archiveAllDone);
@@ -229,7 +254,12 @@ export function KanbanBoard() {
         <SearchFilterBar />
         <div className="flex items-center gap-2 shrink-0">
           {selectedRepoId && (
-            <SortDropdown value={sortPreference} onChange={handleSortChange} />
+            <SortDropdown
+              value={sortPreference}
+              onChange={handleSortChange}
+              onRefreshAutoSort={handleAutoSort}
+              autoSortLoading={sorting}
+            />
           )}
           <Button
             size="sm"
@@ -300,6 +330,7 @@ export function KanbanBoard() {
         onOpenChange={setCreateDialogOpen}
         repoId={selectedRepoId ?? undefined}
         initialStatus={createDialogStatus}
+        onTaskCreated={sortPreference === 'auto' ? handleAutoSort : undefined}
       />
     </div>
   );

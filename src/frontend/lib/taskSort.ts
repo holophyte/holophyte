@@ -12,13 +12,26 @@ const PRIORITY_ORDER: Record<string, number> = {
 
 export function sortTasks<
   T extends {
+    _id: string;
     position: number;
     priority?: string;
     dueAt?: number;
     createdAt: number;
   },
->(tasks: T[], sort: SortPreference): T[] {
+>(tasks: T[], sort: SortPreference, sortOrder?: string[]): T[] {
   const sorted = [...tasks];
+
+  if (sort === 'auto') {
+    if (!sortOrder) return sorted;
+    const indexMap = new Map(sortOrder.map((id, i) => [id, i]));
+    return sorted.sort((a, b) => {
+      const ai = indexMap.get(a._id) ?? Number.MAX_SAFE_INTEGER;
+      const bi = indexMap.get(b._id) ?? Number.MAX_SAFE_INTEGER;
+      if (ai !== bi) return ai - bi;
+      return a.position - b.position;
+    });
+  }
+
   sorted.sort((a, b) => {
     switch (sort) {
       case 'manual':
