@@ -17,7 +17,9 @@ async function selectRepo(page: import('@playwright/test').Page) {
     .first();
   await repoButton.click();
   // Wait for kanban board to load with columns
-  await expect(page.locator('text=To Do')).toBeVisible({ timeout: 10000 });
+  await expect(
+    page.getByRole('heading', { name: 'To Do', exact: true }),
+  ).toBeVisible({ timeout: 10000 });
 }
 
 // Helper: create a task in the To Do column and return its title
@@ -29,7 +31,7 @@ async function createTask(
   // Click "+ Add" in To Do column
   const todoColumn = page
     .locator('[role="group"]')
-    .filter({ hasText: 'To Do' });
+    .filter({ has: page.getByRole('heading', { name: 'To Do', exact: true }) });
   const addButton = todoColumn.locator('button', { hasText: 'Add' });
   await addButton.click();
 
@@ -56,7 +58,7 @@ async function openTaskPage(
 
   // Side panel should open — click maximize to go to full page
   await page
-    .locator('button[aria-label="Expand to full page"]')
+    .locator(`button[aria-label="Open ${taskTitle} in task page"]`)
     .click({ timeout: 5000 });
 
   // Wait for the task page to load
@@ -158,11 +160,12 @@ test.describe('Session Panel - Theme Rendering', () => {
     'arctic',
   ];
 
-  test.beforeEach(async ({ page }) => {
+  test.beforeEach(async ({ page }, testInfo) => {
     await waitForApp(page);
     await selectRepo(page);
-    await createTask(page, 'E2E Theme Test');
-    await openTaskPage(page, 'E2E Theme Test');
+    const taskTitle = `E2E Theme Test ${testInfo.title}`;
+    await createTask(page, taskTitle);
+    await openTaskPage(page, taskTitle);
   });
 
   for (const theme of themes) {

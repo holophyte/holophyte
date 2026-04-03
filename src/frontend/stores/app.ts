@@ -1,6 +1,7 @@
 import type { Id } from '@convex/_generated/dataModel';
+import { TaskStatus } from '@convex/schema';
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+import { createJSONStorage, persist } from 'zustand/middleware';
 
 export type ThemeName =
   | 'neon'
@@ -25,9 +26,35 @@ export const VALID_THEMES: ThemeName[] = [
 
 export const DEFAULT_THEME: ThemeName = 'neon';
 
+const DEFAULT_COLLAPSED_COLUMNS = new Set<string>([TaskStatus.Backlog]);
+
+const storage = createJSONStorage(() => localStorage, {
+  replacer: (_key, value) => {
+    if (value instanceof Set) {
+      return { __type: 'Set', values: [...value] };
+    }
+    return value;
+  },
+  reviver: (_key, value) => {
+    if (
+      value &&
+      typeof value === 'object' &&
+      '__type' in value &&
+      value.__type === 'Set' &&
+      'values' in value &&
+      Array.isArray(value.values)
+    ) {
+      return new Set(
+        value.values.filter((item): item is string => typeof item === 'string'),
+      );
+    }
+    return value;
+  },
+});
+
 interface AppState {
   selectedOrgId: Id<'organizations'> | null;
-  backlogCollapsed: boolean;
+  collapsedColumns: Set<string>;
   taskPageDetailCollapsed: boolean;
   /** The Convex session ID currently displayed in `SessionPanel`. `null` means no session is open. */
   activeSessionId: string | null;
@@ -36,7 +63,6 @@ interface AppState {
   searchQuery: string;
   filterLabelIds: Id<'labels'>[];
   showArchive: boolean;
-  doneColumnCollapsed: boolean;
 
   // Theme
   theme: ThemeName;
@@ -54,6 +80,7 @@ interface AppState {
   setTheme: (theme: ThemeName) => void;
   setSelectedOrgId: (id: Id<'organizations'>) => void;
   clearOrgSelection: () => void;
+  toggleColumnCollapsed: (columnId: string) => void;
   toggleBacklog: () => void;
   toggleTaskPageDetail: () => void;
   /** Sets the active session ID. Navigation to the task page is handled by the router. */
@@ -74,7 +101,6 @@ interface AppState {
   toggleFilterLabel: (labelId: Id<'labels'>) => void;
   clearFilters: () => void;
   toggleArchive: () => void;
-  toggleDoneCollapsed: () => void;
 
   // Sidebar actions
   toggleSidebar: () => void;
@@ -88,16 +114,15 @@ interface AppState {
 
 export const useAppStore = create<AppState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       selectedOrgId: null,
-      backlogCollapsed: true,
+      collapsedColumns: new Set(DEFAULT_COLLAPSED_COLUMNS),
       taskPageDetailCollapsed: false,
       activeSessionId: null,
 
       searchQuery: '',
       filterLabelIds: [],
       showArchive: false,
-      doneColumnCollapsed: false,
 
       theme: DEFAULT_THEME,
 
@@ -119,8 +144,17 @@ export const useAppStore = create<AppState>()(
           selectedOrgId: null,
           bulkSelectedTaskIds: [],
         }),
-      toggleBacklog: () =>
-        set((state) => ({ backlogCollapsed: !state.backlogCollapsed })),
+      toggleColumnCollapsed: (columnId) =>
+        set((state) => {
+          const collapsedColumns = new Set(state.collapsedColumns);
+          if (collapsedColumns.has(columnId)) {
+            collapsedColumns.delete(columnId);
+            return { collapsedColumns };
+          }
+          collapsedColumns.add(columnId);
+          return { collapsedColumns, bulkSelectedTaskIds: [] };
+        }),
+      toggleBacklog: () => get().toggleColumnCollapsed(TaskStatus.Backlog),
       toggleTaskPageDetail: () =>
         set((state) => ({
           taskPageDetailCollapsed: !state.taskPageDetailCollapsed,
@@ -143,11 +177,6 @@ export const useAppStore = create<AppState>()(
       toggleArchive: () =>
         set((state) => ({
           showArchive: !state.showArchive,
-          bulkSelectedTaskIds: [],
-        })),
-      toggleDoneCollapsed: () =>
-        set((state) => ({
-          doneColumnCollapsed: !state.doneColumnCollapsed,
           bulkSelectedTaskIds: [],
         })),
 
@@ -179,9 +208,27 @@ export const useAppStore = create<AppState>()(
     }),
     {
       name: 'holophyte-app',
-      version: 4,
+      storage,
+      version: 5,
       migrate: (persisted) => {
         const state = persisted as Record<string, unknown>;
+        const collapsedColumns = new Set<string>();
+        if (state.collapsedColumns instanceof Set) {
+          for (const value of state.collapsedColumns) {
+            if (typeof value === 'string') {
+              collapsedColumns.add(value);
+            }
+          }
+        } else if (Array.isArray(state.collapsedColumns)) {
+          for (const value of state.collapsedColumns) {
+            if (typeof value === 'string') {
+              collapsedColumns.add(value);
+            }
+          }
+        } else if (state.backlogCollapsed === true) {
+          collapsedColumns.add(TaskStatus.Backlog);
+        }
+        state.collapsedColumns = collapsedColumns;
         if (
           typeof state.theme !== 'string' ||
           !VALID_THEMES.includes(state.theme as ThemeName)
@@ -193,6 +240,8 @@ export const useAppStore = create<AppState>()(
         delete state.selectedRepoId;
         delete state.selectedTaskId;
         delete state.viewMode;
+        delete state.backlogCollapsed;
+        delete state.doneColumnCollapsed;
         // Default sidebarCollapsed for users upgrading from v3 or earlier
         if (typeof state.sidebarCollapsed !== 'boolean') {
           state.sidebarCollapsed = false;
@@ -200,11 +249,10 @@ export const useAppStore = create<AppState>()(
         return state as unknown as AppState;
       },
       partialize: (state) => ({
-        backlogCollapsed: state.backlogCollapsed,
+        collapsedColumns: state.collapsedColumns,
         taskPageDetailCollapsed: state.taskPageDetailCollapsed,
         sidebarCollapsed: state.sidebarCollapsed,
         showArchive: state.showArchive,
-        doneColumnCollapsed: state.doneColumnCollapsed,
         lastUsedRepoId: state.lastUsedRepoId,
         theme: state.theme,
       }),

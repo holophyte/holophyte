@@ -15,7 +15,9 @@ async function selectRepo(page: import('@playwright/test').Page) {
     .filter({ hasText: /e2e-/ })
     .first();
   await repoButton.click();
-  await expect(page.locator('text=To Do')).toBeVisible({ timeout: 10000 });
+  await expect(
+    page.getByRole('heading', { name: 'To Do', exact: true }),
+  ).toBeVisible({ timeout: 10000 });
 }
 
 // Create a task in the To Do column
@@ -26,7 +28,7 @@ async function createTask(
 ) {
   const todoColumn = page
     .locator('[role="group"]')
-    .filter({ hasText: 'To Do' });
+    .filter({ has: page.getByRole('heading', { name: 'To Do', exact: true }) });
   const addButton = todoColumn.locator('button', { hasText: 'Add' });
   await addButton.click();
 
@@ -48,7 +50,7 @@ async function openTaskPage(
   await card.click();
 
   await page
-    .locator('button[aria-label="Expand to full page"]')
+    .locator(`button[aria-label="Open ${taskTitle} in task page"]`)
     .click({ timeout: 5000 });
 
   await expect(

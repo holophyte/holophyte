@@ -26,7 +26,9 @@ async function selectRepo(page: import('@playwright/test').Page) {
     .filter({ hasText: /e2e-/ })
     .first();
   await repoButton.click();
-  await expect(page.locator('text=To Do')).toBeVisible({ timeout: 10000 });
+  await expect(
+    page.getByRole('heading', { name: 'To Do', exact: true }),
+  ).toBeVisible({ timeout: 10000 });
 }
 
 test.describe('All Tasks - Create Task with Repo Picker', () => {
@@ -89,9 +91,9 @@ test.describe('All Tasks - Create Task with Repo Picker', () => {
     const taskTitle = `E2E All Tasks Create ${Date.now()}`;
 
     // Click Add on To Do column
-    const todoColumn = page
-      .locator('[role="group"]')
-      .filter({ hasText: 'To Do' });
+    const todoColumn = page.locator('[role="group"]').filter({
+      has: page.getByRole('heading', { name: 'To Do', exact: true }),
+    });
     await todoColumn.locator('button', { hasText: 'Add' }).click();
     await expect(page.locator('[role="dialog"]')).toBeVisible({
       timeout: 5000,
