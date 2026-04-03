@@ -16,6 +16,13 @@ if [ -z "$FEATURE_NAME" ]; then
   exit 1
 fi
 
+# Sanitize feature name (same rules as worktree:create) to prevent path traversal
+if [ "$FEATURE_NAME" != "--list" ] && [ "$FEATURE_NAME" != "--stale" ] && [[ ! "$FEATURE_NAME" =~ ^[a-zA-Z0-9_-]+$ ]]; then
+  echo "Error: Feature name must contain only letters, numbers, hyphens, and underscores"
+  exit 1
+fi
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
 WORKTREE_DIR="$HOME/.holophyte-dev"
 
 # --list: show all worktrees with status
@@ -32,9 +39,9 @@ if [ "$FEATURE_NAME" = "--list" ]; then
         has_ports=$(grep '^DEV_PORT=' "$path/.dev-ports" | cut -d= -f2)
         has_ports="port $has_ports"
       fi
-      echo "  $name  $branch  ($has_ports)"
+      echo "  $name  ${branch//[\[\]]/}  ($has_ports)"
     else
-      echo "  $name  $branch  (STALE — directory missing)"
+      echo "  $name  ${branch//[\[\]]/}  (STALE — directory missing)"
     fi
   done
   exit 0
@@ -74,6 +81,9 @@ if [ "$WORKTREE_EXISTS" = false ] && [ "$BRANCH_EXISTS" = false ] && [ "$DIR_EXI
 fi
 
 echo "Cleaning up '$FEATURE_NAME'..."
+
+# Run from the main repo root so the shell isn't inside a deleted directory
+cd "$REPO_ROOT"
 
 # Kill any Convex processes running on this worktree's ports
 if [ -f "$WORKTREE_PATH/.dev-ports" ]; then

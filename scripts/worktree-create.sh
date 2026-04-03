@@ -243,13 +243,13 @@ set_convex_env JWKS "$JWKS"
 # Forward OAuth credentials from main repo's .dev-ports (if present)
 if [ -n "${AUTH_GITHUB_ID:-}" ] && [ -n "${AUTH_GITHUB_SECRET:-}" ]; then
   echo "Setting GitHub OAuth credentials..."
-  cd "$WORKTREE_PATH" && bunx convex env set AUTH_GITHUB_ID "$AUTH_GITHUB_ID"
-  cd "$WORKTREE_PATH" && bunx convex env set AUTH_GITHUB_SECRET "$AUTH_GITHUB_SECRET"
+  set_convex_env AUTH_GITHUB_ID "$AUTH_GITHUB_ID"
+  set_convex_env AUTH_GITHUB_SECRET "$AUTH_GITHUB_SECRET"
 fi
 if [ -n "${AUTH_GOOGLE_ID:-}" ] && [ -n "${AUTH_GOOGLE_SECRET:-}" ]; then
   echo "Setting Google OAuth credentials..."
-  cd "$WORKTREE_PATH" && bunx convex env set AUTH_GOOGLE_ID "$AUTH_GOOGLE_ID"
-  cd "$WORKTREE_PATH" && bunx convex env set AUTH_GOOGLE_SECRET "$AUTH_GOOGLE_SECRET"
+  set_convex_env AUTH_GOOGLE_ID "$AUTH_GOOGLE_ID"
+  set_convex_env AUTH_GOOGLE_SECRET "$AUTH_GOOGLE_SECRET"
 fi
 
 # Seed dev user for email+password auth (idempotent)
