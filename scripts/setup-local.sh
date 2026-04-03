@@ -200,6 +200,12 @@ else
   info "Convex Auth keys configured"
 fi
 
+# Forward Anthropic API key from .env (if present)
+if [ -n "${ANTHROPIC_API_KEY:-}" ]; then
+  cd "$REPO_ROOT" && bunx convex env set ANTHROPIC_API_KEY "$ANTHROPIC_API_KEY"
+  info "Set ANTHROPIC_API_KEY on Convex deployment"
+fi
+
 # Forward OAuth credentials from .dev-ports (if present)
 if [ -n "${AUTH_GITHUB_ID:-}" ] && [ -n "${AUTH_GITHUB_SECRET:-}" ]; then
   cd "$REPO_ROOT" && bunx convex env set AUTH_GITHUB_ID "$AUTH_GITHUB_ID"
