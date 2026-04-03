@@ -124,7 +124,7 @@ export function Sidebar() {
             type="button"
             className="shrink-0 cursor-pointer"
             onClick={toggleSidebar}
-            aria-label="Toggle sidebar"
+            aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
             data-testid="sidebar-brand-toggle"
           >
             <HolophyteIcon className="h-4 w-4 shrink-0" aria-hidden="true" />
