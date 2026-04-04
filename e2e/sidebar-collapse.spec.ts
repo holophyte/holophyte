@@ -5,16 +5,13 @@ async function waitForApp(page: import('@playwright/test').Page) {
   await page.waitForSelector('text=Holophyte', { timeout: 30000 });
   // Wait for sidebar to stabilize after Convex queries resolve
   await page
-    .locator('aside')
-    .getByRole('button', { name: /sidebar/i })
+    .getByTestId('sidebar-brand-toggle')
     .waitFor({ state: 'visible', timeout: 10000 });
 }
 
 test('sidebar collapse toggle button is visible', async ({ page }) => {
   await waitForApp(page);
-  const toggle = page.locator('aside').getByRole('button', {
-    name: 'Collapse sidebar',
-  });
+  const toggle = page.getByTestId('sidebar-toggle');
   await expect(toggle).toBeVisible();
 });
 
@@ -25,15 +22,13 @@ test('clicking collapse toggle hides sidebar text', async ({ page }) => {
   await expect(page.locator('aside').locator('text=All Tasks')).toBeVisible();
 
   // Click collapse
-  const toggle = page.locator('aside').getByRole('button', {
-    name: 'Collapse sidebar',
-  });
+  const toggle = page.getByTestId('sidebar-toggle');
   await toggle.click();
 
-  // Text labels should be hidden, toggle should now say "Expand"
-  await expect(
-    page.locator('aside').getByRole('button', { name: 'Expand sidebar' }),
-  ).toBeVisible({ timeout: 5000 });
+  // Toggle should now say "Expand"
+  await expect(toggle).toHaveAttribute('aria-label', 'Expand sidebar', {
+    timeout: 5000,
+  });
   // "Projects" header should not be visible in collapsed mode
   await expect(
     page.locator('aside').locator('text=Projects'),
@@ -52,19 +47,14 @@ test('clicking expand toggle restores sidebar', async ({ page }) => {
   await waitForApp(page);
 
   // Collapse first
-  const collapse = page.locator('aside').getByRole('button', {
-    name: 'Collapse sidebar',
+  const toggle = page.getByTestId('sidebar-toggle');
+  await toggle.click();
+  await expect(toggle).toHaveAttribute('aria-label', 'Expand sidebar', {
+    timeout: 5000,
   });
-  await collapse.click();
-  await expect(
-    page.locator('aside').getByRole('button', { name: 'Expand sidebar' }),
-  ).toBeVisible({ timeout: 5000 });
 
   // Now expand
-  const expand = page.locator('aside').getByRole('button', {
-    name: 'Expand sidebar',
-  });
-  await expand.click();
+  await toggle.click();
 
   // Text should be visible again
   await expect(page.locator('aside').locator('text=Projects')).toBeVisible({
@@ -73,22 +63,42 @@ test('clicking expand toggle restores sidebar', async ({ page }) => {
   await expect(page.locator('aside').locator('text=All Tasks')).toBeVisible();
 });
 
+test('clicking the Holophyte logo toggles the sidebar', async ({ page }) => {
+  await waitForApp(page);
+
+  const brandToggle = page.getByTestId('sidebar-brand-toggle');
+  await expect(brandToggle).toBeVisible();
+
+  // Click brand toggle to collapse
+  await brandToggle.click();
+  await expect(brandToggle).toHaveAttribute('aria-label', 'Expand sidebar', {
+    timeout: 5000,
+  });
+
+  // Click brand toggle to expand
+  await brandToggle.click();
+  await expect(brandToggle).toHaveAttribute('aria-label', 'Collapse sidebar', {
+    timeout: 5000,
+  });
+  await expect(page.locator('aside').locator('text=Projects')).toBeVisible({
+    timeout: 5000,
+  });
+});
+
 test('Cmd+B keyboard shortcut toggles sidebar', async ({ page }) => {
   await waitForApp(page);
 
   // Wait for sidebar to stabilize after hydration
-  const collapseBtn = page.locator('aside').getByRole('button', {
-    name: 'Collapse sidebar',
-  });
-  await expect(collapseBtn).toBeVisible({ timeout: 10000 });
+  const toggle = page.getByTestId('sidebar-toggle');
+  await expect(toggle).toBeVisible({ timeout: 10000 });
 
   // Press Ctrl+B (works on Linux CI; Meta+B on Mac)
   await page.keyboard.press('ControlOrMeta+b');
 
   // Should be collapsed
-  await expect(
-    page.locator('aside').getByRole('button', { name: 'Expand sidebar' }),
-  ).toBeVisible({ timeout: 5000 });
+  await expect(toggle).toHaveAttribute('aria-label', 'Expand sidebar', {
+    timeout: 5000,
+  });
 
   // Press again to expand
   await page.keyboard.press('ControlOrMeta+b');
@@ -103,13 +113,11 @@ test('collapsed state persists across page reload', async ({ page }) => {
   await waitForApp(page);
 
   // Collapse the sidebar
-  const toggle = page.locator('aside').getByRole('button', {
-    name: 'Collapse sidebar',
-  });
+  const toggle = page.getByTestId('sidebar-toggle');
   await toggle.click();
-  await expect(
-    page.locator('aside').getByRole('button', { name: 'Expand sidebar' }),
-  ).toBeVisible({ timeout: 5000 });
+  await expect(toggle).toHaveAttribute('aria-label', 'Expand sidebar', {
+    timeout: 5000,
+  });
 
   // Reload the page
   await page.reload();
@@ -118,7 +126,9 @@ test('collapsed state persists across page reload', async ({ page }) => {
   });
 
   // Sidebar should still be collapsed (expand button visible)
-  await expect(
-    page.locator('aside').getByRole('button', { name: 'Expand sidebar' }),
-  ).toBeVisible({ timeout: 10000 });
+  await expect(page.getByTestId('sidebar-toggle')).toHaveAttribute(
+    'aria-label',
+    'Expand sidebar',
+    { timeout: 10000 },
+  );
 });

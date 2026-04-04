@@ -20,7 +20,7 @@ export default function UserMenu() {
       <PopoverTrigger asChild>
         <button
           type="button"
-          className="flex items-center gap-2 w-full rounded-md px-4 py-1.5 text-sm hover:bg-muted/50 transition-colors whitespace-nowrap overflow-hidden"
+          className="flex w-full cursor-pointer items-center gap-2 rounded-md px-4 py-1.5 text-sm transition-colors whitespace-nowrap overflow-hidden hover:bg-muted/50"
           aria-label={user?.name ? `User menu for ${user.name}` : 'User menu'}
         >
           <Avatar

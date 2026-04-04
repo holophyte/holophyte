@@ -120,7 +120,15 @@ export function Sidebar() {
           data-testid="sidebar-header"
           className="gap-2 font-semibold text-lg whitespace-nowrap px-4 overflow-hidden"
         >
-          <HolophyteIcon className="h-7 w-7 shrink-0" aria-hidden="true" />
+          <button
+            type="button"
+            className="shrink-0 cursor-pointer"
+            onClick={toggleSidebar}
+            aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            data-testid="sidebar-brand-toggle"
+          >
+            <HolophyteIcon className="h-4 w-4 shrink-0" aria-hidden="true" />
+          </button>
           <span className="flex-1 truncate">Holophyte</span>
           <SidebarTooltip
             label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
@@ -132,6 +140,7 @@ export function Sidebar() {
               className="h-7 w-7 shrink-0"
               onClick={toggleSidebar}
               aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+              data-testid="sidebar-toggle"
             >
               {collapsed ? (
                 <PanelLeftOpen className="h-4 w-4" />
