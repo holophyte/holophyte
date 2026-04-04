@@ -39,7 +39,9 @@ function tool(name: string): ToolHandler {
 
 beforeEach(async () => {
   vi.resetModules();
-  vi.clearAllMocks();
+  mockQuery.mockReset();
+  mockMutation.mockReset();
+  mockSetAuth.mockReset();
   capturedRegisteredTools = undefined;
 
   // Capture McpServer instance by subclassing it
