@@ -11,6 +11,7 @@
 
 console.log = (...args: unknown[]) => console.error(...args);
 
+import { fileURLToPath } from 'node:url';
 import { api } from '@convex/_generated/api';
 import type { Id } from '@convex/_generated/dataModel';
 import { TaskPriority, TaskStatus } from '@convex/schema';
@@ -141,6 +142,14 @@ function textResponse(text: string) {
 /** Returns an MCP error result with the given message. */
 function errorResponse(text: string) {
   return { content: [{ type: 'text' as const, text }], isError: true };
+}
+
+export function __setMcpServerStateForTests(args: {
+  client: ConvexHttpClient;
+  defaultOrgId?: Id<'organizations'> | null;
+}) {
+  httpClient = args.client;
+  defaultOrgId = args.defaultOrgId ?? null;
 }
 
 // ── MCP Server ───────────────────────────────────────────────────────
@@ -696,7 +705,7 @@ server.tool(
 
 // ── Main ─────────────────────────────────────────────────────────────
 
-async function main() {
+export async function main() {
   const convexUrl = process.env.CONVEX_URL;
   if (!convexUrl) {
     console.error(
@@ -722,7 +731,18 @@ async function main() {
   process.on('SIGTERM', shutdown);
 }
 
-main().catch((err) => {
-  console.error('Fatal error starting MCP server:', err);
-  process.exit(1);
-});
+function isEntrypoint() {
+  if (typeof Bun !== 'undefined') {
+    return import.meta.main;
+  }
+
+  const entry = process.argv[1];
+  return entry !== undefined && fileURLToPath(import.meta.url) === entry;
+}
+
+if (isEntrypoint()) {
+  main().catch((err) => {
+    console.error('Fatal error starting MCP server:', err);
+    process.exit(1);
+  });
+}

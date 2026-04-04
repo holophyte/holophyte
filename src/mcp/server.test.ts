@@ -87,34 +87,15 @@ beforeEach(async () => {
     },
   }));
 
-  // auth-token: return a valid API key + JWT so bootstrapAuth succeeds
-  vi.doMock('@/server/auth-token', () => ({
-    readApiKeyFile: vi.fn().mockResolvedValue(`holo_${'a'.repeat(64)}`),
-    signInWithApiKey: vi.fn().mockResolvedValue({
-      convexUrl: 'http://localhost:3210',
-      token: 'test-jwt',
-      refreshToken: 'test-refresh',
-      ephemeral: true,
-    }),
-  }));
-
-  // Ensure CONVEX_URL is set so main() doesn't exit early
-  process.env.CONVEX_URL = 'http://localhost:3210';
-
-  // Set up default org resolution — organizations.listByUser returns one org
-  mockQuery.mockResolvedValue([
-    {
-      _id: 'org123',
-      name: 'Personal',
-      slug: 'personal',
-      personal: true,
-      role: 'owner',
-    },
-  ]);
-
-  // Import the server module — this triggers main() which calls bootstrapAuth
-  // and resolveDefaultOrg, then registers the transport.
-  await import('./server');
+  const mod = await import('./server');
+  mod.__setMcpServerStateForTests({
+    client: {
+      query: mockQuery,
+      mutation: mockMutation,
+      setAuth: mockSetAuth,
+    } as unknown as import('convex/browser').ConvexHttpClient,
+    defaultOrgId: 'org123' as never,
+  });
 });
 
 afterEach(() => {
@@ -411,6 +392,7 @@ describe('holophyte_create_task', () => {
   });
 
   it('passes labels as labelIds to api.tasks.create mutation', async () => {
+    mockQuery.mockResolvedValueOnce([]);
     mockMutation.mockResolvedValueOnce('task-l1');
 
     await tool('holophyte_create_task')({
@@ -426,6 +408,7 @@ describe('holophyte_create_task', () => {
   });
 
   it('passes both priority and labels when both are provided', async () => {
+    mockQuery.mockResolvedValueOnce([]);
     mockMutation.mockResolvedValueOnce('task-pl1');
 
     await tool('holophyte_create_task')({
@@ -499,6 +482,7 @@ describe('holophyte_create_task', () => {
   });
 
   it('response includes labelIds array from arg when provided', async () => {
+    mockQuery.mockResolvedValueOnce([]);
     mockMutation.mockResolvedValueOnce('task-wl');
 
     const result = await tool('holophyte_create_task')({
@@ -625,6 +609,7 @@ describe('holophyte_update_task', () => {
   });
 
   it('passes labels as labelIds to api.tasks.update mutation', async () => {
+    mockQuery.mockResolvedValueOnce([]);
     mockMutation.mockResolvedValue(undefined);
 
     await tool('holophyte_update_task')({
@@ -642,6 +627,7 @@ describe('holophyte_update_task', () => {
   });
 
   it('calls update mutation when both priority and labels are provided without status', async () => {
+    mockQuery.mockResolvedValueOnce([]);
     mockMutation.mockResolvedValue(undefined);
 
     await tool('holophyte_update_task')({
@@ -1240,7 +1226,8 @@ describe('bootstrapAuth', () => {
 
     process.env.CONVEX_URL = 'http://localhost:3210';
 
-    await import('./server');
+    const mod = await import('./server');
+    await mod.main();
 
     expect(mockSignInWithApiKey).toHaveBeenCalledWith(
       'http://localhost:3210',
@@ -1290,7 +1277,8 @@ describe('bootstrapAuth', () => {
 
     process.env.CONVEX_URL = 'http://localhost:3210';
 
-    await import('./server');
+    const mod = await import('./server');
+    await mod.main().catch(() => undefined);
 
     expect(mockExit).toHaveBeenCalledWith(1);
 
@@ -1337,7 +1325,8 @@ describe('bootstrapAuth', () => {
 
     process.env.CONVEX_URL = 'http://localhost:3210';
 
-    await import('./server');
+    const mod = await import('./server');
+    await mod.main().catch(() => undefined);
 
     expect(mockExit).toHaveBeenCalledWith(1);
 
