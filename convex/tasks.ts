@@ -308,6 +308,68 @@ export const reorder = mutation({
   },
 });
 
+export const bulkReorder = mutation({
+  args: {
+    ids: v.array(v.id('tasks')),
+  },
+  handler: async (ctx, args) => {
+    const firstId = args.ids[0];
+    if (!firstId) return;
+
+    const uniqueIds = new Set(args.ids);
+    if (uniqueIds.size !== args.ids.length) {
+      throw new Error('Task IDs must be unique');
+    }
+
+    const firstTask = await ctx.db.get(firstId);
+    if (!firstTask) throw new Error('Task not found');
+    const firstRepo = await ctx.db.get(firstTask.repoId);
+    if (!firstRepo) throw new Error('Repo not found');
+    const { userId, membership } = await requireOrgMembership(
+      ctx,
+      firstRepo.orgId,
+    );
+    requireRole(membership, 'member');
+
+    const selectedTasks = [];
+    for (const id of args.ids) {
+      const task = await ctx.db.get(id);
+      if (!task) throw new Error('Task not found');
+      if (task.repoId !== firstTask.repoId) {
+        throw new Error('All tasks must belong to the same repo');
+      }
+      if (task.status !== firstTask.status) {
+        throw new Error('All tasks must have the same status');
+      }
+      requirePrivateOwnership(task, userId);
+      selectedTasks.push(task);
+    }
+
+    const columnTasks = await ctx.db
+      .query('tasks')
+      .withIndex('by_repo_status', (q) =>
+        q.eq('repoId', firstTask.repoId).eq('status', firstTask.status),
+      )
+      .collect();
+
+    const specifiedIds = new Set(args.ids);
+    const remainingTasks = columnTasks
+      .filter((task) => !specifiedIds.has(task._id))
+      .sort((a, b) => a.position - b.position);
+
+    const reorderedTasks = [...selectedTasks, ...remainingTasks];
+    const now = Date.now();
+
+    for (const [index, task] of reorderedTasks.entries()) {
+      if (task.private && task.createdBy !== userId) continue;
+      await ctx.db.patch(task._id, {
+        position: index + 1,
+        updatedAt: now,
+      });
+    }
+  },
+});
+
 export const unarchive = mutation({
   args: { id: v.id('tasks') },
   handler: async (ctx, args) => {

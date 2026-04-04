@@ -241,6 +241,7 @@ describe('holophyte_list_tasks', () => {
         _id: 't1',
         title: 'A',
         status: 'backlog',
+        position: 2,
         repoId: 'r1',
         priority: null,
         prompt: null,
@@ -249,6 +250,7 @@ describe('holophyte_list_tasks', () => {
         _id: 't2',
         title: 'B',
         status: 'todo',
+        position: 1,
         repoId: 'r1',
         priority: null,
         prompt: null,
@@ -259,6 +261,59 @@ describe('holophyte_list_tasks', () => {
     const parsed = JSON.parse(result.content[0]?.text ?? '[]');
 
     expect(parsed).toHaveLength(2);
+  });
+
+  it('includes position and sorts tasks by board order', async () => {
+    mockQuery.mockResolvedValueOnce([
+      {
+        _id: 't-done',
+        title: 'Done later',
+        status: 'done',
+        position: 10,
+        repoId: 'r1',
+        priority: null,
+        prompt: null,
+      },
+      {
+        _id: 't-backlog-2',
+        title: 'Backlog second',
+        status: 'backlog',
+        position: 2,
+        repoId: 'r1',
+        priority: null,
+        prompt: null,
+      },
+      {
+        _id: 't-backlog-1',
+        title: 'Backlog first',
+        status: 'backlog',
+        position: 1,
+        repoId: 'r1',
+        priority: null,
+        prompt: null,
+      },
+      {
+        _id: 't-todo',
+        title: 'Todo first',
+        status: 'todo',
+        position: 3,
+        repoId: 'r1',
+        priority: null,
+        prompt: null,
+      },
+    ]);
+
+    const result = await tool('holophyte_list_tasks')({ orgId: 'org123' });
+    const parsed = JSON.parse(result.content[0]?.text ?? '[]');
+
+    expect(parsed.map((t: { id: string }) => t.id)).toEqual([
+      't-backlog-1',
+      't-backlog-2',
+      't-todo',
+      't-done',
+    ]);
+    expect(parsed[0]?.position).toBe(1);
+    expect(parsed[1]?.position).toBe(2);
   });
 
   it('truncates long prompts to 100 chars with ellipsis', async () => {
@@ -314,6 +369,7 @@ describe('holophyte_get_task', () => {
       description: 'desc',
       prompt: 'do this',
       status: 'todo',
+      position: 4,
       priority: 'high',
       repoId: 'r1',
       repo: { name: 'my-repo', path: '/path' },
@@ -330,6 +386,7 @@ describe('holophyte_get_task', () => {
 
     expect(parsed.id).toBe('task1');
     expect(parsed.title).toBe('My Task');
+    expect(parsed.position).toBe(4);
     expect(parsed.repoName).toBe('my-repo');
     expect(parsed.repoPath).toBe('/path');
     expect(parsed.labels).toHaveLength(1);
@@ -606,6 +663,7 @@ describe('holophyte_update_task', () => {
       expect.anything(),
       expect.objectContaining({ id: 'task1', position: 7 }),
     );
+    expect(mockMutation).toHaveBeenCalledTimes(1);
   });
 
   it('passes labels as labelIds to api.tasks.update mutation', async () => {
@@ -722,6 +780,34 @@ describe('holophyte_update_task', () => {
       expect.anything(),
       expect.objectContaining({ id: 'task1', labelIds: [] }),
     );
+  });
+});
+
+// ── holophyte_reorder_tasks ───────────────────────────────────────────
+
+describe('holophyte_reorder_tasks', () => {
+  it('calls api.tasks.bulkReorder with the provided ids', async () => {
+    mockMutation.mockResolvedValue(undefined);
+
+    await tool('holophyte_reorder_tasks')({
+      ids: ['task3', 'task1', 'task2'],
+    });
+
+    expect(mockMutation).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ ids: ['task3', 'task1', 'task2'] }),
+    );
+    expect(mockMutation).toHaveBeenCalledTimes(1);
+  });
+
+  it('returns a success message including the number of reordered tasks', async () => {
+    mockMutation.mockResolvedValue(undefined);
+
+    const result = await tool('holophyte_reorder_tasks')({
+      ids: ['task1', 'task2'],
+    });
+
+    expect(result.content[0]?.text).toContain('Reordered 2 tasks successfully');
   });
 });
 

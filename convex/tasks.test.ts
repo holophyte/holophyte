@@ -191,6 +191,56 @@ describe('tasks.move', () => {
   });
 });
 
+describe('tasks.bulkReorder', () => {
+  it('reorders tasks within the same status and appends remaining tasks', async () => {
+    const t = convexTest(schema);
+    const { authed, repoId } = await setupRepoEnv(t);
+    const first = await authed.mutation(api.tasks.create, {
+      repoId,
+      title: 'First',
+    });
+    const second = await authed.mutation(api.tasks.create, {
+      repoId,
+      title: 'Second',
+    });
+    const third = await authed.mutation(api.tasks.create, {
+      repoId,
+      title: 'Third',
+    });
+
+    await authed.mutation(api.tasks.bulkReorder, {
+      ids: [third, first],
+    });
+
+    const tasks = await authed.query(api.tasks.listByRepo, { repoId });
+    const ordered = tasks
+      .slice()
+      .sort((a, b) => a.position - b.position)
+      .map((task) => task._id);
+    expect(ordered).toEqual([third, first, second]);
+  });
+
+  it('rejects tasks from different statuses', async () => {
+    const t = convexTest(schema);
+    const { authed, repoId } = await setupRepoEnv(t);
+    const backlog = await authed.mutation(api.tasks.create, {
+      repoId,
+      title: 'Backlog',
+    });
+    const todo = await authed.mutation(api.tasks.create, {
+      repoId,
+      title: 'Todo',
+      status: TaskStatus.Todo,
+    });
+
+    await expect(
+      authed.mutation(api.tasks.bulkReorder, {
+        ids: [backlog, todo],
+      }),
+    ).rejects.toThrow('All tasks must have the same status');
+  });
+});
+
 describe('tasks - private tasks', () => {
   it('private tasks are visible to their creator', async () => {
     const t = convexTest(schema);

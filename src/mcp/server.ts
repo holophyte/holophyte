@@ -184,6 +184,15 @@ const taskStatusWithArchivedEnum = z.enum([
   TaskStatus.Archived,
 ]);
 
+const taskStatusOrder: Record<string, number> = {
+  [TaskStatus.Backlog]: 0,
+  [TaskStatus.Todo]: 1,
+  [TaskStatus.InProgress]: 2,
+  [TaskStatus.Review]: 3,
+  [TaskStatus.Done]: 4,
+  [TaskStatus.Archived]: 5,
+};
+
 // ── Tool: holophyte_list_repos ───────────────────────────────────────
 
 server.tool(
@@ -241,14 +250,21 @@ server.tool(
           orgId: requireOrgId(orgId),
           includeArchived: shouldIncludeArchived,
         });
-    const tasks = status
-      ? allTasks.filter((t) => t.status === status)
-      : allTasks;
+    const tasks = (
+      status ? allTasks.filter((t) => t.status === status) : allTasks
+    ).sort((a, b) => {
+      const statusDiff =
+        (taskStatusOrder[a.status] ?? Number.MAX_SAFE_INTEGER) -
+        (taskStatusOrder[b.status] ?? Number.MAX_SAFE_INTEGER);
+      if (statusDiff !== 0) return statusDiff;
+      return a.position - b.position;
+    });
     return jsonResponse(
       tasks.map((t) => ({
         id: t._id,
         title: t.title,
         status: t.status,
+        position: t.position,
         repoId: t.repoId,
         priority: t.priority,
         prompt: t.prompt
@@ -277,6 +293,7 @@ server.tool(
       description: task.description,
       prompt: task.prompt,
       status: task.status,
+      position: task.position,
       priority: task.priority,
       repoId: task.repoId,
       repoName: task.repo?.name,
@@ -516,25 +533,51 @@ server.tool(
           'Task fields were updated but the task was deleted before the status change could be applied.',
         );
       }
-      const existingTasks = await client.query(api.tasks.listByRepo, {
-        repoId: task.repoId,
-        includeArchived: true,
-      });
-      const tasksInTargetStatus = existingTasks.filter(
-        (t) => t.status === status,
-      );
-      const maxPosition = tasksInTargetStatus.reduce(
-        (max, t) => Math.max(max, t.position),
-        0,
-      );
+      let targetPosition = position;
+      if (targetPosition === undefined) {
+        const existingTasks = await client.query(api.tasks.listByRepo, {
+          repoId: task.repoId,
+          includeArchived: true,
+        });
+        const tasksInTargetStatus = existingTasks.filter(
+          (t) => t.status === status,
+        );
+        targetPosition =
+          tasksInTargetStatus.reduce((max, t) => Math.max(max, t.position), 0) +
+          1;
+      }
       await client.mutation(api.tasks.move, {
         id: taskId,
         status,
-        position: position ?? maxPosition + 1,
+        position: targetPosition,
       });
     }
 
     return textResponse(`Task ${id} updated successfully`);
+  },
+);
+
+// ── Tool: holophyte_reorder_tasks ────────────────────────────────────
+
+server.tool(
+  'holophyte_reorder_tasks',
+  'Reorder multiple tasks in one operation. Task IDs must all belong to the same repo and status; specified tasks are placed first in the given order and any remaining tasks in that status column follow after them.',
+  {
+    ids: z
+      .array(z.string())
+      .min(1)
+      .describe(
+        'Task IDs in desired order; all tasks must share the same status',
+      ),
+  },
+  async ({ ids }) => {
+    const client = requireClient();
+    await client.mutation(api.tasks.bulkReorder, {
+      ids: ids as Id<'tasks'>[],
+    });
+    return textResponse(
+      `Reordered ${ids.length} task${ids.length === 1 ? '' : 's'} successfully`,
+    );
   },
 );
 
