@@ -438,7 +438,7 @@ server.tool(
 
 server.tool(
   'holophyte_update_task',
-  'Update a task (title, prompt, description, status, priority, or labels). Labels are replaced wholesale — pass the full desired label set.',
+  'Update a task (title, prompt, description, status, priority, labels, or position). Labels are replaced wholesale — pass the full desired label set.',
   {
     id: z.string().describe('Task ID'),
     title: z.string().optional().describe('New title'),
@@ -446,6 +446,10 @@ server.tool(
     description: z.string().optional().describe('New description'),
     status: taskStatusWithArchivedEnum.optional().describe('New status'),
     priority: taskPriorityEnum.optional().describe('New priority'),
+    position: z
+      .number()
+      .optional()
+      .describe('New numeric position for ordering within a status column'),
     labels: z
       .array(z.string())
       .optional()
@@ -453,7 +457,16 @@ server.tool(
         'Label IDs or names to set on the task (names are resolved to IDs, replaces all existing labels)',
       ),
   },
-  async ({ id, title, prompt, description, status, priority, labels }) => {
+  async ({
+    id,
+    title,
+    prompt,
+    description,
+    status,
+    priority,
+    position,
+    labels,
+  }) => {
     const client = requireClient();
     const taskId = id as Id<'tasks'>;
 
@@ -465,20 +478,23 @@ server.tool(
         : [];
     }
 
-    // Update fields (title, prompt, description, priority, labels)
-    if (
+    const shouldUpdateFields =
       title !== undefined ||
       prompt !== undefined ||
       description !== undefined ||
       priority !== undefined ||
-      labelIds !== undefined
-    ) {
+      labelIds !== undefined ||
+      (position !== undefined && !status);
+
+    // Update fields (title, prompt, description, priority, labels, position)
+    if (shouldUpdateFields) {
       await client.mutation(api.tasks.update, {
         id: taskId,
         title,
         prompt,
         description,
         priority,
+        position: status ? undefined : position,
         labelIds,
       });
     }
@@ -505,7 +521,7 @@ server.tool(
       await client.mutation(api.tasks.move, {
         id: taskId,
         status,
-        position: maxPosition + 1,
+        position: position ?? maxPosition + 1,
       });
     }
 

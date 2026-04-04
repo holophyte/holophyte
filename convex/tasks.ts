@@ -183,6 +183,7 @@ export const update = mutation({
     title: v.optional(v.string()),
     description: v.optional(v.string()),
     prompt: v.optional(v.string()),
+    position: v.optional(v.number()),
     labelIds: v.optional(v.array(v.id('labels'))),
     dueAt: v.optional(v.number()),
     clearDueAt: v.optional(v.boolean()),
@@ -208,6 +209,7 @@ export const update = mutation({
     if (fields.description !== undefined)
       updates.description = fields.description;
     if (fields.prompt !== undefined) updates.prompt = fields.prompt;
+    if (fields.position !== undefined) updates.position = fields.position;
     if (fields.labelIds !== undefined) updates.labelIds = fields.labelIds;
     if (fields.dueAt !== undefined) updates.dueAt = fields.dueAt;
     if (clearDueAt) updates.dueAt = undefined;

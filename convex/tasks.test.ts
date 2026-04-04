@@ -149,6 +149,23 @@ describe('tasks.update', () => {
     const task = await authed.query(api.tasks.get, { id });
     expect(task).toMatchObject({ priority: TaskPriority.High });
   });
+
+  it('updates task position', async () => {
+    const t = convexTest(schema);
+    const { authed, repoId } = await setupRepoEnv(t);
+    const id = await authed.mutation(api.tasks.create, {
+      repoId,
+      title: 'Task',
+    });
+
+    await authed.mutation(api.tasks.update, {
+      id,
+      position: 7,
+    });
+
+    const task = await authed.query(api.tasks.get, { id });
+    expect(task).toMatchObject({ position: 7 });
+  });
 });
 
 describe('tasks.move', () => {

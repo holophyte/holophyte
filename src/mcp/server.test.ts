@@ -610,6 +610,20 @@ describe('holophyte_update_task', () => {
     );
   });
 
+  it('passes position to api.tasks.update mutation for same-column reordering', async () => {
+    mockMutation.mockResolvedValue(undefined);
+
+    await tool('holophyte_update_task')({
+      id: 'task1',
+      position: 7,
+    });
+
+    expect(mockMutation).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ id: 'task1', position: 7 }),
+    );
+  });
+
   it('passes labels as labelIds to api.tasks.update mutation', async () => {
     mockMutation.mockResolvedValue(undefined);
 
@@ -683,6 +697,31 @@ describe('holophyte_update_task', () => {
       expect.objectContaining({ id: 'task1', status: 'in_progress' }),
     );
     expect(mockMutation).toHaveBeenCalledTimes(2);
+  });
+
+  it('passes an explicit position to api.tasks.move when status changes', async () => {
+    mockQuery.mockResolvedValueOnce({
+      _id: 'task1',
+      repoId: 'r1',
+      status: 'backlog',
+      position: 0,
+    });
+    mockQuery.mockResolvedValueOnce([
+      { _id: 'other', status: 'done', position: 10 },
+    ]);
+    mockMutation.mockResolvedValue(undefined);
+
+    await tool('holophyte_update_task')({
+      id: 'task1',
+      status: 'done',
+      position: 3,
+    });
+
+    expect(mockMutation).toHaveBeenCalledTimes(1);
+    expect(mockMutation).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ id: 'task1', status: 'done', position: 3 }),
+    );
   });
 
   it('passes empty array as labelIds when labels is an empty array', async () => {
