@@ -227,9 +227,9 @@ describe('AddRepoDialog', () => {
       await user.click(screen.getByTitle('Browse...'));
 
       await waitFor(() => {
-        expect(mockToastError).toHaveBeenCalledWith(
-          'Selected folder is not a git repository.',
-        );
+        expect(
+          screen.getByText('Selected folder is not a git repository.'),
+        ).toBeInTheDocument();
       });
     });
 

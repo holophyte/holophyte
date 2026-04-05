@@ -86,7 +86,7 @@ export function AddRepoDialog({ open, onOpenChange }: AddRepoDialogProps) {
       setPath(data.path);
       setName(data.name);
       if (!data.isGitRepo) {
-        toast.error('Selected folder is not a git repository.');
+        setError('Selected folder is not a git repository.');
       }
     } catch {
       toast.error(
