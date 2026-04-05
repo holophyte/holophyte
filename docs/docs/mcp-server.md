@@ -85,7 +85,7 @@ To generate an API key, see the [API Keys](api-keys) page.
 | Tool | Description |
 |------|-------------|
 | `holophyte_create_task` | Create a task with title, prompt, status |
-| `holophyte_update_task` | Update task fields or move to a new status |
+| `holophyte_update_task` | Update task fields, reorder within a column, or move to a new status |
 | `holophyte_launch_session` | Start a session for a task (queued for companion pickup) |
 | `holophyte_stop_session` | Request stop for a running session |
 

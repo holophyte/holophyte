@@ -149,6 +149,23 @@ describe('tasks.update', () => {
     const task = await authed.query(api.tasks.get, { id });
     expect(task).toMatchObject({ priority: TaskPriority.High });
   });
+
+  it('updates task position', async () => {
+    const t = convexTest(schema);
+    const { authed, repoId } = await setupRepoEnv(t);
+    const id = await authed.mutation(api.tasks.create, {
+      repoId,
+      title: 'Task',
+    });
+
+    await authed.mutation(api.tasks.update, {
+      id,
+      position: 7,
+    });
+
+    const task = await authed.query(api.tasks.get, { id });
+    expect(task).toMatchObject({ position: 7 });
+  });
 });
 
 describe('tasks.move', () => {
@@ -171,6 +188,67 @@ describe('tasks.move', () => {
       status: TaskStatus.InProgress,
       position: 1,
     });
+  });
+});
+
+describe('tasks.bulkReorder', () => {
+  it('rejects empty task lists', async () => {
+    const t = convexTest(schema);
+    const { authed } = await setupRepoEnv(t);
+
+    await expect(
+      authed.mutation(api.tasks.bulkReorder, {
+        ids: [],
+      }),
+    ).rejects.toThrow('Task IDs must be non-empty');
+  });
+
+  it('reorders tasks within the same status and appends remaining tasks', async () => {
+    const t = convexTest(schema);
+    const { authed, repoId } = await setupRepoEnv(t);
+    const first = await authed.mutation(api.tasks.create, {
+      repoId,
+      title: 'First',
+    });
+    const second = await authed.mutation(api.tasks.create, {
+      repoId,
+      title: 'Second',
+    });
+    const third = await authed.mutation(api.tasks.create, {
+      repoId,
+      title: 'Third',
+    });
+
+    await authed.mutation(api.tasks.bulkReorder, {
+      ids: [third, first],
+    });
+
+    const tasks = await authed.query(api.tasks.listByRepo, { repoId });
+    const ordered = tasks
+      .slice()
+      .sort((a, b) => a.position - b.position)
+      .map((task) => task._id);
+    expect(ordered).toEqual([third, first, second]);
+  });
+
+  it('rejects tasks from different statuses', async () => {
+    const t = convexTest(schema);
+    const { authed, repoId } = await setupRepoEnv(t);
+    const backlog = await authed.mutation(api.tasks.create, {
+      repoId,
+      title: 'Backlog',
+    });
+    const todo = await authed.mutation(api.tasks.create, {
+      repoId,
+      title: 'Todo',
+      status: TaskStatus.Todo,
+    });
+
+    await expect(
+      authed.mutation(api.tasks.bulkReorder, {
+        ids: [backlog, todo],
+      }),
+    ).rejects.toThrow('All tasks must have the same status');
   });
 });
 

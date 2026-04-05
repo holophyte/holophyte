@@ -39,7 +39,9 @@ function tool(name: string): ToolHandler {
 
 beforeEach(async () => {
   vi.resetModules();
-  vi.clearAllMocks();
+  mockQuery.mockReset();
+  mockMutation.mockReset();
+  mockSetAuth.mockReset();
   capturedRegisteredTools = undefined;
 
   // Capture McpServer instance by subclassing it
@@ -87,34 +89,15 @@ beforeEach(async () => {
     },
   }));
 
-  // auth-token: return a valid API key + JWT so bootstrapAuth succeeds
-  vi.doMock('@/server/auth-token', () => ({
-    readApiKeyFile: vi.fn().mockResolvedValue(`holo_${'a'.repeat(64)}`),
-    signInWithApiKey: vi.fn().mockResolvedValue({
-      convexUrl: 'http://localhost:3210',
-      token: 'test-jwt',
-      refreshToken: 'test-refresh',
-      ephemeral: true,
-    }),
-  }));
-
-  // Ensure CONVEX_URL is set so main() doesn't exit early
-  process.env.CONVEX_URL = 'http://localhost:3210';
-
-  // Set up default org resolution — organizations.listByUser returns one org
-  mockQuery.mockResolvedValue([
-    {
-      _id: 'org123',
-      name: 'Personal',
-      slug: 'personal',
-      personal: true,
-      role: 'owner',
-    },
-  ]);
-
-  // Import the server module — this triggers main() which calls bootstrapAuth
-  // and resolveDefaultOrg, then registers the transport.
-  await import('./server');
+  const mod = await import('./server');
+  mod.__setMcpServerStateForTests({
+    client: {
+      query: mockQuery,
+      mutation: mockMutation,
+      setAuth: mockSetAuth,
+    } as unknown as import('convex/browser').ConvexHttpClient,
+    defaultOrgId: 'org123' as never,
+  });
 });
 
 afterEach(() => {
@@ -260,6 +243,7 @@ describe('holophyte_list_tasks', () => {
         _id: 't1',
         title: 'A',
         status: 'backlog',
+        position: 2,
         repoId: 'r1',
         priority: null,
         prompt: null,
@@ -268,6 +252,7 @@ describe('holophyte_list_tasks', () => {
         _id: 't2',
         title: 'B',
         status: 'todo',
+        position: 1,
         repoId: 'r1',
         priority: null,
         prompt: null,
@@ -278,6 +263,59 @@ describe('holophyte_list_tasks', () => {
     const parsed = JSON.parse(result.content[0]?.text ?? '[]');
 
     expect(parsed).toHaveLength(2);
+  });
+
+  it('includes position and sorts tasks by board order', async () => {
+    mockQuery.mockResolvedValueOnce([
+      {
+        _id: 't-done',
+        title: 'Done later',
+        status: 'done',
+        position: 10,
+        repoId: 'r1',
+        priority: null,
+        prompt: null,
+      },
+      {
+        _id: 't-backlog-2',
+        title: 'Backlog second',
+        status: 'backlog',
+        position: 2,
+        repoId: 'r1',
+        priority: null,
+        prompt: null,
+      },
+      {
+        _id: 't-backlog-1',
+        title: 'Backlog first',
+        status: 'backlog',
+        position: 1,
+        repoId: 'r1',
+        priority: null,
+        prompt: null,
+      },
+      {
+        _id: 't-todo',
+        title: 'Todo first',
+        status: 'todo',
+        position: 3,
+        repoId: 'r1',
+        priority: null,
+        prompt: null,
+      },
+    ]);
+
+    const result = await tool('holophyte_list_tasks')({ orgId: 'org123' });
+    const parsed = JSON.parse(result.content[0]?.text ?? '[]');
+
+    expect(parsed.map((t: { id: string }) => t.id)).toEqual([
+      't-backlog-1',
+      't-backlog-2',
+      't-todo',
+      't-done',
+    ]);
+    expect(parsed[0]?.position).toBe(1);
+    expect(parsed[1]?.position).toBe(2);
   });
 
   it('truncates long prompts to 100 chars with ellipsis', async () => {
@@ -333,6 +371,7 @@ describe('holophyte_get_task', () => {
       description: 'desc',
       prompt: 'do this',
       status: 'todo',
+      position: 4,
       priority: 'high',
       repoId: 'r1',
       repo: { name: 'my-repo', path: '/path' },
@@ -349,6 +388,7 @@ describe('holophyte_get_task', () => {
 
     expect(parsed.id).toBe('task1');
     expect(parsed.title).toBe('My Task');
+    expect(parsed.position).toBe(4);
     expect(parsed.repoName).toBe('my-repo');
     expect(parsed.repoPath).toBe('/path');
     expect(parsed.labels).toHaveLength(1);
@@ -411,6 +451,7 @@ describe('holophyte_create_task', () => {
   });
 
   it('passes labels as labelIds to api.tasks.create mutation', async () => {
+    mockQuery.mockResolvedValueOnce([]);
     mockMutation.mockResolvedValueOnce('task-l1');
 
     await tool('holophyte_create_task')({
@@ -426,6 +467,7 @@ describe('holophyte_create_task', () => {
   });
 
   it('passes both priority and labels when both are provided', async () => {
+    mockQuery.mockResolvedValueOnce([]);
     mockMutation.mockResolvedValueOnce('task-pl1');
 
     await tool('holophyte_create_task')({
@@ -499,6 +541,7 @@ describe('holophyte_create_task', () => {
   });
 
   it('response includes labelIds array from arg when provided', async () => {
+    mockQuery.mockResolvedValueOnce([]);
     mockMutation.mockResolvedValueOnce('task-wl');
 
     const result = await tool('holophyte_create_task')({
@@ -610,7 +653,23 @@ describe('holophyte_update_task', () => {
     );
   });
 
+  it('passes position to api.tasks.update mutation for same-column reordering', async () => {
+    mockMutation.mockResolvedValue(undefined);
+
+    await tool('holophyte_update_task')({
+      id: 'task1',
+      position: 7,
+    });
+
+    expect(mockMutation).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ id: 'task1', position: 7 }),
+    );
+    expect(mockMutation).toHaveBeenCalledTimes(1);
+  });
+
   it('passes labels as labelIds to api.tasks.update mutation', async () => {
+    mockQuery.mockResolvedValueOnce([]);
     mockMutation.mockResolvedValue(undefined);
 
     await tool('holophyte_update_task')({
@@ -628,6 +687,7 @@ describe('holophyte_update_task', () => {
   });
 
   it('calls update mutation when both priority and labels are provided without status', async () => {
+    mockQuery.mockResolvedValueOnce([]);
     mockMutation.mockResolvedValue(undefined);
 
     await tool('holophyte_update_task')({
@@ -685,6 +745,31 @@ describe('holophyte_update_task', () => {
     expect(mockMutation).toHaveBeenCalledTimes(2);
   });
 
+  it('passes an explicit position to api.tasks.move when status changes', async () => {
+    mockQuery.mockResolvedValueOnce({
+      _id: 'task1',
+      repoId: 'r1',
+      status: 'backlog',
+      position: 0,
+    });
+    mockQuery.mockResolvedValueOnce([
+      { _id: 'other', status: 'done', position: 10 },
+    ]);
+    mockMutation.mockResolvedValue(undefined);
+
+    await tool('holophyte_update_task')({
+      id: 'task1',
+      status: 'done',
+      position: 3,
+    });
+
+    expect(mockMutation).toHaveBeenCalledTimes(1);
+    expect(mockMutation).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ id: 'task1', status: 'done', position: 3 }),
+    );
+  });
+
   it('passes empty array as labelIds when labels is an empty array', async () => {
     mockMutation.mockResolvedValue(undefined);
 
@@ -697,6 +782,34 @@ describe('holophyte_update_task', () => {
       expect.anything(),
       expect.objectContaining({ id: 'task1', labelIds: [] }),
     );
+  });
+});
+
+// ── holophyte_reorder_tasks ───────────────────────────────────────────
+
+describe('holophyte_reorder_tasks', () => {
+  it('calls api.tasks.bulkReorder with the provided ids', async () => {
+    mockMutation.mockResolvedValue(undefined);
+
+    await tool('holophyte_reorder_tasks')({
+      ids: ['task3', 'task1', 'task2'],
+    });
+
+    expect(mockMutation).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ ids: ['task3', 'task1', 'task2'] }),
+    );
+    expect(mockMutation).toHaveBeenCalledTimes(1);
+  });
+
+  it('returns a success message including the number of reordered tasks', async () => {
+    mockMutation.mockResolvedValue(undefined);
+
+    const result = await tool('holophyte_reorder_tasks')({
+      ids: ['task1', 'task2'],
+    });
+
+    expect(result.content[0]?.text).toContain('Reordered 2 tasks successfully');
   });
 });
 
@@ -1089,6 +1202,15 @@ describe('holophyte_list_templates', () => {
       repoId: 'r1',
     });
   });
+
+  it('returns an empty array when promptTemplates.list does not return an array', async () => {
+    mockQuery.mockResolvedValueOnce({ unexpected: true });
+
+    const result = await tool('holophyte_list_templates')({});
+    const parsed = JSON.parse(result.content[0]?.text ?? '[]');
+
+    expect(parsed).toEqual([]);
+  });
 });
 
 // ── holophyte_board_summary ───────────────────────────────────────────
@@ -1201,7 +1323,8 @@ describe('bootstrapAuth', () => {
 
     process.env.CONVEX_URL = 'http://localhost:3210';
 
-    await import('./server');
+    const mod = await import('./server');
+    await mod.main();
 
     expect(mockSignInWithApiKey).toHaveBeenCalledWith(
       'http://localhost:3210',
@@ -1251,7 +1374,8 @@ describe('bootstrapAuth', () => {
 
     process.env.CONVEX_URL = 'http://localhost:3210';
 
-    await import('./server');
+    const mod = await import('./server');
+    await mod.main().catch(() => undefined);
 
     expect(mockExit).toHaveBeenCalledWith(1);
 
@@ -1298,7 +1422,8 @@ describe('bootstrapAuth', () => {
 
     process.env.CONVEX_URL = 'http://localhost:3210';
 
-    await import('./server');
+    const mod = await import('./server');
+    await mod.main().catch(() => undefined);
 
     expect(mockExit).toHaveBeenCalledWith(1);
 
