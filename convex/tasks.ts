@@ -314,7 +314,9 @@ export const bulkReorder = mutation({
   },
   handler: async (ctx, args) => {
     const firstId = args.ids[0];
-    if (!firstId) return;
+    if (!firstId) {
+      throw new Error('Task IDs must be non-empty');
+    }
 
     const uniqueIds = new Set(args.ids);
     if (uniqueIds.size !== args.ids.length) {

@@ -192,6 +192,17 @@ describe('tasks.move', () => {
 });
 
 describe('tasks.bulkReorder', () => {
+  it('rejects empty task lists', async () => {
+    const t = convexTest(schema);
+    const { authed } = await setupRepoEnv(t);
+
+    await expect(
+      authed.mutation(api.tasks.bulkReorder, {
+        ids: [],
+      }),
+    ).rejects.toThrow('Task IDs must be non-empty');
+  });
+
   it('reorders tasks within the same status and appends remaining tasks', async () => {
     const t = convexTest(schema);
     const { authed, repoId } = await setupRepoEnv(t);

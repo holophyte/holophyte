@@ -695,9 +695,10 @@ server.tool(
   },
   async ({ repoId }) => {
     const client = requireClient();
-    const templates = await client.query(api.promptTemplates.list, {
+    const templatesResult = await client.query(api.promptTemplates.list, {
       repoId: repoId ? (repoId as Id<'repos'>) : undefined,
     });
+    const templates = Array.isArray(templatesResult) ? templatesResult : [];
     return jsonResponse(
       templates.map((t) => ({
         id: t._id,

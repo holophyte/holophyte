@@ -1202,6 +1202,15 @@ describe('holophyte_list_templates', () => {
       repoId: 'r1',
     });
   });
+
+  it('returns an empty array when promptTemplates.list does not return an array', async () => {
+    mockQuery.mockResolvedValueOnce({ unexpected: true });
+
+    const result = await tool('holophyte_list_templates')({});
+    const parsed = JSON.parse(result.content[0]?.text ?? '[]');
+
+    expect(parsed).toEqual([]);
+  });
 });
 
 // ── holophyte_board_summary ───────────────────────────────────────────
