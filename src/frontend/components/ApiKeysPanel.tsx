@@ -15,6 +15,7 @@ import {
   X,
 } from 'lucide-react';
 import { useMemo, useRef, useState } from 'react';
+import { toast } from '@/frontend/lib/toast';
 import { cn } from '@/frontend/lib/utils';
 import Badge from './ui/Badge';
 import Button from './ui/Button';
@@ -63,7 +64,6 @@ function GenerateKeyDialog({ open, onOpenChange }: GenerateKeyDialogProps) {
   const [mcpScope, setMcpScope] = useState(true);
   const [expiryDays, setExpiryDays] = useState(90);
   const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [generatedKey, setGeneratedKey] = useState<string | null>(null);
   // Track whether the dialog is open so in-flight generate() calls don't set
   // state after the dialog has been closed (stale key shown on next open).
@@ -81,12 +81,11 @@ function GenerateKeyDialog({ open, onOpenChange }: GenerateKeyDialogProps) {
 
     const scopes = mcpScope ? ['mcp'] : [];
     if (scopes.length === 0) {
-      setError('Select at least one usage type.');
+      toast.error('Select at least one usage type.');
       return;
     }
 
     const requestId = ++requestIdRef.current;
-    setError(null);
     setSubmitting(true);
     try {
       const expiresAt =
@@ -105,7 +104,7 @@ function GenerateKeyDialog({ open, onOpenChange }: GenerateKeyDialogProps) {
       if (isOpenRef.current && requestId === requestIdRef.current) {
         const message =
           err instanceof Error ? err.message : 'Failed to generate key.';
-        setError(message);
+        toast.error(message);
       }
     } finally {
       if (requestId === requestIdRef.current) {
@@ -120,7 +119,6 @@ function GenerateKeyDialog({ open, onOpenChange }: GenerateKeyDialogProps) {
     setMcpScope(true);
     setExpiryDays(90);
     setSubmitting(false);
-    setError(null);
     setGeneratedKey(null);
     onOpenChange(false);
   };
@@ -194,7 +192,6 @@ function GenerateKeyDialog({ open, onOpenChange }: GenerateKeyDialogProps) {
                   ))}
                 </select>
               </div>
-              {error && <p className="text-sm text-destructive">{error}</p>}
             </div>
             <DialogFooter>
               <Button
@@ -324,8 +321,9 @@ function OneTimeKeyViewer({ rawKey }: { rawKey: string }) {
       await navigator.clipboard.writeText(rawKey);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
+      toast.success('Copied to clipboard');
     } catch {
-      // Clipboard API unavailable (e.g. non-HTTPS context)
+      toast.error('Failed to copy to clipboard');
     }
   };
 

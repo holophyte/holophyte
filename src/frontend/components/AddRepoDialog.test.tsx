@@ -5,6 +5,14 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 // Mock config module — must be before component import
 vi.mock('@/frontend/lib/config', () => ({}));
 
+// Mock toast
+const { mockToastError } = vi.hoisted(() => ({
+  mockToastError: vi.fn(),
+}));
+vi.mock('@/frontend/lib/toast', () => ({
+  toast: Object.assign(vi.fn(), { error: mockToastError, success: vi.fn() }),
+}));
+
 // Mock Convex
 const mockCreateRepo = vi.fn();
 vi.mock('convex/react', () => ({
@@ -174,9 +182,9 @@ describe('AddRepoDialog', () => {
     await user.click(screen.getByRole('button', { name: 'Add Repo' }));
 
     await waitFor(() => {
-      expect(
-        screen.getByText('This repository has already been added.'),
-      ).toBeInTheDocument();
+      expect(mockToastError).toHaveBeenCalledWith(
+        'This repository has already been added.',
+      );
     });
   });
 
@@ -219,9 +227,9 @@ describe('AddRepoDialog', () => {
       await user.click(screen.getByTitle('Browse...'));
 
       await waitFor(() => {
-        expect(
-          screen.getByText('Selected folder is not a git repository.'),
-        ).toBeInTheDocument();
+        expect(mockToastError).toHaveBeenCalledWith(
+          'Selected folder is not a git repository.',
+        );
       });
     });
 
@@ -244,9 +252,9 @@ describe('AddRepoDialog', () => {
       await user.click(screen.getByTitle('Browse...'));
 
       await waitFor(() => {
-        expect(
-          screen.getByText('Failed to open directory picker.'),
-        ).toBeInTheDocument();
+        expect(mockToastError).toHaveBeenCalledWith(
+          'Failed to open directory picker.',
+        );
       });
     });
 
@@ -258,9 +266,9 @@ describe('AddRepoDialog', () => {
       await user.click(screen.getByTitle('Browse...'));
 
       await waitFor(() => {
-        expect(
-          screen.getByText('Failed to open directory picker.'),
-        ).toBeInTheDocument();
+        expect(mockToastError).toHaveBeenCalledWith(
+          'Failed to open directory picker.',
+        );
       });
     });
 
@@ -274,9 +282,9 @@ describe('AddRepoDialog', () => {
       await user.click(screen.getByTitle('Browse...'));
 
       await waitFor(() => {
-        expect(
-          screen.getByText('Companion URL is invalid.'),
-        ).toBeInTheDocument();
+        expect(mockToastError).toHaveBeenCalledWith(
+          'Companion URL is invalid.',
+        );
       });
       expect(fetchSpy).not.toHaveBeenCalled();
     });

@@ -4,6 +4,7 @@ import { TaskStatus } from '@convex/schema';
 import { useMutation, useQuery } from 'convex/react';
 import { ArrowRight, Tag, Trash2, X } from 'lucide-react';
 import { useState } from 'react';
+import { toast } from '@/frontend/lib/toast';
 import { cn } from '@/frontend/lib/utils';
 import { useAppStore } from '@/frontend/stores/app';
 import type { EnrichedTask } from './KanbanBoard';
@@ -47,11 +48,13 @@ export default function BulkActionBar({ allTasks }: BulkActionBarProps) {
 
   const handleMove = async (status: TaskStatus) => {
     await bulkMove({ ids: bulkSelectedTaskIds, status });
+    toast.success(`Moved ${count} task${count === 1 ? '' : 's'}`);
     clearBulkSelection();
   };
 
   const handleDelete = async () => {
     await bulkDelete({ ids: bulkSelectedTaskIds });
+    toast.success(`Deleted ${count} task${count === 1 ? '' : 's'}`);
     clearBulkSelection();
     setConfirmDelete(false);
   };
