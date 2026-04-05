@@ -264,12 +264,16 @@ export function TaskDetailContent({
   };
 
   const handleDelete = async () => {
-    await removeTask({ id: task._id });
-    toast.success('Task deleted');
-    void navigate({
-      to: '/repos/$repoId',
-      params: { repoId: String(task.repoId) },
-    });
+    try {
+      await removeTask({ id: task._id });
+      toast.success('Task deleted');
+      void navigate({
+        to: '/repos/$repoId',
+        params: { repoId: String(task.repoId) },
+      });
+    } catch (err) {
+      toast.error(String(err));
+    }
   };
 
   const descriptionChanged = description !== task.description;

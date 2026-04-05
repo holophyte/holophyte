@@ -183,6 +183,8 @@ export function AddRepoDialog({ open, onOpenChange }: AddRepoDialogProps) {
                   value={path}
                   onChange={(e) => handlePathChange(e.target.value)}
                   className="font-mono text-xs"
+                  aria-invalid={!!error}
+                  aria-describedby={error ? 'add-repo-error' : undefined}
                 />
                 <Button
                   type="button"
@@ -209,10 +211,16 @@ export function AddRepoDialog({ open, onOpenChange }: AddRepoDialogProps) {
                 placeholder="my-project"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
+                aria-invalid={!!error}
+                aria-describedby={error ? 'add-repo-error' : undefined}
               />
             </div>
 
-            {error && <p className="text-sm text-destructive">{error}</p>}
+            {error && (
+              <p id="add-repo-error" className="text-sm text-destructive">
+                {error}
+              </p>
+            )}
           </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={handleClose}>

@@ -89,7 +89,7 @@ export function ClaudeButton({ task }: ClaudeButtonProps) {
     setLoading(true);
     try {
       await requestStop({ id: session._id });
-      toast('Stop requested');
+      toast.info('Stop requested');
     } catch (err) {
       toast.error(String(err));
     } finally {

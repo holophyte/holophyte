@@ -47,16 +47,24 @@ export default function BulkActionBar({ allTasks }: BulkActionBarProps) {
   const commonLabelIds = getCommonLabelIds(selectedTasks);
 
   const handleMove = async (status: TaskStatus) => {
-    await bulkMove({ ids: bulkSelectedTaskIds, status });
-    toast.success(`Moved ${count} task${count === 1 ? '' : 's'}`);
-    clearBulkSelection();
+    try {
+      await bulkMove({ ids: bulkSelectedTaskIds, status });
+      toast.success(`Moved ${count} task${count === 1 ? '' : 's'}`);
+      clearBulkSelection();
+    } catch (err) {
+      toast.error(String(err));
+    }
   };
 
   const handleDelete = async () => {
-    await bulkDelete({ ids: bulkSelectedTaskIds });
-    toast.success(`Deleted ${count} task${count === 1 ? '' : 's'}`);
-    clearBulkSelection();
-    setConfirmDelete(false);
+    try {
+      await bulkDelete({ ids: bulkSelectedTaskIds });
+      toast.success(`Deleted ${count} task${count === 1 ? '' : 's'}`);
+      clearBulkSelection();
+      setConfirmDelete(false);
+    } catch (err) {
+      toast.error(String(err));
+    }
   };
 
   const handleToggleLabel = async (labelId: Id<'labels'>) => {
