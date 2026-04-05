@@ -142,9 +142,7 @@ function AuthenticatedLayout() {
 export default function RootLayout() {
   useTheme();
   const theme = useAppStore((s) => s.theme);
-  const sonnerTheme = LIGHT_THEMES.has(theme)
-    ? ('light' as const)
-    : ('dark' as const);
+  const sonnerTheme = LIGHT_THEMES.has(theme) ? 'light' : 'dark';
   const hasSigninQuery = new URLSearchParams(window.location.search).has(
     'signin',
   );
