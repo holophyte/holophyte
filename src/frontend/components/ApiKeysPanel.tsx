@@ -246,6 +246,9 @@ function EditKeyDialog({ apiKey, open, onOpenChange }: EditKeyDialogProps) {
       onOpenChange(false);
     } catch (err) {
       console.error('Failed to update API key:', err);
+      toast.error(
+        err instanceof Error ? err.message : 'Failed to update API key.',
+      );
     } finally {
       setSaving(false);
     }
