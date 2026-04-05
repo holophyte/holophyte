@@ -2,8 +2,10 @@ import { Outlet, useMatch } from '@tanstack/react-router';
 import { Authenticated, AuthLoading, Unauthenticated } from 'convex/react';
 import { Loader2 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
+import { Toaster } from 'sonner';
 import { useTheme } from '@/frontend/hooks/useTheme';
 import { allowPasswordAuth, e2eTest } from '@/frontend/lib/config';
+import { LIGHT_THEMES, useAppStore } from '@/frontend/stores/app';
 import AutoTestAuth from '../components/AutoTestAuth';
 import { CommandPalette } from '../components/CommandPalette';
 import { Sidebar } from '../components/Sidebar';
@@ -139,6 +141,10 @@ function AuthenticatedLayout() {
 
 export default function RootLayout() {
   useTheme();
+  const theme = useAppStore((s) => s.theme);
+  const sonnerTheme = LIGHT_THEMES.has(theme)
+    ? ('light' as const)
+    : ('dark' as const);
   const hasSigninQuery = new URLSearchParams(window.location.search).has(
     'signin',
   );
@@ -155,6 +161,7 @@ export default function RootLayout() {
 
   return (
     <>
+      <Toaster theme={sonnerTheme} />
       {allowPasswordAuth && !hasSigninQuery && <AutoTestAuth />}
       <AuthLoading>{spinner}</AuthLoading>
       <Unauthenticated>
