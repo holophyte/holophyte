@@ -133,11 +133,16 @@ function AuthenticatedLayout() {
 
   return (
     <div className="flex h-screen bg-background text-foreground relative">
-      <div className="shrink-0">
-        <ErrorBoundary FallbackComponent={ErrorFallback} onError={logError}>
-          <Sidebar />
-        </ErrorBoundary>
-      </div>
+      <ErrorBoundary
+        fallbackRender={(props) => (
+          <aside className="shrink-0 w-64 border-r bg-muted/30 h-full">
+            <ErrorFallback {...props} />
+          </aside>
+        )}
+        onError={logError}
+      >
+        <Sidebar />
+      </ErrorBoundary>
       <main className="relative flex-1 min-w-0 flex flex-col overflow-clip">
         <ErrorBoundary
           FallbackComponent={ErrorFallback}
@@ -147,7 +152,11 @@ function AuthenticatedLayout() {
           <Outlet />
         </ErrorBoundary>
         <ErrorBoundary
-          FallbackComponent={ErrorFallback}
+          fallbackRender={(props) => (
+            <div className="absolute right-0 top-0 bottom-0 z-10 w-96 border-l bg-background">
+              <ErrorFallback {...props} />
+            </div>
+          )}
           onError={logError}
           resetKeys={[taskId]}
         >

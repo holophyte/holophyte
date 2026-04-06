@@ -75,29 +75,51 @@ describe('RootErrorFallback', () => {
     });
   });
 
-  describe('Reload page button', () => {
-    it('renders a "Reload page" button', () => {
+  describe('Try again button', () => {
+    it('renders a "Try again" button', () => {
       render(
         <RootErrorFallback error={new Error('x')} resetErrorBoundary={noop} />,
       );
       expect(
-        screen.getByRole('button', { name: 'Reload page' }),
+        screen.getByRole('button', { name: 'Try again' }),
       ).toBeInTheDocument();
     });
 
-    it('calls window.location.reload() when clicked', async () => {
+    it('calls resetErrorBoundary when clicked', async () => {
+      const reset = vi.fn();
+      render(
+        <RootErrorFallback error={new Error('x')} resetErrorBoundary={reset} />,
+      );
+      await userEvent.click(screen.getByRole('button', { name: 'Try again' }));
+      expect(reset).toHaveBeenCalledOnce();
+    });
+  });
+
+  describe('Clear data & reload button', () => {
+    it('renders a "Clear data & reload" button', () => {
+      render(
+        <RootErrorFallback error={new Error('x')} resetErrorBoundary={noop} />,
+      );
+      expect(
+        screen.getByRole('button', { name: 'Clear data & reload' }),
+      ).toBeInTheDocument();
+    });
+
+    it('clears localStorage and calls window.location.reload() when clicked', async () => {
       const reload = vi.fn();
       const original = window.location;
       Object.defineProperty(window, 'location', {
         value: { ...original, reload },
         writable: true,
       });
+      localStorage.setItem('test-key', 'test-value');
       render(
         <RootErrorFallback error={new Error('x')} resetErrorBoundary={noop} />,
       );
       await userEvent.click(
-        screen.getByRole('button', { name: 'Reload page' }),
+        screen.getByRole('button', { name: 'Clear data & reload' }),
       );
+      expect(localStorage.getItem('test-key')).toBeNull();
       expect(reload).toHaveBeenCalledOnce();
       Object.defineProperty(window, 'location', {
         value: original,

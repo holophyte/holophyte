@@ -12,7 +12,7 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-/** Standard Error — full-page fallback with a large icon, heading, message, and reload button. */
+/** Standard Error — full-page fallback with a large icon, heading, message, and recovery buttons. */
 export const Default: Story = {
   args: {
     error: new Error('Unexpected application error'),
