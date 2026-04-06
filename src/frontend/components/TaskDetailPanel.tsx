@@ -439,6 +439,7 @@ export function TaskDetailContent({
                   </Button>
                   <input
                     type="date"
+                    tabIndex={-1}
                     aria-label="Set due date"
                     onChange={(e) => handleDueDateChange(e.target.value)}
                     className="absolute inset-0 opacity-0 cursor-pointer"
