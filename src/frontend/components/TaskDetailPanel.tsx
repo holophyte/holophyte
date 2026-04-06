@@ -4,7 +4,7 @@ import { PRIORITY_CONFIG, TaskPriority, TaskStatus } from '@convex/schema';
 import { useNavigate, useParams } from '@tanstack/react-router';
 import { useMutation, useQuery } from 'convex/react';
 import type { FunctionReturnType } from 'convex/server';
-import { ChevronDown, Maximize2, X } from 'lucide-react';
+import { CalendarPlus, ChevronDown, Maximize2, X } from 'lucide-react';
 import {
   type RefObject,
   useCallback,
@@ -406,22 +406,45 @@ export function TaskDetailContent({
               Due Date
             </Label>
             <div className="flex items-center gap-1 mt-0.5">
-              <Input
-                id="detail-due-date"
-                type="date"
-                value={dueDate}
-                onChange={(e) => handleDueDateChange(e.target.value)}
-                className="h-7 text-xs"
-              />
-              {dueDate && (
-                <button
-                  type="button"
-                  onClick={() => handleDueDateChange('')}
-                  aria-label="Clear due date"
-                  className="p-1 text-muted-foreground hover:text-foreground"
-                >
-                  <X className="h-3 w-3" />
-                </button>
+              {dueDate ? (
+                <>
+                  <Input
+                    id="detail-due-date"
+                    type="date"
+                    value={dueDate}
+                    onChange={(e) => handleDueDateChange(e.target.value)}
+                    className="h-7 text-xs"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => handleDueDateChange('')}
+                    aria-label="Clear due date"
+                    className="p-1 text-muted-foreground hover:text-foreground"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </>
+              ) : (
+                <div className="relative">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    tabIndex={-1}
+                    aria-hidden="true"
+                    className="h-7 px-2 text-xs text-muted-foreground pointer-events-none"
+                  >
+                    <CalendarPlus className="h-3.5 w-3.5" />
+                    No deadline
+                  </Button>
+                  <input
+                    type="date"
+                    tabIndex={-1}
+                    aria-label="Set due date"
+                    onChange={(e) => handleDueDateChange(e.target.value)}
+                    className="absolute inset-0 opacity-0 cursor-pointer"
+                  />
+                </div>
               )}
             </div>
           </div>
