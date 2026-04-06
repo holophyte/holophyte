@@ -159,7 +159,7 @@ export default function RootLayout() {
 
   return (
     <>
-      <Toaster theme={sonnerTheme} closeButton />
+      <Toaster theme={sonnerTheme} position="top-center" closeButton />
       {allowPasswordAuth && !hasSigninQuery && <AutoTestAuth />}
       <AuthLoading>{spinner}</AuthLoading>
       <Unauthenticated>
