@@ -4,6 +4,7 @@ import { TaskStatus } from '@convex/schema';
 import { useMutation, useQuery } from 'convex/react';
 import { ArrowRight, Tag, Trash2, X } from 'lucide-react';
 import { useState } from 'react';
+import { toast } from '@/frontend/lib/toast';
 import { cn } from '@/frontend/lib/utils';
 import { useAppStore } from '@/frontend/stores/app';
 import type { EnrichedTask } from './KanbanBoard';
@@ -46,14 +47,24 @@ export default function BulkActionBar({ allTasks }: BulkActionBarProps) {
   const commonLabelIds = getCommonLabelIds(selectedTasks);
 
   const handleMove = async (status: TaskStatus) => {
-    await bulkMove({ ids: bulkSelectedTaskIds, status });
-    clearBulkSelection();
+    try {
+      await bulkMove({ ids: bulkSelectedTaskIds, status });
+      toast.success(`Moved ${count} task${count === 1 ? '' : 's'}`);
+      clearBulkSelection();
+    } catch (err) {
+      toast.error(String(err));
+    }
   };
 
   const handleDelete = async () => {
-    await bulkDelete({ ids: bulkSelectedTaskIds });
-    clearBulkSelection();
-    setConfirmDelete(false);
+    try {
+      await bulkDelete({ ids: bulkSelectedTaskIds });
+      toast.success(`Deleted ${count} task${count === 1 ? '' : 's'}`);
+      clearBulkSelection();
+      setConfirmDelete(false);
+    } catch (err) {
+      toast.error(String(err));
+    }
   };
 
   const handleToggleLabel = async (labelId: Id<'labels'>) => {

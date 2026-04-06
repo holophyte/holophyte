@@ -18,6 +18,7 @@ import {
   timestampToDateInput,
 } from '@/frontend/lib/dateUtils';
 import { isEditableElement } from '@/frontend/lib/dom';
+import { toast } from '@/frontend/lib/toast';
 import { cn } from '@/frontend/lib/utils';
 import { ClaudeButton } from './ClaudeButton';
 import { LabelDots, LabelPicker } from './LabelPicker';
@@ -263,11 +264,16 @@ export function TaskDetailContent({
   };
 
   const handleDelete = async () => {
-    await removeTask({ id: task._id });
-    void navigate({
-      to: '/repos/$repoId',
-      params: { repoId: String(task.repoId) },
-    });
+    try {
+      await removeTask({ id: task._id });
+      toast.success('Task deleted');
+      void navigate({
+        to: '/repos/$repoId',
+        params: { repoId: String(task.repoId) },
+      });
+    } catch (err) {
+      toast.error(String(err));
+    }
   };
 
   const descriptionChanged = description !== task.description;

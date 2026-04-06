@@ -4,6 +4,7 @@ import { useMutation, useQuery } from 'convex/react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { DEFAULT_MODEL, QUEUED_WARNING_THRESHOLD_MS } from '@/constants';
 import { useSession } from '@/frontend/hooks/useSession';
+import { toast } from '@/frontend/lib/toast';
 import { useAppStore } from '@/frontend/stores/app';
 import type { ClaudeModelId } from './ModelPicker';
 import ModelPicker from './ModelPicker';
@@ -213,7 +214,6 @@ function NoSessionPlaceholder({
 }: NoSessionPlaceholderProps) {
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [model, setModel] = useState<ClaudeModelId>(DEFAULT_MODEL);
 
   // Pre-fill text from the task prompt when it arrives from Convex, but only if
@@ -229,12 +229,11 @@ function NoSessionPlaceholder({
   const handleSend = async () => {
     if (!text.trim() || !taskPath) return;
     setSending(true);
-    setError(null);
     try {
       await onStart(text.trim(), model);
       setText('');
     } catch {
-      setError('Failed to start session. Try again.');
+      toast.error('Failed to start session. Try again.');
     } finally {
       setSending(false);
     }
@@ -260,7 +259,6 @@ function NoSessionPlaceholder({
             }
           }}
         />
-        {error && <p className="text-xs text-destructive">{error}</p>}
         <div className="flex items-center gap-2">
           <Button
             className="flex-1"

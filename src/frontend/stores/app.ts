@@ -24,6 +24,12 @@ export const VALID_THEMES: ThemeName[] = [
   'arctic',
 ];
 
+export const LIGHT_THEMES: ReadonlySet<ThemeName> = new Set<ThemeName>([
+  'paper',
+  'dune',
+  'arctic',
+]);
+
 export const DEFAULT_THEME: ThemeName = 'neon';
 
 const DEFAULT_COLLAPSED_COLUMNS = new Set<string>([TaskStatus.Backlog]);

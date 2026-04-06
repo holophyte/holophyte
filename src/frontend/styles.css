@@ -417,3 +417,46 @@ html[data-theme] {
     scroll-behavior: auto !important;
   }
 }
+
+/* ─── Sonner Toast Overrides ─── */
+
+/* Semantic color tokens for toast types */
+:root {
+  --toast-success: oklch(0.72 0.19 145);
+  --toast-info: var(--ring);
+  --toast-warning: oklch(0.78 0.16 70);
+  --toast-error: var(--destructive);
+}
+
+/* Base toast — override sonner's CSS variables for theme integration */
+[data-sonner-toaster] [data-sonner-toast] {
+  --normal-bg: var(--popover);
+  --normal-text: var(--popover-foreground);
+  --normal-border: var(--border);
+
+  box-shadow: 0 4px 16px oklch(0 0 0 / 0.25);
+}
+
+/* Success */
+[data-sonner-toaster] [data-sonner-toast][data-type="success"] {
+  --normal-bg: color-mix(in oklch, var(--toast-success) 15%, var(--popover));
+  --normal-border: var(--toast-success);
+}
+
+/* Error */
+[data-sonner-toaster] [data-sonner-toast][data-type="error"] {
+  --normal-bg: color-mix(in oklch, var(--toast-error) 15%, var(--popover));
+  --normal-border: var(--toast-error);
+}
+
+/* Info */
+[data-sonner-toaster] [data-sonner-toast][data-type="info"] {
+  --normal-bg: color-mix(in oklch, var(--toast-info) 15%, var(--popover));
+  --normal-border: var(--toast-info);
+}
+
+/* Warning */
+[data-sonner-toaster] [data-sonner-toast][data-type="warning"] {
+  --normal-bg: color-mix(in oklch, var(--toast-warning) 15%, var(--popover));
+  --normal-border: var(--toast-warning);
+}

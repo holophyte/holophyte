@@ -113,7 +113,7 @@ test.describe('Composer Enhancements — active session state', () => {
     await startSession(page, 'Test prompt');
 
     // Input should be empty after starting, so the stop button should show
-    const stopButton = page.locator('button[aria-label="Stop session"]');
+    const stopButton = page.locator('form button[aria-label="Stop session"]');
     await expect(stopButton).toBeVisible({ timeout: 5000 });
   });
 
@@ -123,7 +123,7 @@ test.describe('Composer Enhancements — active session state', () => {
     await openTaskPage(page, title);
     await startSession(page, 'Test prompt');
 
-    const stopButton = page.locator('button[aria-label="Stop session"]');
+    const stopButton = page.locator('form button[aria-label="Stop session"]');
     await expect(stopButton).toBeVisible({ timeout: 5000 });
     await expect(stopButton).toHaveClass(/bg-destructive/);
   });
@@ -137,9 +137,9 @@ test.describe('Composer Enhancements — active session state', () => {
     await startSession(page, 'Test prompt');
 
     // Initially stop button is visible (empty input + active session)
-    await expect(page.locator('button[aria-label="Stop session"]')).toBeVisible(
-      { timeout: 5000 },
-    );
+    await expect(
+      page.locator('form button[aria-label="Stop session"]'),
+    ).toBeVisible({ timeout: 5000 });
 
     // Type in the composer input
     const input = page.locator(
@@ -148,9 +148,9 @@ test.describe('Composer Enhancements — active session state', () => {
     await input.fill('A follow-up message');
 
     // Stop button should be gone; send button should appear
-    await expect(page.locator('button[aria-label="Stop session"]')).toBeHidden({
-      timeout: 3000,
-    });
+    await expect(
+      page.locator('form button[aria-label="Stop session"]'),
+    ).toBeHidden({ timeout: 3000 });
     await expect(page.locator('button[aria-label="Send message"]')).toBeVisible(
       { timeout: 3000 },
     );
@@ -170,7 +170,7 @@ test.describe('Composer Enhancements — active session state', () => {
     const sendInput = page.locator(
       '[aria-label="Follow-up message — press Enter to send"]',
     );
-    const stopButton = page.locator('button[aria-label="Stop session"]');
+    const stopButton = page.locator('form button[aria-label="Stop session"]');
     const sendButton = page.locator('button[aria-label="Send message"]');
 
     // Type to show send button (aria-label changes when text is entered)
@@ -213,9 +213,9 @@ test.describe('Composer Enhancements — active session state', () => {
     await expect(input).toBeVisible({ timeout: 5000 });
 
     // Verify stop button is present (empty + active)
-    await expect(page.locator('button[aria-label="Stop session"]')).toBeVisible(
-      { timeout: 5000 },
-    );
+    await expect(
+      page.locator('form button[aria-label="Stop session"]'),
+    ).toBeVisible({ timeout: 5000 });
 
     // Press Enter on empty input — should trigger stop
     await input.press('Enter');
@@ -224,9 +224,9 @@ test.describe('Composer Enhancements — active session state', () => {
     // The composer will either show the no-session placeholder or the
     // stopped-state composer without the stop button.
     // Wait for the stop button to disappear (session is no longer active).
-    await expect(page.locator('button[aria-label="Stop session"]')).toBeHidden({
-      timeout: 10000,
-    });
+    await expect(
+      page.locator('form button[aria-label="Stop session"]'),
+    ).toBeHidden({ timeout: 10000 });
   });
 });
 

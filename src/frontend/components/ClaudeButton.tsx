@@ -7,6 +7,7 @@ import { useState } from 'react';
 import { DEFAULT_MODEL } from '@/constants';
 import { useCompanionStatus } from '@/frontend/hooks/useCompanionStatus';
 import { useStickyValue } from '@/frontend/hooks/useStickyValue';
+import { toast } from '@/frontend/lib/toast';
 import { useAppStore } from '@/frontend/stores/app';
 import type { ClaudeModelId } from './ModelPicker';
 import ModelPicker from './ModelPicker';
@@ -31,7 +32,6 @@ export function ClaudeButton({ task }: ClaudeButtonProps) {
     shouldThrow: false,
   });
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [model, setModel] = useState<ClaudeModelId>(DEFAULT_MODEL);
   const [prevTaskId, setPrevTaskId] = useState(task._id);
   const selectedOrgId = useAppStore((s) => s.selectedOrgId);
@@ -48,7 +48,6 @@ export function ClaudeButton({ task }: ClaudeButtonProps) {
     taskPageMatch?.params.repoId === String(task.repoId);
 
   const handleLaunch = async () => {
-    setError(null);
     if (!task.repo) return;
 
     if (task.prompt) {
@@ -69,7 +68,9 @@ export function ClaudeButton({ task }: ClaudeButtonProps) {
           });
         }
       } catch (err) {
-        setError(String(err));
+        toast.error(
+          `Failed to launch session for "${task.title}": ${String(err)}`,
+        );
       } finally {
         setLoading(false);
       }
@@ -88,11 +89,11 @@ export function ClaudeButton({ task }: ClaudeButtonProps) {
   const handleStop = async () => {
     if (!session) return;
     setLoading(true);
-    setError(null);
     try {
       await requestStop({ id: session._id });
+      toast.success(`Stop requested for "${task.title}"`);
     } catch (err) {
-      setError(String(err));
+      toast.error(`Failed to stop session for "${task.title}": ${String(err)}`);
     } finally {
       setLoading(false);
     }
@@ -115,23 +116,26 @@ export function ClaudeButton({ task }: ClaudeButtonProps) {
 
   if (session?.status === 'running' || session?.status === 'queued') {
     return (
-      <>
-        <div className="flex gap-2">
-          <Button
-            size="sm"
-            variant="outline"
-            className="flex-1"
-            onClick={handleResume}
-          >
-            <Play className="h-4 w-4 mr-1" />
-            {session.status === 'queued' ? 'Queued…' : 'View Session'}
-          </Button>
-          <Button size="sm" variant="destructive" onClick={handleStop}>
-            <Square className="h-4 w-4" />
-          </Button>
-        </div>
-        {error && <p className="text-xs text-red-600 mt-1">{error}</p>}
-      </>
+      <div className="flex gap-2">
+        <Button
+          size="sm"
+          variant="outline"
+          className="flex-1"
+          onClick={handleResume}
+        >
+          <Play className="h-4 w-4 mr-1" />
+          {session.status === 'queued' ? 'Queued…' : 'View Session'}
+        </Button>
+        <Button
+          size="sm"
+          variant="destructive"
+          onClick={handleStop}
+          aria-label="Stop session"
+          title="Stop session"
+        >
+          <Square className="h-4 w-4" />
+        </Button>
+      </div>
     );
   }
 
@@ -157,7 +161,6 @@ export function ClaudeButton({ task }: ClaudeButtonProps) {
             : 'Companion connection is stale \u2014 task may be delayed.'}
         </p>
       )}
-      {error && <p className="text-xs text-red-600 mt-1">{error}</p>}
     </>
   );
 }

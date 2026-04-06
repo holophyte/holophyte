@@ -3,6 +3,7 @@ import { useMutation } from 'convex/react';
 import { FolderOpen, Info, Loader2 } from 'lucide-react';
 import { useState } from 'react';
 import { useCompanionStatus } from '@/frontend/hooks/useCompanionStatus';
+import { toast } from '@/frontend/lib/toast';
 import { useAppStore } from '@/frontend/stores/app';
 import Button from './ui/Button';
 import {
@@ -71,7 +72,7 @@ export function AddRepoDialog({ open, onOpenChange }: AddRepoDialogProps) {
       // UX hint only — real localhost validation is enforced server-side
       // in the companion heartbeat mutation (convex/companion.ts)
       if (baseUrl && !/^http:\/\/(localhost|127\.0\.0\.1):\d+$/.test(baseUrl)) {
-        setError('Companion URL is invalid.');
+        toast.error('Companion URL is invalid.');
         return;
       }
       const res = await fetch(`${baseUrl}/api/pick-directory`, {
@@ -88,7 +89,7 @@ export function AddRepoDialog({ open, onOpenChange }: AddRepoDialogProps) {
         setError('Selected folder is not a git repository.');
       }
     } catch {
-      setError(
+      toast.error(
         companionState !== 'connected'
           ? 'Companion is not connected. Start the companion to use the directory picker.'
           : 'Failed to open directory picker.',
@@ -125,9 +126,9 @@ export function AddRepoDialog({ open, onOpenChange }: AddRepoDialogProps) {
       const message =
         err instanceof Error ? err.message : 'Failed to add repo.';
       if (message.includes('already exists')) {
-        setError('This repository has already been added.');
+        toast.error('This repository has already been added.');
       } else {
-        setError(message);
+        toast.error(message);
       }
     } finally {
       setSubmitting(false);
@@ -182,6 +183,8 @@ export function AddRepoDialog({ open, onOpenChange }: AddRepoDialogProps) {
                   value={path}
                   onChange={(e) => handlePathChange(e.target.value)}
                   className="font-mono text-xs"
+                  aria-invalid={!!error}
+                  aria-describedby={error ? 'add-repo-error' : undefined}
                 />
                 <Button
                   type="button"
@@ -208,10 +211,16 @@ export function AddRepoDialog({ open, onOpenChange }: AddRepoDialogProps) {
                 placeholder="my-project"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
+                aria-invalid={!!error}
+                aria-describedby={error ? 'add-repo-error' : undefined}
               />
             </div>
 
-            {error && <p className="text-sm text-destructive">{error}</p>}
+            {error && (
+              <p id="add-repo-error" className="text-sm text-destructive">
+                {error}
+              </p>
+            )}
           </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={handleClose}>
