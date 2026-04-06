@@ -68,7 +68,9 @@ export function ClaudeButton({ task }: ClaudeButtonProps) {
           });
         }
       } catch (err) {
-        toast.error(String(err));
+        toast.error(
+          `Failed to launch session for "${task.title}": ${String(err)}`,
+        );
       } finally {
         setLoading(false);
       }
@@ -89,9 +91,9 @@ export function ClaudeButton({ task }: ClaudeButtonProps) {
     setLoading(true);
     try {
       await requestStop({ id: session._id });
-      toast.info('Stop requested');
+      toast.info(`Stop requested for "${task.title}"`);
     } catch (err) {
-      toast.error(String(err));
+      toast.error(`Failed to stop session for "${task.title}": ${String(err)}`);
     } finally {
       setLoading(false);
     }
