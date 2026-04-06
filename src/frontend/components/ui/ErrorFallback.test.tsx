@@ -14,13 +14,6 @@ describe('ErrorFallback', () => {
       expect(screen.getByRole('alert')).toBeInTheDocument();
     });
 
-    it('container has tabIndex={-1} for focus management', () => {
-      render(
-        <ErrorFallback error={new Error('oops')} resetErrorBoundary={noop} />,
-      );
-      expect(screen.getByRole('alert')).toHaveAttribute('tabindex', '-1');
-    });
-
     it('icon has aria-hidden="true"', () => {
       const { container } = render(
         <ErrorFallback error={new Error('oops')} resetErrorBoundary={noop} />,

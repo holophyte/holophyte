@@ -1,21 +1,18 @@
 import { TriangleAlert } from 'lucide-react';
 import { useEffect, useRef } from 'react';
 import type { FallbackProps } from 'react-error-boundary';
-import Button from './Button';
 
-/** Full-page last-resort error fallback. */
+/** Full-page last-resort error fallback — dependency-light to avoid cascading failures. */
 function RootErrorFallback({ error }: FallbackProps) {
-  const containerRef = useRef<HTMLDivElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
-    containerRef.current?.focus();
+    buttonRef.current?.focus();
   }, []);
 
   return (
     <div
-      ref={containerRef}
-      tabIndex={-1}
-      className="h-screen w-screen flex flex-col items-center justify-center gap-4 bg-background text-foreground p-8 outline-none"
+      className="h-screen w-screen flex flex-col items-center justify-center gap-4 bg-background text-foreground p-8"
       role="alert"
     >
       <TriangleAlert
@@ -28,9 +25,14 @@ function RootErrorFallback({ error }: FallbackProps) {
       <p className="text-sm text-muted-foreground font-mono max-w-md line-clamp-3 text-center">
         {error instanceof Error ? error.message : String(error)}
       </p>
-      <Button variant="outline" onClick={() => window.location.reload()}>
+      <button
+        ref={buttonRef}
+        type="button"
+        className="inline-flex items-center justify-center rounded-md border border-input bg-background px-4 py-2 text-sm font-medium shadow-sm hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring cursor-pointer"
+        onClick={() => window.location.reload()}
+      >
         Reload page
-      </Button>
+      </button>
     </div>
   );
 }

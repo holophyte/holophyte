@@ -1,5 +1,6 @@
 import { render, screen } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import userEvent from '@testing-library/user-event';
+import { describe, expect, it, vi } from 'vitest';
 import RootErrorFallback from './RootErrorFallback';
 
 const noop = () => {};
@@ -14,16 +15,6 @@ describe('RootErrorFallback', () => {
         />,
       );
       expect(screen.getByRole('alert')).toBeInTheDocument();
-    });
-
-    it('container has tabIndex={-1} for focus management', () => {
-      render(
-        <RootErrorFallback
-          error={new Error('oops')}
-          resetErrorBoundary={noop}
-        />,
-      );
-      expect(screen.getByRole('alert')).toHaveAttribute('tabindex', '-1');
     });
 
     it('icon has aria-hidden="true"', () => {
@@ -92,6 +83,26 @@ describe('RootErrorFallback', () => {
       expect(
         screen.getByRole('button', { name: 'Reload page' }),
       ).toBeInTheDocument();
+    });
+
+    it('calls window.location.reload() when clicked', async () => {
+      const reload = vi.fn();
+      const original = window.location;
+      Object.defineProperty(window, 'location', {
+        value: { ...original, reload },
+        writable: true,
+      });
+      render(
+        <RootErrorFallback error={new Error('x')} resetErrorBoundary={noop} />,
+      );
+      await userEvent.click(
+        screen.getByRole('button', { name: 'Reload page' }),
+      );
+      expect(reload).toHaveBeenCalledOnce();
+      Object.defineProperty(window, 'location', {
+        value: original,
+        writable: true,
+      });
     });
   });
 });
