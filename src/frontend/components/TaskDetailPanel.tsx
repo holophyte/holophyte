@@ -4,7 +4,7 @@ import { PRIORITY_CONFIG, TaskPriority, TaskStatus } from '@convex/schema';
 import { useNavigate, useParams } from '@tanstack/react-router';
 import { useMutation, useQuery } from 'convex/react';
 import type { FunctionReturnType } from 'convex/server';
-import { ChevronDown, Maximize2, X } from 'lucide-react';
+import { CalendarPlus, ChevronDown, Maximize2, X } from 'lucide-react';
 import {
   type RefObject,
   useCallback,
@@ -216,6 +216,7 @@ export function TaskDetailContent({
   const [description, setDescription] = useState(task.description);
   const [prompt, setPrompt] = useState(task.prompt);
   const [priorityOpen, setPriorityOpen] = useState(false);
+  const [showDatePicker, setShowDatePicker] = useState(Boolean(task.dueAt));
 
   // Reset local state when switching tasks (synchronous, no useEffect)
   if (task._id !== prevTaskId) {
@@ -224,6 +225,7 @@ export function TaskDetailContent({
     setDescription(task.description);
     setPrompt(task.prompt);
     setPriorityOpen(false);
+    setShowDatePicker(Boolean(task.dueAt));
   }
 
   // Auto-save title on blur
@@ -406,22 +408,50 @@ export function TaskDetailContent({
               Due Date
             </Label>
             <div className="flex items-center gap-1 mt-0.5">
-              <Input
-                id="detail-due-date"
-                type="date"
-                value={dueDate}
-                onChange={(e) => handleDueDateChange(e.target.value)}
-                className="h-7 text-xs"
-              />
-              {dueDate && (
-                <button
+              {showDatePicker || dueDate ? (
+                <>
+                  <Input
+                    id="detail-due-date"
+                    type="date"
+                    value={dueDate}
+                    onChange={(e) => handleDueDateChange(e.target.value)}
+                    className="h-7 text-xs"
+                  />
+                  {dueDate ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        handleDueDateChange('');
+                        setShowDatePicker(false);
+                      }}
+                      aria-label="Clear due date"
+                      className="p-1 text-muted-foreground hover:text-foreground"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  ) : (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setShowDatePicker(false)}
+                      className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground"
+                    >
+                      Cancel
+                    </Button>
+                  )}
+                </>
+              ) : (
+                <Button
                   type="button"
-                  onClick={() => handleDueDateChange('')}
-                  aria-label="Clear due date"
-                  className="p-1 text-muted-foreground hover:text-foreground"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowDatePicker(true)}
+                  className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground"
                 >
-                  <X className="h-3 w-3" />
-                </button>
+                  <CalendarPlus className="h-3.5 w-3.5" />
+                  No deadline
+                </Button>
               )}
             </div>
           </div>
