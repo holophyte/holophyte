@@ -105,26 +105,29 @@ describe('RootErrorFallback', () => {
       ).toBeInTheDocument();
     });
 
-    it('clears localStorage and calls window.location.reload() when clicked', async () => {
+    it('clears app state and calls window.location.reload() when clicked', async () => {
       const reload = vi.fn();
       const original = window.location;
       Object.defineProperty(window, 'location', {
         value: { ...original, reload },
         writable: true,
       });
-      localStorage.setItem('test-key', 'test-value');
+      localStorage.setItem('holophyte-app', '{"some":"state"}');
+      localStorage.setItem('auth-token', 'should-survive');
       render(
         <RootErrorFallback error={new Error('x')} resetErrorBoundary={noop} />,
       );
       await userEvent.click(
         screen.getByRole('button', { name: 'Clear data & reload' }),
       );
-      expect(localStorage.getItem('test-key')).toBeNull();
+      expect(localStorage.getItem('holophyte-app')).toBeNull();
+      expect(localStorage.getItem('auth-token')).toBe('should-survive');
       expect(reload).toHaveBeenCalledOnce();
       Object.defineProperty(window, 'location', {
         value: original,
         writable: true,
       });
+      localStorage.removeItem('auth-token');
     });
   });
 });
