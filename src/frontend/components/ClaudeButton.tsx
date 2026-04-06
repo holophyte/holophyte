@@ -91,7 +91,7 @@ export function ClaudeButton({ task }: ClaudeButtonProps) {
     setLoading(true);
     try {
       await requestStop({ id: session._id });
-      toast.info(`Stop requested for "${task.title}"`);
+      toast.success(`Stop requested for "${task.title}"`);
     } catch (err) {
       toast.error(`Failed to stop session for "${task.title}": ${String(err)}`);
     } finally {
@@ -126,7 +126,13 @@ export function ClaudeButton({ task }: ClaudeButtonProps) {
           <Play className="h-4 w-4 mr-1" />
           {session.status === 'queued' ? 'Queued…' : 'View Session'}
         </Button>
-        <Button size="sm" variant="destructive" onClick={handleStop}>
+        <Button
+          size="sm"
+          variant="destructive"
+          onClick={handleStop}
+          aria-label="Stop session"
+          title="Stop session"
+        >
           <Square className="h-4 w-4" />
         </Button>
       </div>
