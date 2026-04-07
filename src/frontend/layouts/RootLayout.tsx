@@ -1,7 +1,8 @@
-import { Outlet, useMatch } from '@tanstack/react-router';
+import { Outlet, useLocation, useMatch } from '@tanstack/react-router';
 import { Authenticated, AuthLoading, Unauthenticated } from 'convex/react';
 import { Loader2 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
+import { ErrorBoundary } from 'react-error-boundary';
 import { Toaster } from 'sonner';
 import { useTheme } from '@/frontend/hooks/useTheme';
 import { allowPasswordAuth, e2eTest } from '@/frontend/lib/config';
@@ -11,8 +12,14 @@ import { CommandPalette } from '../components/CommandPalette';
 import { Sidebar } from '../components/Sidebar';
 import SignInPage from '../components/SignInPage';
 import TaskDetailPanel from '../components/TaskDetailPanel';
+import ErrorFallback from '../components/ui/ErrorFallback';
+import RootErrorFallback from '../components/ui/RootErrorFallback';
 
 const PANEL_TRANSITION_MS = 300;
+
+function logError(error: unknown, info: { componentStack?: string | null }) {
+  console.error('ErrorBoundary caught:', error, info.componentStack);
+}
 
 function AnimatedTaskDetailPanel({
   open,
@@ -122,17 +129,43 @@ function AuthenticatedLayout() {
   // Don't restore focus when closing due to "Expand to full page" navigation
   const skipFocusRestore = !!taskPageMatch;
   const taskId = taskDetailMatch?.params.taskId;
+  const { pathname } = useLocation();
 
   return (
     <div className="flex h-screen bg-background text-foreground relative">
-      <Sidebar />
+      <ErrorBoundary
+        fallbackRender={(props) => (
+          <aside className="shrink-0 w-64 border-r bg-muted/30 h-full">
+            <ErrorFallback {...props} />
+          </aside>
+        )}
+        onError={logError}
+      >
+        <Sidebar />
+      </ErrorBoundary>
       <main className="relative flex-1 min-w-0 flex flex-col overflow-clip">
-        <Outlet />
-        <AnimatedTaskDetailPanel
-          open={showTaskDetailPanel}
-          taskId={taskId}
-          skipFocusRestore={skipFocusRestore}
-        />
+        <ErrorBoundary
+          FallbackComponent={ErrorFallback}
+          onError={logError}
+          resetKeys={[pathname]}
+        >
+          <Outlet />
+        </ErrorBoundary>
+        <ErrorBoundary
+          fallbackRender={(props) => (
+            <div className="absolute right-0 top-0 bottom-0 z-10 w-96 border-l bg-background">
+              <ErrorFallback {...props} />
+            </div>
+          )}
+          onError={logError}
+          resetKeys={[taskId]}
+        >
+          <AnimatedTaskDetailPanel
+            open={showTaskDetailPanel}
+            taskId={taskId}
+            skipFocusRestore={skipFocusRestore}
+          />
+        </ErrorBoundary>
       </main>
       <CommandPalette />
     </div>
@@ -166,7 +199,9 @@ export default function RootLayout() {
         {e2eTest && !allowPasswordAuth ? spinner : <SignInPage />}
       </Unauthenticated>
       <Authenticated>
-        <AuthenticatedLayout />
+        <ErrorBoundary FallbackComponent={RootErrorFallback} onError={logError}>
+          <AuthenticatedLayout />
+        </ErrorBoundary>
       </Authenticated>
     </>
   );
