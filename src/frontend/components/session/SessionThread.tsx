@@ -1,18 +1,30 @@
-import { ThreadPrimitive, useThreadViewport } from '@assistant-ui/react';
-import { ChevronDown, Sparkles } from 'lucide-react';
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { cn } from '@/frontend/lib/utils';
-import CustomAssistantMessage from './CustomAssistantMessage';
-import CustomUserMessage from './CustomUserMessage';
+import type { UIMessage } from 'ai';
+import { Sparkles } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import {
+  Conversation,
+  ConversationContent,
+  ConversationScrollButton,
+} from '@/frontend/components/ai-elements/conversation';
+import {
+  Message,
+  MessageContent,
+  MessageResponse,
+} from '@/frontend/components/ai-elements/message';
+import {
+  Reasoning,
+  ReasoningContent,
+  ReasoningTrigger,
+} from '@/frontend/components/ai-elements/reasoning';
 import { useSessionActions } from './SessionActionsContext';
 import SessionComposer from './SessionComposer';
+import ToolCallUI from './ToolCallUI';
 
-/** Minimum distance (px) from bottom before the scroll button appears */
-const SCROLL_THRESHOLD = 200;
+interface ThinkingIndicatorProps {
+  isRunning: boolean;
+}
 
-function ThinkingIndicator() {
-  const { sessionStatus } = useSessionActions();
-  const isRunning = sessionStatus === 'running';
+function ThinkingIndicator({ isRunning }: ThinkingIndicatorProps) {
   const [elapsed, setElapsed] = useState(0);
 
   useEffect(() => {
@@ -41,80 +53,68 @@ function ThinkingIndicator() {
   );
 }
 
-function useScrollDistance() {
-  const [show, setShow] = useState(false);
-  const viewportRef = useRef<HTMLElement | null>(null);
-
-  const handleScroll = useCallback((e: Event) => {
-    const el = e.target as HTMLElement;
-    const distance = el.scrollHeight - el.scrollTop - el.clientHeight;
-    setShow(distance > SCROLL_THRESHOLD);
-  }, []);
-
-  // Ref callback to place on a node inside the scrollable viewport
-  const sentinelRef = useCallback(
-    (node: HTMLDivElement | null) => {
-      if (viewportRef.current) {
-        viewportRef.current.removeEventListener('scroll', handleScroll);
-        viewportRef.current = null;
-      }
-
-      if (!node) return;
-
-      // Walk up to the scrollable parent
-      let el: HTMLElement | null = node.parentElement;
-      while (el) {
-        const { overflowY } = getComputedStyle(el);
-        if (overflowY === 'auto' || overflowY === 'scroll') {
-          viewportRef.current = el;
-          el.addEventListener('scroll', handleScroll, { passive: true });
-          const distance = el.scrollHeight - el.scrollTop - el.clientHeight;
-          setShow(distance > SCROLL_THRESHOLD);
-          break;
-        }
-        el = el.parentElement;
-      }
-    },
-    [handleScroll],
-  );
-
-  return { show, sentinelRef };
+interface SessionThreadProps {
+  messages: UIMessage[];
+  status: 'ready' | 'submitted' | 'streaming' | 'error';
 }
 
-export default function SessionThread() {
-  const scrollToBottom = useThreadViewport((s) => s.scrollToBottom);
-  const { show, sentinelRef } = useScrollDistance();
+export default function SessionThread({
+  messages,
+  status,
+}: SessionThreadProps) {
+  const { sessionStatus } = useSessionActions();
+  const isRunning = sessionStatus === 'running';
+  const isStreaming = status === 'streaming';
 
   return (
-    <ThreadPrimitive.Root className="relative flex h-full flex-col">
-      <ThreadPrimitive.Viewport className="flex-1 overflow-y-auto px-4 py-4">
-        <div className="w-full max-w-[90ch] space-y-5">
-          <ThreadPrimitive.Messages
-            components={{
-              UserMessage: CustomUserMessage,
-              AssistantMessage: CustomAssistantMessage,
-            }}
-          />
-          <ThinkingIndicator />
-        </div>
-        <div ref={sentinelRef} className="hidden" aria-hidden="true" />
-      </ThreadPrimitive.Viewport>
-      <button
-        type="button"
-        aria-label="Scroll to bottom"
-        aria-hidden={show ? undefined : true}
-        tabIndex={show ? 0 : -1}
-        onClick={() => scrollToBottom({ behavior: 'smooth' })}
-        className={cn(
-          'absolute bottom-20 right-4 flex h-8 w-8 items-center justify-center rounded-full bg-foreground text-background shadow-lg hover:bg-foreground/80 transition-all duration-200',
-          show
-            ? 'opacity-100 translate-y-0'
-            : 'opacity-0 translate-y-2 pointer-events-none',
-        )}
-      >
-        <ChevronDown className="h-4 w-4" />
-      </button>
+    <Conversation className="relative flex h-full flex-col">
+      <ConversationContent className="w-full max-w-[90ch] space-y-5">
+        {messages.map((msg) => (
+          <Message key={msg.id} from={msg.role}>
+            <MessageContent>
+              {msg.parts.map((part, i) => {
+                // Use a composite key: message id + part index. Part order is
+                // stable within a single message after it's persisted to Convex.
+                const partKey = `${msg.id}-${i}`;
+                if (part.type === 'text') {
+                  if (msg.role === 'user') {
+                    return (
+                      <div
+                        key={partKey}
+                        className="flex gap-2 rounded-md bg-muted/60 px-3 py-2"
+                      >
+                        <p className="whitespace-pre-wrap break-words text-sm leading-relaxed text-foreground">
+                          {part.text}
+                        </p>
+                      </div>
+                    );
+                  }
+                  return (
+                    <MessageResponse key={partKey} isAnimating={isStreaming}>
+                      {part.text}
+                    </MessageResponse>
+                  );
+                }
+                if (part.type === 'dynamic-tool') {
+                  return <ToolCallUI key={part.toolCallId} part={part} />;
+                }
+                if (part.type === 'reasoning') {
+                  return (
+                    <Reasoning key={partKey} isStreaming={false}>
+                      <ReasoningTrigger />
+                      <ReasoningContent>{part.text}</ReasoningContent>
+                    </Reasoning>
+                  );
+                }
+                return null;
+              })}
+            </MessageContent>
+          </Message>
+        ))}
+        {isRunning && <ThinkingIndicator isRunning={isRunning} />}
+      </ConversationContent>
+      <ConversationScrollButton />
       <SessionComposer />
-    </ThreadPrimitive.Root>
+    </Conversation>
   );
 }
