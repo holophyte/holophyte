@@ -127,7 +127,10 @@ export function Sidebar() {
             aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
             data-testid="sidebar-brand-toggle"
           >
-            <HolophyteIcon className="h-4 w-4 shrink-0" aria-hidden="true" />
+            <HolophyteIcon
+              className="h-4 w-4 shrink-0 text-primary"
+              aria-hidden="true"
+            />
           </button>
           <span className="flex-1 truncate">Holophyte</span>
           <SidebarTooltip
