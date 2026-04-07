@@ -53,9 +53,9 @@ export default function SignInPage() {
     <div className="flex h-screen items-center justify-center bg-background">
       <div className="w-full max-w-sm space-y-6 px-4">
         <div className="text-center space-y-2">
-          <div className="flex items-center justify-center gap-2">
+          <div className="flex flex-col items-center gap-1">
             <HolophyteIcon
-              className="h-8 w-8 text-primary"
+              className="h-auto w-32 text-primary"
               aria-hidden="true"
             />
             <h1 className="text-2xl font-bold tracking-tight">Holophyte</h1>
