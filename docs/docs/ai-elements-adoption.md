@@ -87,7 +87,28 @@ The components import:
 | Queue | None | Yes | Queued session warning banner |
 | Reasoning | Has `useReasoning()` context | Yes (controllable via props) | No equivalent yet |
 | Conversation | None | Yes | `SessionThread` scroll/auto-stick behavior |
-| Prompt Input | TBD | TBD | `SessionComposer` |
+| Prompt Input | None | Yes | `SessionComposer` — has built-in Command palette for slash commands, file attachments, model selector, auto-resize. We add: up-arrow message history, stop-on-enter. |
+| Suggestion | None | Yes | No equivalent yet — horizontal row of clickable prompt chips (quick actions, prompt template shortcuts, follow-up suggestions) |
+| Checkpoint | None | Yes | No equivalent yet — visual conversation breakpoints with restore capability. For sessions: manual save points before risky approvals, visual markers for session milestones. |
+
+#### Future Pass Components
+
+Not part of the initial migration, but worth adopting as we build out session features:
+
+| Component | Use in Holophyte | Notes |
+|-----------|-----------------|-------|
+| Commit | Display git commits made during sessions | Hash, author, color-coded file changes (added/modified/deleted), line counts |
+| Plan | Display ExitPlanMode plans for user approval | Collapsible with streaming shimmer. Maps to the "Plan mode" backlog task |
+| TestResults | Render vitest/playwright output from sessions | Pass/fail/skip counts, progress bar, collapsible suites, error + stack trace per test |
+| StackTrace | Render errors from test runs / build failures | Parses JS/Node stack traces, dims internal frames, clickable file paths |
+| Image | Render screenshots/images in session messages | |
+| SpeechInput | Voice-to-text prompt input (accessibility) | Web Speech API + MediaRecorder fallback, cross-browser. Slots into PromptInput toolbar |
+| AudioPlayer | TTS playback of assistant responses (accessibility) | Composable controls (play, seek, volume). Pair with AI SDK speechSynth |
+| Transcription | Live captions / read-along for audio (accessibility) | Click-to-seek, auto-highlights active segment. Pairs with AudioPlayer |
+| Sources / InlineCitation | Reference links in AI responses | |
+| Artifact | Display generated files as standalone artifacts | |
+| Shimmer | Loading states throughout the app | |
+| Connection | Companion connection status indicator | |
 
 ### Source Verification
 
@@ -185,7 +206,7 @@ This approach means:
 **Rewrite:**
 - `SessionRuntimeProvider` + `sdkToThreadMessages` → `useHolophyteChat` hook (returns `useChat`-compatible shape, normalizes Convex session data to `UIMessage[]`)
 - `SessionThread` — replace `ThreadPrimitive.Viewport` / `ThreadPrimitive.Messages` with Elements' `Conversation` / `ConversationContent`
-- `SessionComposer` — evaluate Elements' `Prompt Input` component or keep custom (slash commands, message history, stop-on-enter are Holophyte-specific)
+- `SessionComposer` → Elements `PromptInput` with `PromptInputCommand*` sub-components for slash commands. Add custom up-arrow message history hook and stop-on-enter keyboard handling.
 
 **Keep as-is:**
 - `useSession` hook (Convex subscriptions)
@@ -384,7 +405,7 @@ If the calculus changes later (public-facing pages, Convex SSR leaving beta, hir
 
 ## Open Questions
 
-- **Prompt Input**: Need to evaluate Elements' prompt input component against our `SessionComposer`. We have Holophyte-specific features (slash commands, message history, stop-on-enter) that may not map cleanly.
+- **Prompt Input**: ~~Need to evaluate Elements' prompt input component against our `SessionComposer`.~~ **Resolved**: Elements' `PromptInput` has built-in `PromptInputCommand*` sub-components (wrapping cmdk) for slash commands, plus file attachments, model selector, auto-resize, and screenshot capture. We adopt it and add two custom behaviors: up-arrow message history and stop-on-enter during streaming.
 - **Streamdown CSS**: `MessageResponse` requires a Streamdown CSS import (`@source "../node_modules/streamdown/dist/*.js"`). Need to verify compatibility with our Tailwind v4 / bun-plugin-tailwind setup.
 - **Shiki bundle size**: CodeBlock uses Shiki instead of rehype-highlight. Shiki is heavier but more accurate — need to check impact on bundle.
 - **Package stability**: AI Elements is new. Need to evaluate release cadence, breaking change policy, and whether we'd pin to a specific version.
