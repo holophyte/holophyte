@@ -40,17 +40,6 @@ const server = Bun.serve({
     // we forward the request to Convex's HTTP actions to complete the flow.
     // Must be in `routes` (above the SPA catch-all) so GET requests aren't
     // swallowed by the `/*` → homepage handler.
-    '/favicon.svg': {
-      GET() {
-        return new Response(
-          Bun.file(new URL('../public/favicon.svg', import.meta.url)),
-          {
-            headers: { 'Content-Type': 'image/svg+xml' },
-          },
-        );
-      },
-    },
-
     '/api/auth/*': async (req: Request) => handleAuthProxy(req),
 
     '/api/pick-directory': {
