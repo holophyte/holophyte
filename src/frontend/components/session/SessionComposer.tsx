@@ -1,10 +1,5 @@
-import {
-  ComposerPrimitive,
-  useComposer,
-  useComposerRuntime,
-} from '@assistant-ui/react';
 import { SendHorizontal, Square } from 'lucide-react';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useMessageHistory } from '@/frontend/hooks/useMessageHistory';
 import { cn } from '@/frontend/lib/utils';
 import { useSessionActions } from './SessionActionsContext';
@@ -33,9 +28,10 @@ export default function SessionComposer() {
     sendMessage,
     addOptimisticMessage,
   } = useSessionActions();
-  const composerRuntime = useComposerRuntime();
-  const composerText = useComposer((s) => s.text);
-  const isEmpty = !composerText.trim();
+
+  const [text, setText] = useState('');
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const isEmpty = !text.trim();
   const [stopping, setStopping] = useState(false);
   const history = useMessageHistory();
 
@@ -50,7 +46,7 @@ export default function SessionComposer() {
   const [selectedIndex, setSelectedIndex] = useState(0);
 
   // Determine if the input starts with "/" and extract the filter text
-  const slashMatch = composerText.match(/^\/(\S*)$/);
+  const slashMatch = text.match(/^\/(\S*)$/);
   const slashFilter = slashMatch?.[1] ?? '';
 
   // Reset dismissed state when the slash pattern is no longer present
@@ -67,13 +63,10 @@ export default function SessionComposer() {
     ? filterCommands(availableCommands, slashFilter)
     : [];
 
-  const handleSelectCommand = useCallback(
-    (name: string) => {
-      composerRuntime.setText(`/${name} `);
-      setSelectedIndex(0);
-    },
-    [composerRuntime],
-  );
+  const handleSelectCommand = useCallback((name: string) => {
+    setText(`/${name} `);
+    setSelectedIndex(0);
+  }, []);
 
   let placeholder: string;
   if (sessionStatus === 'waiting_input') {
@@ -97,6 +90,19 @@ export default function SessionComposer() {
       setStopping(false);
     }
   }, [handleStop, stopping]);
+
+  const handleSend = useCallback(
+    (value: string) => {
+      const trimmed = value.trim();
+      if (!trimmed) return;
+      addOptimisticMessage(trimmed);
+      setText('');
+      sendMessage(trimmed)
+        .then(() => history.push(trimmed))
+        .catch((err) => console.error('Failed to send message:', err));
+    },
+    [addOptimisticMessage, sendMessage, history],
+  );
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -142,7 +148,7 @@ export default function SessionComposer() {
         isEmpty
       ) {
         e.preventDefault();
-        composerRuntime.setText(promptSuggestion);
+        setText(promptSuggestion);
         return;
       }
 
@@ -153,53 +159,32 @@ export default function SessionComposer() {
         return;
       }
 
-      // Enter on non-empty = send (and record in history on success)
+      // Enter on non-empty = send
       if (e.key === 'Enter' && !e.shiftKey && !isEmpty) {
-        const text = composerRuntime.getState().text.trim();
-
-        if (isSessionActive) {
-          // Running/queued: send directly, bypassing the library
-          e.preventDefault();
-          if (text) {
-            addOptimisticMessage(text);
-            composerRuntime.setText('');
-            sendMessage(text)
-              .then(() => history.push(text))
-              .catch((err) => console.error('Failed to send message:', err));
-          }
-        } else {
-          // Idle: push to history eagerly (library handles send via onNew)
-          if (text) history.push(text);
-          // Don't preventDefault — library handles the actual send
-        }
+        e.preventDefault();
+        handleSend(text);
         return;
       }
 
-      // ArrowUp = navigate history backward — only when cursor is at the start of the text
+      // ArrowUp = navigate history backward — only when cursor is at the start
       if (e.key === 'ArrowUp' && e.currentTarget.selectionStart === 0) {
-        const text = history.handleArrowKey(
-          'up',
-          composerRuntime.getState().text,
-        );
-        if (text !== null) {
+        const next = history.handleArrowKey('up', text);
+        if (next !== null) {
           e.preventDefault();
-          composerRuntime.setText(text);
+          setText(next);
         }
         return;
       }
 
-      // ArrowDown = navigate history forward — only when cursor is at the end of the text
+      // ArrowDown = navigate history forward — only when cursor is at the end
       if (
         e.key === 'ArrowDown' &&
         e.currentTarget.selectionStart === e.currentTarget.value.length
       ) {
-        const text = history.handleArrowKey(
-          'down',
-          composerRuntime.getState().text,
-        );
-        if (text !== null) {
+        const next = history.handleArrowKey('down', text);
+        if (next !== null) {
           e.preventDefault();
-          composerRuntime.setText(text);
+          setText(next);
         }
         return;
       }
@@ -217,17 +202,16 @@ export default function SessionComposer() {
       hasSuggestion,
       promptSuggestion,
       isEmpty,
-      composerRuntime,
       isSessionActive,
       handleStopWithState,
+      handleSend,
+      text,
       history,
-      addOptimisticMessage,
-      sendMessage,
     ],
   );
 
   return (
-    <ComposerPrimitive.Root className="shrink-0 border-t bg-muted/10 px-3 py-2">
+    <div className="shrink-0 border-t bg-muted/10 px-3 py-2">
       <div className="relative flex items-end gap-2">
         {showMenu && (
           <SlashCommandMenu
@@ -237,7 +221,9 @@ export default function SessionComposer() {
             onSelect={handleSelectCommand}
           />
         )}
-        <ComposerPrimitive.Input
+        <textarea
+          ref={textareaRef}
+          value={text}
           placeholder={placeholder}
           aria-label={
             isSessionActive
@@ -250,7 +236,6 @@ export default function SessionComposer() {
             sessionStatus === 'failed' || sessionStatus === 'waiting_input'
           }
           rows={1}
-          onKeyDown={handleKeyDown}
           role="combobox"
           aria-haspopup="listbox"
           aria-expanded={showMenu && filteredCommands.length > 0}
@@ -266,14 +251,13 @@ export default function SessionComposer() {
               ? `slash-cmd-${filteredCommands[selectedIndex].name}`
               : undefined
           }
-          onChange={() => {
-            // Reset selection on each keystroke
+          onChange={(e) => {
+            setText(e.target.value);
             setSelectedIndex(0);
           }}
-          onFocus={() => {
-            setIsFocused(true);
-          }}
+          onFocus={() => setIsFocused(true)}
           onBlur={() => setIsFocused(false)}
+          onKeyDown={handleKeyDown}
           className={cn(
             'flex-1 resize-none rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 min-h-11 max-h-36 leading-relaxed',
             hasSuggestion
@@ -297,28 +281,20 @@ export default function SessionComposer() {
             disabled={isEmpty}
             className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-md bg-primary text-primary-foreground shadow hover:bg-primary/90 disabled:pointer-events-none disabled:opacity-50"
             aria-label="Send message"
-            onClick={() => {
-              const text = composerRuntime.getState().text.trim();
-              if (text) {
-                addOptimisticMessage(text);
-                composerRuntime.setText('');
-                sendMessage(text)
-                  .then(() => history.push(text))
-                  .catch((err) =>
-                    console.error('Failed to send message:', err),
-                  );
-              }
-            }}
+            onClick={() => handleSend(text)}
           >
             <SendHorizontal className="h-4 w-4" />
           </button>
         ) : (
-          <ComposerPrimitive.Send
+          <button
+            type="button"
+            disabled={isEmpty}
             className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-md bg-primary text-primary-foreground shadow hover:bg-primary/90 disabled:pointer-events-none disabled:opacity-50"
             aria-label="Send message"
+            onClick={() => handleSend(text)}
           >
             <SendHorizontal className="h-4 w-4" />
-          </ComposerPrimitive.Send>
+          </button>
         )}
       </div>
       <div aria-live="polite" aria-atomic="true">
@@ -329,6 +305,6 @@ export default function SessionComposer() {
           </p>
         )}
       </div>
-    </ComposerPrimitive.Root>
+    </div>
   );
 }
