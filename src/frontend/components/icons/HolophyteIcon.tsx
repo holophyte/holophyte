@@ -1,15 +1,17 @@
 import type { SVGProps } from 'react';
+import { useId } from 'react';
 
 interface HolophyteIconProps extends SVGProps<SVGSVGElement> {
   leafColor?: string;
-  leafColorDark?: string;
+  leafColorAlt?: string;
 }
 
 export default function HolophyteIcon({
   leafColor = 'currentColor',
-  leafColorDark = 'currentColor',
+  leafColorAlt = 'currentColor',
   ...props
 }: HolophyteIconProps) {
+  const maskId = useId();
   return (
     <svg
       xmlns="http://www.w3.org/2000/svg"
@@ -18,7 +20,7 @@ export default function HolophyteIcon({
       aria-label="Holophyte"
       {...props}
     >
-      <mask id="holophyte-vein-mask">
+      <mask id={maskId}>
         <rect width="680" height="320" fill="white" />
         <path
           d="M 340 230 Q 295 180 280 110"
@@ -119,14 +121,14 @@ export default function HolophyteIcon({
           strokeLinecap="round"
         />
       </mask>
-      <g mask="url(#holophyte-vein-mask)">
+      <g mask={`url(#${maskId})`}>
         <path
           d="M 340 230 C 220 230 220 90 285 90 C 330 90 345 160 340 230 Z"
           fill={leafColor}
         />
         <path
           d="M 340 230 C 460 230 460 90 395 90 C 350 90 335 160 340 230 Z"
-          fill={leafColorDark}
+          fill={leafColorAlt}
           opacity="0.8"
         />
       </g>
