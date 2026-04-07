@@ -118,7 +118,7 @@ export function Sidebar() {
         {/* Header */}
         <PageHeader
           data-testid="sidebar-header"
-          className="gap-2 font-semibold text-lg whitespace-nowrap px-4 overflow-hidden"
+          className="gap-2 font-semibold text-lg whitespace-nowrap pl-2 pr-4 overflow-hidden"
         >
           <button
             type="button"
@@ -128,7 +128,7 @@ export function Sidebar() {
             data-testid="sidebar-brand-toggle"
           >
             <HolophyteIcon
-              className="h-4 w-4 shrink-0 text-primary"
+              className="h-5 w-auto shrink-0 text-primary"
               aria-hidden="true"
             />
           </button>
