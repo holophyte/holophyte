@@ -1,7 +1,14 @@
-import { SendHorizontal, Square } from 'lucide-react';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import type { ChatStatus } from 'ai';
+import { useCallback, useEffect, useState } from 'react';
+import type { PromptInputMessage } from '@/frontend/components/ai-elements/prompt-input';
+import {
+  PromptInput,
+  PromptInputBody,
+  PromptInputFooter,
+  PromptInputSubmit,
+  PromptInputTextarea,
+} from '@/frontend/components/ai-elements/prompt-input';
 import { useMessageHistory } from '@/frontend/hooks/useMessageHistory';
-import { cn } from '@/frontend/lib/utils';
 import { useSessionActions } from './SessionActionsContext';
 import SlashCommandMenu, { filterCommands } from './SlashCommandMenu';
 
@@ -26,11 +33,9 @@ export default function SessionComposer() {
     handleStop,
     messageQueued,
     sendMessage,
-    addOptimisticMessage,
   } = useSessionActions();
 
   const [text, setText] = useState('');
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const isEmpty = !text.trim();
   const [stopping, setStopping] = useState(false);
   const history = useMessageHistory();
@@ -95,13 +100,19 @@ export default function SessionComposer() {
     (value: string) => {
       const trimmed = value.trim();
       if (!trimmed) return;
-      addOptimisticMessage(trimmed);
       setText('');
       sendMessage(trimmed)
         .then(() => history.push(trimmed))
         .catch((err) => console.error('Failed to send message:', err));
     },
-    [addOptimisticMessage, sendMessage, history],
+    [sendMessage, history],
+  );
+
+  const handleSubmit = useCallback(
+    (message: PromptInputMessage) => {
+      handleSend(message.text);
+    },
+    [handleSend],
   );
 
   const handleKeyDown = useCallback(
@@ -159,12 +170,8 @@ export default function SessionComposer() {
         return;
       }
 
-      // Enter on non-empty = send
-      if (e.key === 'Enter' && !e.shiftKey && !isEmpty) {
-        e.preventDefault();
-        handleSend(text);
-        return;
-      }
+      // Enter on non-empty = let PromptInputTextarea's built-in Enter → requestSubmit fire
+      // (do NOT preventDefault here — PromptInputTextarea handles it)
 
       // ArrowUp = navigate history backward — only when cursor is at the start
       if (e.key === 'ArrowUp' && e.currentTarget.selectionStart === 0) {
@@ -204,107 +211,94 @@ export default function SessionComposer() {
       isEmpty,
       isSessionActive,
       handleStopWithState,
-      handleSend,
       text,
       history,
     ],
   );
 
+  // Map session status to ChatStatus for PromptInputSubmit.
+  // When there is text typed, always show the send button (status='ready').
+  let chatStatus: ChatStatus;
+  if (!isEmpty) {
+    chatStatus = 'ready';
+  } else if (sessionStatus === 'queued') {
+    chatStatus = 'submitted';
+  } else if (sessionStatus === 'running' || sessionStatus === 'waiting_input') {
+    chatStatus = 'streaming';
+  } else if (sessionStatus === 'failed') {
+    chatStatus = 'error';
+  } else {
+    chatStatus = 'ready';
+  }
+
+  const isDisabled =
+    sessionStatus === 'failed' || sessionStatus === 'waiting_input';
+
   return (
     <div className="shrink-0 border-t bg-muted/10 px-3 py-2">
-      <div className="relative flex items-end gap-2">
-        {showMenu && (
-          <SlashCommandMenu
-            commands={availableCommands}
-            filter={slashFilter}
-            selectedIndex={selectedIndex}
-            onSelect={handleSelectCommand}
-          />
-        )}
-        <textarea
-          ref={textareaRef}
-          value={text}
-          placeholder={placeholder}
-          aria-label={
-            isSessionActive
-              ? showStop
-                ? 'Follow-up message — press Enter to stop session, or type a message'
-                : 'Follow-up message — press Enter to send'
-              : 'Send a follow-up to Claude'
-          }
-          disabled={
-            sessionStatus === 'failed' || sessionStatus === 'waiting_input'
-          }
-          rows={1}
-          role="combobox"
-          aria-haspopup="listbox"
-          aria-expanded={showMenu && filteredCommands.length > 0}
-          aria-controls={
-            showMenu && filteredCommands.length > 0
-              ? 'slash-command-menu'
-              : undefined
-          }
-          aria-activedescendant={
-            showMenu &&
-            filteredCommands.length > 0 &&
-            filteredCommands[selectedIndex]
-              ? `slash-cmd-${filteredCommands[selectedIndex].name}`
-              : undefined
-          }
-          onChange={(e) => {
-            setText(e.target.value);
-            setSelectedIndex(0);
-          }}
-          onFocus={() => setIsFocused(true)}
-          onBlur={() => setIsFocused(false)}
-          onKeyDown={handleKeyDown}
-          className={cn(
-            'flex-1 resize-none rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 min-h-11 max-h-36 leading-relaxed',
-            hasSuggestion
-              ? 'placeholder:italic placeholder:text-muted-foreground/40'
-              : 'placeholder:text-muted-foreground/50',
+      <PromptInput onSubmit={handleSubmit}>
+        <PromptInputBody>
+          {showMenu && (
+            <SlashCommandMenu
+              commands={availableCommands}
+              filter={slashFilter}
+              selectedIndex={selectedIndex}
+              onSelect={handleSelectCommand}
+            />
           )}
-        />
-        {showStop ? (
-          <button
-            type="button"
-            onClick={() => void handleStopWithState()}
-            disabled={stopping}
-            className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-md bg-destructive text-destructive-foreground shadow hover:bg-destructive/90 disabled:pointer-events-none disabled:opacity-50"
-            aria-label="Stop session"
-          >
-            <Square className="h-4 w-4" />
-          </button>
-        ) : isSessionActive ? (
-          <button
-            type="button"
-            disabled={isEmpty}
-            className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-md bg-primary text-primary-foreground shadow hover:bg-primary/90 disabled:pointer-events-none disabled:opacity-50"
-            aria-label="Send message"
-            onClick={() => handleSend(text)}
-          >
-            <SendHorizontal className="h-4 w-4" />
-          </button>
-        ) : (
-          <button
-            type="button"
-            disabled={isEmpty}
-            className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-md bg-primary text-primary-foreground shadow hover:bg-primary/90 disabled:pointer-events-none disabled:opacity-50"
-            aria-label="Send message"
-            onClick={() => handleSend(text)}
-          >
-            <SendHorizontal className="h-4 w-4" />
-          </button>
-        )}
-      </div>
-      <div aria-live="polite" aria-atomic="true">
-        {messageQueued && (
-          <p className="px-1 text-xs text-muted-foreground">
-            Message queued — will be delivered when Claude finishes its current
-            turn.
-          </p>
-        )}
-      </div>
+          <PromptInputTextarea
+            value={text}
+            placeholder={placeholder}
+            aria-label={
+              isSessionActive
+                ? showStop
+                  ? 'Follow-up message — press Enter to stop session, or type a message'
+                  : 'Follow-up message — press Enter to send'
+                : 'Send a follow-up to Claude'
+            }
+            disabled={isDisabled}
+            role="combobox"
+            aria-haspopup="listbox"
+            aria-expanded={showMenu && filteredCommands.length > 0}
+            aria-controls={
+              showMenu && filteredCommands.length > 0
+                ? 'slash-command-menu'
+                : undefined
+            }
+            aria-activedescendant={
+              showMenu &&
+              filteredCommands.length > 0 &&
+              filteredCommands[selectedIndex]
+                ? `slash-cmd-${filteredCommands[selectedIndex].name}`
+                : undefined
+            }
+            onChange={(e) => {
+              setText(e.target.value);
+              setSelectedIndex(0);
+            }}
+            onFocus={() => setIsFocused(true)}
+            onBlur={() => setIsFocused(false)}
+            onKeyDown={handleKeyDown}
+            className="min-h-11 max-h-36 leading-relaxed field-sizing-content"
+          />
+        </PromptInputBody>
+        <PromptInputFooter>
+          <PromptInputSubmit
+            status={chatStatus}
+            onStop={() => void handleStopWithState()}
+            disabled={stopping || (!showStop && isEmpty && !isSessionActive)}
+            aria-label={showStop ? 'Stop session' : 'Send message'}
+          />
+          <div aria-live="polite" aria-atomic="true">
+            {messageQueued && (
+              <p className="px-1 text-xs text-muted-foreground">
+                Message queued — will be delivered when Claude finishes its
+                current turn.
+              </p>
+            )}
+          </div>
+        </PromptInputFooter>
+      </PromptInput>
     </div>
   );
 }

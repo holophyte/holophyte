@@ -121,15 +121,6 @@ export default function SessionPanel({ taskId }: SessionPanelProps) {
     [sessionStatus, resumeIdleSession, sendMessage],
   );
 
-  /** Bound sendMessage wrapper for the composer (no sessionId arg). */
-  const handleSendMessageDirect = useCallback(
-    async (text: string) => {
-      if (!sessionId) return;
-      await handleSendMessage(sessionId, text);
-    },
-    [sessionId, handleSendMessage],
-  );
-
   /** Create a brand-new session (used by NoSessionPlaceholder). */
   const handleNewSession = async (text: string, model: ClaudeModelId) => {
     if (!task?.repo?.path) return;
@@ -167,7 +158,6 @@ export default function SessionPanel({ taskId }: SessionPanelProps) {
             sendMessage={handleSendMessage}
             handleStop={handleStopRaw}
             messageQueued={messageQueued}
-            sendMessageDirect={handleSendMessageDirect}
           />
         ) : (
           <NoSessionPlaceholder
@@ -197,7 +187,6 @@ interface ActiveSessionProps {
   sendMessage: (sessionId: string, text: string) => Promise<void>;
   handleStop: () => Promise<void>;
   messageQueued: boolean;
-  sendMessageDirect: (text: string) => Promise<void>;
 }
 
 function ActiveSession({
@@ -211,7 +200,6 @@ function ActiveSession({
   sendMessage,
   handleStop,
   messageQueued,
-  sendMessageDirect,
 }: ActiveSessionProps) {
   const chat = useHolophyteChat({
     sessionId,
@@ -224,7 +212,6 @@ function ActiveSession({
     sendMessage,
     handleStop,
     messageQueued,
-    sendMessageDirect,
   });
 
   return (
