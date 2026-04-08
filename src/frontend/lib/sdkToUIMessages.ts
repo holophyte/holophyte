@@ -44,6 +44,22 @@ type DynamicToolUIPart =
       state: 'output-error';
       input: unknown;
       errorText: string;
+    }
+  | {
+      type: 'dynamic-tool';
+      toolName: string;
+      toolCallId: string;
+      state: 'approval-responded';
+      input: unknown;
+      approval: { id: string; approved: true };
+    }
+  | {
+      type: 'dynamic-tool';
+      toolName: string;
+      toolCallId: string;
+      state: 'output-denied';
+      input: unknown;
+      approval: { id: string; approved: false };
     };
 
 /**
@@ -64,6 +80,13 @@ export function sdkToUIMessages(
   // Set of requestIds that still need user action
   const unresolvedIds = new Set(
     pendingApprovals.filter((a) => !a.resolved).map((a) => a.requestId),
+  );
+
+  // Map of requestId → approved boolean for resolved approvals
+  const resolvedApprovals = new Map<string, boolean>(
+    pendingApprovals
+      .filter((a) => a.resolved !== undefined)
+      .map((a) => [a.requestId, a.resolved?.approved ?? false]),
   );
 
   // First pass: collect tool results keyed by tool_use_id
@@ -193,6 +216,28 @@ export function sdkToUIMessages(
                 state: 'output-available',
                 input,
                 output: toolResult.result,
+              };
+            }
+          } else if (resolvedApprovals.has(toolCallId)) {
+            // Approval was resolved but tool_result hasn't arrived yet
+            const approved = resolvedApprovals.get(toolCallId) ?? false;
+            if (approved) {
+              part = {
+                type: 'dynamic-tool',
+                toolName,
+                toolCallId,
+                state: 'approval-responded',
+                input,
+                approval: { id: toolCallId, approved: true },
+              };
+            } else {
+              part = {
+                type: 'dynamic-tool',
+                toolName,
+                toolCallId,
+                state: 'output-denied',
+                input,
+                approval: { id: toolCallId, approved: false },
               };
             }
           } else {

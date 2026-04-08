@@ -199,6 +199,68 @@ describe('sdkToUIMessages — tool-use parts', () => {
     const part = result[0]?.parts[0] as Record<string, unknown>;
     expect(part.state).toBe('output-available');
   });
+
+  it('produces approval-responded state for approved-but-no-result-yet tool', () => {
+    const pending: PendingApproval[] = [
+      {
+        requestId: 'tool-6',
+        tool: 'Bash',
+        input: { command: 'ls' },
+        resolved: { approved: true },
+      },
+    ];
+    const events = [
+      makeAssistantEvent([
+        {
+          type: 'tool_use',
+          id: 'tool-6',
+          name: 'Bash',
+          input: { command: 'ls' },
+        },
+      ]),
+      // No tool_result event yet
+    ];
+    const result = sdkToUIMessages(events, false, pending);
+    const part = result[0]?.parts[0] as Record<string, unknown>;
+    expect(part).toMatchObject({
+      type: 'dynamic-tool',
+      toolName: 'Bash',
+      toolCallId: 'tool-6',
+      state: 'approval-responded',
+      approval: { id: 'tool-6', approved: true },
+    });
+  });
+
+  it('produces output-denied state for denied-but-no-result-yet tool', () => {
+    const pending: PendingApproval[] = [
+      {
+        requestId: 'tool-7',
+        tool: 'Bash',
+        input: { command: 'rm -rf /' },
+        resolved: { approved: false },
+      },
+    ];
+    const events = [
+      makeAssistantEvent([
+        {
+          type: 'tool_use',
+          id: 'tool-7',
+          name: 'Bash',
+          input: { command: 'rm -rf /' },
+        },
+      ]),
+      // No tool_result event yet
+    ];
+    const result = sdkToUIMessages(events, false, pending);
+    const part = result[0]?.parts[0] as Record<string, unknown>;
+    expect(part).toMatchObject({
+      type: 'dynamic-tool',
+      toolName: 'Bash',
+      toolCallId: 'tool-7',
+      state: 'output-denied',
+      approval: { id: 'tool-7', approved: false },
+    });
+  });
 });
 
 // ---------------------------------------------------------------------------

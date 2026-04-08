@@ -60,6 +60,7 @@ function uiMessageToThreadMessage(
         const hasResult =
           p.state === 'output-available' || p.state === 'output-error';
         const isError = p.state === 'output-error';
+        const isDenied = p.state === 'output-denied';
 
         parts.push({
           type: 'tool-call',
@@ -68,7 +69,7 @@ function uiMessageToThreadMessage(
           // biome-ignore lint/suspicious/noExplicitAny: SDK input is untyped; assistant-ui expects ReadonlyJSONObject
           args: p.input as any,
           result: hasResult ? String(p.output ?? p.errorText ?? '') : undefined,
-          isError: isError || undefined,
+          isError: isError || isDenied || undefined,
           ...(isUnresolved
             ? {
                 status: {
