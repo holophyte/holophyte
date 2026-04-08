@@ -236,69 +236,72 @@ export default function SessionComposer() {
 
   return (
     <div className="shrink-0 border-t bg-muted/10 px-3 py-2">
-      <PromptInput onSubmit={handleSubmit}>
-        <PromptInputBody>
-          {showMenu && (
-            <SlashCommandMenu
-              commands={availableCommands}
-              filter={slashFilter}
-              selectedIndex={selectedIndex}
-              onSelect={handleSelectCommand}
+      {/* Relative wrapper so the slash menu (absolute bottom-full) escapes InputGroup's overflow-hidden */}
+      <div className="relative">
+        {showMenu && (
+          <SlashCommandMenu
+            commands={availableCommands}
+            filter={slashFilter}
+            selectedIndex={selectedIndex}
+            onSelect={handleSelectCommand}
+          />
+        )}
+        <PromptInput onSubmit={handleSubmit}>
+          <PromptInputBody>
+            <PromptInputTextarea
+              value={text}
+              placeholder={placeholder}
+              aria-label={
+                isSessionActive
+                  ? showStop
+                    ? 'Follow-up message — press Enter to stop session, or type a message'
+                    : 'Follow-up message — press Enter to send'
+                  : 'Send a follow-up to Claude'
+              }
+              disabled={isDisabled}
+              role="combobox"
+              aria-haspopup="listbox"
+              aria-expanded={showMenu && filteredCommands.length > 0}
+              aria-controls={
+                showMenu && filteredCommands.length > 0
+                  ? 'slash-command-menu'
+                  : undefined
+              }
+              aria-activedescendant={
+                showMenu &&
+                filteredCommands.length > 0 &&
+                filteredCommands[selectedIndex]
+                  ? `slash-cmd-${filteredCommands[selectedIndex].name}`
+                  : undefined
+              }
+              onChange={(e) => {
+                setText(e.target.value);
+                setSelectedIndex(0);
+              }}
+              onFocus={() => setIsFocused(true)}
+              onBlur={() => setIsFocused(false)}
+              onKeyDown={handleKeyDown}
+              className="min-h-11 max-h-36 leading-relaxed field-sizing-content"
             />
-          )}
-          <PromptInputTextarea
-            value={text}
-            placeholder={placeholder}
-            aria-label={
-              isSessionActive
-                ? showStop
-                  ? 'Follow-up message — press Enter to stop session, or type a message'
-                  : 'Follow-up message — press Enter to send'
-                : 'Send a follow-up to Claude'
-            }
-            disabled={isDisabled}
-            role="combobox"
-            aria-haspopup="listbox"
-            aria-expanded={showMenu && filteredCommands.length > 0}
-            aria-controls={
-              showMenu && filteredCommands.length > 0
-                ? 'slash-command-menu'
-                : undefined
-            }
-            aria-activedescendant={
-              showMenu &&
-              filteredCommands.length > 0 &&
-              filteredCommands[selectedIndex]
-                ? `slash-cmd-${filteredCommands[selectedIndex].name}`
-                : undefined
-            }
-            onChange={(e) => {
-              setText(e.target.value);
-              setSelectedIndex(0);
-            }}
-            onFocus={() => setIsFocused(true)}
-            onBlur={() => setIsFocused(false)}
-            onKeyDown={handleKeyDown}
-            className="min-h-11 max-h-36 leading-relaxed field-sizing-content"
-          />
-        </PromptInputBody>
-        <PromptInputFooter>
-          <PromptInputSubmit
-            status={chatStatus}
-            onStop={() => void handleStopWithState()}
-            disabled={stopping || (!showStop && isEmpty && !isSessionActive)}
-            aria-label={showStop ? 'Stop session' : 'Send message'}
-          />
-          <div aria-live="polite" aria-atomic="true">
-            {messageQueued && (
-              <p className="px-1 text-xs text-muted-foreground">
-                Message queued — will be delivered when Claude finishes its
-                current turn.
-              </p>
-            )}
-          </div>
-        </PromptInputFooter>
-      </PromptInput>
+          </PromptInputBody>
+          <PromptInputFooter>
+            <div aria-live="polite" aria-atomic="true">
+              {messageQueued && (
+                <p className="px-1 text-xs text-muted-foreground">
+                  Message queued — will be delivered when Claude finishes its
+                  current turn.
+                </p>
+              )}
+            </div>
+            <PromptInputSubmit
+              status={chatStatus}
+              onStop={() => void handleStopWithState()}
+              disabled={stopping || (!showStop && isEmpty && !isSessionActive)}
+              aria-label={showStop ? 'Stop session' : 'Send message'}
+            />
+          </PromptInputFooter>
+        </PromptInput>
+      </div>
     </div>
   );
 }
