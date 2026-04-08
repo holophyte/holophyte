@@ -115,12 +115,23 @@ export function sdkToThreadMessages(
   pendingApprovals: PendingApproval[],
 ): ThreadMessageLike[] {
   const uiMessages = sdkToUIMessages(events, isRunning, pendingApprovals);
-  const assistantMessages = uiMessages.filter((m) => m.role === 'assistant');
-  const lastAssistantMsg = assistantMessages.at(-1);
 
+  // First pass: find which messages survive filtering to determine the real last assistant
+  const survivingAssistantIds = new Set<string>();
+  for (const msg of uiMessages) {
+    if (msg.role !== 'assistant') continue;
+    // Check if it would produce a non-null result (has renderable parts)
+    const hasRenderableParts = msg.parts.some(
+      (p) => p.type === 'text' || p.type === 'dynamic-tool',
+    );
+    if (hasRenderableParts) survivingAssistantIds.add(msg.id);
+  }
+  const lastSurvivingId = [...survivingAssistantIds].at(-1);
+
+  // Second pass: convert with correct isLast
   const result: ThreadMessageLike[] = [];
   for (const msg of uiMessages) {
-    const isLast = msg === lastAssistantMsg;
+    const isLast = msg.id === lastSurvivingId;
     const converted = uiMessageToThreadMessage(msg, isRunning, isLast);
     if (converted) result.push(converted);
   }
