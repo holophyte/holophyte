@@ -68,49 +68,55 @@ export default function SessionThread({
 
   return (
     <Conversation className="relative flex h-full flex-col">
-      <ConversationContent className="w-full max-w-[90ch] space-y-5">
-        {messages.map((msg) => (
-          <Message key={msg.id} from={msg.role}>
-            <MessageContent>
-              {msg.parts.map((part, i) => {
-                // Use a composite key: message id + part index. Part order is
-                // stable within a single message after it's persisted to Convex.
-                const partKey = `${msg.id}-${i}`;
-                if (part.type === 'text') {
-                  if (msg.role === 'user') {
-                    return (
-                      <div
-                        key={partKey}
-                        className="flex gap-2 rounded-md bg-muted/60 px-3 py-2"
-                      >
+      <ConversationContent className="mx-auto w-full max-w-[90ch] space-y-5">
+        {messages.map((msg) =>
+          msg.parts.map((part, i) => {
+            // Use a composite key: message id + part index. Part order is
+            // stable within a single message after it's persisted to Convex.
+            const partKey = `${msg.id}-${i}`;
+            if (part.type === 'text') {
+              if (msg.role === 'user') {
+                return (
+                  <Message key={partKey} from="user">
+                    <MessageContent>
+                      <div className="flex gap-2 rounded-md bg-muted/60 px-3 py-2">
                         <p className="whitespace-pre-wrap break-words text-sm leading-relaxed text-foreground">
                           {part.text}
                         </p>
                       </div>
-                    );
-                  }
-                  return (
-                    <MessageResponse key={partKey} isAnimating={isStreaming}>
+                    </MessageContent>
+                  </Message>
+                );
+              }
+              return (
+                <Message key={partKey} from="assistant" className="max-w-full">
+                  <MessageContent className="w-full">
+                    <MessageResponse isAnimating={isStreaming}>
                       {part.text}
                     </MessageResponse>
-                  );
-                }
-                if (part.type === 'dynamic-tool') {
-                  return <ToolCallUI key={part.toolCallId} part={part} />;
-                }
-                if (part.type === 'reasoning') {
-                  return (
-                    <Reasoning key={partKey} isStreaming={false}>
+                  </MessageContent>
+                </Message>
+              );
+            }
+            if (part.type === 'dynamic-tool') {
+              // Rendered outside Message/MessageContent so it's full-width
+              return <ToolCallUI key={part.toolCallId} part={part} />;
+            }
+            if (part.type === 'reasoning') {
+              return (
+                <Message key={partKey} from="assistant" className="max-w-full">
+                  <MessageContent className="w-full">
+                    <Reasoning isStreaming={false}>
                       <ReasoningTrigger />
                       <ReasoningContent>{part.text}</ReasoningContent>
                     </Reasoning>
-                  );
-                }
-                return null;
-              })}
-            </MessageContent>
-          </Message>
-        ))}
+                  </MessageContent>
+                </Message>
+              );
+            }
+            return null;
+          }),
+        )}
         {isRunning && <ThinkingIndicator isRunning={isRunning} />}
       </ConversationContent>
       <ConversationScrollButton />
