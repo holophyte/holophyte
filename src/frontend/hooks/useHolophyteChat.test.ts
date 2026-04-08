@@ -51,7 +51,6 @@ function makeProps(overrides: {
     sendMessage: vi.fn().mockResolvedValue(undefined),
     handleStop: vi.fn().mockResolvedValue(undefined),
     messageQueued: overrides.messageQueued ?? false,
-    sendMessageDirect: vi.fn().mockResolvedValue(undefined),
   };
 }
 

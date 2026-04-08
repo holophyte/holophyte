@@ -22,7 +22,6 @@ export interface UseHolophyteChatProps {
   sendMessage: (sessionId: string, text: string) => Promise<void>;
   handleStop: () => Promise<void>;
   messageQueued: boolean;
-  sendMessageDirect: (text: string) => Promise<void>;
 }
 
 export interface UseHolophyteChatReturn {
