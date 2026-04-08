@@ -120,9 +120,13 @@ export function sdkToThreadMessages(
   const survivingAssistantIds = new Set<string>();
   for (const msg of uiMessages) {
     if (msg.role !== 'assistant') continue;
-    // Check if it would produce a non-null result (has renderable parts)
+    // Check if it would produce a non-null result (has renderable parts).
+    // Text parts with empty strings are dropped by uiMessageToThreadMessage,
+    // so only count non-empty text.
     const hasRenderableParts = msg.parts.some(
-      (p) => p.type === 'text' || p.type === 'dynamic-tool',
+      (p) =>
+        (p.type === 'text' && (p as { text: string }).text !== '') ||
+        p.type === 'dynamic-tool',
     );
     if (hasRenderableParts) survivingAssistantIds.add(msg.id);
   }
