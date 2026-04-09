@@ -141,6 +141,16 @@ const tokensCache = new Map<string, TokenizedCode>();
 // Subscribers for async token updates
 const subscribers = new Map<string, Set<(result: TokenizedCode) => void>>();
 
+const notifySubscribers = (key: string, result: TokenizedCode) => {
+  const subs = subscribers.get(key);
+  if (subs) {
+    for (const sub of subs) {
+      sub(result);
+    }
+    subscribers.delete(key);
+  }
+};
+
 const getTokensCacheKey = (code: string, language: BundledLanguage) => {
   const start = code.slice(0, 100);
   const end = code.length > 100 ? code.slice(-100) : '';
@@ -210,13 +220,22 @@ export const highlightCode = (
       const availableLangs = highlighter.getLoadedLanguages();
       const langToUse = availableLangs.includes(language) ? language : 'text';
 
-      const result = highlighter.codeToTokens(code, {
-        lang: langToUse,
-        themes: {
-          dark: 'github-dark',
-          light: 'github-light',
-        },
-      });
+      let result: ReturnType<typeof highlighter.codeToTokens>;
+      try {
+        result = highlighter.codeToTokens(code, {
+          lang: langToUse,
+          themes: {
+            light: 'github-light',
+            dark: 'github-dark',
+          },
+        });
+      } catch {
+        // Grammar/tokenization error — cache raw tokens to avoid retrying
+        const raw = createRawTokens(code);
+        tokensCache.set(tokensCacheKey, raw);
+        notifySubscribers(tokensCacheKey, raw);
+        return;
+      }
 
       const tokenized: TokenizedCode = {
         bg: result.bg ?? 'transparent',
@@ -224,22 +243,15 @@ export const highlightCode = (
         tokens: result.tokens,
       };
 
-      // Cache the result
       tokensCache.set(tokensCacheKey, tokenized);
-
-      // Notify all subscribers
-      const subs = subscribers.get(tokensCacheKey);
-      if (subs) {
-        for (const sub of subs) {
-          sub(tokenized);
-        }
-        subscribers.delete(tokensCacheKey);
-      }
+      notifySubscribers(tokensCacheKey, tokenized);
     })
     // oxlint-disable-next-line eslint-plugin-promise(prefer-await-to-then), eslint-plugin-promise(prefer-await-to-callbacks)
-    .catch((error) => {
-      console.error('Failed to highlight code:', error);
-      subscribers.delete(tokensCacheKey);
+    .catch(() => {
+      // Highlighter failed to load — cache raw tokens to avoid retrying
+      const raw = createRawTokens(code);
+      tokensCache.set(tokensCacheKey, raw);
+      notifySubscribers(tokensCacheKey, raw);
     });
 
   return null;
@@ -271,7 +283,7 @@ const CodeBlockBody = memo(
     return (
       <pre
         className={cn(
-          'dark:!bg-[var(--shiki-dark-bg)] dark:!text-[var(--shiki-dark)] m-0 p-4 text-sm',
+          'bg-white dark:!bg-[var(--shiki-dark-bg)] dark:!text-[var(--shiki-dark)] m-0 p-4 text-sm',
           className,
         )}
         style={preStyle}
