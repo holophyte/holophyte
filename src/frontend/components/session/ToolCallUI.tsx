@@ -108,7 +108,7 @@ export default function ToolCallUI({ part }: ToolCallUIProps) {
                 </ConfirmationAction>
               </ConfirmationActions>
             ) : (
-              <div className="flex flex-col gap-1.5">
+              <div className="flex w-full flex-col gap-2">
                 <textarea
                   value={denyMessage}
                   onChange={(e) => {
@@ -119,7 +119,7 @@ export default function ToolCallUI({ part }: ToolCallUIProps) {
                   aria-label="Denial reason (optional)"
                   placeholder="Reason (optional)"
                   rows={1}
-                  className="w-full text-xs bg-background border border-input rounded px-2 py-1.5 placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-ring resize-none overflow-y-auto"
+                  className="min-h-[4rem] w-full rounded border border-input bg-background px-2 py-1.5 text-sm placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-ring resize-none overflow-y-auto"
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' && !e.shiftKey) {
                       e.preventDefault();
@@ -133,7 +133,7 @@ export default function ToolCallUI({ part }: ToolCallUIProps) {
                   // biome-ignore lint/a11y/noAutofocus: deny reason input should be focused on reveal
                   autoFocus
                 />
-                <div className="flex gap-1.5">
+                <div className="flex justify-end gap-1.5">
                   <Button
                     size="sm"
                     variant="destructive"
