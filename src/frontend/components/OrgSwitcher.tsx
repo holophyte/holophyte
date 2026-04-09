@@ -32,7 +32,7 @@ export default function OrgSwitcher() {
       <PopoverTrigger asChild>
         <Button
           variant="ghost"
-          className="w-full justify-between gap-2 text-sm px-4 whitespace-nowrap overflow-hidden"
+          className="w-full justify-start gap-2 text-sm has-[>svg]:px-4 whitespace-nowrap overflow-hidden"
           aria-label={
             selectedOrg
               ? `Current organization: ${selectedOrg.name}`
@@ -43,11 +43,11 @@ export default function OrgSwitcher() {
             className="h-4 w-4 !shrink-0 text-muted-foreground"
             aria-hidden="true"
           />
-          <span className="truncate">
+          <span className="truncate flex-1">
             {selectedOrg?.name ?? 'Select org...'}
           </span>
           <ChevronsUpDown
-            className="h-3.5 w-3.5 text-muted-foreground"
+            className="h-3.5 w-3.5 shrink-0 text-muted-foreground"
             aria-hidden="true"
           />
         </Button>
