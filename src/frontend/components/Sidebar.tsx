@@ -118,17 +118,17 @@ export function Sidebar() {
         {/* Header */}
         <PageHeader
           data-testid="sidebar-header"
-          className="gap-2 font-semibold text-lg whitespace-nowrap pl-2 pr-4 overflow-hidden"
+          className="gap-2 font-semibold text-lg whitespace-nowrap overflow-hidden"
         >
           <button
             type="button"
-            className="shrink-0 cursor-pointer"
+            className="shrink-0 cursor-pointer -ml-3"
             onClick={toggleSidebar}
             aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
             data-testid="sidebar-brand-toggle"
           >
             <HolophyteIcon
-              className="h-5 w-auto shrink-0 text-primary"
+              className="h-10 w-auto shrink-0 text-primary"
               aria-hidden="true"
             />
           </button>
@@ -165,7 +165,7 @@ export function Sidebar() {
           <SidebarTooltip label="All Tasks" collapsed={collapsed}>
             <Button
               variant={homeMatch ? 'secondary' : 'ghost'}
-              className="w-full justify-start gap-2 whitespace-nowrap overflow-hidden"
+              className="w-full justify-start gap-2 has-[>svg]:px-4 whitespace-nowrap overflow-hidden"
               onClick={() => void navigate({ to: '/' })}
               aria-label="All Tasks"
             >
@@ -176,7 +176,7 @@ export function Sidebar() {
           <SidebarTooltip label="Seed Box" collapsed={collapsed}>
             <Button
               variant={seedsMatch ? 'secondary' : 'ghost'}
-              className="w-full justify-start gap-2 whitespace-nowrap overflow-hidden"
+              className="w-full justify-start gap-2 has-[>svg]:px-4 whitespace-nowrap overflow-hidden"
               onClick={() => void navigate({ to: '/seeds' })}
               aria-label="Seed Box"
             >
@@ -226,7 +226,7 @@ export function Sidebar() {
                         variant={
                           selectedRepoId === repo._id ? 'secondary' : 'ghost'
                         }
-                        className="w-full justify-start gap-2 text-sm pr-8 whitespace-nowrap overflow-hidden"
+                        className="w-full justify-start gap-2 text-sm has-[>svg]:px-4 pr-8 whitespace-nowrap overflow-hidden"
                         onClick={() =>
                           void navigate({
                             to: '/repos/$repoId',
