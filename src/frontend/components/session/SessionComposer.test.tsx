@@ -6,6 +6,17 @@ import type { SessionStatus } from '@/frontend/hooks/useSession';
 import { SessionActionsContext } from './SessionActionsContext';
 
 // ---------------------------------------------------------------------------
+// Mocks
+// ---------------------------------------------------------------------------
+
+vi.mock('use-stick-to-bottom', () => ({
+  useStickToBottomContext: () => ({
+    isAtBottom: true,
+    scrollToBottom: vi.fn(),
+  }),
+}));
+
+// ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 

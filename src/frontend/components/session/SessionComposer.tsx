@@ -1,5 +1,6 @@
 import type { ChatStatus } from 'ai';
 import { useCallback, useEffect, useState } from 'react';
+import { useStickToBottomContext } from 'use-stick-to-bottom';
 import type { PromptInputMessage } from '@/frontend/components/ai-elements/prompt-input';
 import {
   PromptInput,
@@ -35,6 +36,7 @@ export default function SessionComposer() {
     sendMessage,
   } = useSessionActions();
 
+  const { scrollToBottom } = useStickToBottomContext();
   const [text, setText] = useState('');
   const isEmpty = !text.trim();
   const [stopping, setStopping] = useState(false);
@@ -111,8 +113,9 @@ export default function SessionComposer() {
   const handleSubmit = useCallback(
     (message: PromptInputMessage) => {
       handleSend(message.text);
+      scrollToBottom();
     },
-    [handleSend],
+    [handleSend, scrollToBottom],
   );
 
   const handleKeyDown = useCallback(

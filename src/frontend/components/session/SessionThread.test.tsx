@@ -62,7 +62,7 @@ vi.mock('streamdown', () => ({
 
 // Mock streamdown plugins
 vi.mock('@streamdown/cjk', () => ({ cjk: {} }));
-vi.mock('@streamdown/code', () => ({ code: {} }));
+vi.mock('@streamdown/code', () => ({ code: {}, createCodePlugin: () => ({}) }));
 vi.mock('@streamdown/math', () => ({ math: {} }));
 vi.mock('@streamdown/mermaid', () => ({ mermaid: {} }));
 

@@ -3,6 +3,21 @@
 @plugin "@tailwindcss/typography";
 @source "../node_modules/streamdown/dist/*.js";
 
+/* ─── Streamdown code blocks: force dark background ─── */
+
+.code-block {
+  --sdm-bg: #24292e;
+  --sdm-fg: #e1e4e8;
+  background-color: var(--sdm-bg);
+  color: var(--sdm-fg);
+}
+
+.code-block-header {
+  background-color: color-mix(in oklch, var(--sdm-bg), white 8%);
+  color: var(--sdm-fg);
+  border-color: color-mix(in oklch, var(--sdm-bg), white 15%);
+}
+
 /* ─── Animations ─── */
 
 @keyframes pulse-spin {
