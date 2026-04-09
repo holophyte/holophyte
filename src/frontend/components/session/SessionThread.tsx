@@ -67,12 +67,10 @@ export default function SessionThread({
   const isStreaming = status === 'streaming';
 
   return (
-    <Conversation className="relative flex h-full flex-col">
+    <Conversation className="flex h-full flex-col">
       <ConversationContent className="mx-auto w-full max-w-[90ch] space-y-5">
         {messages.map((msg) =>
           msg.parts.map((part, i) => {
-            // Use a composite key: message id + part index. Part order is
-            // stable within a single message after it's persisted to Convex.
             const partKey = `${msg.id}-${i}`;
             if (part.type === 'text') {
               if (msg.role === 'user') {
@@ -99,7 +97,6 @@ export default function SessionThread({
               );
             }
             if (part.type === 'dynamic-tool') {
-              // Rendered outside Message/MessageContent so it's full-width
               return <ToolCallUI key={part.toolCallId} part={part} />;
             }
             if (part.type === 'reasoning') {
@@ -119,8 +116,10 @@ export default function SessionThread({
         )}
         {isRunning && <ThinkingIndicator isRunning={isRunning} />}
       </ConversationContent>
-      <ConversationScrollButton />
-      <SessionComposer />
+      <div className="relative shrink-0">
+        <ConversationScrollButton className="bottom-full mb-2" />
+        <SessionComposer />
+      </div>
     </Conversation>
   );
 }
