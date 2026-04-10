@@ -87,11 +87,6 @@ describe('useHolophyteChat — messages', () => {
     expect(result.current.messages).toHaveLength(1);
     expect(result.current.messages[0]?.role).toBe('assistant');
   });
-
-  it('returns the sessionId as id', () => {
-    const { result } = renderHook(() => useHolophyteChat(makeProps({})));
-    expect(result.current.id).toBe('sess-1');
-  });
 });
 
 // ---------------------------------------------------------------------------
@@ -99,20 +94,7 @@ describe('useHolophyteChat — messages', () => {
 // ---------------------------------------------------------------------------
 
 describe('useHolophyteChat — optimistic messages', () => {
-  it('addOptimisticMessage appends a user UIMessage immediately', () => {
-    const { result } = renderHook(() => useHolophyteChat(makeProps({})));
-    act(() => {
-      result.current.addOptimisticMessage('Optimistic text');
-    });
-    const lastMsg = result.current.messages.at(-1);
-    expect(lastMsg?.role).toBe('user');
-    expect(lastMsg?.parts[0]).toMatchObject({
-      type: 'text',
-      text: 'Optimistic text',
-    });
-  });
-
-  it('sendMessage adds an optimistic message and calls sendMessage prop', async () => {
+  it('sendMessage appends an optimistic user message and calls the prop', async () => {
     const props = makeProps({});
     const { result } = renderHook(() => useHolophyteChat(props));
     await act(async () => {
@@ -121,9 +103,10 @@ describe('useHolophyteChat — optimistic messages', () => {
     expect(props.sendMessage).toHaveBeenCalledWith('sess-1', 'Hello');
     const lastMsg = result.current.messages.at(-1);
     expect(lastMsg?.role).toBe('user');
+    expect(lastMsg?.parts[0]).toMatchObject({ type: 'text', text: 'Hello' });
   });
 
-  it('clears optimistic messages when new events arrive', () => {
+  it('clears optimistic messages when new events arrive', async () => {
     const initialEvents: SDKMessage[] = [];
     const props = makeProps({ events: initialEvents });
     const { result, rerender } = renderHook(
@@ -131,8 +114,8 @@ describe('useHolophyteChat — optimistic messages', () => {
       { initialProps: props },
     );
 
-    act(() => {
-      result.current.addOptimisticMessage('temp');
+    await act(async () => {
+      await result.current.sendMessage('temp');
     });
     expect(result.current.messages).toHaveLength(1);
 

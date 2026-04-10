@@ -27,10 +27,8 @@ export interface UseHolophyteChatProps {
 export interface UseHolophyteChatReturn {
   messages: UIMessage[];
   status: 'ready' | 'submitted' | 'streaming' | 'error';
-  id: string;
   sendMessage: (text: string) => Promise<void>;
   stop: () => Promise<void>;
-  addOptimisticMessage: (text: string) => void;
   approve: (requestId: string) => void;
   deny: (requestId: string, message?: string) => void;
   pendingApprovals: PendingApproval[];
@@ -168,10 +166,8 @@ export function useHolophyteChat(
   return {
     messages,
     status,
-    id: sessionId,
     sendMessage,
     stop: handleStop,
-    addOptimisticMessage,
     approve,
     deny,
     pendingApprovals,
