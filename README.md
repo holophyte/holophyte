@@ -8,7 +8,7 @@ Holophyte is a kanban board application that lets you create tasks with prompts,
 
 - **Kanban Board UI** — Organize tasks across customizable workflow states
 - **Session Per Task** — Each task spawns its own Claude Code session via the Agent SDK
-- **Real-time Streaming** — Convex-powered structured SDK events rendered in an assistant-ui conversation UI
+- **Real-time Streaming** — Convex-powered structured SDK events rendered in a live conversation view with Streamdown markdown
 - **Real-time Database** — Convex provides instant synchronization across all clients
 - **Parallel Development** — Git worktrees for isolated feature branches with per-workspace local Convex backends
 
@@ -18,7 +18,7 @@ Holophyte is a kanban board application that lets you create tasks with prompts,
 - **Frontend:** [React 19](https://react.dev/) + [Zustand](https://zustand.docs.pmnd.rs/) (state management)
 - **Backend:** Bun.serve() with routes + companion polling
 - **Database:** [Convex](https://convex.dev/) — Real-time database with automatic synchronization
-- **Sessions:** [Claude Agent SDK](https://github.com/anthropics/claude-agent-sdk) (`@anthropic-ai/claude-agent-sdk`) + [assistant-ui](https://www.assistant-ui.com/)
+- **Sessions:** [Claude Agent SDK](https://github.com/anthropics/claude-agent-sdk) (`@anthropic-ai/claude-agent-sdk`) + [AI Elements](https://elements.ai-sdk.dev/) (chat UI primitives rendering `UIMessage[]`)
 - **Styling:** [Tailwind CSS v4](https://tailwindcss.com/) (CSS-first config)
 - **UI Components:** [Radix UI](https://www.radix-ui.com/)
 - **Icons:** [Lucide React](https://lucide.dev/)
@@ -200,7 +200,7 @@ Pre-commit hooks will automatically run to ensure code quality.
 
 - Built with [Bun](https://bun.sh/)
 - Real-time database by [Convex](https://convex.dev/)
-- Conversation UI by [assistant-ui](https://www.assistant-ui.com/)
+- Conversation UI by [AI Elements](https://elements.ai-sdk.dev/)
 - UI components by [Radix UI](https://www.radix-ui.com/)
 
 ---

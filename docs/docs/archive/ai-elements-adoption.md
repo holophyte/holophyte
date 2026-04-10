@@ -1,3 +1,7 @@
+**Status: shipped.** This proposal was implemented across PRs #240, #241, #242, and #243. Kept for historical context.
+
+---
+
 # AI Elements Adoption Plan
 
 Proposal to adopt [AI Elements](https://elements.ai-sdk.dev/) as the component library for all AI-related UI in Holophyte, replacing the current assistant-ui primitives and custom components.

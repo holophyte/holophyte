@@ -153,7 +153,7 @@ scripts/                   → Shared shell scripts (convex-local, dev-local, wo
 - **Tailwind v4** via CSS-first config in `src/frontend/styles.css` (`@theme inline {}` block) — no `tailwind.config.ts`
 - **Radix UI** (umbrella `radix-ui` package) + class-variance-authority for component variants
 - **Icons**: `lucide-react`
-- **react-markdown** + rehype-highlight for rendered message content
+- **Streamdown** (`streamdown` package) for markdown rendering, **Shiki** for syntax highlighting — messages rendered through AI Elements' `MessageResponse` component
 
 ## Testing
 

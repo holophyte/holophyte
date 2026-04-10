@@ -49,8 +49,8 @@ export default function SessionPanel({ taskId }: SessionPanelProps) {
     }
   }, [session, closeSession]);
 
-  // Single useSession call — state is passed down to SessionRuntimeProvider as props
-  // to avoid duplicate WebSocket connections.
+  // Single useSession call — state is passed down to ActiveSession as props,
+  // which forwards it into useHolophyteChat to build the chat data layer.
   const {
     events,
     pendingApprovals,
@@ -102,7 +102,7 @@ export default function SessionPanel({ taskId }: SessionPanelProps) {
     [session, queueResume],
   );
 
-  /** Unified send handler passed to SessionRuntimeProvider. */
+  /** Unified send handler passed into useHolophyteChat via the ActiveSession wrapper. */
   const handleSendMessage = useCallback(
     async (_sessionId: string, text: string) => {
       if (sessionStatus === 'idle') {
