@@ -12,6 +12,12 @@ const sidebars: SidebarsConfig = {
       label: 'Testing',
       items: ['testing/playwright-manual'],
     },
+    {
+      type: 'category',
+      label: 'Archive',
+      collapsed: true,
+      items: ['archive/ai-elements-adoption'],
+    },
   ],
 };
 
