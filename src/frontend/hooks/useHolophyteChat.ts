@@ -43,10 +43,11 @@ export interface UseHolophyteChatReturn {
 /**
  * Data-layer hook for a Holophyte session thread.
  *
- * Absorbs the logic previously spread across `SessionRuntimeProvider` and
- * `SessionActionsContext` and exposes it as a plain object compatible with the
- * `ai` package's `UIMessage` type. Consumers can use this with any chat UI
- * that accepts `UIMessage[]`.
+ * Normalizes raw Convex session data (SDK events, pending approvals, session
+ * status) into an `ai` package `UIMessage[]` shape, along with derived state
+ * and action callbacks. The returned object is consumed by `ActiveSession`,
+ * which wires it into `SessionActionsProvider` and `SessionThread`.
+ * Any chat UI that accepts `UIMessage[]` can use this hook as its data source.
  */
 export function useHolophyteChat(
   props: UseHolophyteChatProps,
