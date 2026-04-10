@@ -6,6 +6,10 @@ The role of this file is to describe common mistakes and confusion points that a
 
 Project management app for running parallel Claude Code sessions. A kanban board UI lets you create tasks with prompts, launch Claude Code sessions via the Agent SDK per task, and stream structured events to the browser via Convex real-time queries.
 
+## Knowledge base
+
+Companion wiki at `/Users/ko/Development/holophyte-thoughts`. **Start any new task by reading `wiki/_hot.md`** — rolling cache of current focus, recent activity, and open threads. Use `wiki/index.md` as the catalog for specs, decisions, and journal entries. The wiki is the source of truth for "why"; the code is the source of truth for "what".
+
 ## Development Principles
 
 - **KISS** — Write simple, readable code over clever solutions. Prefer straightforward implementations that are easy to understand and maintain.
@@ -48,28 +52,11 @@ Use **Bun** for everything — never Node.js, npm, vite, or express. Bun auto-lo
 
 ## Code Style
 
-Enforced by **Biome** (no ESLint/Prettier). Run `bun run lint:fix` before committing.
-
-- 2 spaces, single quotes, semicolons always
-- Default exports for React components; named exports for everything else
-- PascalCase component files (`TaskCard.tsx`), camelCase for non-component modules
-- Props typed with `interface ComponentNameProps`
-- Use `import type` for type-only imports (`verbatimModuleSyntax` is on)
-- Combine classNames with `cn()` helper from `@/frontend/lib/utils` (clsx + tailwind-merge)
-
-**Import ordering** (top to bottom):
-1. External type imports (`import type { Doc } from '@convex/_generated/dataModel'`)
-2. External value imports (`import { useQuery } from 'convex/react'`)
-3. Internal type imports (`import type { Session } from '@/claude/manager'`)
-4. Internal value imports — `@/` aliases (`import { cn } from '@/frontend/lib/utils'`)
-5. Relative imports (`import Badge from './ui/Badge'`)
+Enforced by **Biome** — run `bun run lint:fix` before committing. Default exports for React components, named exports elsewhere. Use `import type` for type-only imports (`verbatimModuleSyntax` is on). Combine classNames with `cn()` from `@/frontend/lib/utils`.
 
 ## TypeScript
 
-Strict mode with additional checks:
-- `noUncheckedIndexedAccess: true` — array/object indexing returns `T | undefined`
-- `noImplicitOverride: true`
-- `noFallthroughCasesInSwitch: true`
+Strict mode with `noUncheckedIndexedAccess: true` — array/object indexing returns `T | undefined`.
 
 ## Architecture
 
@@ -174,44 +161,12 @@ scripts/                   → Shared shell scripts (convex-local, dev-local, wo
 - **Manual testing**: when `ALLOW_PASSWORD_AUTH=1` is set, auto-login as `dev@holophyte.test` happens automatically on any page load. Use `?signin` to suppress auto-login and see the sign-in page.
 - See `docs/docs/testing/playwright-manual.md` for the full guide
 
-## Error Handling
+## Error Handling & Logging
 
-**Server routes** (`src/server.ts`): Catch errors and return structured JSON responses. Always log with `console.error` before returning a 500.
-```typescript
-try {
-  // ...
-  return Response.json(result);
-} catch (err) {
-  console.error("Failed to do X:", err);
-  return Response.json({ error: String(err) }, { status: 500 });
-}
-```
-
-**Convex functions**: Throw descriptive `Error` messages — Convex surfaces these to the client. No try/catch needed around database operations (Convex handles transactions).
-```typescript
-const task = await ctx.db.get(args.id);
-if (!task) throw new Error("Task not found");
-```
-
-**Frontend**: Convex `useMutation` errors surface via the Convex error boundary. For API calls to the Bun server, catch and display via UI state.
-
-## Logging
-
-Use `console.error` for errors that need attention in server-side code. Use `console.log` sparingly — only for startup messages and significant lifecycle events (server start, session spawn/exit). No logging in Convex functions (Convex has its own dashboard logging). No `console.log` in frontend code (use React DevTools / Convex dashboard instead).
-
-## Constants
-
-Extract shared values to avoid magic numbers and duplicated strings:
-- **Task/session statuses**: Import `taskStatusValidator` from `convex/schema.ts` — don't redeclare status literals elsewhere
-- **Default model**: Import `DEFAULT_MODEL` from `src/constants.ts` — shared between backend and frontend
-
-## Configuration
-
-Server configuration lives in environment variables with sensible defaults:
-- `PORT` (default: `8080`) — server port
-- `CONVEX_URL` — Convex deployment URL (served to frontend via `/api/config`)
-- `SHELL` (default: `/bin/zsh`) — login shell for environment resolution
-- `CONVEX_DEPLOYMENT` — managed by `convex dev` in `.env.local`
+- **Server routes**: catch errors, `console.error` before returning `Response.json({ error: String(err) }, { status: 500 })`.
+- **Convex functions**: throw descriptive `Error` messages — Convex surfaces them to the client. No try/catch around db ops.
+- **Frontend**: Convex mutation errors surface via the error boundary; Bun API errors handled in UI state.
+- **Logging**: `console.error` for server errors. `console.log` only for startup/lifecycle. No logging in Convex functions or frontend.
 
 ## Git Workflow
 
