@@ -106,7 +106,7 @@ export default function SessionThread({
               return (
                 <Message key={partKey} from="assistant" className="max-w-full">
                   <MessageContent className="w-full">
-                    <Reasoning isStreaming={false}>
+                    <Reasoning isStreaming={isStreaming}>
                       <ReasoningTrigger />
                       <ReasoningContent>{part.text}</ReasoningContent>
                     </Reasoning>

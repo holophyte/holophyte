@@ -120,7 +120,6 @@ function withSessionActions(approve = vi.fn(), deny = vi.fn()) {
         handleStop: vi.fn().mockResolvedValue(undefined),
         messageQueued: false,
         sendMessage: vi.fn().mockResolvedValue(undefined),
-        addOptimisticMessage: vi.fn(),
       }}
     >
       {children}

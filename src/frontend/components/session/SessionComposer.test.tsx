@@ -17,7 +17,6 @@ function withSession(
     handleStop?: () => Promise<void>;
     messageQueued?: boolean;
     sendMessage?: (text: string) => Promise<void>;
-    addOptimisticMessage?: (text: string) => void;
   } = {},
 ) {
   return (
@@ -34,7 +33,6 @@ function withSession(
         messageQueued: overrides.messageQueued ?? false,
         sendMessage:
           overrides.sendMessage ?? vi.fn().mockResolvedValue(undefined),
-        addOptimisticMessage: overrides.addOptimisticMessage ?? vi.fn(),
       }}
     >
       {children}
@@ -191,7 +189,7 @@ describe('SessionComposer', () => {
       const input = screen.getByRole('combobox');
       expect(input).toHaveAttribute(
         'placeholder',
-        'Send a follow-up to Claude… (Enter to send)',
+        'Send a follow-up… (Enter to send)',
       );
     });
 

@@ -81,7 +81,7 @@ export default function SessionComposer() {
   } else if (hasSuggestion) {
     placeholder = `${promptSuggestion}  [tab]`;
   } else {
-    placeholder = 'Send a follow-up to Claude… (Enter to send)';
+    placeholder = 'Send a follow-up… (Enter to send)';
   }
 
   const handleStopWithState = useCallback(async () => {
@@ -97,13 +97,16 @@ export default function SessionComposer() {
   }, [handleStop, stopping]);
 
   const handleSend = useCallback(
-    (value: string) => {
+    async (value: string) => {
       const trimmed = value.trim();
       if (!trimmed) return;
-      setText('');
-      sendMessage(trimmed)
-        .then(() => history.push(trimmed))
-        .catch((err) => console.error('Failed to send message:', err));
+      try {
+        await sendMessage(trimmed);
+        setText('');
+        history.push(trimmed);
+      } catch (err) {
+        console.error('Failed to send message:', err);
+      }
     },
     [sendMessage, history],
   );
@@ -219,14 +222,16 @@ export default function SessionComposer() {
   // Map session status to ChatStatus for PromptInputSubmit.
   // When there is text typed, always show the send button (status='ready').
   let chatStatus: ChatStatus;
-  if (!isEmpty) {
+  if (sessionStatus === 'failed') {
+    chatStatus = 'error';
+  } else if (sessionStatus === 'waiting_input') {
+    chatStatus = 'streaming';
+  } else if (!isEmpty) {
     chatStatus = 'ready';
   } else if (sessionStatus === 'queued') {
     chatStatus = 'submitted';
-  } else if (sessionStatus === 'running' || sessionStatus === 'waiting_input') {
+  } else if (sessionStatus === 'running') {
     chatStatus = 'streaming';
-  } else if (sessionStatus === 'failed') {
-    chatStatus = 'error';
   } else {
     chatStatus = 'ready';
   }
@@ -256,7 +261,7 @@ export default function SessionComposer() {
                   ? showStop
                     ? 'Follow-up message — press Enter to stop session, or type a message'
                     : 'Follow-up message — press Enter to send'
-                  : 'Send a follow-up to Claude'
+                  : 'Send a follow-up message'
               }
               disabled={isDisabled}
               role="combobox"
@@ -288,15 +293,19 @@ export default function SessionComposer() {
             <div aria-live="polite" aria-atomic="true">
               {messageQueued && (
                 <p className="px-1 text-xs text-muted-foreground">
-                  Message queued — will be delivered when Claude finishes its
-                  current turn.
+                  Message queued — will be delivered when the current turn
+                  finishes.
                 </p>
               )}
             </div>
             <PromptInputSubmit
               status={chatStatus}
               onStop={() => void handleStopWithState()}
-              disabled={stopping || (!showStop && isEmpty && !isSessionActive)}
+              disabled={
+                isDisabled ||
+                stopping ||
+                (!showStop && isEmpty && !isSessionActive)
+              }
               aria-label={showStop ? 'Stop session' : 'Send message'}
             />
           </PromptInputFooter>

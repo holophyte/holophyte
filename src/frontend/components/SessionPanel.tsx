@@ -225,7 +225,6 @@ function ActiveSession({
       handleStop={chat.stop}
       messageQueued={chat.messageQueued}
       sendMessage={chat.sendMessage}
-      addOptimisticMessage={chat.addOptimisticMessage}
     >
       <SessionThread messages={chat.messages} status={chat.status} />
     </SessionActionsProvider>
