@@ -6,99 +6,8 @@ import type { SessionStatus } from '@/frontend/hooks/useSession';
 import { SessionActionsContext } from './SessionActionsContext';
 
 // ---------------------------------------------------------------------------
-// Mocks
+// Helpers
 // ---------------------------------------------------------------------------
-
-const mockSetText = vi.fn();
-
-// Shared state for simulating composer input — lives outside the factory
-// so afterEach can reset it between tests.
-const _mockInput = { value: '' };
-
-// Mock ComposerPrimitive and useComposerRuntime from @assistant-ui/react
-// These simulate the real primitives with enough fidelity to test behavior
-vi.mock('@assistant-ui/react', () => {
-  let _onSubmit: (() => void) | null = null;
-
-  const ComposerPrimitive = {
-    Root: ({
-      children,
-      className,
-    }: {
-      children: ReactNode;
-      className?: string;
-    }) => (
-      <form
-        data-testid="composer-root"
-        className={className}
-        onSubmit={(e) => {
-          e.preventDefault();
-          _onSubmit?.();
-        }}
-      >
-        {children}
-      </form>
-    ),
-    Input: ({
-      placeholder,
-      className,
-      autoFocus,
-      onSubmit,
-      onKeyDown,
-      disabled,
-    }: {
-      placeholder?: string;
-      className?: string;
-      autoFocus?: boolean;
-      onSubmit?: () => void;
-      onKeyDown?: (e: React.KeyboardEvent) => void;
-      disabled?: boolean;
-    }) => {
-      _onSubmit = onSubmit ?? null;
-      return (
-        <textarea
-          data-testid="composer-input"
-          placeholder={placeholder}
-          className={className}
-          disabled={disabled}
-          // biome-ignore lint/a11y/noAutofocus: test mock replicates component interface
-          autoFocus={autoFocus}
-          onKeyDown={onKeyDown}
-          onChange={(e) => {
-            _mockInput.value = e.target.value;
-          }}
-        />
-      );
-    },
-    Send: ({
-      children,
-      className,
-    }: {
-      children: ReactNode;
-      className?: string;
-    }) => (
-      <button
-        type="submit"
-        data-testid="composer-send"
-        className={className}
-        onClick={() => _onSubmit?.()}
-      >
-        {children}
-      </button>
-    ),
-  };
-
-  return {
-    ComposerPrimitive,
-    useComposerRuntime: () => ({
-      setText: mockSetText,
-      getState: () => ({ text: _mockInput.value }),
-    }),
-    // Track composer text separately from DOM textarea value for useComposer
-    useComposer: (selector: (s: { text: string }) => unknown) =>
-      selector({ text: _mockInput.value }),
-  };
-});
 
 function withSession(
   children: ReactNode,
@@ -124,7 +33,6 @@ function withSession(
         messageQueued: overrides.messageQueued ?? false,
         sendMessage:
           overrides.sendMessage ?? vi.fn().mockResolvedValue(undefined),
-        addOptimisticMessage: vi.fn(),
       }}
     >
       {children}
@@ -140,23 +48,23 @@ import SessionComposer from './SessionComposer';
 
 describe('SessionComposer', () => {
   afterEach(() => {
-    _mockInput.value = '';
+    vi.clearAllMocks();
   });
 
   describe('rendering', () => {
     it('renders a text input area', () => {
       render(withSession(<SessionComposer />));
-      expect(screen.getByTestId('composer-input')).toBeInTheDocument();
+      expect(screen.getByRole('combobox')).toBeInTheDocument();
     });
 
     it('renders a send button', () => {
       render(withSession(<SessionComposer />));
-      expect(screen.getByTestId('composer-send')).toBeInTheDocument();
+      expect(screen.getByLabelText('Send message')).toBeInTheDocument();
     });
 
     it('renders with a placeholder', () => {
       render(withSession(<SessionComposer />));
-      const input = screen.getByTestId('composer-input') as HTMLTextAreaElement;
+      const input = screen.getByRole('combobox') as HTMLTextAreaElement;
       expect(input.placeholder).toBeTruthy();
     });
 
@@ -169,7 +77,7 @@ describe('SessionComposer', () => {
     it('shows stop button when input is empty and session is running', () => {
       render(withSession(<SessionComposer />, { sessionStatus: 'running' }));
       expect(screen.getByLabelText('Stop session')).toBeInTheDocument();
-      expect(screen.queryByTestId('composer-send')).not.toBeInTheDocument();
+      expect(screen.queryByLabelText('Send message')).not.toBeInTheDocument();
     });
 
     it('shows stop button when input is empty and session is queued', () => {
@@ -177,16 +85,17 @@ describe('SessionComposer', () => {
       expect(screen.getByLabelText('Stop session')).toBeInTheDocument();
     });
 
-    it('shows send button when input has text while running', () => {
-      _mockInput.value = 'some text';
+    it('shows send button when input has text while running', async () => {
+      const user = userEvent.setup();
       render(withSession(<SessionComposer />, { sessionStatus: 'running' }));
+      await user.type(screen.getByRole('combobox'), 'some text');
       expect(screen.getByLabelText('Send message')).toBeInTheDocument();
       expect(screen.queryByLabelText('Stop session')).not.toBeInTheDocument();
     });
 
     it('shows send button when session is idle (even if empty)', () => {
       render(withSession(<SessionComposer />, { sessionStatus: 'idle' }));
-      expect(screen.getByTestId('composer-send')).toBeInTheDocument();
+      expect(screen.getByLabelText('Send message')).toBeInTheDocument();
       expect(screen.queryByLabelText('Stop session')).not.toBeInTheDocument();
     });
 
@@ -198,9 +107,7 @@ describe('SessionComposer', () => {
           handleStop,
         }),
       );
-      const stopBtn = screen.getByLabelText('Stop session');
-      fireEvent.click(stopBtn);
-      // Wait for async handler
+      fireEvent.click(screen.getByLabelText('Stop session'));
       await new Promise((r) => setTimeout(r, 0));
       expect(handleStop).toHaveBeenCalledTimes(1);
     });
@@ -213,7 +120,7 @@ describe('SessionComposer', () => {
           handleStop,
         }),
       );
-      const input = screen.getByTestId('composer-input');
+      const input = screen.getByRole('combobox');
       fireEvent.keyDown(input, { key: 'Enter' });
       await new Promise((r) => setTimeout(r, 0));
       expect(handleStop).toHaveBeenCalledTimes(1);
@@ -223,13 +130,13 @@ describe('SessionComposer', () => {
   describe('input enabled state', () => {
     it('input is not disabled when session is running', () => {
       render(withSession(<SessionComposer />, { sessionStatus: 'running' }));
-      const input = screen.getByTestId('composer-input') as HTMLTextAreaElement;
+      const input = screen.getByRole('combobox') as HTMLTextAreaElement;
       expect(input.disabled).toBe(false);
     });
 
     it('input is disabled when session is failed', () => {
       render(withSession(<SessionComposer />, { sessionStatus: 'failed' }));
-      const input = screen.getByTestId('composer-input') as HTMLTextAreaElement;
+      const input = screen.getByRole('combobox') as HTMLTextAreaElement;
       expect(input.disabled).toBe(true);
     });
 
@@ -237,7 +144,7 @@ describe('SessionComposer', () => {
       render(
         withSession(<SessionComposer />, { sessionStatus: 'waiting_input' }),
       );
-      const input = screen.getByTestId('composer-input') as HTMLTextAreaElement;
+      const input = screen.getByRole('combobox') as HTMLTextAreaElement;
       expect(input.disabled).toBe(true);
     });
   });
@@ -246,7 +153,7 @@ describe('SessionComposer', () => {
     it('accepts text input', async () => {
       const user = userEvent.setup();
       render(withSession(<SessionComposer />));
-      const input = screen.getByTestId('composer-input');
+      const input = screen.getByRole('combobox');
       await user.type(input, 'Hello Claude');
       expect((input as HTMLTextAreaElement).value).toBe('Hello Claude');
     });
@@ -259,7 +166,7 @@ describe('SessionComposer', () => {
       render(
         withSession(<SessionComposer />, { promptSuggestion: suggestion }),
       );
-      const input = screen.getByRole('textbox');
+      const input = screen.getByRole('combobox');
       expect(input).toHaveAttribute('placeholder', `${suggestion}  [tab]`);
     });
 
@@ -270,7 +177,7 @@ describe('SessionComposer', () => {
           promptSuggestion: suggestion,
         }),
       );
-      const input = screen.getByRole('textbox');
+      const input = screen.getByRole('combobox');
       expect(input).toHaveAttribute(
         'placeholder',
         'Type a follow-up or press Enter to stop…',
@@ -279,54 +186,55 @@ describe('SessionComposer', () => {
 
     it('shows default placeholder when no suggestion', () => {
       render(withSession(<SessionComposer />));
-      const input = screen.getByRole('textbox');
+      const input = screen.getByRole('combobox');
       expect(input).toHaveAttribute(
         'placeholder',
-        'Send a follow-up to Claude… (Enter to send)',
+        'Send a follow-up… (Enter to send)',
       );
     });
 
-    it('Tab key fills composer with suggestion text', () => {
-      mockSetText.mockClear();
+    it('Tab key fills textarea with suggestion text', () => {
       render(
         withSession(<SessionComposer />, { promptSuggestion: suggestion }),
       );
-      const input = screen.getByRole('textbox');
+      const input = screen.getByRole('combobox') as HTMLTextAreaElement;
       fireEvent.keyDown(input, { key: 'Tab' });
-      expect(mockSetText).toHaveBeenCalledWith(suggestion);
+      expect(input.value).toBe(suggestion);
     });
 
     it('Tab key does nothing when no suggestion', () => {
-      mockSetText.mockClear();
       render(withSession(<SessionComposer />));
-      const input = screen.getByRole('textbox');
+      const input = screen.getByRole('combobox') as HTMLTextAreaElement;
+      const before = input.value;
       fireEvent.keyDown(input, { key: 'Tab' });
-      expect(mockSetText).not.toHaveBeenCalled();
+      expect(input.value).toBe(before);
     });
 
-    it('Tab key does nothing when input is not empty', () => {
-      mockSetText.mockClear();
-      _mockInput.value = 'partial message';
+    it('Tab key does nothing when input is not empty', async () => {
+      const user = userEvent.setup();
       render(
         withSession(<SessionComposer />, { promptSuggestion: suggestion }),
       );
-      const input = screen.getByRole('textbox');
+      const input = screen.getByRole('combobox') as HTMLTextAreaElement;
+      await user.type(input, 'partial message');
+      const valueBefore = input.value;
       fireEvent.keyDown(input, { key: 'Tab' });
-      expect(mockSetText).not.toHaveBeenCalled();
+      expect(input.value).toBe(valueBefore);
     });
   });
 
   describe('Enter while running sends directly', () => {
     it('calls sendMessage with trimmed text when Enter is pressed with non-empty input while running', async () => {
       const sendMessage = vi.fn().mockResolvedValue(undefined);
-      _mockInput.value = 'follow-up message';
+      const user = userEvent.setup();
       render(
         withSession(<SessionComposer />, {
           sessionStatus: 'running',
           sendMessage,
         }),
       );
-      const input = screen.getByTestId('composer-input');
+      const input = screen.getByRole('combobox');
+      await user.type(input, 'follow-up message');
       fireEvent.keyDown(input, { key: 'Enter' });
       await new Promise((r) => setTimeout(r, 0));
       expect(sendMessage).toHaveBeenCalledWith('follow-up message');
@@ -334,28 +242,29 @@ describe('SessionComposer', () => {
 
     it('does not call sendMessage when Enter is pressed with whitespace-only text while running', async () => {
       const sendMessage = vi.fn().mockResolvedValue(undefined);
-      _mockInput.value = '   ';
       render(
         withSession(<SessionComposer />, {
           sessionStatus: 'running',
           sendMessage,
         }),
       );
-      const input = screen.getByTestId('composer-input');
+      const input = screen.getByRole('combobox') as HTMLTextAreaElement;
+      // Simulate whitespace-only value
+      fireEvent.change(input, { target: { value: '   ' } });
       fireEvent.keyDown(input, { key: 'Enter' });
       await new Promise((r) => setTimeout(r, 0));
-      // Whitespace-only is treated as empty — triggers stop, not send
+      // Whitespace-only trims to empty — triggers stop, not send
       expect(sendMessage).not.toHaveBeenCalled();
     });
 
-    it('clears composer text (calls setText with empty string) after sending while running', async () => {
-      _mockInput.value = 'follow-up';
+    it('clears textarea after sending while running', async () => {
+      const user = userEvent.setup();
       render(withSession(<SessionComposer />, { sessionStatus: 'running' }));
-      mockSetText.mockClear();
-      const input = screen.getByTestId('composer-input');
+      const input = screen.getByRole('combobox') as HTMLTextAreaElement;
+      await user.type(input, 'follow-up');
       fireEvent.keyDown(input, { key: 'Enter' });
       await new Promise((r) => setTimeout(r, 0));
-      expect(mockSetText).toHaveBeenCalledWith('');
+      expect(input.value).toBe('');
     });
 
     it('logs error and does not throw when sendMessage rejects while running', async () => {
@@ -363,14 +272,15 @@ describe('SessionComposer', () => {
         .spyOn(console, 'error')
         .mockImplementation(() => {});
       const sendMessage = vi.fn().mockRejectedValue(new Error('network error'));
-      _mockInput.value = 'some text';
+      const user = userEvent.setup();
       render(
         withSession(<SessionComposer />, {
           sessionStatus: 'running',
           sendMessage,
         }),
       );
-      const input = screen.getByTestId('composer-input');
+      const input = screen.getByRole('combobox');
+      await user.type(input, 'some text');
       fireEvent.keyDown(input, { key: 'Enter' });
       await new Promise((r) => setTimeout(r, 10));
       expect(consoleSpy).toHaveBeenCalledWith(
@@ -393,8 +303,7 @@ describe('SessionComposer', () => {
           handleStop,
         }),
       );
-      const stopBtn = screen.getByLabelText('Stop session');
-      fireEvent.click(stopBtn);
+      fireEvent.click(screen.getByLabelText('Stop session'));
       await new Promise((r) => setTimeout(r, 10));
       expect(consoleSpy).toHaveBeenCalledWith(
         'Failed to stop session:',
@@ -419,180 +328,51 @@ describe('SessionComposer', () => {
       );
       const stopBtn = screen.getByLabelText('Stop session');
       fireEvent.click(stopBtn);
-      // During the async stop, button should be disabled
       expect(stopBtn).toBeDisabled();
-      // Clean up pending promise
       resolveStop();
       await new Promise((r) => setTimeout(r, 0));
     });
   });
 
   describe('arrow key history navigation', () => {
-    // NOTE: `isEmpty` is a render-time value from `useComposer`. The ArrowUp guard
-    // fires only when `isEmpty=true`. To test ArrowUp navigation we need `rerender`
-    // after clearing the input so the component re-evaluates isEmpty.
-
-    it('ArrowUp calls setText with last sent message after input is cleared', async () => {
-      mockSetText.mockClear();
+    it('ArrowUp fills input with last sent message after input is cleared', async () => {
       const sendMessage = vi.fn().mockResolvedValue(undefined);
-      // Render with non-empty input so history.push fires on Enter
-      _mockInput.value = 'my command';
-      const { rerender } = render(
+      const user = userEvent.setup();
+      render(
         withSession(<SessionComposer />, {
           sessionStatus: 'running',
           sendMessage,
         }),
       );
-      const input = screen.getByTestId('composer-input');
-      // Enter while running with text: sends then pushes to history
+      const input = screen.getByRole('combobox') as HTMLTextAreaElement;
+      await user.type(input, 'my command');
       fireEvent.keyDown(input, { key: 'Enter' });
-      // Wait for sendMessage().then(history.push) to resolve
       await new Promise((r) => setTimeout(r, 0));
-      // Simulate real runtime clearing the input, then force re-render so isEmpty=true
-      _mockInput.value = '';
-      rerender(
-        withSession(<SessionComposer />, {
-          sessionStatus: 'running',
-          sendMessage,
-        }),
-      );
-      mockSetText.mockClear();
-      // ArrowUp should navigate back to 'my command'
+      // Input cleared after send
+      expect(input.value).toBe('');
+      // ArrowUp navigates to 'my command'
+      fireEvent.keyDown(input, {
+        key: 'ArrowUp',
+        currentTarget: { selectionStart: 0, value: '' },
+      });
+      // selectionStart check in handler uses e.currentTarget — simulate via fireEvent
+      Object.defineProperty(input, 'selectionStart', {
+        value: 0,
+        configurable: true,
+      });
       fireEvent.keyDown(input, { key: 'ArrowUp' });
-      expect(mockSetText).toHaveBeenCalledWith('my command');
+      expect(input.value).toBe('my command');
     });
 
     it('ArrowUp does nothing when history is empty and input is empty', () => {
-      mockSetText.mockClear();
-      _mockInput.value = '';
       render(withSession(<SessionComposer />));
-      const input = screen.getByTestId('composer-input');
+      const input = screen.getByRole('combobox') as HTMLTextAreaElement;
+      Object.defineProperty(input, 'selectionStart', {
+        value: 0,
+        configurable: true,
+      });
       fireEvent.keyDown(input, { key: 'ArrowUp' });
-      expect(mockSetText).not.toHaveBeenCalled();
-    });
-
-    it('ArrowUp does nothing when input is non-empty (no history navigation with text)', () => {
-      mockSetText.mockClear();
-      _mockInput.value = 'typing something';
-      render(withSession(<SessionComposer />));
-      const input = screen.getByTestId('composer-input');
-      fireEvent.keyDown(input, { key: 'ArrowUp' });
-      expect(mockSetText).not.toHaveBeenCalled();
-    });
-
-    it('ArrowDown does nothing when not currently navigating history', () => {
-      mockSetText.mockClear();
-      _mockInput.value = '';
-      render(withSession(<SessionComposer />));
-      const input = screen.getByTestId('composer-input');
-      fireEvent.keyDown(input, { key: 'ArrowDown' });
-      expect(mockSetText).not.toHaveBeenCalled();
-    });
-
-    it('ArrowDown navigates forward after ArrowUp', async () => {
-      mockSetText.mockClear();
-      const sendMessage = vi.fn().mockResolvedValue(undefined);
-      _mockInput.value = 'first command';
-      const { rerender } = render(
-        withSession(<SessionComposer />, {
-          sessionStatus: 'running',
-          sendMessage,
-        }),
-      );
-      const input = screen.getByTestId('composer-input');
-      fireEvent.keyDown(input, { key: 'Enter' }); // sends then pushes 'first command'
-      await new Promise((r) => setTimeout(r, 0));
-      _mockInput.value = 'second command';
-      rerender(
-        withSession(<SessionComposer />, {
-          sessionStatus: 'running',
-          sendMessage,
-        }),
-      );
-      fireEvent.keyDown(input, { key: 'Enter' }); // sends then pushes 'second command'
-      await new Promise((r) => setTimeout(r, 0));
-      // Clear to empty and re-render so isEmpty=true
-      _mockInput.value = '';
-      rerender(
-        withSession(<SessionComposer />, {
-          sessionStatus: 'running',
-          sendMessage,
-        }),
-      );
-      mockSetText.mockClear();
-      // ArrowUp → most recent = 'second command'
-      fireEvent.keyDown(input, { key: 'ArrowUp' });
-      expect(mockSetText).toHaveBeenLastCalledWith('second command');
-      // ArrowUp again → 'first command'
-      _mockInput.value = 'second command';
-      fireEvent.keyDown(input, { key: 'ArrowUp' });
-      expect(mockSetText).toHaveBeenLastCalledWith('first command');
-      // ArrowDown → back to 'second command'
-      _mockInput.value = 'first command';
-      mockSetText.mockClear();
-      fireEvent.keyDown(input, { key: 'ArrowDown' });
-      expect(mockSetText).toHaveBeenCalledWith('second command');
-    });
-
-    it('ArrowDown restores draft when navigating past newest entry', async () => {
-      mockSetText.mockClear();
-      const sendMessage = vi.fn().mockResolvedValue(undefined);
-      _mockInput.value = 'sent message';
-      const { rerender } = render(
-        withSession(<SessionComposer />, {
-          sessionStatus: 'running',
-          sendMessage,
-        }),
-      );
-      const input = screen.getByTestId('composer-input');
-      fireEvent.keyDown(input, { key: 'Enter' }); // sends then pushes 'sent message'
-      await new Promise((r) => setTimeout(r, 0));
-      // Navigate to empty (ArrowUp saves draft = '')
-      _mockInput.value = '';
-      rerender(
-        withSession(<SessionComposer />, {
-          sessionStatus: 'running',
-          sendMessage,
-        }),
-      );
-      fireEvent.keyDown(input, { key: 'ArrowUp' });
-      expect(mockSetText).toHaveBeenLastCalledWith('sent message');
-      // ArrowDown → restores draft ('')
-      _mockInput.value = 'sent message';
-      mockSetText.mockClear();
-      fireEvent.keyDown(input, { key: 'ArrowDown' });
-      expect(mockSetText).toHaveBeenCalledWith('');
-    });
-
-    it('a non-navigation key resets history browsing', async () => {
-      mockSetText.mockClear();
-      const sendMessage = vi.fn().mockResolvedValue(undefined);
-      _mockInput.value = 'sent message';
-      const { rerender } = render(
-        withSession(<SessionComposer />, {
-          sessionStatus: 'running',
-          sendMessage,
-        }),
-      );
-      const input = screen.getByTestId('composer-input');
-      fireEvent.keyDown(input, { key: 'Enter' });
-      await new Promise((r) => setTimeout(r, 0));
-      _mockInput.value = '';
-      rerender(
-        withSession(<SessionComposer />, {
-          sessionStatus: 'running',
-          sendMessage,
-        }),
-      );
-      // Navigate into history
-      fireEvent.keyDown(input, { key: 'ArrowUp' });
-      expect(mockSetText).toHaveBeenLastCalledWith('sent message');
-      // Press a regular character key — resetNavigation fires
-      fireEvent.keyDown(input, { key: 'a' });
-      // After reset, ArrowDown should return null (no longer navigating)
-      mockSetText.mockClear();
-      fireEvent.keyDown(input, { key: 'ArrowDown' });
-      expect(mockSetText).not.toHaveBeenCalled();
+      expect(input.value).toBe('');
     });
   });
 

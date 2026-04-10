@@ -3,24 +3,15 @@ import type { Id } from '@convex/_generated/dataModel';
 import { useMutation, useQuery } from 'convex/react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { DEFAULT_MODEL, QUEUED_WARNING_THRESHOLD_MS } from '@/constants';
+import { useHolophyteChat } from '@/frontend/hooks/useHolophyteChat';
 import { useSession } from '@/frontend/hooks/useSession';
 import { toast } from '@/frontend/lib/toast';
 import { useAppStore } from '@/frontend/stores/app';
 import type { ClaudeModelId } from './ModelPicker';
 import ModelPicker from './ModelPicker';
 import SessionDropdown from './SessionDropdown';
-import SessionRuntimeProvider from './session/SessionRuntimeProvider';
+import { SessionActionsProvider } from './session/SessionActionsContext';
 import SessionThread from './session/SessionThread';
-import {
-  BashToolUI,
-  EditToolUI,
-  GlobToolUI,
-  GrepToolUI,
-  ReadToolUI,
-  WebFetchToolUI,
-  WebSearchToolUI,
-  WriteToolUI,
-} from './session/toolUIs';
 import Button from './ui/Button';
 
 /** Props for {@link SessionPanel}. */
@@ -130,15 +121,6 @@ export default function SessionPanel({ taskId }: SessionPanelProps) {
     [sessionStatus, resumeIdleSession, sendMessage],
   );
 
-  /** Bound sendMessage wrapper for the composer (no sessionId arg). */
-  const handleSendMessageDirect = useCallback(
-    async (text: string) => {
-      if (!sessionId) return;
-      await handleSendMessage(sessionId, text);
-    },
-    [sessionId, handleSendMessage],
-  );
-
   /** Create a brand-new session (used by NoSessionPlaceholder). */
   const handleNewSession = async (text: string, model: ClaudeModelId) => {
     if (!task?.repo?.path) return;
@@ -165,7 +147,7 @@ export default function SessionPanel({ taskId }: SessionPanelProps) {
 
       <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
         {sessionId ? (
-          <SessionRuntimeProvider
+          <ActiveSession
             sessionId={sessionId}
             events={events}
             pendingApprovals={pendingApprovals}
@@ -176,18 +158,7 @@ export default function SessionPanel({ taskId }: SessionPanelProps) {
             sendMessage={handleSendMessage}
             handleStop={handleStopRaw}
             messageQueued={messageQueued}
-            sendMessageDirect={handleSendMessageDirect}
-          >
-            <BashToolUI />
-            <ReadToolUI />
-            <EditToolUI />
-            <WriteToolUI />
-            <GlobToolUI />
-            <GrepToolUI />
-            <WebFetchToolUI />
-            <WebSearchToolUI />
-            <SessionThread />
-          </SessionRuntimeProvider>
+          />
         ) : (
           <NoSessionPlaceholder
             key={taskId}
@@ -200,6 +171,69 @@ export default function SessionPanel({ taskId }: SessionPanelProps) {
     </div>
   );
 }
+
+// ---------------------------------------------------------------------------
+// ActiveSession — calls useHolophyteChat and provides context to SessionThread
+// ---------------------------------------------------------------------------
+
+interface ActiveSessionProps {
+  sessionId: string;
+  events: ReturnType<typeof useSession>['events'];
+  pendingApprovals: ReturnType<typeof useSession>['pendingApprovals'];
+  sessionStatus: ReturnType<typeof useSession>['sessionStatus'];
+  projectCommands: ReturnType<typeof useSession>['projectCommands'];
+  approve: ReturnType<typeof useSession>['approve'];
+  deny: ReturnType<typeof useSession>['deny'];
+  sendMessage: (sessionId: string, text: string) => Promise<void>;
+  handleStop: () => Promise<void>;
+  messageQueued: boolean;
+}
+
+function ActiveSession({
+  sessionId,
+  events,
+  pendingApprovals,
+  sessionStatus,
+  projectCommands,
+  approve,
+  deny,
+  sendMessage,
+  handleStop,
+  messageQueued,
+}: ActiveSessionProps) {
+  const chat = useHolophyteChat({
+    sessionId,
+    events,
+    pendingApprovals,
+    sessionStatus,
+    projectCommands,
+    approve,
+    deny,
+    sendMessage,
+    handleStop,
+    messageQueued,
+  });
+
+  return (
+    <SessionActionsProvider
+      approve={chat.approve}
+      deny={chat.deny}
+      pendingApprovals={chat.pendingApprovals}
+      sessionStatus={chat.sessionStatus}
+      promptSuggestion={chat.promptSuggestion}
+      availableCommands={chat.availableCommands}
+      handleStop={chat.stop}
+      messageQueued={chat.messageQueued}
+      sendMessage={chat.sendMessage}
+    >
+      <SessionThread messages={chat.messages} status={chat.status} />
+    </SessionActionsProvider>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// NoSessionPlaceholder
+// ---------------------------------------------------------------------------
 
 interface NoSessionPlaceholderProps {
   taskPath: string;

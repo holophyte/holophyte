@@ -17,7 +17,6 @@ interface SessionActions {
   handleStop: () => Promise<void>;
   messageQueued: boolean;
   sendMessage: (text: string) => Promise<void>;
-  addOptimisticMessage: (text: string) => void;
 }
 
 export const SessionActionsContext = createContext<SessionActions | null>(null);
@@ -38,7 +37,6 @@ export function SessionActionsProvider({
   handleStop,
   messageQueued,
   sendMessage,
-  addOptimisticMessage,
 }: SessionActionsProviderProps) {
   return (
     <SessionActionsContext.Provider
@@ -52,7 +50,6 @@ export function SessionActionsProvider({
         handleStop,
         messageQueued,
         sendMessage,
-        addOptimisticMessage,
       }}
     >
       {children}
