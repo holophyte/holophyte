@@ -6,10 +6,6 @@ The role of this file is to describe common mistakes and confusion points that a
 
 Project management app for running parallel Claude Code sessions. A kanban board UI lets you create tasks with prompts, launch Claude Code sessions via the Agent SDK per task, and stream structured events to the browser via Convex real-time queries.
 
-## Knowledge base
-
-Companion wiki at `/Users/ko/Development/holophyte-thoughts`. **Start any new task by reading `wiki/_hot.md`** — rolling cache of current focus, recent activity, and open threads. Use `wiki/index.md` as the catalog for specs, decisions, and journal entries. The wiki is the source of truth for "why"; the code is the source of truth for "what".
-
 ## Development Principles
 
 - **KISS** — Write simple, readable code over clever solutions. Prefer straightforward implementations that are easy to understand and maintain.
@@ -166,7 +162,7 @@ scripts/                   → Shared shell scripts (convex-local, dev-local, wo
 - **Server routes**: catch errors, `console.error` before returning `Response.json({ error: String(err) }, { status: 500 })`.
 - **Convex functions**: throw descriptive `Error` messages — Convex surfaces them to the client. No try/catch around db ops.
 - **Frontend**: Convex mutation errors surface via the error boundary; Bun API errors handled in UI state.
-- **Logging**: `console.error` for server errors. `console.log` only for startup/lifecycle. No logging in Convex functions or frontend.
+- **Logging**: `console.error` for server errors. `console.log` only for startup/lifecycle. No logging in Convex functions. In frontend, avoid `console.log` (use React DevTools / Convex dashboard) — `console.error` is fine.
 
 ## Git Workflow
 
