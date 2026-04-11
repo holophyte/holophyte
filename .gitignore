@@ -59,6 +59,9 @@ docs/build
 .dev-ports
 .dev-local.pid
 
+# Claude Code local overrides (personal, not shared)
+CLAUDE.local.md
+
 # autopilot working files
 .autopilot/
 
