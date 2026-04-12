@@ -22,6 +22,10 @@ WORKTREE_DIR="$HOME/.holophyte-dev"
 WORKTREE_PATH="$WORKTREE_DIR/$FEATURE_NAME"
 BRANCH="feat/$FEATURE_NAME"
 
+# Resolve real Bun binary (skips node_modules/.bin shim) and export clean PATH
+# shellcheck source=lib/resolve-bun.sh
+source "$(cd "$(dirname "$0")" && pwd)/lib/resolve-bun.sh"
+
 # Read team/project from main repo's .dev-ports
 MAIN_DEV_PORTS="$REPO_ROOT/.dev-ports"
 if [ ! -f "$MAIN_DEV_PORTS" ]; then
@@ -68,6 +72,9 @@ cleanup() {
   if [ -n "${CONVEX_SITE_PORT:-}" ]; then
     lsof -ti "TCP:$CONVEX_SITE_PORT" 2>/dev/null | xargs kill 2>/dev/null || true
   fi
+  if [ -n "${CONVEX_ENV_FILE:-}" ]; then
+    rm -f "$CONVEX_ENV_FILE"
+  fi
   cd "$REPO_ROOT"
   git worktree remove "$WORKTREE_PATH" --force 2>/dev/null || rm -rf "$WORKTREE_PATH"
   git worktree prune 2>/dev/null || true
@@ -79,7 +86,7 @@ echo "Creating worktree at ~/.holophyte-dev/$FEATURE_NAME on branch $BRANCH..."
 git worktree add "$WORKTREE_PATH" -b "$BRANCH"
 
 # From this point, failures should clean up the partial worktree
-trap cleanup ERR
+trap cleanup ERR INT TERM
 
 # Copy .env (shared config). Don't copy .env.local yet — Convex will create it
 # during provisioning. Non-Convex vars (API keys, secrets) are appended after.
@@ -97,7 +104,7 @@ fi
 # Install dependencies (frozen lockfile avoids modifying bun.lock, which would
 # make the worktree dirty and block `bunx @convex-dev/auth` later)
 echo "Installing dependencies..."
-cd "$WORKTREE_PATH" && bun install --frozen-lockfile
+cd "$WORKTREE_PATH" && "$BUN_BIN" install --frozen-lockfile
 
 # Assign ports — scan all existing .dev-ports files to avoid collisions with
 # other worktrees, even if they aren't currently running.
@@ -156,7 +163,7 @@ if [ ! -f "$WORKTREE_PATH/convex.json" ]; then
 fi
 
 echo "Initializing local Convex backend (cloud=$CONVEX_CLOUD_PORT, site=$CONVEX_SITE_PORT)..."
-cd "$WORKTREE_PATH" && bunx convex dev --configure existing \
+cd "$WORKTREE_PATH" && "$BUN_BIN" x convex dev --configure existing \
   --team "$CONVEX_TEAM" \
   --project "$CONVEX_PROJECT" \
   --dev-deployment local \
@@ -173,8 +180,8 @@ fi
 
 # `convex dev --once` exits after deploying, but `convex env set` needs a
 # running backend. Start one in the background, set env vars, then stop it.
-echo "Setting environment variables on local Convex..."
-cd "$WORKTREE_PATH" && bunx convex dev --local \
+echo "Starting local Convex for environment setup..."
+cd "$WORKTREE_PATH" && "$BUN_BIN" x convex dev --local \
   --local-cloud-port "$CONVEX_CLOUD_PORT" \
   --local-site-port "$CONVEX_SITE_PORT" &
 CONVEX_BG_PID=$!
@@ -196,24 +203,26 @@ for i in $(seq 1 30); do
   sleep 1
 done
 
-# Set env vars one at a time with a pause between each. Rapid-fire `env set`
-# while `convex dev --local` is running causes "Environment variables have
-# changed during push" errors because each set triggers a redeploy.
-set_convex_env() {
-  cd "$WORKTREE_PATH" && bunx convex env set -- "$1" "$2"
-  sleep 2
+CONVEX_ENV_FILE=$(mktemp)
+
+write_convex_env() {
+  local key="$1"
+  local value="$2"
+  value="${value//\\/\\\\}"
+  value="${value//\"/\\\"}"
+  printf '%s="%s"\n' "$key" "$value" >> "$CONVEX_ENV_FILE"
 }
 
 # Override SITE_URL (a Convex Auth env var) to point at the app server port.
 # The app server proxies /api/auth/* to the Convex site port so OAuth callbacks
 # work through a single origin (matches what's configured in GitHub/Google OAuth apps).
-set_convex_env SITE_URL "http://localhost:$DEV_PORT"
-set_convex_env ALLOW_ANONYMOUS_AUTH 1
-set_convex_env ALLOW_PASSWORD_AUTH 1
+write_convex_env SITE_URL "http://localhost:$DEV_PORT"
+write_convex_env ALLOW_ANONYMOUS_AUTH 1
+write_convex_env ALLOW_PASSWORD_AUTH 1
 
 # Generate and set INTERNAL_API_SECRET for companion ↔ Convex communication
 INTERNAL_API_SECRET=$(openssl rand -hex 32)
-set_convex_env INTERNAL_API_SECRET "$INTERNAL_API_SECRET"
+write_convex_env INTERNAL_API_SECRET "$INTERNAL_API_SECRET"
 # Store the secret in .env.local (Bun prioritizes .env.local over .env).
 # convex-local.sh reads from .env.local first to stay in sync with the server.
 ENV_LOCAL_FILE="$WORKTREE_PATH/.env.local"
@@ -227,7 +236,7 @@ fi
 # Uses jose directly instead of `bunx @convex-dev/auth` — that tool has
 # interactive prompts (SITE_URL, dirty tree) that break in automated scripts.
 echo "Generating Convex Auth JWT keys..."
-JWT_OUTPUT=$(cd "$WORKTREE_PATH" && bun --eval '
+JWT_OUTPUT=$(cd "$WORKTREE_PATH" && "$BUN_BIN" --eval '
 import { generateKeyPair, exportPKCS8, exportJWK } from "jose";
 const keys = await generateKeyPair("RS256", { extractable: true });
 const priv = (await exportPKCS8(keys.privateKey)).trimEnd().replaceAll("\n", " ");
@@ -237,23 +246,25 @@ console.log(JSON.stringify({ keys: [{ use: "sig", ...pub }] }));
 ')
 JWT_PRIVATE_KEY=$(echo "$JWT_OUTPUT" | head -1)
 JWKS=$(echo "$JWT_OUTPUT" | tail -1)
-set_convex_env JWT_PRIVATE_KEY "$JWT_PRIVATE_KEY"
-set_convex_env JWKS "$JWKS"
+write_convex_env JWT_PRIVATE_KEY "$JWT_PRIVATE_KEY"
+write_convex_env JWKS "$JWKS"
 
 # Forward OAuth credentials from main repo's .dev-ports (if present)
 if [ -n "${AUTH_GITHUB_ID:-}" ] && [ -n "${AUTH_GITHUB_SECRET:-}" ]; then
-  echo "Setting GitHub OAuth credentials..."
-  set_convex_env AUTH_GITHUB_ID "$AUTH_GITHUB_ID"
-  set_convex_env AUTH_GITHUB_SECRET "$AUTH_GITHUB_SECRET"
+  write_convex_env AUTH_GITHUB_ID "$AUTH_GITHUB_ID"
+  write_convex_env AUTH_GITHUB_SECRET "$AUTH_GITHUB_SECRET"
 fi
 if [ -n "${AUTH_GOOGLE_ID:-}" ] && [ -n "${AUTH_GOOGLE_SECRET:-}" ]; then
-  echo "Setting Google OAuth credentials..."
-  set_convex_env AUTH_GOOGLE_ID "$AUTH_GOOGLE_ID"
-  set_convex_env AUTH_GOOGLE_SECRET "$AUTH_GOOGLE_SECRET"
+  write_convex_env AUTH_GOOGLE_ID "$AUTH_GOOGLE_ID"
+  write_convex_env AUTH_GOOGLE_SECRET "$AUTH_GOOGLE_SECRET"
 fi
 
+echo "Setting environment variables on local Convex..."
+cd "$WORKTREE_PATH" && "$BUN_BIN" x convex env set --from-file "$CONVEX_ENV_FILE" --force
+rm -f "$CONVEX_ENV_FILE"
+
 # Seed dev user for email+password auth (idempotent)
-cd "$WORKTREE_PATH" && bun run seed:dev-user || echo "Warning: Could not seed dev user"
+cd "$WORKTREE_PATH" && "$BUN_BIN" run seed:dev-user || echo "Warning: Could not seed dev user"
 
 # Stop the background Convex backend (kill process group + port fallback,
 # because `bunx` spawns child processes that outlive the wrapper)
@@ -265,7 +276,7 @@ lsof -ti "TCP:$CONVEX_CLOUD_PORT" 2>/dev/null | xargs kill 2>/dev/null || true
 lsof -ti "TCP:$CONVEX_SITE_PORT" 2>/dev/null | xargs kill 2>/dev/null || true
 
 # Disable the cleanup trap — we succeeded
-trap - ERR
+trap - ERR INT TERM
 
 echo ""
 echo "Worktree created: ~/.holophyte-dev/$FEATURE_NAME"

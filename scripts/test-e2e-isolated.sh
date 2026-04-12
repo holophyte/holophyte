@@ -14,6 +14,10 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 MAIN_DEV_PORTS="$REPO_ROOT/.dev-ports"
 
+# Resolve real Bun binary (skips node_modules/.bin shim) and export clean PATH
+# shellcheck source=lib/resolve-bun.sh
+source "$SCRIPT_DIR/lib/resolve-bun.sh"
+
 if [ ! -f "$MAIN_DEV_PORTS" ]; then
   echo "Error: .dev-ports not found in main repo"
   exit 1
@@ -65,7 +69,7 @@ EOF
 
 # Install dependencies (convex/_generated is already in the worktree via git)
 echo "Installing dependencies..."
-cd "$WORKTREE_PATH" && bun install --frozen-lockfile
+cd "$WORKTREE_PATH" && "$BUN_BIN" install --frozen-lockfile
 
 # Run E2E tests — capture exit code to return after cleanup
 echo ""
