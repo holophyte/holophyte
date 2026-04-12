@@ -22,28 +22,9 @@ WORKTREE_DIR="$HOME/.holophyte-dev"
 WORKTREE_PATH="$WORKTREE_DIR/$FEATURE_NAME"
 BRANCH="feat/$FEATURE_NAME"
 
-path_without_node_modules_bins() {
-  local part
-  local result=""
-  while IFS= read -r part; do
-    case "$part" in
-      */node_modules/.bin) continue ;;
-    esac
-    if [ -z "$result" ]; then
-      result="$part"
-    else
-      result="$result:$part"
-    fi
-  done < <(printf '%s' "$PATH" | tr ':' '\n')
-  printf '%s' "$result"
-}
-
-REAL_PATH="$(path_without_node_modules_bins)"
-BUN_BIN="$(PATH="$REAL_PATH" command -v bun || true)"
-if [ -z "$BUN_BIN" ]; then
-  echo "Error: Could not find Bun outside node_modules/.bin"
-  exit 1
-fi
+# Resolve real Bun binary (skips node_modules/.bin shim) and export clean PATH
+# shellcheck source=lib/resolve-bun.sh
+source "$(cd "$(dirname "$0")" && pwd)/lib/resolve-bun.sh"
 
 # Read team/project from main repo's .dev-ports
 MAIN_DEV_PORTS="$REPO_ROOT/.dev-ports"
@@ -105,7 +86,7 @@ echo "Creating worktree at ~/.holophyte-dev/$FEATURE_NAME on branch $BRANCH..."
 git worktree add "$WORKTREE_PATH" -b "$BRANCH"
 
 # From this point, failures should clean up the partial worktree
-trap cleanup ERR
+trap cleanup ERR INT TERM
 
 # Copy .env (shared config). Don't copy .env.local yet — Convex will create it
 # during provisioning. Non-Convex vars (API keys, secrets) are appended after.
@@ -295,7 +276,7 @@ lsof -ti "TCP:$CONVEX_CLOUD_PORT" 2>/dev/null | xargs kill 2>/dev/null || true
 lsof -ti "TCP:$CONVEX_SITE_PORT" 2>/dev/null | xargs kill 2>/dev/null || true
 
 # Disable the cleanup trap — we succeeded
-trap - ERR
+trap - ERR INT TERM
 
 echo ""
 echo "Worktree created: ~/.holophyte-dev/$FEATURE_NAME"
