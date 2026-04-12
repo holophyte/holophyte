@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Resolve the real Bun binary, skipping any node_modules/.bin shim.
-# Source this file — it exports BUN_BIN and a shim-free PATH.
+# Source this file — it sets BUN_BIN and exports a shim-free PATH.
 
 path_without_node_modules_bins() {
   local part
