@@ -29,9 +29,15 @@ _cas_write_env() {
   local file="$1"
   local key="$2"
   local value="$3"
-  value="${value//\\/\\\\}"
-  value="${value//\"/\\\"}"
-  printf '%s="%s"\n' "$key" "$value" >> "$file"
+  # Single-quote so JSON values (JWKS) survive dotenv parsing — dotenv does
+  # NOT unescape backslash sequences inside double-quoted values, which would
+  # leave `{\"keys\":...}` in place of `{"keys":...}` and break JWT
+  # verification. None of the values we write contain a literal single quote.
+  if [[ "$value" == *"'"* ]]; then
+    echo "_cas_write_env: value for $key contains single quote — unsupported" >&2
+    return 1
+  fi
+  printf "%s='%s'\n" "$key" "$value" >> "$file"
 }
 
 setup_convex_auth() {
