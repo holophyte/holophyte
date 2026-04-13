@@ -16,6 +16,12 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 DEV_PORTS="$REPO_ROOT/.dev-ports"
 
+# Resolve real Bun binary (skips node_modules/.bin shim) and export clean PATH
+# shellcheck source=lib/resolve-bun.sh
+source "$SCRIPT_DIR/lib/resolve-bun.sh"
+# shellcheck source=lib/convex-auth-setup.sh
+source "$SCRIPT_DIR/lib/convex-auth-setup.sh"
+
 E2E_PID_FILE="$REPO_ROOT/.e2e-convex.pid"
 E2E_PORTS_FILE="$REPO_ROOT/.e2e-convex-ports"
 ENV_LOCAL="$REPO_ROOT/.env.local"
@@ -156,17 +162,18 @@ start_e2e_convex() {
     sleep 1
   done
 
-  # Set anonymous auth for E2E
-  cd "$REPO_ROOT" && bunx convex env set ALLOW_ANONYMOUS_AUTH 1
-  # Set password auth for E2E (password-auth tests)
-  cd "$REPO_ROOT" && bunx convex env set ALLOW_PASSWORD_AUTH 1
+  # Configure Convex Auth (JWT keys, SITE_URL, feature flags, dev user).
+  # Shared with scripts/worktree-create.sh via scripts/lib/convex-auth-setup.sh.
+  # Derive SITE_URL from the app server port used by Playwright
+  # (DEV_PORT+1, matching resolveE2ePort() in playwright.config.ts).
+  local e2e_port
+  e2e_port=$(( ${DEV_PORT:-8080} + 1 ))
+  cd "$REPO_ROOT"
+  export SITE_URL="http://localhost:$e2e_port"
+  setup_convex_auth
 
-  # Generate and set INTERNAL_API_SECRET for companion ↔ Convex communication
-  E2E_INTERNAL_API_SECRET=$(openssl rand -hex 32)
-  cd "$REPO_ROOT" && bunx convex env set INTERNAL_API_SECRET "$E2E_INTERNAL_API_SECRET"
-
-  # Generate JWT keys for @convex-dev/auth (fresh instances don't have them)
-  cd "$REPO_ROOT" && bunx @convex-dev/auth --skip-git-check --allow-dirty-git-state
+  # Expose the generated secret to Playwright via .e2e-convex-ports
+  local E2E_INTERNAL_API_SECRET="$INTERNAL_API_SECRET"
 
   # Write port config for test-e2e.sh / playwright.config.ts
   cat > "$E2E_PORTS_FILE" <<EOF

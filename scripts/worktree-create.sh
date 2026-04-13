@@ -25,6 +25,8 @@ BRANCH="feat/$FEATURE_NAME"
 # Resolve real Bun binary (skips node_modules/.bin shim) and export clean PATH
 # shellcheck source=lib/resolve-bun.sh
 source "$(cd "$(dirname "$0")" && pwd)/lib/resolve-bun.sh"
+# shellcheck source=lib/convex-auth-setup.sh
+source "$(cd "$(dirname "$0")" && pwd)/lib/convex-auth-setup.sh"
 
 # Read team/project from main repo's .dev-ports
 MAIN_DEV_PORTS="$REPO_ROOT/.dev-ports"
@@ -71,9 +73,6 @@ cleanup() {
   fi
   if [ -n "${CONVEX_SITE_PORT:-}" ]; then
     lsof -ti "TCP:$CONVEX_SITE_PORT" 2>/dev/null | xargs kill 2>/dev/null || true
-  fi
-  if [ -n "${CONVEX_ENV_FILE:-}" ]; then
-    rm -f "$CONVEX_ENV_FILE"
   fi
   cd "$REPO_ROOT"
   git worktree remove "$WORKTREE_PATH" --force 2>/dev/null || rm -rf "$WORKTREE_PATH"
@@ -176,8 +175,6 @@ if [ -n "$NON_CONVEX_VARS" ]; then
   printf '\n%s\n' "$NON_CONVEX_VARS" >> "$WORKTREE_PATH/.env.local"
 fi
 
-# Auth keys are configured on first `bun run dev:local` (needs a running backend)
-
 # `convex dev --once` exits after deploying, but `convex env set` needs a
 # running backend. Start one in the background, set env vars, then stop it.
 echo "Starting local Convex for environment setup..."
@@ -203,68 +200,23 @@ for i in $(seq 1 30); do
   sleep 1
 done
 
-CONVEX_ENV_FILE=$(mktemp)
-
-write_convex_env() {
-  local key="$1"
-  local value="$2"
-  value="${value//\\/\\\\}"
-  value="${value//\"/\\\"}"
-  printf '%s="%s"\n' "$key" "$value" >> "$CONVEX_ENV_FILE"
-}
-
-# Override SITE_URL (a Convex Auth env var) to point at the app server port.
+# Generate Convex Auth keys, set env vars, seed dev user.
+# Shared with scripts/e2e-convex.sh via scripts/lib/convex-auth-setup.sh —
+# edit that file if you need to change the auth bootstrap flow.
+cd "$WORKTREE_PATH"
 # The app server proxies /api/auth/* to the Convex site port so OAuth callbacks
 # work through a single origin (matches what's configured in GitHub/Google OAuth apps).
-write_convex_env SITE_URL "http://localhost:$DEV_PORT"
-write_convex_env ALLOW_ANONYMOUS_AUTH 1
-write_convex_env ALLOW_PASSWORD_AUTH 1
+export SITE_URL="http://localhost:$DEV_PORT"
+setup_convex_auth
 
-# Generate and set INTERNAL_API_SECRET for companion ↔ Convex communication
-INTERNAL_API_SECRET=$(openssl rand -hex 32)
-write_convex_env INTERNAL_API_SECRET "$INTERNAL_API_SECRET"
-# Store the secret in .env.local (Bun prioritizes .env.local over .env).
-# convex-local.sh reads from .env.local first to stay in sync with the server.
+# Store the generated INTERNAL_API_SECRET in .env.local (Bun prioritizes
+# .env.local over .env). convex-local.sh reads from .env.local to stay in sync.
 ENV_LOCAL_FILE="$WORKTREE_PATH/.env.local"
 if [ -f "$ENV_LOCAL_FILE" ] && grep -q '^INTERNAL_API_SECRET=' "$ENV_LOCAL_FILE"; then
   sed -i '' "s|^INTERNAL_API_SECRET=.*|INTERNAL_API_SECRET=$INTERNAL_API_SECRET|" "$ENV_LOCAL_FILE"
 else
   echo "INTERNAL_API_SECRET=$INTERNAL_API_SECRET" >> "$ENV_LOCAL_FILE"
 fi
-
-# Generate JWT keys for Convex Auth (anonymous + OAuth login).
-# Uses jose directly instead of `bunx @convex-dev/auth` — that tool has
-# interactive prompts (SITE_URL, dirty tree) that break in automated scripts.
-echo "Generating Convex Auth JWT keys..."
-JWT_OUTPUT=$(cd "$WORKTREE_PATH" && "$BUN_BIN" --eval '
-import { generateKeyPair, exportPKCS8, exportJWK } from "jose";
-const keys = await generateKeyPair("RS256", { extractable: true });
-const priv = (await exportPKCS8(keys.privateKey)).trimEnd().replaceAll("\n", " ");
-const pub = await exportJWK(keys.publicKey);
-console.log(priv);
-console.log(JSON.stringify({ keys: [{ use: "sig", ...pub }] }));
-')
-JWT_PRIVATE_KEY=$(echo "$JWT_OUTPUT" | head -1)
-JWKS=$(echo "$JWT_OUTPUT" | tail -1)
-write_convex_env JWT_PRIVATE_KEY "$JWT_PRIVATE_KEY"
-write_convex_env JWKS "$JWKS"
-
-# Forward OAuth credentials from main repo's .dev-ports (if present)
-if [ -n "${AUTH_GITHUB_ID:-}" ] && [ -n "${AUTH_GITHUB_SECRET:-}" ]; then
-  write_convex_env AUTH_GITHUB_ID "$AUTH_GITHUB_ID"
-  write_convex_env AUTH_GITHUB_SECRET "$AUTH_GITHUB_SECRET"
-fi
-if [ -n "${AUTH_GOOGLE_ID:-}" ] && [ -n "${AUTH_GOOGLE_SECRET:-}" ]; then
-  write_convex_env AUTH_GOOGLE_ID "$AUTH_GOOGLE_ID"
-  write_convex_env AUTH_GOOGLE_SECRET "$AUTH_GOOGLE_SECRET"
-fi
-
-echo "Setting environment variables on local Convex..."
-cd "$WORKTREE_PATH" && "$BUN_BIN" x convex env set --from-file "$CONVEX_ENV_FILE" --force
-rm -f "$CONVEX_ENV_FILE"
-
-# Seed dev user for email+password auth (idempotent)
-cd "$WORKTREE_PATH" && "$BUN_BIN" run seed:dev-user || echo "Warning: Could not seed dev user"
 
 # Stop the background Convex backend (kill process group + port fallback,
 # because `bunx` spawns child processes that outlive the wrapper)
