@@ -93,6 +93,19 @@ console.log(JSON.stringify({ keys: [{ use: "sig", ...pub }] }));
   rm -f "$env_file"
 
   if [ "$SEED_DEV_USER" = "1" ]; then
-    "$BUN_BIN" run seed:dev-user || echo "Warning: Could not seed dev user"
+    # `convex env set` above causes a background `convex dev` wrapper (if any)
+    # to re-push functions, briefly taking the backend offline. Retry the seed
+    # so we tolerate that window without flakiness.
+    local seed_attempt
+    for seed_attempt in 1 2 3 4 5; do
+      if "$BUN_BIN" run seed:dev-user; then
+        break
+      fi
+      if [ "$seed_attempt" = "5" ]; then
+        echo "Warning: Could not seed dev user after $seed_attempt attempts"
+        break
+      fi
+      sleep 1
+    done
   fi
 }

@@ -169,6 +169,10 @@ start_e2e_convex() {
   local e2e_port
   e2e_port=$(( ${DEV_PORT:-8080} + 1 ))
   cd "$REPO_ROOT"
+  # Override CONVEX_URL so seed:dev-user hits the ephemeral backend rather
+  # than the (dummy, high-numbered) CONVEX_CLOUD_PORT from the worktree's
+  # .dev-ports — the latter is never actually listening in isolated mode.
+  export CONVEX_URL="http://127.0.0.1:$cloud_port"
   export SITE_URL="http://localhost:$e2e_port"
   setup_convex_auth
 
