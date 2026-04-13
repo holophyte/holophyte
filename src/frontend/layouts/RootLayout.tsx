@@ -1,7 +1,12 @@
 import { Outlet, useLocation, useMatch } from '@tanstack/react-router';
-import { Authenticated, AuthLoading, Unauthenticated } from 'convex/react';
+import {
+  Authenticated,
+  AuthLoading,
+  Unauthenticated,
+  useConvexAuth,
+} from 'convex/react';
 import { Loader2 } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { type ReactNode, useEffect, useRef, useState } from 'react';
 import { ErrorBoundary } from 'react-error-boundary';
 import { Toaster } from 'sonner';
 import { useTheme } from '@/frontend/hooks/useTheme';
@@ -114,6 +119,31 @@ function AnimatedTaskDetailPanel({
   return <TaskDetailPanel isOpen={isVisible} closeBtnRef={closeBtnRef} />;
 }
 
+// Defers mounting children by one committed effect after Convex reports auth
+// ready, so the Convex client has a chance to attach its token to the WS before
+// any descendant `useQuery` subscribes. Syncs with an external system (the
+// WebSocket auth handshake), which is a valid use of useEffect.
+function AuthReadyGate({
+  children,
+  fallback,
+}: {
+  children: ReactNode;
+  fallback: ReactNode;
+}) {
+  const { isAuthenticated, isLoading } = useConvexAuth();
+  const [ready, setReady] = useState(false);
+
+  useEffect(() => {
+    if (isAuthenticated && !isLoading) {
+      setReady(true);
+      return;
+    }
+    setReady(false);
+  }, [isAuthenticated, isLoading]);
+
+  return <>{ready ? children : fallback}</>;
+}
+
 function AuthenticatedLayout() {
   // Show TaskDetailPanel when on the task detail route but NOT on the task page route
   const taskDetailMatch = useMatch({
@@ -199,9 +229,14 @@ export default function RootLayout() {
         {e2eTest && !allowPasswordAuth ? spinner : <SignInPage />}
       </Unauthenticated>
       <Authenticated>
-        <ErrorBoundary FallbackComponent={RootErrorFallback} onError={logError}>
-          <AuthenticatedLayout />
-        </ErrorBoundary>
+        <AuthReadyGate fallback={spinner}>
+          <ErrorBoundary
+            FallbackComponent={RootErrorFallback}
+            onError={logError}
+          >
+            <AuthenticatedLayout />
+          </ErrorBoundary>
+        </AuthReadyGate>
       </Authenticated>
     </>
   );
