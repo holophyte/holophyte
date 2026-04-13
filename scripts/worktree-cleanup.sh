@@ -85,12 +85,19 @@ echo "Cleaning up '$FEATURE_NAME'..."
 # Run from the main repo root so the shell isn't inside a deleted directory
 cd "$REPO_ROOT"
 
-# Kill any Convex processes running on this worktree's ports
+# Kill any processes running in this worktree (dev server, `bunx convex dev`
+# wrapper, convex backend, etc). Matching by path catches everything whose
+# command line references the worktree, not just the port listener. SIGKILL
+# avoids shutdown sequences that try to re-read package.json after the
+# worktree is removed and spam errors back to the terminal.
+pgrep -f "$WORKTREE_PATH" 2>/dev/null | xargs kill -9 2>/dev/null || true
+
+# Fallback: anything still holding the worktree's Convex ports
 if [ -f "$WORKTREE_PATH/.dev-ports" ]; then
   # shellcheck source=/dev/null
   source "$WORKTREE_PATH/.dev-ports"
   for port in "${CONVEX_CLOUD_PORT:-}" "${CONVEX_SITE_PORT:-}"; do
-    [ -n "$port" ] && lsof -ti "TCP:$port" 2>/dev/null | xargs kill 2>/dev/null || true
+    [ -n "$port" ] && lsof -ti "TCP:$port" 2>/dev/null | xargs kill -9 2>/dev/null || true
   done
 fi
 
