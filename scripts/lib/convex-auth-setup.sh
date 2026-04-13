@@ -75,28 +75,37 @@ console.log(JSON.stringify({ keys: [{ use: "sig", ...pub }] }));
   priv=$(echo "$jwt_output" | head -1)
   jwks=$(echo "$jwt_output" | tail -1)
 
-  local env_file
+  # Write all env vars to a tempfile so `convex env set --from-file` can apply
+  # them in one round trip. The file holds JWT_PRIVATE_KEY and
+  # INTERNAL_API_SECRET in plaintext, so the subshell wrapper + unconditional
+  # cleanup below guarantees removal even if the caller's `set -e` aborts.
+  local env_file rc=0
   env_file=$(mktemp)
+  (
+    set -e
+    _cas_write_env "$env_file" SITE_URL "$SITE_URL"
+    _cas_write_env "$env_file" ALLOW_ANONYMOUS_AUTH "$ALLOW_ANONYMOUS_AUTH"
+    _cas_write_env "$env_file" ALLOW_PASSWORD_AUTH "$ALLOW_PASSWORD_AUTH"
+    _cas_write_env "$env_file" INTERNAL_API_SECRET "$INTERNAL_API_SECRET"
+    _cas_write_env "$env_file" JWT_PRIVATE_KEY "$priv"
+    _cas_write_env "$env_file" JWKS "$jwks"
 
-  _cas_write_env "$env_file" SITE_URL "$SITE_URL"
-  _cas_write_env "$env_file" ALLOW_ANONYMOUS_AUTH "$ALLOW_ANONYMOUS_AUTH"
-  _cas_write_env "$env_file" ALLOW_PASSWORD_AUTH "$ALLOW_PASSWORD_AUTH"
-  _cas_write_env "$env_file" INTERNAL_API_SECRET "$INTERNAL_API_SECRET"
-  _cas_write_env "$env_file" JWT_PRIVATE_KEY "$priv"
-  _cas_write_env "$env_file" JWKS "$jwks"
+    if [ -n "${AUTH_GITHUB_ID:-}" ] && [ -n "${AUTH_GITHUB_SECRET:-}" ]; then
+      _cas_write_env "$env_file" AUTH_GITHUB_ID "$AUTH_GITHUB_ID"
+      _cas_write_env "$env_file" AUTH_GITHUB_SECRET "$AUTH_GITHUB_SECRET"
+    fi
+    if [ -n "${AUTH_GOOGLE_ID:-}" ] && [ -n "${AUTH_GOOGLE_SECRET:-}" ]; then
+      _cas_write_env "$env_file" AUTH_GOOGLE_ID "$AUTH_GOOGLE_ID"
+      _cas_write_env "$env_file" AUTH_GOOGLE_SECRET "$AUTH_GOOGLE_SECRET"
+    fi
 
-  if [ -n "${AUTH_GITHUB_ID:-}" ] && [ -n "${AUTH_GITHUB_SECRET:-}" ]; then
-    _cas_write_env "$env_file" AUTH_GITHUB_ID "$AUTH_GITHUB_ID"
-    _cas_write_env "$env_file" AUTH_GITHUB_SECRET "$AUTH_GITHUB_SECRET"
-  fi
-  if [ -n "${AUTH_GOOGLE_ID:-}" ] && [ -n "${AUTH_GOOGLE_SECRET:-}" ]; then
-    _cas_write_env "$env_file" AUTH_GOOGLE_ID "$AUTH_GOOGLE_ID"
-    _cas_write_env "$env_file" AUTH_GOOGLE_SECRET "$AUTH_GOOGLE_SECRET"
-  fi
-
-  echo "Setting environment variables on local Convex..."
-  "$BUN_BIN" x convex env set --from-file "$env_file" --force
+    echo "Setting environment variables on local Convex..."
+    "$BUN_BIN" x convex env set --from-file "$env_file" --force
+  ) || rc=$?
   rm -f "$env_file"
+  if [ "$rc" -ne 0 ]; then
+    return "$rc"
+  fi
 
   if [ "$SEED_DEV_USER" = "1" ]; then
     # `convex env set` above causes a background `convex dev` wrapper (if any)

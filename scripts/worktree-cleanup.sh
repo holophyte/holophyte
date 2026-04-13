@@ -90,7 +90,12 @@ cd "$REPO_ROOT"
 # command line references the worktree, not just the port listener. SIGKILL
 # avoids shutdown sequences that try to re-read package.json after the
 # worktree is removed and spam errors back to the terminal.
-pgrep -f "$WORKTREE_PATH" 2>/dev/null | xargs kill -9 2>/dev/null || true
+#
+# Anchor the match with a trailing `/` so sibling worktrees with shared
+# prefixes (e.g. cleaning `foo` doesn't match `foo2`) aren't killed. Escape
+# regex metacharacters in the path so `.holophyte-dev` doesn't match `X`.
+ESCAPED_PATH="${WORKTREE_PATH//./\\.}"
+pgrep -f "${ESCAPED_PATH}/" 2>/dev/null | xargs kill -9 2>/dev/null || true
 
 # Fallback: anything still holding the worktree's Convex ports
 if [ -f "$WORKTREE_PATH/.dev-ports" ]; then
