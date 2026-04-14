@@ -1,0 +1,91 @@
+---
+name: worktree-cleanup
+description: Clean up git worktree with safety checks
+---
+
+# Clean Up Git Worktree
+
+## Codex Adaptation
+
+Treat slash-command examples as skill names or user intents, not literal Codex command syntax. Treat `$ARGUMENTS` as the user's request text for the skill. Use Codex subagents only when the user explicitly asks for delegation, parallel agents, or team work; otherwise perform the workflow locally and use the playbooks in `holophyte-agent-playbooks` as references.
+
+Remove a git worktree along with its associated branch and directory.
+
+**Warning**: This is a destructive operation. Always verify before deleting.
+
+## Usage
+
+/worktree-cleanup [worktree-name]
+
+- If no argument provided, list worktrees and ask user to select
+- Requires explicit confirmation before deletion
+
+## Process
+
+### 1. List Available Worktrees
+
+```bash
+git worktree list
+```
+
+Present worktrees to user (excluding main directory).
+
+### 2. Safety Checks
+
+Before deletion, verify:
+
+1. Check for uncommitted changes in worktree
+2. Check PR merge status via GitHub CLI (handles squash merges correctly):
+   ```bash
+   gh pr list --head "feat/<name>" --state merged --json number,title,mergedAt
+   ```
+   - If a merged PR exists → Check for unpushed local commits (see step 3) before declaring safe
+   - If an open PR exists (`--state open`) → **Caution** — PR still open
+   - If a closed (non-merged) PR exists (`--state closed`) → **Caution** — PR was closed without merging; work may be abandoned
+   - If no PR found → Check if branch has a remote (`git branch -vv`) and warn accordingly
+
+3. Check for unpushed local commits (even when PR is merged):
+   ```bash
+   git rev-parse --verify --quiet "origin/<branch>" > /dev/null && \
+     git log "origin/<branch>..HEAD" --oneline
+   ```
+   - If `origin/<branch>` doesn't exist (e.g. auto-deleted after merge) → **Safe to delete**
+   - If commits exist → **Caution** — local commits not included in the merged PR
+   - If no commits and PR is merged → **Safe to delete**
+
+**Why `gh pr list` instead of `git branch --merged`**: This repo uses squash merges, which create a new commit on main. Git doesn't recognize the original branch as merged since the commit SHAs differ. Checking GitHub PR status is the reliable way to detect squash merges.
+
+### 3. Display Merge Status
+
+- **Safe to delete**: PR was merged (squash-merged into main) and no unpushed local commits
+- **Caution**: PR was merged but there are unpushed local commits — work may be lost
+- **Caution**: PR is still open — work may not be reviewed/merged yet
+- **Caution**: PR was closed without merging — work may be abandoned
+- **Caution**: No PR found but remote branch exists — branch was pushed without a PR
+- **Caution**: No PR found and no remote branch — work may not be pushed
+
+### 4. Request Confirmation
+
+Always ask for explicit confirmation before proceeding, especially if warnings are present.
+
+### 5. Remove Worktree and Branch
+
+```bash
+git worktree remove ~/.holophyte-dev/<feature-name>
+git branch -D feat/<feature-name>
+```
+
+### 6. Verify Removal
+
+```bash
+git worktree list
+git branch -a
+```
+
+## Safety Rules
+
+- **Never** delete the main worktree
+- **Always** warn if PR may not be complete (unmerged remote branch)
+- **Always** warn if there are uncommitted changes
+- **Always** warn if there are unpushed local commits (even when PR is merged)
+- **Always** require explicit confirmation
