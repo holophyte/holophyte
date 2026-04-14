@@ -79,11 +79,9 @@ export default function SessionThread({
                 return (
                   <Message key={partKey} from="user">
                     <MessageContent>
-                      <div className="flex gap-2 rounded-md bg-muted/60 px-3 py-2">
-                        <p className="whitespace-pre-wrap break-words text-sm leading-relaxed text-foreground">
-                          {part.text}
-                        </p>
-                      </div>
+                      <p className="whitespace-pre-wrap break-words text-sm leading-relaxed">
+                        {part.text}
+                      </p>
                     </MessageContent>
                   </Message>
                 );
