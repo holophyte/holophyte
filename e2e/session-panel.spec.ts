@@ -150,16 +150,7 @@ test.describe('Session Panel', () => {
 });
 
 test.describe('Session Panel - Theme Rendering', () => {
-  const themes = [
-    'neon',
-    'flora',
-    'infrared',
-    'verdant',
-    'rosewood',
-    'paper',
-    'dune',
-    'arctic',
-  ];
+  const themes = ['kolada', 'dune'];
 
   test.beforeEach(async ({ page }, testInfo) => {
     await waitForApp(page);
