@@ -8,7 +8,7 @@
     <script>
       // Apply theme before CSS loads to prevent FOUC.
       // Theme list must match VALID_THEMES in src/frontend/stores/app.ts
-      try{var v=['neon','flora','infrared','verdant','rosewood','paper','dune','arctic'];var s=JSON.parse(localStorage.getItem('holophyte-app')||'{}');var t=s.state&&s.state.theme;document.documentElement.setAttribute('data-theme',v.indexOf(t)>-1?t:'neon')}catch(e){document.documentElement.setAttribute('data-theme','neon')}
+      try{var v=['kolada','dune'];var s=JSON.parse(localStorage.getItem('holophyte-app')||'{}');var t=s.state&&s.state.theme;document.documentElement.setAttribute('data-theme',v.indexOf(t)>-1?t:'kolada')}catch(e){document.documentElement.setAttribute('data-theme','kolada')}
     </script>
     <link rel="stylesheet" href="../src/frontend/styles.css" />
     <script>
