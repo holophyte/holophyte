@@ -1,9 +1,5 @@
 import { expect, test } from '@playwright/test';
-
-async function waitForApp(page: import('@playwright/test').Page) {
-  await page.goto('/');
-  await page.waitForSelector('text=Holophyte', { timeout: 30000 });
-}
+import { waitForApp } from './helpers';
 
 async function selectRepo(page: import('@playwright/test').Page) {
   const repoButton = page

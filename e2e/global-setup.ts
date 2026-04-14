@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { mkdirSync } from 'node:fs';
+import { mkdirSync } from 'node:fs'; // used for repoPath creation
 import { chromium, type FullConfig } from '@playwright/test';
 
 export default async function globalSetup(config: FullConfig) {
@@ -65,8 +65,9 @@ export default async function globalSetup(config: FullConfig) {
       timeout: 10000,
     });
 
-    mkdirSync('e2e/.auth', { recursive: true });
-    await page.context().storageState({ path: 'e2e/.auth/storage-state.json' });
+    // No storageState save — tests sign in fresh via AutoTestAuth each time.
+    // The dev user and test repo are now seeded in e2e-convex.sh start, so
+    // each test's AutoTestAuth sign-in always returns the same user/org/repos.
   } finally {
     await browser.close();
   }

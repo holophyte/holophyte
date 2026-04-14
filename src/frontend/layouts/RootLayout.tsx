@@ -1,7 +1,7 @@
 import { Outlet, useLocation, useMatch } from '@tanstack/react-router';
 import { Authenticated, AuthLoading, Unauthenticated } from 'convex/react';
 import { Loader2 } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { type ReactNode, useEffect, useRef, useState } from 'react';
 import { ErrorBoundary } from 'react-error-boundary';
 import { Toaster } from 'sonner';
 import { useTheme } from '@/frontend/hooks/useTheme';
@@ -114,6 +114,26 @@ function AnimatedTaskDetailPanel({
   return <TaskDetailPanel isOpen={isVisible} closeBtnRef={closeBtnRef} />;
 }
 
+// Defers mounting children by one committed effect after mount, giving the
+// Convex client a chance to attach its auth token to the WebSocket before any
+// descendant `useQuery` subscribes. Always mounted inside `<Authenticated>`,
+// so auth is guaranteed to be ready — the effect fires once and sets ready.
+function AuthReadyGate({
+  children,
+  fallback,
+}: {
+  children: ReactNode;
+  fallback: ReactNode;
+}) {
+  const [ready, setReady] = useState(false);
+
+  useEffect(() => {
+    setReady(true);
+  }, []);
+
+  return <>{ready ? children : fallback}</>;
+}
+
 function AuthenticatedLayout() {
   // Show TaskDetailPanel when on the task detail route but NOT on the task page route
   const taskDetailMatch = useMatch({
@@ -199,9 +219,14 @@ export default function RootLayout() {
         {e2eTest && !allowPasswordAuth ? spinner : <SignInPage />}
       </Unauthenticated>
       <Authenticated>
-        <ErrorBoundary FallbackComponent={RootErrorFallback} onError={logError}>
-          <AuthenticatedLayout />
-        </ErrorBoundary>
+        <AuthReadyGate fallback={spinner}>
+          <ErrorBoundary
+            FallbackComponent={RootErrorFallback}
+            onError={logError}
+          >
+            <AuthenticatedLayout />
+          </ErrorBoundary>
+        </AuthReadyGate>
       </Authenticated>
     </>
   );
