@@ -165,7 +165,7 @@ export function Sidebar() {
           <SidebarTooltip label="All Tasks" collapsed={collapsed}>
             <Button
               variant={homeMatch ? 'secondary' : 'ghost'}
-              className="w-full justify-start gap-2 has-[>svg]:px-4 whitespace-nowrap overflow-hidden"
+              className="w-full justify-start gap-2 rounded-none has-[>svg]:px-4 whitespace-nowrap overflow-hidden"
               onClick={() => void navigate({ to: '/' })}
               aria-label="All Tasks"
             >
@@ -176,7 +176,7 @@ export function Sidebar() {
           <SidebarTooltip label="Seed Box" collapsed={collapsed}>
             <Button
               variant={seedsMatch ? 'secondary' : 'ghost'}
-              className="w-full justify-start gap-2 has-[>svg]:px-4 whitespace-nowrap overflow-hidden"
+              className="w-full justify-start gap-2 rounded-none has-[>svg]:px-4 whitespace-nowrap overflow-hidden"
               onClick={() => void navigate({ to: '/seeds' })}
               aria-label="Seed Box"
             >
@@ -226,7 +226,7 @@ export function Sidebar() {
                         variant={
                           selectedRepoId === repo._id ? 'secondary' : 'ghost'
                         }
-                        className="w-full justify-start gap-2 text-sm has-[>svg]:px-4 pr-8 whitespace-nowrap overflow-hidden"
+                        className="w-full justify-start gap-2 rounded-none text-sm has-[>svg]:px-4 pr-8 whitespace-nowrap overflow-hidden"
                         onClick={() =>
                           void navigate({
                             to: '/repos/$repoId',
