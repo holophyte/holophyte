@@ -168,6 +168,11 @@ start_e2e_convex() {
   # Generate JWT keys for @convex-dev/auth (fresh instances don't have them)
   cd "$REPO_ROOT" && bunx @convex-dev/auth --skip-git-check --allow-dirty-git-state
 
+  # Seed the dev user so AutoTestAuth always signs in (not signs up).
+  # Tests start with empty storage state and sign in fresh per test — seeding
+  # here ensures the user exists before global-setup or any test runs.
+  CONVEX_URL="http://127.0.0.1:$cloud_port" bash "$SCRIPT_DIR/seed-dev-user.sh"
+
   # Write port config for test-e2e.sh / playwright.config.ts
   cat > "$E2E_PORTS_FILE" <<EOF
 E2E_CONVEX_CLOUD_PORT=$cloud_port

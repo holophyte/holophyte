@@ -1,10 +1,5 @@
 import { expect, test } from '@playwright/test';
-
-// Wait for app to hydrate
-async function waitForApp(page: import('@playwright/test').Page) {
-  await page.goto('/');
-  await page.waitForSelector('text=Holophyte', { timeout: 30000 });
-}
+import { waitForApp } from './helpers';
 
 // Ensure we are on the All Tasks view (no repo selected)
 async function goToAllTasks(page: import('@playwright/test').Page) {

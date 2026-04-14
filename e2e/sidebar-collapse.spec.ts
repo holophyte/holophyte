@@ -1,13 +1,5 @@
 import { expect, test } from '@playwright/test';
-
-async function waitForApp(page: import('@playwright/test').Page) {
-  await page.goto('/');
-  await page.waitForSelector('text=Holophyte', { timeout: 30000 });
-  // Wait for sidebar to stabilize after Convex queries resolve
-  await page
-    .getByTestId('sidebar-brand-toggle')
-    .waitFor({ state: 'visible', timeout: 10000 });
-}
+import { waitForApp } from './helpers';
 
 test('sidebar collapse toggle button is visible', async ({ page }) => {
   await waitForApp(page);

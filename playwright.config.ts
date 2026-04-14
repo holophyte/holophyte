@@ -45,7 +45,12 @@ export default defineConfig({
   use: {
     baseURL: `http://localhost:${e2ePort}`,
     trace: 'on-first-retry',
-    storageState: 'e2e/.auth/storage-state.json',
+    // Each test starts with a fresh context — AutoTestAuth signs in with
+    // password credentials on every navigation. This avoids the "Refresh token
+    // used outside of reuse window" error that occurred when multiple tests
+    // shared a single stored session token (token rotation made subsequent
+    // tests see a stale token in the same storage-state.json).
+    storageState: { cookies: [], origins: [] },
   },
   projects: [
     {
