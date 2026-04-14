@@ -1,10 +1,5 @@
 import { Outlet, useLocation, useMatch } from '@tanstack/react-router';
-import {
-  Authenticated,
-  AuthLoading,
-  Unauthenticated,
-  useConvexAuth,
-} from 'convex/react';
+import { Authenticated, AuthLoading, Unauthenticated } from 'convex/react';
 import { Loader2 } from 'lucide-react';
 import { type ReactNode, useEffect, useRef, useState } from 'react';
 import { ErrorBoundary } from 'react-error-boundary';
@@ -119,10 +114,10 @@ function AnimatedTaskDetailPanel({
   return <TaskDetailPanel isOpen={isVisible} closeBtnRef={closeBtnRef} />;
 }
 
-// Defers mounting children by one committed effect after Convex reports auth
-// ready, so the Convex client has a chance to attach its token to the WS before
-// any descendant `useQuery` subscribes. Syncs with an external system (the
-// WebSocket auth handshake), which is a valid use of useEffect.
+// Defers mounting children by one committed effect after mount, giving the
+// Convex client a chance to attach its auth token to the WebSocket before any
+// descendant `useQuery` subscribes. Always mounted inside `<Authenticated>`,
+// so auth is guaranteed to be ready — the effect fires once and sets ready.
 function AuthReadyGate({
   children,
   fallback,
@@ -130,16 +125,11 @@ function AuthReadyGate({
   children: ReactNode;
   fallback: ReactNode;
 }) {
-  const { isAuthenticated, isLoading } = useConvexAuth();
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    if (isAuthenticated && !isLoading) {
-      setReady(true);
-      return;
-    }
-    setReady(false);
-  }, [isAuthenticated, isLoading]);
+    setReady(true);
+  }, []);
 
   return <>{ready ? children : fallback}</>;
 }
