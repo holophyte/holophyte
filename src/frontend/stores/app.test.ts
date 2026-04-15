@@ -15,7 +15,7 @@ beforeEach(() => {
     searchQuery: '',
     filterLabelIds: [],
     showArchive: false,
-    theme: 'kolada',
+    theme: 'dark',
     lastUsedRepoId: null,
     sidebarCollapsed: false,
     bulkSelectedTaskIds: [],
@@ -182,9 +182,11 @@ describe('persist', () => {
     expect(
       useAppStore.getState().collapsedColumns.has(TaskStatus.Backlog),
     ).toBe(true);
+    expect(useAppStore.getState().theme).toBe('dark');
 
     const stored = JSON.parse(localStorage.getItem('holophyte-app') ?? '{}');
-    expect(stored.version).toBe(6);
+    expect(stored.version).toBe(7);
+    expect(stored.state.theme).toBe('dark');
     expect(stored.state.backlogCollapsed).toBeUndefined();
     expect(stored.state.collapsedColumns).toEqual({
       __type: 'Set',
@@ -213,18 +215,45 @@ describe('persist', () => {
 
     await useAppStore.persist.rehydrate();
 
-    expect(useAppStore.getState().theme).toBe('kolada');
+    expect(useAppStore.getState().theme).toBe('dark');
     expect(useAppStore.getState().collapsedColumns).toEqual(
       new Set([TaskStatus.Backlog, TaskStatus.Done]),
     );
 
     const stored = JSON.parse(localStorage.getItem('holophyte-app') ?? '{}');
-    expect(stored.version).toBe(6);
-    expect(stored.state.theme).toBe('kolada');
+    expect(stored.version).toBe(7);
+    expect(stored.state.theme).toBe('dark');
     expect(stored.state.collapsedColumns).toEqual({
       __type: 'Set',
       values: [TaskStatus.Backlog, TaskStatus.Done],
     });
+  });
+
+  it.each([
+    ['kolada', 'dark'],
+    ['dune', 'light'],
+  ])('migrates legacy theme %s → %s', async (legacy, expected) => {
+    localStorage.setItem(
+      'holophyte-app',
+      JSON.stringify({
+        state: {
+          collapsedColumns: { __type: 'Set', values: [TaskStatus.Backlog] },
+          taskPageDetailCollapsed: false,
+          sidebarCollapsed: false,
+          showArchive: false,
+          lastUsedRepoId: null,
+          theme: legacy,
+        },
+        version: 6,
+      }),
+    );
+
+    await useAppStore.persist.rehydrate();
+
+    expect(useAppStore.getState().theme).toBe(expected);
+    const stored = JSON.parse(localStorage.getItem('holophyte-app') ?? '{}');
+    expect(stored.version).toBe(7);
+    expect(stored.state.theme).toBe(expected);
   });
 });
 
