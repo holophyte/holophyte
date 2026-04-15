@@ -28,10 +28,10 @@ const THEMES: ThemeOption[] = [
   {
     name: 'dune',
     label: 'Dune',
-    bg: '#f0e4cc',
-    surface: '#faf4e4',
-    primary: '#0f508c',
-    accent: '#d48830',
+    bg: '#f4eee3',
+    surface: '#fbf7ee',
+    primary: '#c4408a',
+    accent: '#2b8fb3',
   },
 ];
 
