@@ -1,10 +1,9 @@
-import { Check } from 'lucide-react';
 import { cn } from '@/frontend/lib/utils';
-import type { ThemeName } from '@/frontend/stores/app';
+import type { ThemePreference } from '@/frontend/stores/app';
 import { useAppStore } from '@/frontend/stores/app';
 
 interface ThemeOption {
-  name: ThemeName;
+  name: ThemePreference;
   label: string;
   /** Static hex preview colors — hardcoded because previews
    *  render independently of the active theme's CSS variables. */
@@ -17,6 +16,14 @@ interface ThemeOption {
 /** Preview hex colors are hand-picked approximations of the oklch values in
  *  styles.css. Update these when theme palettes change. */
 const THEMES: ThemeOption[] = [
+  {
+    name: 'system',
+    label: 'System',
+    bg: 'linear-gradient(135deg, #f4eee3 0 50%, #0f0e11 50% 100%)',
+    surface: 'linear-gradient(135deg, #fbf7ee 0 50%, #15141b 50% 100%)',
+    primary: 'linear-gradient(135deg, #c4408a 0 50%, #ffa5e9 50% 100%)',
+    accent: 'linear-gradient(135deg, #2b8fb3 0 50%, #5ddbff 50% 100%)',
+  },
   {
     name: 'dark',
     label: 'Dark',
@@ -44,7 +51,7 @@ export function ThemeSwitcher() {
       <legend className="text-xs font-medium text-muted-foreground px-1 mb-1.5">
         Theme
       </legend>
-      <div className="grid grid-cols-2 gap-1.5" role="radiogroup">
+      <div className="grid grid-cols-3 gap-1.5" role="radiogroup">
         {THEMES.map((t) => {
           const isActive = theme === t.name;
           return (
@@ -86,22 +93,22 @@ export function ThemeSwitcher() {
               <div
                 className="flex h-6 w-full rounded-sm overflow-hidden"
                 style={{
-                  backgroundColor: t.bg,
+                  background: t.bg,
                   boxShadow: 'inset 0 0 0 1px oklch(0.5 0 0 / 0.15)',
                 }}
               >
                 {/* Surface card preview */}
                 <div
                   className="flex-1 m-[3px] mr-0 rounded-[2px] flex items-end px-[3px] pb-[3px] gap-[2px]"
-                  style={{ backgroundColor: t.surface }}
+                  style={{ background: t.surface }}
                 >
                   <div
                     className="w-[4px] h-[4px] rounded-full"
-                    style={{ backgroundColor: t.primary }}
+                    style={{ background: t.primary }}
                   />
                   <div
                     className="w-[4px] h-[3px] rounded-sm"
-                    style={{ backgroundColor: t.accent }}
+                    style={{ background: t.accent }}
                   />
                 </div>
                 {/* Accent bar */}
@@ -115,12 +122,6 @@ export function ThemeSwitcher() {
               <span className="text-muted-foreground leading-none">
                 {t.label}
               </span>
-              {isActive && (
-                <Check
-                  className="absolute top-0.5 right-0.5 h-3 w-3 text-primary"
-                  aria-hidden="true"
-                />
-              )}
             </button>
           );
         })}
