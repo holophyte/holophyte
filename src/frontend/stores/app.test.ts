@@ -15,7 +15,7 @@ beforeEach(() => {
     searchQuery: '',
     filterLabelIds: [],
     showArchive: false,
-    theme: 'neon',
+    theme: 'kolada',
     lastUsedRepoId: null,
     sidebarCollapsed: false,
     bulkSelectedTaskIds: [],
@@ -171,7 +171,7 @@ describe('persist', () => {
           sidebarCollapsed: false,
           showArchive: false,
           lastUsedRepoId: null,
-          theme: 'neon',
+          theme: 'kolada',
         },
         version: 4,
       }),
@@ -184,11 +184,46 @@ describe('persist', () => {
     ).toBe(true);
 
     const stored = JSON.parse(localStorage.getItem('holophyte-app') ?? '{}');
-    expect(stored.version).toBe(5);
+    expect(stored.version).toBe(6);
     expect(stored.state.backlogCollapsed).toBeUndefined();
     expect(stored.state.collapsedColumns).toEqual({
       __type: 'Set',
       values: [TaskStatus.Backlog],
+    });
+  });
+
+  it('falls back to default theme when a removed theme is persisted', async () => {
+    localStorage.setItem(
+      'holophyte-app',
+      JSON.stringify({
+        state: {
+          collapsedColumns: {
+            __type: 'Set',
+            values: [TaskStatus.Backlog, TaskStatus.Done],
+          },
+          taskPageDetailCollapsed: false,
+          sidebarCollapsed: false,
+          showArchive: false,
+          lastUsedRepoId: null,
+          theme: 'neon',
+        },
+        version: 5,
+      }),
+    );
+
+    await useAppStore.persist.rehydrate();
+
+    expect(useAppStore.getState().theme).toBe('kolada');
+    expect(useAppStore.getState().collapsedColumns).toEqual(
+      new Set([TaskStatus.Backlog, TaskStatus.Done]),
+    );
+
+    const stored = JSON.parse(localStorage.getItem('holophyte-app') ?? '{}');
+    expect(stored.version).toBe(6);
+    expect(stored.state.theme).toBe('kolada');
+    expect(stored.state.collapsedColumns).toEqual({
+      __type: 'Set',
+      values: [TaskStatus.Backlog, TaskStatus.Done],
     });
   });
 });

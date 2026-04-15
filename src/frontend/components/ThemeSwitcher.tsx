@@ -18,52 +18,12 @@ interface ThemeOption {
  *  styles.css. Update these when theme palettes change. */
 const THEMES: ThemeOption[] = [
   {
-    name: 'neon',
-    label: 'Neon',
-    bg: '#08060f',
-    surface: '#100c1c',
-    primary: '#ff3296',
-    accent: '#00dce8',
-  },
-  {
-    name: 'flora',
-    label: 'Flora',
-    bg: '#08070e',
-    surface: '#120e1a',
-    primary: '#f050a0',
-    accent: '#28c864',
-  },
-  {
-    name: 'infrared',
-    label: 'Infrared',
-    bg: '#080505',
-    surface: '#120c0c',
-    primary: '#ff1e5a',
-    accent: '#20e0d0',
-  },
-  {
-    name: 'verdant',
-    label: 'Verdant',
-    bg: '#0b1a12',
-    surface: '#132b20',
-    primary: '#e88055',
-    accent: '#5cc4a8',
-  },
-  {
-    name: 'rosewood',
-    label: 'Rosewood',
-    bg: '#1e0f22',
-    surface: '#281830',
-    primary: '#d4a870',
-    accent: '#c070a0',
-  },
-  {
-    name: 'paper',
-    label: 'Paper',
-    bg: '#f5f0e6',
-    surface: '#fcfaf6',
-    primary: '#a85230',
-    accent: '#d8d0c0',
+    name: 'kolada',
+    label: 'Kolada',
+    bg: '#0f0e11',
+    surface: '#15141b',
+    primary: '#ffa5e9',
+    accent: '#5ddbff',
   },
   {
     name: 'dune',
@@ -72,14 +32,6 @@ const THEMES: ThemeOption[] = [
     surface: '#faf4e4',
     primary: '#0f508c',
     accent: '#d48830',
-  },
-  {
-    name: 'arctic',
-    label: 'Arctic',
-    bg: '#f0eff8',
-    surface: '#fafafe',
-    primary: '#7c3aed',
-    accent: '#d0cee0',
   },
 ];
 
@@ -92,7 +44,7 @@ export function ThemeSwitcher() {
       <legend className="text-xs font-medium text-muted-foreground px-1 mb-1.5">
         Theme
       </legend>
-      <div className="grid grid-cols-4 gap-1.5" role="radiogroup">
+      <div className="grid grid-cols-2 gap-1.5" role="radiogroup">
         {THEMES.map((t) => {
           const isActive = theme === t.name;
           return (

@@ -48,251 +48,105 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
+  /* Custom tokens from the Kolada spec. Reserved for follow-up passes
+     (semantic badges, card gradients, sidebar chrome) — some are unused
+     at first wire-up but are declared here so Tailwind generates
+     `bg-info`, `text-success`, etc. classes for direct use. */
+  --color-sidebar: var(--sidebar);
+  --color-border-subtle: var(--border-subtle);
+  --color-subtle-foreground: var(--subtle-foreground);
+  --color-info: var(--info);
+  --color-success: var(--success);
+  --color-attention: var(--attention);
+  --color-violet: var(--violet);
+  --color-highlight: var(--highlight);
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
 }
 
 /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-   THEMES — oklch + CSS Relative Colors
+   THEMES — oklch
 
-   8 curated palettes. Each uses color tension between
-   surface hue and accent hues. Surfaces derive card/muted/
-   border via oklch(from var(--background) ...) for
-   maintainability. Tri-color themes map:
-     primary = color 1, ring = color 3,
-     purple/tint sits in surface atmosphere.
+   Two themes: Kolada (dark, default) and Dune (light).
+   Core palette uses explicit oklch pinned per-value.
+   CSS Relative Colors (oklch(from var(--x) ...)) are
+   reserved for state variants (hover / selected lifts).
    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
 
-/* ━━━ Neon ━━━ Pink + purple + cyan — synthwave glow ━━━ */
+/* ━━━ Kolada ━━━ Warm plum + pink/mint/cyan/orange/violet accents ━━━
 
-[data-theme="neon"] {
+   Palette source: Ko's customized VSCode Kolada theme.
+   Pink primary is reserved for rare, loud UI state (active,
+   selected, CTA). The other 4 accents have their own semantic
+   lanes (success / info / attention / secondary). Borders are
+   a signature plum — structural, not derived from background. */
+
+[data-theme="kolada"] {
   color-scheme: dark;
 
-  --background: oklch(0.11 0.02 290);
-  --foreground: oklch(0.93 0.02 290);
+  /* Base surfaces — warm dark plum hierarchy */
+  --background: oklch(0.1663 0.0064 300.87); /* #0f0e11 */
+  --foreground: oklch(0.9444 0.0029 308.43); /* #edecee */
 
-  /* Surfaces: purple-tinted darks */
-  --card: oklch(from var(--background) calc(l + 0.06) 0.02 295);
+  --sidebar: oklch(0.1601 0.0253 294.87); /* #0e0b17 */
+
+  --card: oklch(0.225 0.015 292); /* lifted ~6% above background */
   --card-foreground: var(--foreground);
-  --popover: oklch(from var(--background) calc(l + 0.08) 0.02 295);
+  --popover: oklch(0.225 0.015 292);
   --popover-foreground: var(--foreground);
 
-  /* Primary: hot pink */
-  --primary: oklch(0.64 0.26 350);
-  --primary-foreground: oklch(0.97 0.01 350);
+  /* Primary: pink — rare & loud (active tabs, selected card, CTA, badges) */
+  --primary: oklch(0.8316 0.1352 336.17); /* #ffa5e9 */
+  --primary-foreground: oklch(0.1663 0.0064 300.87);
 
-  /* Subtle surfaces — deep purple atmosphere */
-  --secondary: oklch(from var(--background) calc(l + 0.12) 0.025 295);
-  --secondary-foreground: var(--foreground);
-  --muted: oklch(from var(--background) calc(l + 0.12) 0.025 295);
-  --muted-foreground: oklch(0.65 0.035 290);
-  --accent: oklch(from var(--background) calc(l + 0.14) 0.03 298);
+  /* Secondary: violet — calmer alt to primary pink (surface + accent dual use). */
+  --secondary: oklch(0.7187 0.1663 296.28); /* #af8bff */
+  --secondary-foreground: oklch(0.1663 0.0064 300.87);
+
+  /* Muted surface: line-highlight / hover fills */
+  --muted: oklch(0.2617 0.0228 300.08); /* #26222e */
+  --muted-foreground: oklch(0.6765 0.0228 303.86); /* #9a94a3 */
+  /* Subtle foreground — for disabled / placeholder / decorative only.
+     Contrast against bg is intentionally below WCAG AA; do NOT use on
+     body text. Use --muted-foreground for readable secondary text. */
+  --subtle-foreground: oklch(0.4404 0.0216 346.38); /* #5c4e55 */
+
+  /* Accent surface (shadcn surface semantic — NOT the cyan lane).
+     Used by hover and selected states throughout the UI; must read
+     clearly raised above sidebar/background. The cyan / mint / orange
+     / violet semantic lanes live in --info / --success / --attention
+     / --violet below. */
+  --accent: oklch(0.3 0.025 298);
   --accent-foreground: var(--foreground);
+
+  /* Semantic accents — each with a clear lane */
+  --info: oklch(0.8346 0.121 219.92); /* #5ddbff cyan — links, in-progress */
+  --success: oklch(0.9027 0.153 167.27); /* #61ffca mint — completed */
+  --attention: oklch(0.832 0.1356 71.04); /* #ffb85c orange — warnings */
+  --violet: oklch(0.7187 0.1663 296.28); /* #af8bff — calmer alt accent */
+  --highlight: oklch(0.9837 0.0267 95.33); /* #fffae6 cream — rare sparkle */
 
   /* Danger */
-  --destructive: oklch(0.55 0.2 25);
-  --destructive-foreground: oklch(0.95 0.01 60);
+  --destructive: oklch(0.758 0.1447 21.05); /* #ff8888 */
+  --destructive-foreground: oklch(0.1663 0.0064 300.87);
 
-  /* Chrome — purple-tinted borders, cyan focus ring */
-  --border: oklch(from var(--background) calc(l + 0.2) 0.02 295);
-  --input: oklch(from var(--background) calc(l + 0.2) 0.02 295);
-  --ring: oklch(0.82 0.14 195);
-
-  --radius: 0.5rem;
-}
-
-/* ━━━ Flora ━━━ Pink + purple + green — midnight garden ━━━ */
-
-[data-theme="flora"] {
-  color-scheme: dark;
-
-  --background: oklch(0.11 0.018 290);
-  --foreground: oklch(0.93 0.015 290);
-
-  /* Surfaces: purple-tinted darks */
-  --card: oklch(from var(--background) calc(l + 0.06) 0.018 293);
-  --card-foreground: var(--foreground);
-  --popover: oklch(from var(--background) calc(l + 0.08) 0.018 293);
-  --popover-foreground: var(--foreground);
-
-  /* Primary: hot pink */
-  --primary: oklch(0.63 0.22 345);
-  --primary-foreground: oklch(0.97 0.01 345);
-
-  /* Subtle surfaces — dark purple garden beds */
-  --secondary: oklch(from var(--background) calc(l + 0.12) 0.022 295);
-  --secondary-foreground: var(--foreground);
-  --muted: oklch(from var(--background) calc(l + 0.12) 0.022 295);
-  --muted-foreground: oklch(0.65 0.03 290);
-  --accent: oklch(from var(--background) calc(l + 0.14) 0.027 298);
-  --accent-foreground: var(--foreground);
-
-  /* Danger */
-  --destructive: oklch(0.55 0.2 25);
-  --destructive-foreground: oklch(0.95 0.01 60);
-
-  /* Chrome — purple borders, emerald green focus ring */
-  --border: oklch(from var(--background) calc(l + 0.2) 0.018 293);
-  --input: oklch(from var(--background) calc(l + 0.2) 0.018 293);
-  --ring: oklch(0.7 0.18 155);
+  /* Chrome — signature plum borders */
+  --border: oklch(0.3048 0.0523 297.49); /* #322946 */
+  --border-subtle: oklch(0.2096 0.0203 302.95); /* #1a1620 */
+  --input: oklch(0.3048 0.0523 297.49);
+  --ring: oklch(0.8316 0.1352 336.17); /* primary pink */
 
   --radius: 0.5rem;
 }
 
-/* ━━━ Infrared ━━━ Near-black + searing pink + cyan ━━━ */
+/* ━━━ Dune ━━━ Sun-baked sand + ocean blue ━━━
 
-[data-theme="infrared"] {
-  color-scheme: dark;
-
-  --background: oklch(0.1 0.012 20);
-  --foreground: oklch(0.93 0.01 20);
-
-  /* Surfaces: warm-tinted near-blacks */
-  --card: oklch(from var(--background) calc(l + 0.06) 0.012 22);
-  --card-foreground: var(--foreground);
-  --popover: oklch(from var(--background) calc(l + 0.08) 0.012 22);
-  --popover-foreground: var(--foreground);
-
-  /* Primary: searing hot pink-red */
-  --primary: oklch(0.6 0.27 12);
-  --primary-foreground: oklch(0.97 0.01 12);
-
-  /* Subtle surfaces — warm charcoal */
-  --secondary: oklch(from var(--background) calc(l + 0.12) 0.015 22);
-  --secondary-foreground: var(--foreground);
-  --muted: oklch(from var(--background) calc(l + 0.12) 0.015 22);
-  --muted-foreground: oklch(0.63 0.02 20);
-  --accent: oklch(from var(--background) calc(l + 0.14) 0.018 25);
-  --accent-foreground: var(--foreground);
-
-  /* Danger: same hue family as primary — shift to orange to stay distinct */
-  --destructive: oklch(0.55 0.18 40);
-  --destructive-foreground: oklch(0.95 0.01 60);
-
-  /* Chrome — warm borders, cool cyan ring for contrast */
-  --border: oklch(from var(--background) calc(l + 0.2) 0.01 22);
-  --input: oklch(from var(--background) calc(l + 0.2) 0.01 22);
-  --ring: oklch(0.82 0.14 190);
-
-  --radius: 0.5rem;
-}
-
-/* ━━━ Verdant ━━━ Deep forest + warm coral ━━━ */
-
-[data-theme="verdant"] {
-  color-scheme: dark;
-
-  --background: oklch(0.15 0.03 160);
-  --foreground: oklch(0.93 0.025 155);
-
-  /* Surfaces: teal-shifted greens for depth */
-  --card: oklch(from var(--background) calc(l + 0.06) 0.025 168);
-  --card-foreground: var(--foreground);
-  --popover: oklch(from var(--background) calc(l + 0.08) 0.025 168);
-  --popover-foreground: var(--foreground);
-
-  /* Primary: warm coral — complementary to green */
-  --primary: oklch(0.74 0.14 40);
-  --primary-foreground: oklch(0.15 0.04 160);
-
-  /* Subtle surfaces — cooler aqua-green tint */
-  --secondary: oklch(from var(--background) calc(l + 0.11) 0.02 170);
-  --secondary-foreground: var(--foreground);
-  --muted: oklch(from var(--background) calc(l + 0.11) 0.02 170);
-  --muted-foreground: oklch(0.65 0.035 155);
-  --accent: oklch(from var(--background) calc(l + 0.13) 0.025 172);
-  --accent-foreground: var(--foreground);
-
-  /* Danger: vivid warm red — extra chroma to pop against green */
-  --destructive: oklch(0.55 0.22 20);
-  --destructive-foreground: oklch(0.95 0.01 60);
-
-  /* Chrome — aqua-tinted borders */
-  --border: oklch(from var(--background) calc(l + 0.19) 0.015 170);
-  --input: oklch(from var(--background) calc(l + 0.19) 0.015 170);
-  --ring: oklch(from var(--primary) l c h / 0.45);
-
-  --radius: 0.5rem;
-}
-
-/* ━━━ Rosewood ━━━ Deep plum + rose gold ━━━ */
-
-[data-theme="rosewood"] {
-  color-scheme: dark;
-
-  --background: oklch(0.15 0.03 320);
-  --foreground: oklch(0.93 0.015 350);
-
-  /* Surfaces: wine-purple tinted */
-  --card: oklch(from var(--background) calc(l + 0.06) 0.025 330);
-  --card-foreground: var(--foreground);
-  --popover: oklch(from var(--background) calc(l + 0.08) 0.025 330);
-  --popover-foreground: var(--foreground);
-
-  /* Primary: rose gold — warm metallic against cool plum */
-  --primary: oklch(0.75 0.1 55);
-  --primary-foreground: oklch(0.15 0.03 320);
-
-  /* Subtle surfaces — mauve-shifted for depth */
-  --secondary: oklch(from var(--background) calc(l + 0.11) 0.022 335);
-  --secondary-foreground: var(--foreground);
-  --muted: oklch(from var(--background) calc(l + 0.11) 0.022 335);
-  --muted-foreground: oklch(0.65 0.03 340);
-  --accent: oklch(from var(--background) calc(l + 0.13) 0.028 340);
-  --accent-foreground: var(--foreground);
-
-  /* Danger: orange-red, distinct from plum */
-  --destructive: oklch(0.55 0.2 25);
-  --destructive-foreground: oklch(0.95 0.01 60);
-
-  /* Chrome — dusty mauve borders */
-  --border: oklch(from var(--background) calc(l + 0.19) 0.018 335);
-  --input: oklch(from var(--background) calc(l + 0.19) 0.018 335);
-  --ring: oklch(from var(--primary) l c h / 0.45);
-
-  --radius: 0.5rem;
-}
-
-/* ━━━ Paper ━━━ Warm cream + terracotta ━━━ */
-
-[data-theme="paper"] {
-  color-scheme: light;
-
-  --background: oklch(0.97 0.008 80);
-  --foreground: oklch(0.2 0.025 50);
-
-  /* Surfaces: pure warm white for cards */
-  --card: oklch(0.99 0.004 80);
-  --card-foreground: var(--foreground);
-  --popover: oklch(0.99 0.004 80);
-  --popover-foreground: var(--foreground);
-
-  /* Primary: rich terracotta */
-  --primary: oklch(0.52 0.14 35);
-  --primary-foreground: oklch(0.97 0.01 35);
-
-  /* Subtle surfaces — olive-tinted cream */
-  --secondary: oklch(from var(--background) calc(l - 0.04) 0.012 90);
-  --secondary-foreground: var(--foreground);
-  --muted: oklch(from var(--background) calc(l - 0.04) 0.012 90);
-  --muted-foreground: oklch(0.48 0.02 50);
-  --accent: oklch(from var(--background) calc(l - 0.035) 0.018 60);
-  --accent-foreground: var(--foreground);
-
-  /* Danger */
-  --destructive: oklch(0.52 0.2 25);
-  --destructive-foreground: oklch(0.985 0.01 60);
-
-  /* Chrome — warm borders */
-  --border: oklch(from var(--background) calc(l - 0.1) 0.015 75);
-  --input: oklch(from var(--background) calc(l - 0.1) 0.015 75);
-  --ring: oklch(from var(--primary) l c h / 0.4);
-
-  --radius: 0.5rem;
-}
-
-/* ━━━ Dune ━━━ Sun-baked sand + ocean blue ━━━ */
+   Placeholder values for the new custom vars (sidebar,
+   border-subtle, subtle-foreground, info, success,
+   attention, highlight) are set so components don't break
+   at runtime. Real Dune-palette equivalents are a separate
+   follow-up task (Dune contrast fix). */
 
 [data-theme="dune"] {
   color-scheme: light;
@@ -306,6 +160,10 @@
   --popover: oklch(0.97 0.02 82);
   --popover-foreground: var(--foreground);
 
+  --sidebar: oklch(
+    0.89 0.035 80
+  ); /* TODO(dune): placeholder, refine in Dune contrast pass */
+
   /* Primary: deep ocean blue — complementary to warm sand */
   --primary: oklch(0.42 0.14 250);
   --primary-foreground: oklch(0.97 0.01 250);
@@ -315,8 +173,16 @@
   --secondary-foreground: var(--foreground);
   --muted: oklch(from var(--background) calc(l - 0.04) 0.035 78);
   --muted-foreground: oklch(0.48 0.03 70);
+  --subtle-foreground: oklch(0.6 0.025 70); /* TODO(dune): placeholder */
   --accent: oklch(from var(--background) calc(l - 0.035) 0.04 75);
   --accent-foreground: var(--foreground);
+
+  /* Semantic accents — placeholders, refine in Dune contrast pass */
+  --info: oklch(0.55 0.15 230); /* TODO(dune): placeholder */
+  --success: oklch(0.6 0.15 155); /* TODO(dune): placeholder */
+  --attention: oklch(0.7 0.15 65); /* TODO(dune): placeholder */
+  --violet: oklch(0.55 0.18 295); /* TODO(dune): placeholder */
+  --highlight: oklch(0.95 0.05 95); /* TODO(dune): placeholder */
 
   /* Danger */
   --destructive: oklch(0.52 0.2 25);
@@ -324,45 +190,8 @@
 
   /* Chrome — warm sandy borders */
   --border: oklch(from var(--background) calc(l - 0.1) 0.03 78);
+  --border-subtle: oklch(from var(--background) calc(l - 0.05) 0.025 78);
   --input: oklch(from var(--background) calc(l - 0.1) 0.03 78);
-  --ring: oklch(from var(--primary) l c h / 0.35);
-
-  --radius: 0.5rem;
-}
-
-/* ━━━ Arctic ━━━ Crisp lavender-white + electric violet ━━━ */
-
-[data-theme="arctic"] {
-  color-scheme: light;
-
-  --background: oklch(0.975 0.008 270);
-  --foreground: oklch(0.19 0.03 270);
-
-  /* Surfaces: clean white */
-  --card: oklch(0.99 0.003 270);
-  --card-foreground: var(--foreground);
-  --popover: oklch(0.99 0.003 270);
-  --popover-foreground: var(--foreground);
-
-  /* Primary: electric violet */
-  --primary: oklch(0.53 0.21 295);
-  --primary-foreground: oklch(0.98 0.008 295);
-
-  /* Subtle surfaces — cool lavender wash */
-  --secondary: oklch(from var(--background) calc(l - 0.035) 0.02 285);
-  --secondary-foreground: var(--foreground);
-  --muted: oklch(from var(--background) calc(l - 0.035) 0.02 285);
-  --muted-foreground: oklch(0.47 0.025 270);
-  --accent: oklch(from var(--background) calc(l - 0.03) 0.025 290);
-  --accent-foreground: var(--foreground);
-
-  /* Danger */
-  --destructive: oklch(0.52 0.2 25);
-  --destructive-foreground: oklch(0.985 0.01 60);
-
-  /* Chrome — lavender-tinted borders */
-  --border: oklch(from var(--background) calc(l - 0.09) 0.015 280);
-  --input: oklch(from var(--background) calc(l - 0.09) 0.015 280);
   --ring: oklch(from var(--primary) l c h / 0.35);
 
   --radius: 0.5rem;

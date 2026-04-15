@@ -3,34 +3,15 @@ import { TaskStatus } from '@convex/schema';
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 
-export type ThemeName =
-  | 'neon'
-  | 'flora'
-  | 'infrared'
-  | 'verdant'
-  | 'rosewood'
-  | 'paper'
-  | 'dune'
-  | 'arctic';
+export type ThemeName = 'kolada' | 'dune';
 
-export const VALID_THEMES: ThemeName[] = [
-  'neon',
-  'flora',
-  'infrared',
-  'verdant',
-  'rosewood',
-  'paper',
-  'dune',
-  'arctic',
-];
+export const VALID_THEMES: ThemeName[] = ['kolada', 'dune'];
 
 export const LIGHT_THEMES: ReadonlySet<ThemeName> = new Set<ThemeName>([
-  'paper',
   'dune',
-  'arctic',
 ]);
 
-export const DEFAULT_THEME: ThemeName = 'neon';
+export const DEFAULT_THEME: ThemeName = 'kolada';
 
 const DEFAULT_COLLAPSED_COLUMNS = new Set<string>([TaskStatus.Backlog]);
 
@@ -215,7 +196,7 @@ export const useAppStore = create<AppState>()(
     {
       name: 'holophyte-app',
       storage,
-      version: 5,
+      version: 6,
       migrate: (persisted) => {
         const state = persisted as Record<string, unknown>;
         const collapsedColumns = new Set<string>();
