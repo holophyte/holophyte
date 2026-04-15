@@ -18,16 +18,16 @@ interface ThemeOption {
  *  styles.css. Update these when theme palettes change. */
 const THEMES: ThemeOption[] = [
   {
-    name: 'kolada',
-    label: 'Kolada',
+    name: 'dark',
+    label: 'Dark',
     bg: '#0f0e11',
     surface: '#15141b',
     primary: '#ffa5e9',
     accent: '#5ddbff',
   },
   {
-    name: 'dune',
-    label: 'Dune',
+    name: 'light',
+    label: 'Light',
     bg: '#f4eee3',
     surface: '#fbf7ee',
     primary: '#c4408a',

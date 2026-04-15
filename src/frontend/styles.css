@@ -48,7 +48,7 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
-  /* Custom tokens from the Kolada spec. Reserved for follow-up passes
+  /* Custom tokens from the Dark palette spec. Reserved for follow-up passes
      (semantic badges, card gradients, sidebar chrome) — some are unused
      at first wire-up but are declared here so Tailwind generates
      `bg-info`, `text-success`, etc. classes for direct use. */
@@ -68,13 +68,14 @@
 /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
    THEMES — oklch
 
-   Two themes: Kolada (dark, default) and Dune (light).
-   Core palette uses explicit oklch pinned per-value.
-   CSS Relative Colors (oklch(from var(--x) ...)) are
-   reserved for state variants (hover / selected lifts).
+   Two themes: Dark (default, Kolada palette) and Light
+   (cream palette, light-mode counterpart). Core palette
+   uses explicit oklch pinned per-value. CSS Relative Colors
+   (oklch(from var(--x) ...)) are reserved for state
+   variants (hover / selected lifts).
    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
 
-/* ━━━ Kolada ━━━ Warm plum + pink/mint/cyan/orange/violet accents ━━━
+/* ━━━ Dark ━━━ Warm plum + pink/mint/cyan/orange/violet accents ━━━
 
    Palette source: Ko's customized VSCode Kolada theme.
    Pink primary is reserved for rare, loud UI state (active,
@@ -82,7 +83,7 @@
    lanes (success / info / attention / secondary). Borders are
    a signature plum — structural, not derived from background. */
 
-[data-theme="kolada"] {
+[data-theme="dark"] {
   color-scheme: dark;
 
   /* Base surfaces — warm dark plum hierarchy */
@@ -140,15 +141,15 @@
   --radius: 0.5rem;
 }
 
-/* ━━━ Dune ━━━ Warm cream + pink/mint/cyan/orange/violet accents ━━━
+/* ━━━ Light ━━━ Warm cream + pink/mint/cyan/orange/violet accents ━━━
 
-   Light-mode counterpart to Kolada. Same hue families and semantic
+   Light-mode counterpart to Dark. Same hue families and semantic
    lanes, inverted lightness. Anchored on a cream background (#F4EEE3)
    that's easy on the eyes. Pink primary stays rare/loud; the other
    four accents each own their own semantic lane. Borders are a
    signature warm sand — structural, not derived from background. */
 
-[data-theme="dune"] {
+[data-theme="light"] {
   color-scheme: light;
 
   /* Base surfaces — warm cream hierarchy */
@@ -166,7 +167,7 @@
   --primary: oklch(0.58 0.19 340);
   --primary-foreground: oklch(0.98 0.005 85);
 
-  /* Secondary: pastel lilac — same hue family as Kolada, carries dark text on cream. */
+  /* Secondary: pastel lilac — same hue family as Dark, carries dark text on cream. */
   --secondary: oklch(0.82 0.071 298); /* ~#c9bbec */
   --secondary-foreground: var(--foreground);
 

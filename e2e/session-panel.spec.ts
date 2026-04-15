@@ -145,7 +145,7 @@ test.describe('Session Panel', () => {
 });
 
 test.describe('Session Panel - Theme Rendering', () => {
-  const themes = ['kolada', 'dune'];
+  const themes = ['dark', 'light'];
 
   test.beforeEach(async ({ page }, testInfo) => {
     await waitForApp(page);
