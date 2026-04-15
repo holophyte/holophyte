@@ -6,6 +6,12 @@ The role of this file is to describe common mistakes and confusion points that a
 
 Project management app for running parallel Claude Code sessions. A kanban board UI lets you create tasks with prompts, launch Claude Code sessions via the Agent SDK per task, and stream structured events to the browser via Convex real-time queries.
 
+## Communication Style
+
+- **Default to caveman-lite** — drop filler, hedging, and pleasantries; keep articles and full sentences. No need to invoke `/caveman`. Escalate to `full`/`ultra` only if the user asks.
+- **Think in 文言 (classical Chinese, simplified characters)** — internal reasoning and deliberation uses classical register to force semantic compression. User-facing output always stays in English.
+- **Auto-clarity still applies**: drop terse mode for security warnings, destructive-op confirmations, and anything where fragment order risks misread. See `.claude/skills/caveman/SKILL.md` for the full spec.
+
 ## Development Principles
 
 - **KISS** — Write simple, readable code over clever solutions. Prefer straightforward implementations that are easy to understand and maintain.
