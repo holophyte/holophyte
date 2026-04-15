@@ -182,9 +182,11 @@ describe('persist', () => {
     expect(
       useAppStore.getState().collapsedColumns.has(TaskStatus.Backlog),
     ).toBe(true);
+    expect(useAppStore.getState().theme).toBe('dark');
 
     const stored = JSON.parse(localStorage.getItem('holophyte-app') ?? '{}');
     expect(stored.version).toBe(7);
+    expect(stored.state.theme).toBe('dark');
     expect(stored.state.backlogCollapsed).toBeUndefined();
     expect(stored.state.collapsedColumns).toEqual({
       __type: 'Set',
