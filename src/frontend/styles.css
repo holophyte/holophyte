@@ -1,6 +1,7 @@
 @import "tailwindcss";
 @plugin "@tailwindcss/typography";
 @source "../node_modules/streamdown/dist/*.js";
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
 
 /* ─── Animations ─── */
 

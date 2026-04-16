@@ -15,7 +15,7 @@ beforeEach(() => {
     searchQuery: '',
     filterLabelIds: [],
     showArchive: false,
-    theme: 'dark',
+    theme: 'system',
     lastUsedRepoId: null,
     sidebarCollapsed: false,
     bulkSelectedTaskIds: [],
@@ -185,7 +185,7 @@ describe('persist', () => {
     expect(useAppStore.getState().theme).toBe('dark');
 
     const stored = JSON.parse(localStorage.getItem('holophyte-app') ?? '{}');
-    expect(stored.version).toBe(7);
+    expect(stored.version).toBe(8);
     expect(stored.state.theme).toBe('dark');
     expect(stored.state.backlogCollapsed).toBeUndefined();
     expect(stored.state.collapsedColumns).toEqual({
@@ -215,14 +215,14 @@ describe('persist', () => {
 
     await useAppStore.persist.rehydrate();
 
-    expect(useAppStore.getState().theme).toBe('dark');
+    expect(useAppStore.getState().theme).toBe('system');
     expect(useAppStore.getState().collapsedColumns).toEqual(
       new Set([TaskStatus.Backlog, TaskStatus.Done]),
     );
 
     const stored = JSON.parse(localStorage.getItem('holophyte-app') ?? '{}');
-    expect(stored.version).toBe(7);
-    expect(stored.state.theme).toBe('dark');
+    expect(stored.version).toBe(8);
+    expect(stored.state.theme).toBe('system');
     expect(stored.state.collapsedColumns).toEqual({
       __type: 'Set',
       values: [TaskStatus.Backlog, TaskStatus.Done],
@@ -252,7 +252,7 @@ describe('persist', () => {
 
     expect(useAppStore.getState().theme).toBe(expected);
     const stored = JSON.parse(localStorage.getItem('holophyte-app') ?? '{}');
-    expect(stored.version).toBe(7);
+    expect(stored.version).toBe(8);
     expect(stored.state.theme).toBe(expected);
   });
 });

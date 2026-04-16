@@ -4,14 +4,19 @@ import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 
 export type ThemeName = 'dark' | 'light';
+export type ThemePreference = 'system' | ThemeName;
 
 export const VALID_THEMES: ThemeName[] = ['dark', 'light'];
+export const VALID_THEME_PREFERENCES: ThemePreference[] = [
+  'system',
+  ...VALID_THEMES,
+];
 
 export const LIGHT_THEMES: ReadonlySet<ThemeName> = new Set<ThemeName>([
   'light',
 ]);
 
-export const DEFAULT_THEME: ThemeName = 'dark';
+export const DEFAULT_THEME: ThemePreference = 'system';
 
 const DEFAULT_COLLAPSED_COLUMNS = new Set<string>([TaskStatus.Backlog]);
 
@@ -52,7 +57,7 @@ interface AppState {
   showArchive: boolean;
 
   // Theme
-  theme: ThemeName;
+  theme: ThemePreference;
 
   // Last repo used when creating a task from the "All Tasks" view
   lastUsedRepoId: Id<'repos'> | null;
@@ -64,7 +69,7 @@ interface AppState {
   bulkSelectedTaskIds: Id<'tasks'>[];
 
   setLastUsedRepoId: (id: Id<'repos'>) => void;
-  setTheme: (theme: ThemeName) => void;
+  setTheme: (theme: ThemePreference) => void;
   setSelectedOrgId: (id: Id<'organizations'>) => void;
   clearOrgSelection: () => void;
   toggleColumnCollapsed: (columnId: string) => void;
@@ -196,7 +201,7 @@ export const useAppStore = create<AppState>()(
     {
       name: 'holophyte-app',
       storage,
-      version: 7,
+      version: 8,
       migrate: (persisted) => {
         const state = persisted as Record<string, unknown>;
         // v7: rename themes "kolada" → "dark", "dune" → "light"
@@ -221,7 +226,7 @@ export const useAppStore = create<AppState>()(
         state.collapsedColumns = collapsedColumns;
         if (
           typeof state.theme !== 'string' ||
-          !VALID_THEMES.includes(state.theme as ThemeName)
+          !VALID_THEME_PREFERENCES.includes(state.theme as ThemePreference)
         ) {
           state.theme = DEFAULT_THEME;
         }

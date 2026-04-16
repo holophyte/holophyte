@@ -1,13 +1,9 @@
-import { Check } from 'lucide-react';
+import type { CSSProperties } from 'react';
 import { cn } from '@/frontend/lib/utils';
-import type { ThemeName } from '@/frontend/stores/app';
+import type { ThemePreference } from '@/frontend/stores/app';
 import { useAppStore } from '@/frontend/stores/app';
 
-interface ThemeOption {
-  name: ThemeName;
-  label: string;
-  /** Static hex preview colors — hardcoded because previews
-   *  render independently of the active theme's CSS variables. */
+interface Palette {
   bg: string;
   surface: string;
   primary: string;
@@ -16,24 +12,85 @@ interface ThemeOption {
 
 /** Preview hex colors are hand-picked approximations of the oklch values in
  *  styles.css. Update these when theme palettes change. */
+const LIGHT: Palette = {
+  bg: '#f4eee3',
+  surface: '#fbf7ee',
+  primary: '#c4408a',
+  accent: '#2b8fb3',
+};
+
+const DARK: Palette = {
+  bg: '#0f0e11',
+  surface: '#15141b',
+  primary: '#ffa5e9',
+  accent: '#5ddbff',
+};
+
+interface ThemeOption {
+  name: ThemePreference;
+  label: string;
+}
+
 const THEMES: ThemeOption[] = [
-  {
-    name: 'dark',
-    label: 'Dark',
-    bg: '#0f0e11',
-    surface: '#15141b',
-    primary: '#ffa5e9',
-    accent: '#5ddbff',
-  },
-  {
-    name: 'light',
-    label: 'Light',
-    bg: '#f4eee3',
-    surface: '#fbf7ee',
-    primary: '#c4408a',
-    accent: '#2b8fb3',
-  },
+  { name: 'system', label: 'System' },
+  { name: 'dark', label: 'Dark' },
+  { name: 'light', label: 'Light' },
 ];
+
+function Swatch({
+  palette,
+  className,
+  style,
+}: {
+  palette: Palette;
+  className?: string;
+  style?: CSSProperties;
+}) {
+  return (
+    <div
+      className={cn('flex h-6 w-full rounded-sm overflow-hidden', className)}
+      style={{
+        background: palette.bg,
+        boxShadow: 'inset 0 0 0 1px oklch(0.5 0 0 / 0.15)',
+        ...style,
+      }}
+    >
+      <div
+        className="flex-1 m-[3px] mr-0 rounded-[2px] flex items-end px-[3px] pb-[3px] gap-[2px]"
+        style={{ background: palette.surface }}
+      >
+        <div
+          className="w-[4px] h-[4px] rounded-full"
+          style={{ background: palette.primary }}
+        />
+        <div
+          className="w-[4px] h-[3px] rounded-sm"
+          style={{ background: palette.accent }}
+        />
+      </div>
+      <div
+        className="w-[4px] m-[3px] ml-[2px] rounded-[1px]"
+        style={{
+          background: `linear-gradient(180deg, ${palette.primary}, ${palette.accent})`,
+        }}
+      />
+    </div>
+  );
+}
+
+function SystemSwatch() {
+  const fade = 'linear-gradient(135deg, black 35%, transparent 65%)';
+  return (
+    <div className="relative h-6 w-full rounded-sm overflow-hidden">
+      <Swatch palette={DARK} className="absolute inset-0 rounded-none" />
+      <Swatch
+        palette={LIGHT}
+        className="absolute inset-0 rounded-none"
+        style={{ maskImage: fade, WebkitMaskImage: fade }}
+      />
+    </div>
+  );
+}
 
 export function ThemeSwitcher() {
   const theme = useAppStore((s) => s.theme);
@@ -44,7 +101,7 @@ export function ThemeSwitcher() {
       <legend className="text-xs font-medium text-muted-foreground px-1 mb-1.5">
         Theme
       </legend>
-      <div className="grid grid-cols-2 gap-1.5" role="radiogroup">
+      <div className="grid grid-cols-3 gap-1.5" role="radiogroup">
         {THEMES.map((t) => {
           const isActive = theme === t.name;
           return (
@@ -82,45 +139,14 @@ export function ThemeSwitcher() {
                 isActive ? 'ring-2 ring-ring bg-accent' : 'hover:bg-accent/50',
               )}
             >
-              {/* Mini swatch showing color tension */}
-              <div
-                className="flex h-6 w-full rounded-sm overflow-hidden"
-                style={{
-                  backgroundColor: t.bg,
-                  boxShadow: 'inset 0 0 0 1px oklch(0.5 0 0 / 0.15)',
-                }}
-              >
-                {/* Surface card preview */}
-                <div
-                  className="flex-1 m-[3px] mr-0 rounded-[2px] flex items-end px-[3px] pb-[3px] gap-[2px]"
-                  style={{ backgroundColor: t.surface }}
-                >
-                  <div
-                    className="w-[4px] h-[4px] rounded-full"
-                    style={{ backgroundColor: t.primary }}
-                  />
-                  <div
-                    className="w-[4px] h-[3px] rounded-sm"
-                    style={{ backgroundColor: t.accent }}
-                  />
-                </div>
-                {/* Accent bar */}
-                <div
-                  className="w-[4px] m-[3px] ml-[2px] rounded-[1px]"
-                  style={{
-                    background: `linear-gradient(180deg, ${t.primary}, ${t.accent})`,
-                  }}
-                />
-              </div>
+              {t.name === 'system' ? (
+                <SystemSwatch />
+              ) : (
+                <Swatch palette={t.name === 'light' ? LIGHT : DARK} />
+              )}
               <span className="text-muted-foreground leading-none">
                 {t.label}
               </span>
-              {isActive && (
-                <Check
-                  className="absolute top-0.5 right-0.5 h-3 w-3 text-primary"
-                  aria-hidden="true"
-                />
-              )}
             </button>
           );
         })}

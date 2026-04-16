@@ -6,7 +6,7 @@ import { ErrorBoundary } from 'react-error-boundary';
 import { Toaster } from 'sonner';
 import { useTheme } from '@/frontend/hooks/useTheme';
 import { allowPasswordAuth, e2eTest } from '@/frontend/lib/config';
-import { LIGHT_THEMES, useAppStore } from '@/frontend/stores/app';
+import { LIGHT_THEMES } from '@/frontend/stores/app';
 import AutoTestAuth from '../components/AutoTestAuth';
 import { CommandPalette } from '../components/CommandPalette';
 import { Sidebar } from '../components/Sidebar';
@@ -193,9 +193,8 @@ function AuthenticatedLayout() {
 }
 
 export default function RootLayout() {
-  useTheme();
-  const theme = useAppStore((s) => s.theme);
-  const sonnerTheme = LIGHT_THEMES.has(theme) ? 'light' : 'dark';
+  const resolvedTheme = useTheme();
+  const sonnerTheme = LIGHT_THEMES.has(resolvedTheme) ? 'light' : 'dark';
   const hasSigninQuery = new URLSearchParams(window.location.search).has(
     'signin',
   );

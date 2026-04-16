@@ -7,8 +7,8 @@
     <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
     <script>
       // Apply theme before CSS loads to prevent FOUC.
-      // Theme list must match VALID_THEMES in src/frontend/stores/app.ts
-      try{var v=['dark','light'];var m={kolada:'dark',dune:'light'};var s=JSON.parse(localStorage.getItem('holophyte-app')||'{}');var t=s.state&&s.state.theme;t=m[t]||t;document.documentElement.setAttribute('data-theme',v.indexOf(t)>-1?t:'dark')}catch(e){document.documentElement.setAttribute('data-theme','dark')}
+      // Theme list must match VALID_THEME_PREFERENCES in src/frontend/stores/app.ts
+      try{var q='(prefers-color-scheme: dark)';var sys=function(){return window.matchMedia&&window.matchMedia(q).matches?'dark':'light'};var v=['system','dark','light'];var m={kolada:'dark',dune:'light'};var s=JSON.parse(localStorage.getItem('holophyte-app')||'{}');var t=s.state&&s.state.theme;t=m[t]||t;if(v.indexOf(t)<0)t='system';document.documentElement.setAttribute('data-theme',t==='system'?sys():t)}catch(e){document.documentElement.setAttribute('data-theme','light')}
     </script>
     <link rel="stylesheet" href="../src/frontend/styles.css" />
     <script>
