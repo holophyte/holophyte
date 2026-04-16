@@ -172,7 +172,7 @@ scripts/                   → Shared shell scripts (convex-local, dev-local, wo
 
 ## Git Workflow
 
-- **Features/refactors**: Use worktrees (`/worktree` skill) for parallel development on `feat/<name>` branches
+- **Features/refactors**: Use worktrees for parallel development on `feat/<name>` branches — create with `bun run worktree:create <name>`
 - **Quick fixes**: Work directly on a branch from main — no worktree needed
 - Worktrees are for multi-file features you want to run in parallel, not for every change
 
