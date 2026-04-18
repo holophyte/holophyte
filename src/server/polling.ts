@@ -3,6 +3,7 @@
 import { hostname } from 'node:os';
 import { api } from '@convex/_generated/api';
 import type { Id } from '@convex/_generated/dataModel';
+import type { ConvexClient } from 'convex/browser';
 import { getActiveSessions } from '@/claude/manager';
 import type { TokenFileData } from './auth-token';
 import { readTokenFile, signInAnonymous } from './auth-token';
@@ -53,6 +54,19 @@ let heartbeatFailureLogged = false;
 // and a replacement obtained on the next cycle, kept for the rest of the window.
 let ephemeralClearedAt: number | null = null;
 const EPHEMERAL_CLEAR_COOLDOWN_MS = 30_000;
+// Gate the Codex model-list probe to once per process: the probe is fire-
+// and-forget with its own 15s timeout, so re-running it per poll cycle
+// would churn a subprocess on every tick. Reset only on explicit cases
+// (currently none — restart companion to refresh the cache).
+let codexProbeStarted = false;
+
+function ensureCodexProbe(client: ConvexClient): void {
+  if (codexProbeStarted) return;
+  codexProbeStarted = true;
+  void probeCodexModels(client).catch((err) => {
+    console.error('Codex model-list probe failed:', err);
+  });
+}
 
 function getDeployment(): string | undefined {
   return process.env.CONVEX_DEPLOYMENT;
@@ -160,6 +174,12 @@ export async function companionPoll() {
               );
               await startCompanionSubscriptions();
               ephemeralClearedAt = null;
+              // Fire the Codex model probe now that the Convex client is
+              // live — handles the case where companion started without a
+              // usable token and auth recovered mid-flight. No-op after
+              // the first successful call.
+              const recoveredClient = getConvexClient();
+              if (recoveredClient) ensureCodexProbe(recoveredClient);
             } catch (subErr) {
               // Clear stale ephemeral tokens so the next cycle can obtain a
               // fresh anonymous identity (e.g. after a Convex restart).
@@ -404,9 +424,7 @@ export async function startCompanion(url: string): Promise<void> {
   // Frontend falls back to CODEX_MODELS_FALLBACK and Convex's reactive
   // query picks up the row whenever the probe eventually lands.
   if (client) {
-    void probeCodexModels(client).catch((err) => {
-      console.error('Codex model-list probe failed:', err);
-    });
+    ensureCodexProbe(client);
   }
 
   // 5. Start reactive subscriptions for queued/stopped sessions and pending messages
