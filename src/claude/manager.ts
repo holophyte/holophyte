@@ -155,6 +155,24 @@ class SdkMessageChannel implements AsyncIterable<SDKUserMessage> {
   }
 }
 
+/**
+ * Directories outside the repo that sessions are allowed to touch. The SDK's
+ * Write/Edit tools refuse paths outside cwd + this allowlist, even after the
+ * user approves — which is what GH #247 was reporting for `/tmp` writes.
+ *
+ * `/tmp` is universally expected as scratch space on Unix. On macOS, Node's
+ * `os.tmpdir()` typically resolves to `/var/folders/...` via `TMPDIR`, and
+ * `/tmp` is a symlink to `/private/tmp`. We whitelist all three so paths
+ * resolve consistently regardless of which form Claude picks.
+ */
+function buildAdditionalDirectories(): string[] {
+  const dirs = new Set<string>(['/tmp']);
+  if (process.platform === 'darwin') dirs.add('/private/tmp');
+  const envTmp = process.env.TMPDIR;
+  if (envTmp) dirs.add(envTmp.replace(/\/+$/, ''));
+  return [...dirs];
+}
+
 function shouldAutoApprove(
   session: Session,
   toolName: string,
@@ -360,6 +378,7 @@ export async function startSession(opts: {
   const sdkOptions: Parameters<typeof sdkQuery>[0]['options'] = {
     cwd: opts.repoPath,
     env: sdkEnv,
+    additionalDirectories: buildAdditionalDirectories(),
     abortController: controller,
     canUseTool: async (toolName, input, toolOpts) => {
       if (shouldAutoApprove(session, toolName, input)) {

@@ -94,6 +94,16 @@ The frontend `useSession` hook derives a fourth status not present in the backen
 
 Tool-use approvals are handled via Convex mutations. When Claude requests permission to use a tool, a `pendingApprovals` record is created. The frontend renders an approve/deny UI, and the user's response is written back via `api.pendingApprovals.resolve()`. The companion process reads the resolved approval and resumes the SDK.
 
+### Filesystem Access
+
+Each session runs with the task's repo as the SDK's `cwd`. By default, the SDK's `Write`/`Edit` tools refuse paths outside `cwd`, even after the user approves. Holophyte widens that allowlist with `additionalDirectories` so sessions can use standard scratch locations:
+
+- `/tmp` — universal Unix scratch
+- `/private/tmp` (macOS) — where `/tmp` actually resolves to
+- `$TMPDIR` (when set) — the per-user tmp directory on macOS
+
+Anything outside the repo + those three paths is still blocked, regardless of approval.
+
 ## Stop
 
 Stopping a running session (`POST /api/sessions/:id/stop`) sets `stoppedByUser = true` on the in-memory session and aborts the SDK controller. The cleanup path in `consumeIterator` detects this flag and transitions the session to `idle` rather than `failed` — so the session remains resumable. Stop does not delete the session or its history.
