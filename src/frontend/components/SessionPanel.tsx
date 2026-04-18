@@ -227,7 +227,11 @@ function ActiveSession({
       messageQueued={chat.messageQueued}
       sendMessage={chat.sendMessage}
     >
-      <SessionThread messages={chat.messages} status={chat.status} />
+      <SessionThread
+        messages={chat.messages}
+        status={chat.status}
+        isInterrupted={chat.isInterrupted}
+      />
     </SessionActionsProvider>
   );
 }

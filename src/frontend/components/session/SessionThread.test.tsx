@@ -212,6 +212,86 @@ describe('SessionThread', () => {
     });
   });
 
+  describe('queued messages (GH #207)', () => {
+    it('renders a Queued badge + muted styling on optimistic user messages while running', () => {
+      const messages: UIMessage[] = [
+        {
+          id: 'optimistic-0',
+          role: 'user',
+          parts: [{ type: 'text', text: 'follow-up' }],
+        },
+      ];
+      render(<SessionThread messages={messages} status="streaming" />, {
+        wrapper: withSessionActions('running'),
+      });
+      expect(screen.getByText(/queued/i)).toBeInTheDocument();
+      expect(screen.getByText('follow-up')).toBeInTheDocument();
+    });
+
+    it('does not render Queued badge on persisted user messages while running', () => {
+      const messages: UIMessage[] = [
+        {
+          id: 'msg-persisted-0',
+          role: 'user',
+          parts: [{ type: 'text', text: 'active prompt' }],
+        },
+      ];
+      render(<SessionThread messages={messages} status="streaming" />, {
+        wrapper: withSessionActions('running'),
+      });
+      expect(screen.queryByText(/queued/i)).not.toBeInTheDocument();
+    });
+
+    it('does not render Queued badge when session is idle', () => {
+      // Optimistic messages can exist briefly before the SDK catches up on a
+      // fresh send; but while idle, the next turn is about to start, not
+      // stacking onto an active one — so no "queued" framing.
+      const messages: UIMessage[] = [
+        {
+          id: 'optimistic-0',
+          role: 'user',
+          parts: [{ type: 'text', text: 'first message' }],
+        },
+      ];
+      render(<SessionThread messages={messages} status="ready" />, {
+        wrapper: withSessionActions('idle'),
+      });
+      expect(screen.queryByText(/queued/i)).not.toBeInTheDocument();
+    });
+  });
+
+  describe('interruption indicator (GH #207)', () => {
+    it('renders when isInterrupted is true and session is not running', () => {
+      render(
+        <SessionThread messages={[]} status="ready" isInterrupted={true} />,
+        { wrapper: withSessionActions('idle') },
+      );
+      expect(screen.getByTestId('interruption-indicator')).toBeInTheDocument();
+      expect(screen.getByText(/interrupted/i)).toBeInTheDocument();
+    });
+
+    it('does not render when isInterrupted is false', () => {
+      render(
+        <SessionThread messages={[]} status="ready" isInterrupted={false} />,
+        { wrapper: withSessionActions('idle') },
+      );
+      expect(
+        screen.queryByTestId('interruption-indicator'),
+      ).not.toBeInTheDocument();
+    });
+
+    it('does not render while the session is still running', () => {
+      // Guard: we only want to signal interruption *after* the run has ended.
+      render(
+        <SessionThread messages={[]} status="streaming" isInterrupted={true} />,
+        { wrapper: withSessionActions('running') },
+      );
+      expect(
+        screen.queryByTestId('interruption-indicator'),
+      ).not.toBeInTheDocument();
+    });
+  });
+
   describe('ThinkingIndicator', () => {
     it('shows thinking indicator when session is running', () => {
       render(<SessionThread messages={[]} status="streaming" />, {

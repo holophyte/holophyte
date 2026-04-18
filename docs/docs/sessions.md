@@ -90,6 +90,14 @@ The `useSession` hook reads events from Convex (`sessionEvents.getBySession`) or
 
 The frontend `useSession` hook derives a fourth status not present in the backend: `waiting_input`. This is set when there are unresolved `PendingApproval` entries and the session is not yet `idle` or `failed`. It overrides a backend `running` status in the UI, signaling that user action is required before Claude can proceed.
 
+### Queued Messages
+
+While Claude is processing a response (session `running` or `waiting_input`), the user can send additional messages — they're added optimistically to the thread and flushed to the SDK when the current turn ends. The thread renders these with reduced opacity and a small "Queued" badge so the active prompt stays visually distinct from the backlog. Once Claude picks the message up, the corresponding SDK event arrives, the optimistic entry is dropped, and the real user message takes its place with normal styling.
+
+### Interruption Indicator
+
+When the user hits stop mid-response, the session transitions to `idle` without a terminal `result` SDK event. The thread detects the mismatch and renders a subtle `— interrupted —` divider after the last message, so there's a clear visual seam between the truncated turn and anything that comes after.
+
 ### Approvals
 
 Tool-use approvals are handled via Convex mutations. When Claude requests permission to use a tool, a `pendingApprovals` record is created. The frontend renders an approve/deny UI, and the user's response is written back via `api.pendingApprovals.resolve()`. The companion process reads the resolved approval and resumes the SDK.

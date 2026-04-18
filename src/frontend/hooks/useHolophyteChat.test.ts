@@ -212,3 +212,75 @@ describe('useHolophyteChat — passthrough', () => {
     expect(result.current.pendingApprovals).toBe(pendingApprovals);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Interruption detection (GH #207)
+// ---------------------------------------------------------------------------
+
+describe('useHolophyteChat — isInterrupted', () => {
+  function makeResultEvent(uuid = 'u-r'): SDKMessage {
+    return {
+      type: 'result',
+      subtype: 'success',
+      is_error: false,
+      uuid,
+    } as unknown as SDKMessage;
+  }
+
+  it('is false when session is running', () => {
+    const { result } = renderHook(() =>
+      useHolophyteChat(
+        makeProps({
+          events: [makeAssistantEvent('partial')],
+          sessionStatus: 'running',
+        }),
+      ),
+    );
+    expect(result.current.isInterrupted).toBe(false);
+  });
+
+  it('is false when session ended with a terminal result event', () => {
+    const { result } = renderHook(() =>
+      useHolophyteChat(
+        makeProps({
+          events: [makeAssistantEvent('hello'), makeResultEvent()],
+          sessionStatus: 'idle',
+        }),
+      ),
+    );
+    expect(result.current.isInterrupted).toBe(false);
+  });
+
+  it('is true when session is idle but last event is not a result', () => {
+    // Simulates the user hitting Stop mid-response: the iterator is aborted
+    // before the SDK emits the closing `result` event.
+    const { result } = renderHook(() =>
+      useHolophyteChat(
+        makeProps({
+          events: [makeUserEvent('hi'), makeAssistantEvent('partial…')],
+          sessionStatus: 'idle',
+        }),
+      ),
+    );
+    expect(result.current.isInterrupted).toBe(true);
+  });
+
+  it('is false when there are no events at all', () => {
+    const { result } = renderHook(() =>
+      useHolophyteChat(makeProps({ events: [], sessionStatus: 'idle' })),
+    );
+    expect(result.current.isInterrupted).toBe(false);
+  });
+
+  it('is false when session failed (error, not interruption)', () => {
+    const { result } = renderHook(() =>
+      useHolophyteChat(
+        makeProps({
+          events: [makeAssistantEvent('crashed mid-reply')],
+          sessionStatus: 'failed',
+        }),
+      ),
+    );
+    expect(result.current.isInterrupted).toBe(false);
+  });
+});

@@ -36,6 +36,13 @@ export interface UseHolophyteChatReturn {
   promptSuggestion: string | null;
   availableCommands: ProjectCommand[];
   messageQueued: boolean;
+  /**
+   * True when the last turn was cut short (session is idle but the SDK event
+   * stream never produced a terminal `result` event — i.e. the user stopped
+   * the session mid-response). The thread UI uses this to render an
+   * "— interrupted —" indicator after the last assistant message.
+   */
+  isInterrupted: boolean;
 }
 
 /**
@@ -86,6 +93,16 @@ export function useHolophyteChat(
     () => sdkToUIMessages(events, isRunning, pendingApprovals),
     [events, isRunning, pendingApprovals],
   );
+
+  // A cleanly-ended turn terminates with a `result` SDK event. If the session
+  // is idle but the last event isn't a `result`, the turn was interrupted
+  // (the user hit stop). Only check `idle` — `failed` is an error, not an
+  // interruption.
+  const isInterrupted = useMemo(() => {
+    if (sessionStatus !== 'idle') return false;
+    const last = events[events.length - 1];
+    return last != null && last.type !== 'result';
+  }, [events, sessionStatus]);
 
   // Extract the latest prompt suggestion from the event stream
   const promptSuggestion = useMemo(
@@ -175,5 +192,6 @@ export function useHolophyteChat(
     promptSuggestion,
     availableCommands,
     messageQueued,
+    isInterrupted,
   };
 }
