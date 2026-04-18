@@ -59,6 +59,7 @@ export function ClaudeButton({ task }: ClaudeButtonProps) {
           taskId: task._id,
           prompt: task.prompt,
           model,
+          provider: 'claude',
         });
         openSession(sessionId);
         if (!isOnThisTaskPage) {

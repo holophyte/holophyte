@@ -37,7 +37,10 @@ describe('sessions.create', () => {
     const { authed, taskId } = await setupTaskEnv(t);
 
     const before = Date.now();
-    const sessionId = await authed.mutation(api.sessions.create, { taskId });
+    const sessionId = await authed.mutation(api.sessions.create, {
+      taskId,
+      provider: 'claude',
+    });
     const after = Date.now();
 
     const session = await authed.query(api.sessions.get, { id: sessionId });
@@ -66,7 +69,10 @@ describe('sessions.create', () => {
     });
 
     await expect(
-      viewerAuthed.mutation(api.sessions.create, { taskId }),
+      viewerAuthed.mutation(api.sessions.create, {
+        taskId,
+        provider: 'claude',
+      }),
     ).rejects.toThrow();
   });
 });
@@ -84,10 +90,16 @@ describe('sessions.getByTask', () => {
     const t = convexTest(schema);
     const { authed, taskId } = await setupTaskEnv(t);
 
-    const _firstId = await authed.mutation(api.sessions.create, { taskId });
+    const _firstId = await authed.mutation(api.sessions.create, {
+      taskId,
+      provider: 'claude',
+    });
     // Small delay to ensure different timestamps
     await new Promise((r) => setTimeout(r, 5));
-    const secondId = await authed.mutation(api.sessions.create, { taskId });
+    const secondId = await authed.mutation(api.sessions.create, {
+      taskId,
+      provider: 'claude',
+    });
 
     const result = await authed.query(api.sessions.getByTask, { taskId });
     // Should return the most recently active (second created)
@@ -100,11 +112,20 @@ describe('sessions.listByTask', () => {
     const t = convexTest(schema);
     const { authed, taskId } = await setupTaskEnv(t);
 
-    const firstId = await authed.mutation(api.sessions.create, { taskId });
+    const firstId = await authed.mutation(api.sessions.create, {
+      taskId,
+      provider: 'claude',
+    });
     await new Promise((r) => setTimeout(r, 5));
-    const secondId = await authed.mutation(api.sessions.create, { taskId });
+    const secondId = await authed.mutation(api.sessions.create, {
+      taskId,
+      provider: 'claude',
+    });
     await new Promise((r) => setTimeout(r, 5));
-    const thirdId = await authed.mutation(api.sessions.create, { taskId });
+    const thirdId = await authed.mutation(api.sessions.create, {
+      taskId,
+      provider: 'claude',
+    });
 
     const sessions = await authed.query(api.sessions.listByTask, { taskId });
     expect(sessions).toHaveLength(3);
@@ -132,8 +153,11 @@ describe('sessions.listByTask', () => {
       title: 'Other Task',
     });
 
-    await authed.mutation(api.sessions.create, { taskId });
-    await authed.mutation(api.sessions.create, { taskId: otherTaskId });
+    await authed.mutation(api.sessions.create, { taskId, provider: 'claude' });
+    await authed.mutation(api.sessions.create, {
+      taskId: otherTaskId,
+      provider: 'claude',
+    });
 
     const sessions = await authed.query(api.sessions.listByTask, { taskId });
     expect(sessions).toHaveLength(1);
@@ -146,8 +170,14 @@ describe('sessions.listActive', () => {
     const t = convexTest(schema);
     const { authed, orgId, taskId } = await setupTaskEnv(t);
 
-    const runningId = await authed.mutation(api.sessions.create, { taskId });
-    const idleId = await authed.mutation(api.sessions.create, { taskId });
+    const runningId = await authed.mutation(api.sessions.create, {
+      taskId,
+      provider: 'claude',
+    });
+    const idleId = await authed.mutation(api.sessions.create, {
+      taskId,
+      provider: 'claude',
+    });
 
     // create() now sets 'queued' — transition first session to 'running'
     // and second to 'idle' to test the listActive filter.
@@ -167,7 +197,10 @@ describe('sessions.updateStatus (client-side)', () => {
     const t = convexTest(schema);
     const { authed, taskId } = await setupTaskEnv(t);
 
-    const sessionId = await authed.mutation(api.sessions.create, { taskId });
+    const sessionId = await authed.mutation(api.sessions.create, {
+      taskId,
+      provider: 'claude',
+    });
 
     await authed.mutation(api.sessions.updateStatus, {
       id: sessionId,
@@ -182,7 +215,10 @@ describe('sessions.updateStatus (client-side)', () => {
     const t = convexTest(schema);
     const { authed, taskId } = await setupTaskEnv(t);
 
-    const sessionId = await authed.mutation(api.sessions.create, { taskId });
+    const sessionId = await authed.mutation(api.sessions.create, {
+      taskId,
+      provider: 'claude',
+    });
 
     await authed.mutation(api.sessions.updateStatus, {
       id: sessionId,
@@ -199,7 +235,10 @@ describe('sessions.updateLastActivity', () => {
     const t = convexTest(schema);
     const { authed, taskId } = await setupTaskEnv(t);
 
-    const sessionId = await authed.mutation(api.sessions.create, { taskId });
+    const sessionId = await authed.mutation(api.sessions.create, {
+      taskId,
+      provider: 'claude',
+    });
     const session = await authed.query(api.sessions.get, { id: sessionId });
     const originalActivity = session?.lastActivityAt;
 
@@ -221,7 +260,10 @@ describe('sessions.requestStop', () => {
     const t = convexTest(schema);
     const { authed, taskId } = await setupTaskEnv(t);
 
-    const sessionId = await authed.mutation(api.sessions.create, { taskId });
+    const sessionId = await authed.mutation(api.sessions.create, {
+      taskId,
+      provider: 'claude',
+    });
     await t.run(async (ctx) => {
       await ctx.db.patch(sessionId, { status: 'running' });
     });
@@ -236,7 +278,10 @@ describe('sessions.requestStop', () => {
     const t = convexTest(schema);
     const { authed, taskId } = await setupTaskEnv(t);
 
-    const sessionId = await authed.mutation(api.sessions.create, { taskId });
+    const sessionId = await authed.mutation(api.sessions.create, {
+      taskId,
+      provider: 'claude',
+    });
     // create() already sets 'queued', no patch needed
 
     await authed.mutation(api.sessions.requestStop, { id: sessionId });
@@ -249,7 +294,10 @@ describe('sessions.requestStop', () => {
     const t = convexTest(schema);
     const { authed, taskId } = await setupTaskEnv(t);
 
-    const sessionId = await authed.mutation(api.sessions.create, { taskId });
+    const sessionId = await authed.mutation(api.sessions.create, {
+      taskId,
+      provider: 'claude',
+    });
     await t.run(async (ctx) => {
       await ctx.db.patch(sessionId, { status: 'idle' });
     });
@@ -264,7 +312,10 @@ describe('sessions.requestStop', () => {
     const t = convexTest(schema);
     const { authed, taskId } = await setupTaskEnv(t);
 
-    const sessionId = await authed.mutation(api.sessions.create, { taskId });
+    const sessionId = await authed.mutation(api.sessions.create, {
+      taskId,
+      provider: 'claude',
+    });
     await t.run(async (ctx) => {
       await ctx.db.patch(sessionId, { status: 'stopped' });
     });
@@ -279,7 +330,10 @@ describe('sessions.requestStop', () => {
     const t = convexTest(schema);
     const { authed, taskId } = await setupTaskEnv(t);
 
-    const sessionId = await authed.mutation(api.sessions.create, { taskId });
+    const sessionId = await authed.mutation(api.sessions.create, {
+      taskId,
+      provider: 'claude',
+    });
     await t.run(async (ctx) => {
       await ctx.db.patch(sessionId, { status: 'failed' });
     });
@@ -296,6 +350,7 @@ describe('sessions.requestStop', () => {
 
     const sessionId = await ownerAuthed.mutation(api.sessions.create, {
       taskId,
+      provider: 'claude',
     });
     await t.run(async (ctx) => {
       await ctx.db.patch(sessionId, { status: 'running' });
@@ -323,7 +378,10 @@ describe('sessions.queueResume', () => {
     const t = convexTest(schema);
     const { authed, taskId } = await setupTaskEnv(t);
 
-    const sessionId = await authed.mutation(api.sessions.create, { taskId });
+    const sessionId = await authed.mutation(api.sessions.create, {
+      taskId,
+      provider: 'claude',
+    });
     await t.run(async (ctx) => {
       await ctx.db.patch(sessionId, { status: 'idle' });
     });
@@ -343,7 +401,10 @@ describe('sessions.queueResume', () => {
     const t = convexTest(schema);
     const { authed, taskId } = await setupTaskEnv(t);
 
-    const sessionId = await authed.mutation(api.sessions.create, { taskId });
+    const sessionId = await authed.mutation(api.sessions.create, {
+      taskId,
+      provider: 'claude',
+    });
     await t.run(async (ctx) => {
       await ctx.db.patch(sessionId, { status: 'running' });
     });
@@ -364,6 +425,7 @@ describe('sessions.queueResume', () => {
 
     const sessionId = await ownerAuthed.mutation(api.sessions.create, {
       taskId,
+      provider: 'claude',
     });
     await t.run(async (ctx) => {
       await ctx.db.patch(sessionId, { status: 'idle' });
@@ -394,7 +456,10 @@ describe('sessions.listQueued', () => {
     const t = convexTest(schema);
     const { authed, taskId } = await setupTaskEnv(t);
 
-    const sessionId = await authed.mutation(api.sessions.create, { taskId });
+    const sessionId = await authed.mutation(api.sessions.create, {
+      taskId,
+      provider: 'claude',
+    });
     // create() sets status to 'queued' — no patch needed
 
     const queued = await t.query(internal.sessions.listQueued, {});
@@ -407,7 +472,10 @@ describe('sessions.listQueued', () => {
     const t = convexTest(schema);
     const { authed, taskId } = await setupTaskEnv(t);
 
-    const sessionId = await authed.mutation(api.sessions.create, { taskId });
+    const sessionId = await authed.mutation(api.sessions.create, {
+      taskId,
+      provider: 'claude',
+    });
     await t.run(async (ctx) => {
       await ctx.db.patch(sessionId, { status: 'running' });
     });
@@ -420,7 +488,10 @@ describe('sessions.listQueued', () => {
     const t = convexTest(schema);
     const { authed, taskId } = await setupTaskEnv(t);
 
-    const sessionId = await authed.mutation(api.sessions.create, { taskId });
+    const sessionId = await authed.mutation(api.sessions.create, {
+      taskId,
+      provider: 'claude',
+    });
 
     // Delete the task to orphan the session
     await t.run(async (ctx) => {
@@ -438,7 +509,10 @@ describe('sessions.claimQueued', () => {
     const t = convexTest(schema);
     const { authed, taskId } = await setupTaskEnv(t);
 
-    const sessionId = await authed.mutation(api.sessions.create, { taskId });
+    const sessionId = await authed.mutation(api.sessions.create, {
+      taskId,
+      provider: 'claude',
+    });
 
     const result = await t.mutation(internal.sessions.claimQueued, {
       id: sessionId,
@@ -453,7 +527,10 @@ describe('sessions.claimQueued', () => {
     const t = convexTest(schema);
     const { authed, taskId } = await setupTaskEnv(t);
 
-    const sessionId = await authed.mutation(api.sessions.create, { taskId });
+    const sessionId = await authed.mutation(api.sessions.create, {
+      taskId,
+      provider: 'claude',
+    });
     await t.run(async (ctx) => {
       await ctx.db.patch(sessionId, { status: 'running' });
     });
@@ -469,7 +546,10 @@ describe('sessions.claimQueued', () => {
     const { authed, taskId } = await setupTaskEnv(t);
 
     // Create a session just to get a valid-format ID, then delete it
-    const sessionId = await authed.mutation(api.sessions.create, { taskId });
+    const sessionId = await authed.mutation(api.sessions.create, {
+      taskId,
+      provider: 'claude',
+    });
     await t.run(async (ctx) => {
       await ctx.db.delete(sessionId);
     });
@@ -486,8 +566,14 @@ describe('sessions.listStopped', () => {
     const t = convexTest(schema);
     const { authed, taskId } = await setupTaskEnv(t);
 
-    const stoppedId = await authed.mutation(api.sessions.create, { taskId });
-    const runningId = await authed.mutation(api.sessions.create, { taskId });
+    const stoppedId = await authed.mutation(api.sessions.create, {
+      taskId,
+      provider: 'claude',
+    });
+    const runningId = await authed.mutation(api.sessions.create, {
+      taskId,
+      provider: 'claude',
+    });
     await t.run(async (ctx) => {
       await ctx.db.patch(stoppedId, { status: 'stopped' });
       await ctx.db.patch(runningId, { status: 'running' });
@@ -684,7 +770,10 @@ describe('sessions.companionListQueued', () => {
     const t = convexTest(schema);
     const { authed, taskId } = await setupTaskEnv(t);
 
-    const sessionId = await authed.mutation(api.sessions.create, { taskId });
+    const sessionId = await authed.mutation(api.sessions.create, {
+      taskId,
+      provider: 'claude',
+    });
 
     const queued = await authed.query(api.sessions.companionListQueued, {});
     expect(queued).toHaveLength(1);
@@ -705,7 +794,7 @@ describe('sessions.companionListQueued', () => {
     const { authed, taskId } = await setupTaskEnv(t);
 
     // Create a session in the owner's org
-    await authed.mutation(api.sessions.create, { taskId });
+    await authed.mutation(api.sessions.create, { taskId, provider: 'claude' });
 
     // Create a second user with their own org
     const { authed: otherAuthed } = await setupUser(t, 'Other User');
@@ -722,7 +811,10 @@ describe('sessions.companionListQueued', () => {
       repoId: otherRepoId,
       title: 'Other Task',
     });
-    await otherAuthed.mutation(api.sessions.create, { taskId: otherTaskId });
+    await otherAuthed.mutation(api.sessions.create, {
+      taskId: otherTaskId,
+      provider: 'claude',
+    });
 
     // Other user should only see their own org's sessions
     const queued = await otherAuthed.query(
@@ -739,7 +831,10 @@ describe('sessions.companionListStopped', () => {
     const t = convexTest(schema);
     const { authed, taskId } = await setupTaskEnv(t);
 
-    const sessionId = await authed.mutation(api.sessions.create, { taskId });
+    const sessionId = await authed.mutation(api.sessions.create, {
+      taskId,
+      provider: 'claude',
+    });
     await t.run(async (ctx) => {
       await ctx.db.patch(sessionId, { status: 'stopped' });
     });
@@ -762,7 +857,10 @@ describe('sessions.companionListStopped', () => {
     const { authed, taskId } = await setupTaskEnv(t);
 
     // Create a stopped session in owner's org
-    const sessionId = await authed.mutation(api.sessions.create, { taskId });
+    const sessionId = await authed.mutation(api.sessions.create, {
+      taskId,
+      provider: 'claude',
+    });
     await t.run(async (ctx) => {
       await ctx.db.patch(sessionId, { status: 'stopped' });
     });
@@ -878,7 +976,10 @@ describe('sessions.listActive — org isolation', () => {
     const { authed, orgId, taskId } = await setupTaskEnv(t);
 
     // Create a running session in org 1
-    const sessionId = await authed.mutation(api.sessions.create, { taskId });
+    const sessionId = await authed.mutation(api.sessions.create, {
+      taskId,
+      provider: 'claude',
+    });
     await t.run(async (ctx) => {
       await ctx.db.patch(sessionId, { status: 'running' });
     });
@@ -900,6 +1001,7 @@ describe('sessions.listActive — org isolation', () => {
     });
     const otherSessionId = await otherAuthed.mutation(api.sessions.create, {
       taskId: otherTaskId,
+      provider: 'claude',
     });
     await t.run(async (ctx) => {
       await ctx.db.patch(otherSessionId, { status: 'running' });
@@ -925,7 +1027,10 @@ describe('sessions.companionMarkStaleRunning — org isolation', () => {
     const { authed, taskId } = await setupTaskEnv(t);
 
     // Create running session in org 1
-    const sessionId = await authed.mutation(api.sessions.create, { taskId });
+    const sessionId = await authed.mutation(api.sessions.create, {
+      taskId,
+      provider: 'claude',
+    });
     await t.run(async (ctx) => {
       await ctx.db.patch(sessionId, { status: 'running' });
     });
@@ -947,6 +1052,7 @@ describe('sessions.companionMarkStaleRunning — org isolation', () => {
     });
     const otherSessionId = await otherAuthed.mutation(api.sessions.create, {
       taskId: otherTaskId,
+      provider: 'claude',
     });
     await t.run(async (ctx) => {
       await ctx.db.patch(otherSessionId, { status: 'running' });
@@ -973,7 +1079,10 @@ describe('sessions.companionMarkStoppedAsIdle — org isolation', () => {
     const { authed, taskId } = await setupTaskEnv(t);
 
     // Create stopped session in org 1
-    const sessionId = await authed.mutation(api.sessions.create, { taskId });
+    const sessionId = await authed.mutation(api.sessions.create, {
+      taskId,
+      provider: 'claude',
+    });
     await t.run(async (ctx) => {
       await ctx.db.patch(sessionId, { status: 'stopped' });
     });
@@ -995,6 +1104,7 @@ describe('sessions.companionMarkStoppedAsIdle — org isolation', () => {
     });
     const otherSessionId = await otherAuthed.mutation(api.sessions.create, {
       taskId: otherTaskId,
+      provider: 'claude',
     });
     await t.run(async (ctx) => {
       await ctx.db.patch(otherSessionId, { status: 'stopped' });
@@ -1021,7 +1131,7 @@ describe('sessions.companionListQueued — org isolation', () => {
     const { authed, taskId } = await setupTaskEnv(t);
 
     // Create a queued session in org 1
-    await authed.mutation(api.sessions.create, { taskId });
+    await authed.mutation(api.sessions.create, { taskId, provider: 'claude' });
 
     // Create a second user with their own org and a queued session
     const { authed: otherAuthed } = await setupUser(t, 'Other User');
@@ -1038,7 +1148,10 @@ describe('sessions.companionListQueued — org isolation', () => {
       repoId: otherRepoId,
       title: 'Other Task',
     });
-    await otherAuthed.mutation(api.sessions.create, { taskId: otherTaskId });
+    await otherAuthed.mutation(api.sessions.create, {
+      taskId: otherTaskId,
+      provider: 'claude',
+    });
 
     // Each user should only see their own org's queued sessions
     const myQueued = await authed.query(api.sessions.companionListQueued, {});
@@ -1058,7 +1171,10 @@ describe('sessions.companionListStopped — org isolation', () => {
     const { authed, taskId } = await setupTaskEnv(t);
 
     // Create a stopped session in org 1
-    const sessionId = await authed.mutation(api.sessions.create, { taskId });
+    const sessionId = await authed.mutation(api.sessions.create, {
+      taskId,
+      provider: 'claude',
+    });
     await t.run(async (ctx) => {
       await ctx.db.patch(sessionId, { status: 'stopped' });
     });
@@ -1080,6 +1196,7 @@ describe('sessions.companionListStopped — org isolation', () => {
     });
     const otherSessionId = await otherAuthed.mutation(api.sessions.create, {
       taskId: otherTaskId,
+      provider: 'claude',
     });
     await t.run(async (ctx) => {
       await ctx.db.patch(otherSessionId, { status: 'stopped' });

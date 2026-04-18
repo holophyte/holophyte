@@ -657,6 +657,7 @@ server.tool(
       taskId: taskId as Id<'tasks'>,
       prompt: effectivePrompt,
       model,
+      provider: 'claude',
     });
 
     return textResponse(

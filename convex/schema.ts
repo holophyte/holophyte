@@ -196,6 +196,11 @@ export default defineSchema({
     lastActivityAt: v.optional(v.number()),
     name: v.optional(v.string()),
     sdkSessionId: v.optional(v.string()),
+    // Forward-going provider session identifier. Mirrors `sdkSessionId` on every
+    // write; reads should prefer `providerSessionId ?? sdkSessionId`.
+    providerSessionId: v.optional(v.string()),
+    // missing = 'claude' for pre-Phase-0 docs
+    provider: v.optional(v.union(v.literal('claude'), v.literal('codex'))),
     model: v.optional(v.string()),
     permissionMode: v.optional(v.string()),
     // Stored when status='queued' so the companion can pick it up
@@ -224,7 +229,24 @@ export default defineSchema({
     text: v.string(),
     consumed: v.boolean(),
     createdAt: v.number(),
+    // Per-turn reasoning effort captured at send time; the companion reads this
+    // when dispatching the follow-up turn.
+    reasoningEffort: v.optional(v.string()),
   }).index('by_session_pending', ['sessionId', 'consumed']),
+
+  // Cache of the live Codex `model/list` RPC response, replaced on every
+  // companion startup. Single-row table — no per-org variance. Populated by
+  // Task 2b; Task 2 only registers the shape.
+  codexModels: defineTable({
+    models: v.array(
+      v.object({
+        id: v.string(),
+        label: v.string(),
+        description: v.string(),
+      }),
+    ),
+    fetchedAt: v.number(),
+  }),
 
   pendingApprovals: defineTable({
     sessionId: v.id('sessions'),

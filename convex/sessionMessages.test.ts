@@ -28,7 +28,10 @@ async function setupSessionEnv(t: ReturnType<typeof convexTest>) {
     repoId,
     title: 'Test Task',
   });
-  const sessionId = await authed.mutation(api.sessions.create, { taskId });
+  const sessionId = await authed.mutation(api.sessions.create, {
+    taskId,
+    provider: 'claude',
+  });
   return { userId, authed, orgId, repoId, taskId, sessionId };
 }
 
