@@ -199,7 +199,7 @@ export default defineSchema({
     // Forward-going provider session identifier. Mirrors `sdkSessionId` on every
     // write; reads should prefer `providerSessionId ?? sdkSessionId`.
     providerSessionId: v.optional(v.string()),
-    // missing = 'claude' for pre-Phase-0 docs
+    // required; missing = 'claude' for pre-Phase-0 docs
     provider: v.optional(v.union(v.literal('claude'), v.literal('codex'))),
     model: v.optional(v.string()),
     permissionMode: v.optional(v.string()),

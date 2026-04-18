@@ -6,7 +6,7 @@ export const DEFAULT_MODEL = 'claude-haiku-4-5-20251001';
  * when localStorage is empty (first launch, cleared storage). Has NO effect on
  * the backend: `sessions.create` requires `provider` explicitly.
  */
-export const DEFAULT_PROVIDER: 'claude' | 'codex' = 'codex';
+export const DEFAULT_PROVIDER: 'claude' | 'codex' = 'claude';
 
 /** Default Codex model — fallback when provider is 'codex' and no model is specified. */
 export const DEFAULT_CODEX_MODEL = 'gpt-5.4-mini';
