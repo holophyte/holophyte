@@ -272,6 +272,31 @@ describe('useHolophyteChat — isInterrupted', () => {
     expect(result.current.isInterrupted).toBe(false);
   });
 
+  it('is false when a metadata event lands after the terminal result', () => {
+    // Repro for the concern flagged on #269 review: `prompt_suggestion` and
+    // similar telemetry can arrive after the closing `result`. Detection must
+    // scan back to the most recent turn marker rather than just eyeing the
+    // very last event.
+    const promptSuggestion = {
+      type: 'prompt_suggestion',
+      text: 'try the next thing',
+    } as unknown as SDKMessage;
+    const { result } = renderHook(() =>
+      useHolophyteChat(
+        makeProps({
+          events: [
+            makeUserEvent('hi'),
+            makeAssistantEvent('hello'),
+            makeResultEvent(),
+            promptSuggestion,
+          ],
+          sessionStatus: 'idle',
+        }),
+      ),
+    );
+    expect(result.current.isInterrupted).toBe(false);
+  });
+
   it('is false when session failed (error, not interruption)', () => {
     const { result } = renderHook(() =>
       useHolophyteChat(

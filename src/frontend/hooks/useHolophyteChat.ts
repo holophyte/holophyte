@@ -94,14 +94,29 @@ export function useHolophyteChat(
     [events, isRunning, pendingApprovals],
   );
 
-  // A cleanly-ended turn terminates with a `result` SDK event. If the session
-  // is idle but the last event isn't a `result`, the turn was interrupted
-  // (the user hit stop). Only check `idle` — `failed` is an error, not an
-  // interruption.
+  // A cleanly-ended turn contains a terminal `result` SDK event. Scan backward
+  // from the most recent event: if we see a `result` before a `user`, the
+  // current turn ended cleanly (even if metadata events like
+  // `prompt_suggestion` landed after the result). If we see a `user` first,
+  // this turn never produced a `result` — the user hit stop mid-response.
+  //
+  // Only gate on `idle`: `failed` is an error, not an interruption; `running`
+  // and `waiting_input` mean the turn is still in flight.
+  //
+  // Caveat: `events` and `sessionStatus` come from separate Convex queries, so
+  // during a clean completion there's a narrow window where `idle` lands
+  // before the final `result` batch does, causing a brief `true` flash. The
+  // UI absorbs that flash gracefully — once the event batch arrives, this
+  // recomputes and flips back to `false`.
   const isInterrupted = useMemo(() => {
     if (sessionStatus !== 'idle') return false;
-    const last = events[events.length - 1];
-    return last != null && last.type !== 'result';
+    for (let i = events.length - 1; i >= 0; i--) {
+      const ev = events[i];
+      if (!ev) continue;
+      if (ev.type === 'result') return false;
+      if (ev.type === 'user') return true;
+    }
+    return false;
   }, [events, sessionStatus]);
 
   // Extract the latest prompt suggestion from the event stream

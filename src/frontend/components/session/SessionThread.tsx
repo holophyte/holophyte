@@ -145,7 +145,7 @@ export default function SessionThread({
           }),
         )}
         {isRunning && <ThinkingIndicator isRunning={isRunning} />}
-        {isInterrupted && !isRunning && (
+        {isInterrupted && !isSessionBusy && (
           <div
             data-testid="interruption-indicator"
             className="flex items-center gap-3 py-1 text-muted-foreground/70"
