@@ -17,6 +17,8 @@ vi.mock('@/server/convex-client', () => ({
 }));
 
 import { query as mockSdkQuery } from '@anthropic-ai/claude-agent-sdk';
+import { api } from '@convex/_generated/api';
+import { getFunctionName } from 'convex/server';
 
 afterEach(async () => {
   const { getActiveSessions, stopSession } = await import('./manager');
@@ -272,7 +274,12 @@ describe('claude/manager (SDK-based)', () => {
     tool: string,
     input: Record<string, unknown>,
     opts: { toolUseID: string; signal: AbortSignal },
-  ) => Promise<{ behavior: string; toolUseID?: string; message?: string }>;
+  ) => Promise<{
+    behavior: string;
+    toolUseID?: string;
+    message?: string;
+    updatedInput?: Record<string, unknown>;
+  }>;
 
   /** Start a session and capture the canUseTool callback from the SDK options. */
   async function captureCanUseTool(
@@ -579,6 +586,90 @@ describe('claude/manager (SDK-based)', () => {
           (c) => (c[1] as Record<string, unknown>).requestId === 'e1',
         ),
       ).toBe(true);
+    });
+  });
+
+  describe('canUseTool: allow-return shape (SDK Zod schema)', () => {
+    // The @anthropic-ai/claude-agent-sdk Zod schema requires `updatedInput` on
+    // every `{ behavior: 'allow' }` response. Missing it throws ZodError and
+    // breaks tools like AskUserQuestion. See GH issue #206.
+
+    it('auto-approve (safe-auto) returns updatedInput matching input', async () => {
+      const { canUseTool } = await captureCanUseTool('safe-auto');
+      const input = { pattern: 'foo', path: '/tmp' };
+      const result = await canUseTool('Grep', input, {
+        toolUseID: 'safe-shape-1',
+        signal: sig(),
+      });
+      expect(result.behavior).toBe('allow');
+      expect(result.updatedInput).toEqual(input);
+    });
+
+    it('auto-approve (bypass) returns updatedInput matching input', async () => {
+      const { canUseTool } = await captureCanUseTool('bypass');
+      const input = { file_path: '/tmp/x', content: 'hi' };
+      const result = await canUseTool('Write', input, {
+        toolUseID: 'bypass-shape-1',
+        signal: sig(),
+      });
+      expect(result.behavior).toBe('allow');
+      expect(result.updatedInput).toEqual(input);
+    });
+
+    it('user-approved tool (default) returns updatedInput matching input', async () => {
+      const input = { question: 'Keep going?' };
+      let pendingResult: Awaited<ReturnType<CanUseTool>> | undefined;
+
+      vi.mocked(mockSdkQuery).mockImplementation((params: unknown) => {
+        const { options } = params as {
+          options: { canUseTool: CanUseTool };
+        };
+        return {
+          // biome-ignore lint/correctness/useYield: blocking mock — parks via await without yielding events
+          async *[Symbol.asyncIterator]() {
+            pendingResult = await options.canUseTool('AskUserQuestion', input, {
+              toolUseID: 'approval-shape-1',
+              signal: new AbortController().signal,
+            });
+          },
+          streamInput: vi.fn().mockResolvedValue(undefined),
+          supportedCommands: vi.fn().mockResolvedValue([]),
+        } as never;
+      });
+
+      // The poll loop reads resolved approvals from Convex. Match only the
+      // approvals query — other queries (e.g. companionGetNextBatchIndex) fall
+      // through to the default. Convex FunctionReferences are proxies, so
+      // compare by stable name, not reference.
+      const approvalsQuery = getFunctionName(
+        api.pendingApprovals.companionListResolvedUnconsumed,
+      );
+      mockQuery.mockImplementation((path: unknown) => {
+        if (path && getFunctionName(path as never) === approvalsQuery) {
+          return Promise.resolve([
+            {
+              _id: 'approved-id',
+              requestId: 'approval-shape-1',
+              approved: true,
+            },
+          ]);
+        }
+        return Promise.resolve(null);
+      });
+
+      const { startSession } = await import('./manager');
+      await startSession({
+        sessionId: 'approval-shape-test',
+        repoPath: '/tmp',
+        prompt: 'test',
+        permissionMode: 'default',
+      });
+
+      // Wait for the poll interval (500ms) to tick at least once
+      await new Promise((r) => setTimeout(r, 800));
+
+      expect(pendingResult?.behavior).toBe('allow');
+      expect(pendingResult?.updatedInput).toEqual(input);
     });
   });
 
