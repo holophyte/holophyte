@@ -40,7 +40,10 @@ export default defineConfig({
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
-  workers: process.env.CI ? 1 : undefined,
+  // CI stays single-worker for deterministic logs. Locally, cap at 4 — the
+  // default (worker-per-core on M-series Macs) causes Bun bundler contention
+  // under cold-cache hits and drives `waitForApp` flake. See GH #255.
+  workers: process.env.CI ? 1 : 4,
   reporter: 'html',
   use: {
     baseURL: `http://localhost:${e2ePort}`,
