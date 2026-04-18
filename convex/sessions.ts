@@ -135,8 +135,20 @@ export const create = mutation({
     prompt: v.optional(v.string()),
     model: v.optional(v.string()),
     permissionMode: v.optional(v.string()),
+    // Per-turn effort accepted at the boundary for forward compatibility; not
+    // persisted in Task 2 (see spec § Task 6 — no `sessions.reasoningEffort`
+    // column). Task 6 wires first-turn effort through its own channel.
+    reasoningEffort: v.optional(v.string()),
+    provider: v.union(v.literal('claude'), v.literal('codex')),
   },
   handler: async (ctx, args) => {
+    // Validator accepts 'codex' so the API shape is stable for Tasks 3–9, but
+    // the companion has no Codex dispatcher yet (lands in Task 4). Reject at
+    // the boundary until then so a queued Codex session can't be claimed by
+    // the Claude runner.
+    if (args.provider === 'codex') {
+      throw new Error('Codex provider not yet supported');
+    }
     const task = await ctx.db.get(args.taskId);
     if (!task) throw new Error('Task not found');
     const repo = await ctx.db.get(task.repoId);
@@ -153,6 +165,7 @@ export const create = mutation({
       queuedPrompt: args.prompt,
       model: args.model,
       permissionMode: args.permissionMode,
+      provider: args.provider,
     });
   },
 });
@@ -337,6 +350,35 @@ export const updateSdkSessionId = internalMutation({
     if (!session) throw new Error('Session not found');
     const updates: Record<string, unknown> = {
       sdkSessionId: args.sdkSessionId,
+      providerSessionId: args.sdkSessionId,
+    };
+    if (args.model !== undefined) updates.model = args.model;
+    if (args.permissionMode !== undefined)
+      updates.permissionMode = args.permissionMode;
+    await ctx.db.patch(args.id, updates);
+  },
+});
+
+/**
+ * Forward-going entry point for Codex (and future providers) to persist the
+ * provider-owned session identifier. Writes both `providerSessionId` and
+ * `sdkSessionId` so reads via either name resolve during Phase 0.
+ *
+ * Internal — callers on the server trust this value.
+ */
+export const updateProviderSessionId = internalMutation({
+  args: {
+    id: v.id('sessions'),
+    providerSessionId: v.string(),
+    model: v.optional(v.string()),
+    permissionMode: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const session = await ctx.db.get(args.id);
+    if (!session) throw new Error('Session not found');
+    const updates: Record<string, unknown> = {
+      sdkSessionId: args.providerSessionId,
+      providerSessionId: args.providerSessionId,
     };
     if (args.model !== undefined) updates.model = args.model;
     if (args.permissionMode !== undefined)
@@ -834,6 +876,31 @@ export const companionUpdateSdkSessionId = mutation({
     if (!isLocalDevMode()) await requireSessionOwnership(ctx, args.id);
     await ctx.db.patch(args.id, {
       sdkSessionId: args.sdkSessionId,
+      providerSessionId: args.sdkSessionId,
+      ...(args.model !== undefined && { model: args.model }),
+      ...(args.permissionMode !== undefined && {
+        permissionMode: args.permissionMode,
+      }),
+    });
+  },
+});
+
+/**
+ * Forward-going companion equivalent of {@link updateProviderSessionId}.
+ * Writes both columns so readers on either name resolve during Phase 0.
+ */
+export const companionUpdateProviderSessionId = mutation({
+  args: {
+    id: v.id('sessions'),
+    providerSessionId: v.string(),
+    model: v.optional(v.string()),
+    permissionMode: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    if (!isLocalDevMode()) await requireSessionOwnership(ctx, args.id);
+    await ctx.db.patch(args.id, {
+      sdkSessionId: args.providerSessionId,
+      providerSessionId: args.providerSessionId,
       ...(args.model !== undefined && { model: args.model }),
       ...(args.permissionMode !== undefined && {
         permissionMode: args.permissionMode,

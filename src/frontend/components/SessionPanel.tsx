@@ -129,6 +129,7 @@ export default function SessionPanel({ taskId }: SessionPanelProps) {
       taskId,
       prompt: text,
       model,
+      provider: 'claude',
     });
     openSession(newSessionId);
   };
