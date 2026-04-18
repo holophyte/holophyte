@@ -169,7 +169,7 @@ function buildAdditionalDirectories(): string[] {
   const dirs = new Set<string>(['/tmp']);
   if (process.platform === 'darwin') dirs.add('/private/tmp');
   const envTmp = process.env.TMPDIR;
-  if (envTmp) dirs.add(envTmp.replace(/\/$/, ''));
+  if (envTmp) dirs.add(envTmp.replace(/\/+$/, ''));
   return [...dirs];
 }
 

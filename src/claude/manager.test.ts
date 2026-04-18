@@ -617,6 +617,34 @@ describe('claude/manager (SDK-based)', () => {
         );
       }
     });
+
+    it('includes $TMPDIR (stripped of trailing slashes) when set', async () => {
+      const originalTmpdir = process.env.TMPDIR;
+      process.env.TMPDIR = '/var/folders/abc/T//';
+      try {
+        let capturedOptions: Record<string, unknown> | undefined;
+        vi.mocked(mockSdkQuery).mockImplementation((params: unknown) => {
+          const { options } = params as { options: Record<string, unknown> };
+          capturedOptions = options;
+          return createMockIterator([]) as never;
+        });
+
+        const { startSession } = await import('./manager');
+        await startSession({
+          sessionId: `tmpdir-${Math.random().toString(36).slice(2)}`,
+          repoPath: '/some/repo',
+          prompt: 'test',
+        });
+        await new Promise((r) => setTimeout(r, 20));
+
+        expect(capturedOptions?.additionalDirectories).toEqual(
+          expect.arrayContaining(['/var/folders/abc/T']),
+        );
+      } finally {
+        if (originalTmpdir === undefined) delete process.env.TMPDIR;
+        else process.env.TMPDIR = originalTmpdir;
+      }
+    });
   });
 
   describe('canUseTool: allow-return shape (SDK Zod schema)', () => {
