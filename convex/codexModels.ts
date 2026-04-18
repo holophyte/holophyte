@@ -13,6 +13,15 @@ const modelEntry = v.object({
  * by the companion on startup after probing the live `codex app-server`
  * model/list RPC. Upsert semantics via first-row patch so the table never
  * grows past one row.
+ *
+ * Trust model: writable by any authenticated user. Convex Auth doesn't
+ * distinguish "companion" from "browser," and the same pattern is used
+ * by `companion.ts` mutations. The table is deliberately global (no
+ * orgId scoping — spec Task 2), so a writer from one org updates the
+ * cache seen by every org. Blast radius is the model picker UI only;
+ * the list is not a security boundary. If this ever becomes untrusted,
+ * switch to an `internalMutation` invoked from an HTTP action guarded
+ * by `INTERNAL_API_SECRET`.
  */
 export const replace = mutation({
   args: { models: v.array(modelEntry) },

@@ -56,6 +56,7 @@ function makeCodexStub(opts: { models?: Model[]; modelListError?: Error }) {
 
 afterEach(() => {
   mockCreateClient.mockReset();
+  vi.useRealTimers();
 });
 
 describe('probeCodexModels', () => {
@@ -170,6 +171,5 @@ describe('probeCodexModels', () => {
     await assertion;
 
     expect(client.mutation).not.toHaveBeenCalled();
-    vi.useRealTimers();
   });
 });
