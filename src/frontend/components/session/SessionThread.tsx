@@ -56,15 +56,30 @@ function ThinkingIndicator({ isRunning }: ThinkingIndicatorProps) {
 interface SessionThreadProps {
   messages: UIMessage[];
   status: 'ready' | 'submitted' | 'streaming' | 'error';
+  /**
+   * True when the previous turn was cut short (session idle, but the SDK
+   * event stream never produced a terminal `result` event). Renders an
+   * "— interrupted —" divider after the last message.
+   */
+  isInterrupted?: boolean;
 }
 
 export default function SessionThread({
   messages,
   status,
+  isInterrupted = false,
 }: SessionThreadProps) {
   const { sessionStatus } = useSessionActions();
   const isRunning = sessionStatus === 'running';
   const isStreaming = status === 'streaming';
+  // A user message is "queued" when it's still optimistic (no corresponding
+  // SDK event yet) while the session is actively processing a prior turn.
+  // The first active prompt is not optimistic — by the time the session is
+  // running, it's been persisted as an SDK user event.
+  const isSessionBusy =
+    sessionStatus === 'running' || sessionStatus === 'waiting_input';
+  const isQueuedMessage = (msg: UIMessage): boolean =>
+    isSessionBusy && msg.id.startsWith('optimistic-');
 
   return (
     <Conversation className="relative flex h-full flex-col">
@@ -76,9 +91,23 @@ export default function SessionThread({
             const partKey = `${msg.id}-${i}`;
             if (part.type === 'text') {
               if (msg.role === 'user') {
+                const queued = isQueuedMessage(msg);
                 return (
-                  <Message key={partKey} from="user">
+                  <Message
+                    key={partKey}
+                    from="user"
+                    data-queued={queued ? 'true' : undefined}
+                    className={queued ? 'opacity-60' : undefined}
+                  >
                     <MessageContent>
+                      {queued && (
+                        <span
+                          title="Will be sent when Claude finishes the current response"
+                          className="mb-1 inline-block rounded-full border border-dashed px-2 py-0.5 text-[10px] font-medium text-muted-foreground uppercase tracking-wide"
+                        >
+                          Queued
+                        </span>
+                      )}
                       <p className="whitespace-pre-wrap break-words text-sm leading-relaxed">
                         {part.text}
                       </p>
@@ -116,6 +145,18 @@ export default function SessionThread({
           }),
         )}
         {isRunning && <ThinkingIndicator isRunning={isRunning} />}
+        {isInterrupted && !isSessionBusy && (
+          <div
+            data-testid="interruption-indicator"
+            className="flex items-center gap-3 py-1 text-muted-foreground/70"
+          >
+            <div className="h-px flex-1 border-t border-dashed" />
+            <span className="text-[10px] font-medium uppercase tracking-wide">
+              Interrupted
+            </span>
+            <div className="h-px flex-1 border-t border-dashed" />
+          </div>
+        )}
       </ConversationContent>
       <ConversationScrollButton />
       <SessionComposer />

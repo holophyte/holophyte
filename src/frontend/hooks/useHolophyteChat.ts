@@ -36,6 +36,13 @@ export interface UseHolophyteChatReturn {
   promptSuggestion: string | null;
   availableCommands: ProjectCommand[];
   messageQueued: boolean;
+  /**
+   * True when the last turn was cut short (session is idle but the SDK event
+   * stream never produced a terminal `result` event — i.e. the user stopped
+   * the session mid-response). The thread UI uses this to render an
+   * "— interrupted —" indicator after the last assistant message.
+   */
+  isInterrupted: boolean;
 }
 
 /**
@@ -86,6 +93,31 @@ export function useHolophyteChat(
     () => sdkToUIMessages(events, isRunning, pendingApprovals),
     [events, isRunning, pendingApprovals],
   );
+
+  // A cleanly-ended turn contains a terminal `result` SDK event. Scan backward
+  // from the most recent event: if we see a `result` before a `user`, the
+  // current turn ended cleanly (even if metadata events like
+  // `prompt_suggestion` landed after the result). If we see a `user` first,
+  // this turn never produced a `result` — the user hit stop mid-response.
+  //
+  // Only gate on `idle`: `failed` is an error, not an interruption; `running`
+  // and `waiting_input` mean the turn is still in flight.
+  //
+  // Caveat: `events` and `sessionStatus` come from separate Convex queries, so
+  // during a clean completion there's a narrow window where `idle` lands
+  // before the final `result` batch does, causing a brief `true` flash. The
+  // UI absorbs that flash gracefully — once the event batch arrives, this
+  // recomputes and flips back to `false`.
+  const isInterrupted = useMemo(() => {
+    if (sessionStatus !== 'idle') return false;
+    for (let i = events.length - 1; i >= 0; i--) {
+      const ev = events[i];
+      if (!ev) continue;
+      if (ev.type === 'result') return false;
+      if (ev.type === 'user') return true;
+    }
+    return false;
+  }, [events, sessionStatus]);
 
   // Extract the latest prompt suggestion from the event stream
   const promptSuggestion = useMemo(
@@ -175,5 +207,6 @@ export function useHolophyteChat(
     promptSuggestion,
     availableCommands,
     messageQueued,
+    isInterrupted,
   };
 }

@@ -212,3 +212,100 @@ describe('useHolophyteChat — passthrough', () => {
     expect(result.current.pendingApprovals).toBe(pendingApprovals);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Interruption detection (GH #207)
+// ---------------------------------------------------------------------------
+
+describe('useHolophyteChat — isInterrupted', () => {
+  function makeResultEvent(uuid = 'u-r'): SDKMessage {
+    return {
+      type: 'result',
+      subtype: 'success',
+      is_error: false,
+      uuid,
+    } as unknown as SDKMessage;
+  }
+
+  it('is false when session is running', () => {
+    const { result } = renderHook(() =>
+      useHolophyteChat(
+        makeProps({
+          events: [makeAssistantEvent('partial')],
+          sessionStatus: 'running',
+        }),
+      ),
+    );
+    expect(result.current.isInterrupted).toBe(false);
+  });
+
+  it('is false when session ended with a terminal result event', () => {
+    const { result } = renderHook(() =>
+      useHolophyteChat(
+        makeProps({
+          events: [makeAssistantEvent('hello'), makeResultEvent()],
+          sessionStatus: 'idle',
+        }),
+      ),
+    );
+    expect(result.current.isInterrupted).toBe(false);
+  });
+
+  it('is true when session is idle but last event is not a result', () => {
+    // Simulates the user hitting Stop mid-response: the iterator is aborted
+    // before the SDK emits the closing `result` event.
+    const { result } = renderHook(() =>
+      useHolophyteChat(
+        makeProps({
+          events: [makeUserEvent('hi'), makeAssistantEvent('partial…')],
+          sessionStatus: 'idle',
+        }),
+      ),
+    );
+    expect(result.current.isInterrupted).toBe(true);
+  });
+
+  it('is false when there are no events at all', () => {
+    const { result } = renderHook(() =>
+      useHolophyteChat(makeProps({ events: [], sessionStatus: 'idle' })),
+    );
+    expect(result.current.isInterrupted).toBe(false);
+  });
+
+  it('is false when a metadata event lands after the terminal result', () => {
+    // Repro for the concern flagged on #269 review: `prompt_suggestion` and
+    // similar telemetry can arrive after the closing `result`. Detection must
+    // scan back to the most recent turn marker rather than just eyeing the
+    // very last event.
+    const promptSuggestion = {
+      type: 'prompt_suggestion',
+      text: 'try the next thing',
+    } as unknown as SDKMessage;
+    const { result } = renderHook(() =>
+      useHolophyteChat(
+        makeProps({
+          events: [
+            makeUserEvent('hi'),
+            makeAssistantEvent('hello'),
+            makeResultEvent(),
+            promptSuggestion,
+          ],
+          sessionStatus: 'idle',
+        }),
+      ),
+    );
+    expect(result.current.isInterrupted).toBe(false);
+  });
+
+  it('is false when session failed (error, not interruption)', () => {
+    const { result } = renderHook(() =>
+      useHolophyteChat(
+        makeProps({
+          events: [makeAssistantEvent('crashed mid-reply')],
+          sessionStatus: 'failed',
+        }),
+      ),
+    );
+    expect(result.current.isInterrupted).toBe(false);
+  });
+});
