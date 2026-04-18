@@ -17,6 +17,8 @@ vi.mock('@/server/convex-client', () => ({
 }));
 
 import { query as mockSdkQuery } from '@anthropic-ai/claude-agent-sdk';
+import { api } from '@convex/_generated/api';
+import { getFunctionName } from 'convex/server';
 
 afterEach(async () => {
   const { getActiveSessions, stopSession } = await import('./manager');
@@ -635,21 +637,25 @@ describe('claude/manager (SDK-based)', () => {
         } as never;
       });
 
-      // The poll loop reads resolved approvals from Convex. Return one that matches.
-      mockQuery.mockImplementation(
-        (_path: unknown, args: Record<string, unknown>) => {
-          if (args && 'sessionId' in args) {
-            return Promise.resolve([
-              {
-                _id: 'approved-id',
-                requestId: 'approval-shape-1',
-                approved: true,
-              },
-            ]);
-          }
-          return Promise.resolve(null);
-        },
+      // The poll loop reads resolved approvals from Convex. Match only the
+      // approvals query — other queries (e.g. companionGetNextBatchIndex) fall
+      // through to the default. Convex FunctionReferences are proxies, so
+      // compare by stable name, not reference.
+      const approvalsQuery = getFunctionName(
+        api.pendingApprovals.companionListResolvedUnconsumed,
       );
+      mockQuery.mockImplementation((path: unknown) => {
+        if (path && getFunctionName(path as never) === approvalsQuery) {
+          return Promise.resolve([
+            {
+              _id: 'approved-id',
+              requestId: 'approval-shape-1',
+              approved: true,
+            },
+          ]);
+        }
+        return Promise.resolve(null);
+      });
 
       const { startSession } = await import('./manager');
       await startSession({
