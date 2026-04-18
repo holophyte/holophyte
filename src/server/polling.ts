@@ -6,6 +6,7 @@ import type { Id } from '@convex/_generated/dataModel';
 import { getActiveSessions } from '@/claude/manager';
 import type { TokenFileData } from './auth-token';
 import { readTokenFile, signInAnonymous } from './auth-token';
+import { probeCodexModels } from './codex-models-probe';
 import {
   closeCompanionClients,
   getConvexClient,
@@ -395,6 +396,17 @@ export async function startCompanion(url: string): Promise<void> {
     } catch {
       // Non-critical — Convex may not be configured yet
     }
+  }
+
+  // 4.5. Refresh the Codex model cache in the background — fire-and-forget
+  // so the probe never delays subscriptions/heartbeats even when `codex` is
+  // missing or the app-server handshake hangs until PROBE_TIMEOUT_MS.
+  // Frontend falls back to CODEX_MODELS_FALLBACK and Convex's reactive
+  // query picks up the row whenever the probe eventually lands.
+  if (client) {
+    void probeCodexModels(client).catch((err) => {
+      console.error('Codex model-list probe failed:', err);
+    });
   }
 
   // 5. Start reactive subscriptions for queued/stopped sessions and pending messages
