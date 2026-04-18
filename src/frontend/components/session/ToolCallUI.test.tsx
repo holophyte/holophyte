@@ -9,20 +9,28 @@ import { SessionActionsContext } from './SessionActionsContext';
 // Mocks
 // ---------------------------------------------------------------------------
 
-// Mock Radix Collapsible — controls open/closed state simply
+// Mock Radix Collapsible — reflect whichever of open/defaultOpen is provided.
+// ToolCallUI uses controlled `open`, but tests that still pass `defaultOpen`
+// (or nothing) should see the same data-open behavior.
 vi.mock('@/frontend/components/ui/collapsible', () => ({
   Collapsible: ({
     children,
+    open,
     defaultOpen,
   }: {
     children: ReactNode;
+    open?: boolean;
     defaultOpen?: boolean;
+    onOpenChange?: (next: boolean) => void;
     className?: string;
-  }) => (
-    <div data-testid="collapsible" data-open={defaultOpen ? 'true' : 'false'}>
-      {children}
-    </div>
-  ),
+  }) => {
+    const isOpen = open ?? defaultOpen ?? false;
+    return (
+      <div data-testid="collapsible" data-open={isOpen ? 'true' : 'false'}>
+        {children}
+      </div>
+    );
+  },
   CollapsibleTrigger: ({
     children,
     className,
@@ -238,6 +246,58 @@ describe('ToolCallUI', () => {
       render(<ToolCallUI part={part} />, { wrapper: withSessionActions() });
       const collapsible = screen.getByTestId('collapsible');
       expect(collapsible).toHaveAttribute('data-open', 'true');
+    });
+
+    it('stays open after the part transitions out of approval-requested', () => {
+      // Repro for GH #246: the card should remain expanded once an approval
+      // has been seen, even if the state flips to approval-responded or
+      // output-available afterwards.
+      const initial = makePart({
+        state: 'approval-requested',
+        approval: { id: 'appr-1' },
+      });
+      const { rerender } = render(<ToolCallUI part={initial} />, {
+        wrapper: withSessionActions(),
+      });
+      expect(screen.getByTestId('collapsible')).toHaveAttribute(
+        'data-open',
+        'true',
+      );
+
+      const resolved = makePart({
+        state: 'output-available',
+        output: 'done',
+        approval: { id: 'appr-1', approved: true },
+      });
+      rerender(<ToolCallUI part={resolved} />);
+      expect(screen.getByTestId('collapsible')).toHaveAttribute(
+        'data-open',
+        'true',
+      );
+    });
+
+    it('opens when an approval arrives after an earlier non-approval state', () => {
+      // Repro for GH #246: if the tool mounts before the approval-requested
+      // event lands (e.g. input-available first), the card should still open
+      // when the state transitions into approval-requested.
+      const initial = makePart({ state: 'input-available' });
+      const { rerender } = render(<ToolCallUI part={initial} />, {
+        wrapper: withSessionActions(),
+      });
+      expect(screen.getByTestId('collapsible')).toHaveAttribute(
+        'data-open',
+        'false',
+      );
+
+      const approving = makePart({
+        state: 'approval-requested',
+        approval: { id: 'appr-1' },
+      });
+      rerender(<ToolCallUI part={approving} />);
+      expect(screen.getByTestId('collapsible')).toHaveAttribute(
+        'data-open',
+        'true',
+      );
     });
 
     it('renders Approve button', () => {

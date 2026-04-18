@@ -1,5 +1,5 @@
 import type { DynamicToolUIPart } from 'ai';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   Confirmation,
   ConfirmationAccepted,
@@ -33,6 +33,16 @@ export default function ToolCallUI({ part }: ToolCallUIProps) {
 
   const isApprovalRequested = part.state === 'approval-requested';
   const isError = part.state === 'output-error';
+
+  // Controlled open state so the card stays expanded across state transitions
+  // once an approval has been requested. `defaultOpen` alone only applied on
+  // first mount, and the part could mount before state flipped to
+  // `approval-requested`, leaving users staring at a collapsed card. The user
+  // can still collapse it manually via the header.
+  const [open, setOpen] = useState(isApprovalRequested);
+  useEffect(() => {
+    if (isApprovalRequested) setOpen(true);
+  }, [isApprovalRequested]);
 
   const titleSummary = toolSummary(
     part.toolName,
@@ -77,7 +87,7 @@ export default function ToolCallUI({ part }: ToolCallUIProps) {
   };
 
   return (
-    <Tool defaultOpen={isApprovalRequested}>
+    <Tool open={open} onOpenChange={setOpen}>
       <ToolHeader
         type="dynamic-tool"
         state={part.state}
