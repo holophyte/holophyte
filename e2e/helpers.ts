@@ -13,7 +13,11 @@ import type { Page } from '@playwright/test';
  */
 export async function waitForApp(page: Page): Promise<void> {
   await page.goto('/');
+  // 10s: auth handshake + Bun bundler cold-cache under parallel workers can be
+  // slow on the first hit, but a 30s timeout just hid regressions behind long
+  // retries. If the authenticated gate isn't visible in 10s, something is
+  // genuinely wrong.
   await page.waitForSelector('aside button:has-text("All Tasks")', {
-    timeout: 30000,
+    timeout: 10000,
   });
 }
