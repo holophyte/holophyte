@@ -363,7 +363,11 @@ export async function startSession(opts: {
     abortController: controller,
     canUseTool: async (toolName, input, toolOpts) => {
       if (shouldAutoApprove(session, toolName, input)) {
-        return { behavior: 'allow' as const, toolUseID: toolOpts.toolUseID };
+        return {
+          behavior: 'allow' as const,
+          updatedInput: input as Record<string, unknown>,
+          toolUseID: toolOpts.toolUseID,
+        };
       }
 
       const requestId = toolOpts.toolUseID;
@@ -416,7 +420,11 @@ export async function startSession(opts: {
                 console.error('Failed to mark approval consumed:', err);
               }
               if (match.approved) {
-                resolve({ behavior: 'allow', toolUseID: toolOpts.toolUseID });
+                resolve({
+                  behavior: 'allow',
+                  updatedInput: input as Record<string, unknown>,
+                  toolUseID: toolOpts.toolUseID,
+                });
               } else {
                 resolve({
                   behavior: 'deny',
