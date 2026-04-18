@@ -589,6 +589,36 @@ describe('claude/manager (SDK-based)', () => {
     });
   });
 
+  describe('additionalDirectories (GH #247)', () => {
+    it('passes /tmp to the SDK so approved Writes outside the repo succeed', async () => {
+      let capturedOptions: Record<string, unknown> | undefined;
+      vi.mocked(mockSdkQuery).mockImplementation((params: unknown) => {
+        const { options } = params as { options: Record<string, unknown> };
+        capturedOptions = options;
+        return createMockIterator([]) as never;
+      });
+
+      const { startSession } = await import('./manager');
+      await startSession({
+        sessionId: `add-dir-${Math.random().toString(36).slice(2)}`,
+        repoPath: '/some/repo',
+        prompt: 'test',
+      });
+      await new Promise((r) => setTimeout(r, 20));
+
+      expect(capturedOptions?.additionalDirectories).toEqual(
+        expect.arrayContaining(['/tmp']),
+      );
+      // On macOS, /tmp is a symlink to /private/tmp — both should be allowed so
+      // path resolution doesn't matter for the permission check.
+      if (process.platform === 'darwin') {
+        expect(capturedOptions?.additionalDirectories).toEqual(
+          expect.arrayContaining(['/private/tmp']),
+        );
+      }
+    });
+  });
+
   describe('canUseTool: allow-return shape (SDK Zod schema)', () => {
     // The @anthropic-ai/claude-agent-sdk Zod schema requires `updatedInput` on
     // every `{ behavior: 'allow' }` response. Missing it throws ZodError and
