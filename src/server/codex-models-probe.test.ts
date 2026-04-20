@@ -9,7 +9,11 @@ vi.mock('codex-app-server-client', () => ({
 
 import { api } from '@convex/_generated/api';
 import type { ConvexClient } from 'convex/browser';
-import { probeCodexModels } from './codex-models-probe';
+import {
+  ensureCodexModelsProbe,
+  probeCodexModels,
+  resetCodexModelsProbeStateForTests,
+} from './codex-models-probe';
 
 type ModelListResponse = Awaited<
   ReturnType<
@@ -57,6 +61,7 @@ function makeCodexStub(opts: { models?: Model[]; modelListError?: Error }) {
 afterEach(() => {
   mockCreateClient.mockReset();
   vi.useRealTimers();
+  resetCodexModelsProbeStateForTests();
 });
 
 describe('probeCodexModels', () => {
@@ -171,5 +176,111 @@ describe('probeCodexModels', () => {
     await assertion;
 
     expect(client.mutation).not.toHaveBeenCalled();
+  });
+
+  it('closes the codex subprocess from the timeout path when modelList hangs', async () => {
+    vi.useFakeTimers();
+    const codex = {
+      modelList: vi.fn().mockReturnValue(new Promise(() => undefined)),
+      close: vi.fn().mockResolvedValue(undefined),
+    };
+    mockCreateClient.mockResolvedValue(codex);
+    const client = makeConvexClient();
+
+    const probe = probeCodexModels(client);
+    // Swallow the expected timeout rejection so assertion ordering doesn't
+    // race the microtask queue.
+    probe.catch(() => undefined);
+    // Let createClient resolve so the probe stores its handle on `codex`.
+    await vi.advanceTimersByTimeAsync(0);
+    // Wall-clock fires while modelList is still pending.
+    await vi.advanceTimersByTimeAsync(15_000);
+
+    await expect(probe).rejects.toThrow('Codex model probe timed out');
+    expect(codex.close).toHaveBeenCalled();
+    expect(client.mutation).not.toHaveBeenCalled();
+  });
+
+  it('closes the subprocess even when createClient resolves after the timeout', async () => {
+    vi.useFakeTimers();
+    const codex = {
+      modelList: vi.fn(),
+      close: vi.fn().mockResolvedValue(undefined),
+    };
+    let resolveCreate!: (value: typeof codex) => void;
+    mockCreateClient.mockReturnValue(
+      new Promise<typeof codex>((resolve) => {
+        resolveCreate = resolve;
+      }),
+    );
+    const client = makeConvexClient();
+
+    const probe = probeCodexModels(client);
+    probe.catch(() => undefined);
+    // Timer fires before createClient settles.
+    await vi.advanceTimersByTimeAsync(15_000);
+    await expect(probe).rejects.toThrow('Codex model probe timed out');
+
+    // Orphaned subprocess arrives late — probe branch must still tear it
+    // down rather than leaking.
+    resolveCreate(codex);
+    await vi.advanceTimersByTimeAsync(0);
+    await Promise.resolve();
+
+    expect(codex.close).toHaveBeenCalledTimes(1);
+    expect(codex.modelList).not.toHaveBeenCalled();
+    expect(client.mutation).not.toHaveBeenCalled();
+  });
+});
+
+describe('ensureCodexModelsProbe', () => {
+  it('latches after a successful probe so repeat calls no-op', async () => {
+    const codex = makeCodexStub({ models: [makeModel()] });
+    mockCreateClient.mockResolvedValue(codex);
+    const client = makeConvexClient();
+
+    ensureCodexModelsProbe(client);
+    ensureCodexModelsProbe(client); // concurrent — must not spawn again
+    // Flush microtasks so the probe completes.
+    await vi.waitFor(() => {
+      expect(client.mutation).toHaveBeenCalledTimes(1);
+    });
+
+    ensureCodexModelsProbe(client); // post-success — still a no-op
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(mockCreateClient).toHaveBeenCalledTimes(1);
+    expect(client.mutation).toHaveBeenCalledTimes(1);
+  });
+
+  it('retries after a failed probe so the recovery path can refresh', async () => {
+    const failingCodex = makeCodexStub({
+      modelListError: new Error('rpc timeout'),
+    });
+    const succeedingCodex = makeCodexStub({ models: [makeModel()] });
+    mockCreateClient
+      .mockResolvedValueOnce(failingCodex)
+      .mockResolvedValueOnce(succeedingCodex);
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const client = makeConvexClient();
+
+    ensureCodexModelsProbe(client);
+    await vi.waitFor(() => {
+      expect(errorSpy).toHaveBeenCalledWith(
+        'Codex model-list probe failed:',
+        expect.any(Error),
+      );
+    });
+    // First attempt failed — latch should be cleared, not stuck "succeeded".
+    expect(client.mutation).not.toHaveBeenCalled();
+
+    ensureCodexModelsProbe(client); // retry
+    await vi.waitFor(() => {
+      expect(client.mutation).toHaveBeenCalledTimes(1);
+    });
+
+    expect(mockCreateClient).toHaveBeenCalledTimes(2);
+    errorSpy.mockRestore();
   });
 });
