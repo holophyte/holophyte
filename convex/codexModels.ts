@@ -27,6 +27,11 @@ export const replace = mutation({
   args: { models: v.array(modelEntry) },
   handler: async (ctx, { models }) => {
     await requireAuth(ctx);
+    // Reject empty snapshots so a well-formed-but-useless write from any
+    // authenticated client can't nullify the cached list and force the UI
+    // onto the fallback. The probe already skips empty `data` upstream;
+    // this is the defense-in-depth check at the mutation boundary.
+    if (models.length === 0) return;
     const existing = await ctx.db.query('codexModels').first();
     const fetchedAt = Date.now();
     if (existing) {

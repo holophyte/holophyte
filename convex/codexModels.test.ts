@@ -90,4 +90,27 @@ describe('codexModels.replace', () => {
       t.mutation(api.codexModels.replace, { models: sampleA }),
     ).rejects.toThrow('Not authenticated');
   });
+
+  it('ignores empty snapshots so the cached row is not nullified', async () => {
+    const t = convexTest(schema);
+    const authed = await setupUser(t);
+
+    await authed.mutation(api.codexModels.replace, { models: sampleA });
+    await authed.mutation(api.codexModels.replace, { models: [] });
+
+    const row = await authed.query(api.codexModels.get, {});
+    expect(row?.models).toEqual(sampleA);
+  });
+
+  it('does not insert an empty row on a fresh DB', async () => {
+    const t = convexTest(schema);
+    const authed = await setupUser(t);
+
+    await authed.mutation(api.codexModels.replace, { models: [] });
+
+    const rows = await t.run(async (ctx) =>
+      ctx.db.query('codexModels').collect(),
+    );
+    expect(rows).toHaveLength(0);
+  });
 });
