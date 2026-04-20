@@ -6,6 +6,7 @@ import type { Id } from '@convex/_generated/dataModel';
 import { getActiveSessions } from '@/claude/manager';
 import type { TokenFileData } from './auth-token';
 import { readTokenFile, signInAnonymous } from './auth-token';
+import { ensureCodexModelsProbe } from './codex-models-probe';
 import {
   closeCompanionClients,
   getConvexClient,
@@ -52,7 +53,6 @@ let heartbeatFailureLogged = false;
 // and a replacement obtained on the next cycle, kept for the rest of the window.
 let ephemeralClearedAt: number | null = null;
 const EPHEMERAL_CLEAR_COOLDOWN_MS = 30_000;
-
 function getDeployment(): string | undefined {
   return process.env.CONVEX_DEPLOYMENT;
 }
@@ -159,6 +159,12 @@ export async function companionPoll() {
               );
               await startCompanionSubscriptions();
               ephemeralClearedAt = null;
+              // Fire the Codex model probe now that the Convex client is
+              // live — handles the case where companion started without a
+              // usable token and auth recovered mid-flight. No-op after
+              // the first successful call.
+              const recoveredClient = getConvexClient();
+              if (recoveredClient) ensureCodexModelsProbe(recoveredClient);
             } catch (subErr) {
               // Clear stale ephemeral tokens so the next cycle can obtain a
               // fresh anonymous identity (e.g. after a Convex restart).
@@ -395,6 +401,15 @@ export async function startCompanion(url: string): Promise<void> {
     } catch {
       // Non-critical — Convex may not be configured yet
     }
+  }
+
+  // 4.5. Refresh the Codex model cache in the background — fire-and-forget
+  // so the probe never delays subscriptions/heartbeats even when `codex` is
+  // missing or the app-server handshake hangs until PROBE_TIMEOUT_MS.
+  // Frontend falls back to CODEX_MODELS_FALLBACK and Convex's reactive
+  // query picks up the row whenever the probe eventually lands.
+  if (client) {
+    ensureCodexModelsProbe(client);
   }
 
   // 5. Start reactive subscriptions for queued/stopped sessions and pending messages
