@@ -1,6 +1,3 @@
-import { api } from '@convex/_generated/api';
-import type { ConvexClient } from 'convex/browser';
-
 /**
  * Wall-clock cap on the entire probe (spawn + initialize + RPC + close).
  * Belt-and-suspenders for Bun, where a missing `codex` binary has been
@@ -9,10 +6,16 @@ import type { ConvexClient } from 'convex/browser';
  */
 const PROBE_TIMEOUT_MS = 15_000;
 
+export interface ProbeTarget {
+  siteUrl: string;
+  secret: string;
+}
+
 /**
  * Spawn an ephemeral `codex app-server` subprocess, fetch the live model
- * list, and replace the `codexModels` Convex cache. Best-effort: callers
- * swallow errors and fall back to `CODEX_MODELS_FALLBACK` on the frontend.
+ * list, and replace the `codexModels` Convex cache via the companion-only
+ * HTTP action. Best-effort: callers swallow errors and fall back to
+ * `CODEX_MODELS_FALLBACK` on the frontend.
  *
  * The `codex-app-server-client` import is dynamic so a missing binary does
  * not crash companion startup at module-load time. The wall-clock timeout
@@ -20,7 +23,7 @@ const PROBE_TIMEOUT_MS = 15_000;
  * `close` hangs — critical because `Promise.race` alone would only unblock
  * the caller while leaving the child process alive.
  */
-export async function probeCodexModels(client: ConvexClient): Promise<void> {
+export async function probeCodexModels(target: ProbeTarget): Promise<void> {
   const { createClient } = await import('codex-app-server-client');
   type Codex = Awaited<ReturnType<typeof createClient>>;
 
@@ -31,9 +34,6 @@ export async function probeCodexModels(client: ConvexClient): Promise<void> {
   const timeoutPromise = new Promise<never>((_, reject) => {
     timer = setTimeout(() => {
       timedOut = true;
-      // If the client is already live, kill the subprocess now. Otherwise
-      // the probe branch below will close it as soon as `createClient`
-      // resolves (which may happen long after the timeout fires).
       codex?.close().catch(() => undefined);
       reject(new Error('Codex model probe timed out'));
     }, PROBE_TIMEOUT_MS);
@@ -56,14 +56,11 @@ export async function probeCodexModels(client: ConvexClient): Promise<void> {
           description: m.description,
         }));
       if (models.length === 0) return;
-      await client.mutation(api.codexModels.replace, { models });
+      await replaceCodexModels(target, models);
     } finally {
       await codex.close().catch(() => undefined);
     }
   })();
-  // Swallow late rejections from the losing side of the race so a timed-out
-  // probe that eventually errors (e.g. subprocess crash) never triggers an
-  // unhandled-rejection warning.
   probe.catch(() => undefined);
 
   try {
@@ -73,11 +70,23 @@ export async function probeCodexModels(client: ConvexClient): Promise<void> {
   }
 }
 
-// Latches for `ensureCodexModelsProbe`. `succeeded` is a one-shot gate after
-// a successful refresh so we don't churn a subprocess on every companion
-// poll. `inFlight` prevents concurrent probes while one is running. Failures
-// leave both `false`, so the recovery path can retry after a transient
-// spawn/RPC/network error.
+async function replaceCodexModels(
+  { siteUrl, secret }: ProbeTarget,
+  models: Array<{ id: string; label: string; description: string }>,
+): Promise<void> {
+  const res = await fetch(`${siteUrl}/api/internal/codex-models/replace`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${secret}`,
+    },
+    body: JSON.stringify({ models }),
+  });
+  if (!res.ok) {
+    throw new Error(`codex-models replace failed: ${res.status}`);
+  }
+}
+
 let succeeded = false;
 let inFlight = false;
 
@@ -87,10 +96,10 @@ let inFlight = false;
  * duplicate calls while a probe is in flight (or after one has succeeded)
  * no-op.
  */
-export function ensureCodexModelsProbe(client: ConvexClient): void {
+export function ensureCodexModelsProbe(target: ProbeTarget): void {
   if (succeeded || inFlight) return;
   inFlight = true;
-  void probeCodexModels(client)
+  void probeCodexModels(target)
     .then(() => {
       succeeded = true;
     })

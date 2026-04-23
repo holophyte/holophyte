@@ -1,7 +1,7 @@
 // @vitest-environment edge-runtime
 import { convexTest } from 'convex-test';
 import { describe, expect, it } from 'vitest';
-import { api } from './_generated/api';
+import { api, internal } from './_generated/api';
 import schema from './schema';
 
 async function setupUser(t: ReturnType<typeof convexTest>) {
@@ -43,13 +43,13 @@ describe('codexModels.get', () => {
   });
 });
 
-describe('codexModels.replace', () => {
+describe('codexModels.replace (internalMutation)', () => {
   it('inserts on first call and get() returns the models', async () => {
     const t = convexTest(schema);
     const authed = await setupUser(t);
 
     const before = Date.now();
-    await authed.mutation(api.codexModels.replace, { models: sampleA });
+    await t.mutation(internal.codexModels.replace, { models: sampleA });
     const row = await authed.query(api.codexModels.get, {});
 
     expect(row).not.toBeNull();
@@ -59,10 +59,9 @@ describe('codexModels.replace', () => {
 
   it('patches the existing row in place — never appends', async () => {
     const t = convexTest(schema);
-    const authed = await setupUser(t);
 
-    await authed.mutation(api.codexModels.replace, { models: sampleA });
-    await authed.mutation(api.codexModels.replace, { models: sampleB });
+    await t.mutation(internal.codexModels.replace, { models: sampleA });
+    await t.mutation(internal.codexModels.replace, { models: sampleB });
 
     const rows = await t.run(async (ctx) =>
       ctx.db.query('codexModels').collect(),
@@ -75,28 +74,21 @@ describe('codexModels.replace', () => {
     const t = convexTest(schema);
     const authed = await setupUser(t);
 
-    await authed.mutation(api.codexModels.replace, { models: sampleA });
+    await t.mutation(internal.codexModels.replace, { models: sampleA });
     const first = await authed.query(api.codexModels.get, {});
     await new Promise((r) => setTimeout(r, 5));
-    await authed.mutation(api.codexModels.replace, { models: sampleB });
+    await t.mutation(internal.codexModels.replace, { models: sampleB });
     const second = await authed.query(api.codexModels.get, {});
 
     expect(second?.fetchedAt).toBeGreaterThan(first?.fetchedAt ?? 0);
-  });
-
-  it('throws when called unauthenticated', async () => {
-    const t = convexTest(schema);
-    await expect(
-      t.mutation(api.codexModels.replace, { models: sampleA }),
-    ).rejects.toThrow('Not authenticated');
   });
 
   it('ignores empty snapshots so the cached row is not nullified', async () => {
     const t = convexTest(schema);
     const authed = await setupUser(t);
 
-    await authed.mutation(api.codexModels.replace, { models: sampleA });
-    await authed.mutation(api.codexModels.replace, { models: [] });
+    await t.mutation(internal.codexModels.replace, { models: sampleA });
+    await t.mutation(internal.codexModels.replace, { models: [] });
 
     const row = await authed.query(api.codexModels.get, {});
     expect(row?.models).toEqual(sampleA);
@@ -104,9 +96,8 @@ describe('codexModels.replace', () => {
 
   it('does not insert an empty row on a fresh DB', async () => {
     const t = convexTest(schema);
-    const authed = await setupUser(t);
 
-    await authed.mutation(api.codexModels.replace, { models: [] });
+    await t.mutation(internal.codexModels.replace, { models: [] });
 
     const rows = await t.run(async (ctx) =>
       ctx.db.query('codexModels').collect(),

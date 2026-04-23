@@ -469,6 +469,60 @@ http.route({
   }),
 });
 
+// ── Codex models ─────────────────────────────────────────────────────
+
+const MAX_CODEX_MODELS = 64;
+const MAX_CODEX_FIELD_LEN = 256;
+
+function isValidCodexModel(m: unknown): m is {
+  id: string;
+  label: string;
+  description: string;
+} {
+  if (!m || typeof m !== 'object') return false;
+  const { id, label, description } = m as Record<string, unknown>;
+  return (
+    typeof id === 'string' &&
+    id.length > 0 &&
+    id.length <= MAX_CODEX_FIELD_LEN &&
+    typeof label === 'string' &&
+    label.length > 0 &&
+    label.length <= MAX_CODEX_FIELD_LEN &&
+    typeof description === 'string' &&
+    description.length > 0 &&
+    description.length <= MAX_CODEX_FIELD_LEN
+  );
+}
+
+http.route({
+  path: '/api/internal/codex-models/replace',
+  method: 'POST',
+  handler: httpAction(async (ctx, request) => {
+    const authError = validateSecret(request);
+    if (authError) return authError;
+
+    const body = await parseBody(request);
+    if (body instanceof Response) return body;
+
+    const { models } = body;
+    if (
+      !Array.isArray(models) ||
+      models.length > MAX_CODEX_MODELS ||
+      !models.every(isValidCodexModel)
+    ) {
+      return jsonError('Invalid models payload', 400);
+    }
+
+    try {
+      await ctx.runMutation(internal.codexModels.replace, { models });
+      return jsonOk();
+    } catch (err) {
+      console.error('codexModels.replace failed:', err);
+      return jsonError('Mutation failed', 400);
+    }
+  }),
+});
+
 // ── API key exchange ─────────────────────────────────────────────────
 
 /**

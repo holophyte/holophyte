@@ -38,6 +38,23 @@ export interface PendingMessage {
   text: string;
 }
 
+let codexProbeEnvWarned = false;
+
+function tryCodexModelsProbe(): void {
+  const siteUrl = process.env.CONVEX_SITE_URL;
+  const secret = process.env.INTERNAL_API_SECRET;
+  if (!siteUrl || !secret) {
+    if (!codexProbeEnvWarned) {
+      console.warn(
+        'Skipping Codex model probe: CONVEX_SITE_URL or INTERNAL_API_SECRET not set',
+      );
+      codexProbeEnvWarned = true;
+    }
+    return;
+  }
+  ensureCodexModelsProbe({ siteUrl, secret });
+}
+
 const MACHINE_ID = process.env.MACHINE_ID ?? hostname();
 const INSTANCE_ID = `${MACHINE_ID}:${process.pid}`;
 export const POLL_INTERVAL_MS = 2000;
@@ -163,8 +180,7 @@ export async function companionPoll() {
               // live — handles the case where companion started without a
               // usable token and auth recovered mid-flight. No-op after
               // the first successful call.
-              const recoveredClient = getConvexClient();
-              if (recoveredClient) ensureCodexModelsProbe(recoveredClient);
+              if (getConvexClient()) tryCodexModelsProbe();
             } catch (subErr) {
               // Clear stale ephemeral tokens so the next cycle can obtain a
               // fresh anonymous identity (e.g. after a Convex restart).
@@ -409,7 +425,7 @@ export async function startCompanion(url: string): Promise<void> {
   // Frontend falls back to CODEX_MODELS_FALLBACK and Convex's reactive
   // query picks up the row whenever the probe eventually lands.
   if (client) {
-    ensureCodexModelsProbe(client);
+    tryCodexModelsProbe();
   }
 
   // 5. Start reactive subscriptions for queued/stopped sessions and pending messages
