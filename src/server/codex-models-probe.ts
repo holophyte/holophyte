@@ -102,6 +102,7 @@ export function ensureCodexModelsProbe(target: ProbeTarget): void {
   void probeCodexModels(target)
     .then(() => {
       succeeded = true;
+      console.log('Codex model cache refreshed');
     })
     .catch((err) => {
       console.error('Codex model-list probe failed:', err);
