@@ -85,6 +85,16 @@ describe('POST /api/internal/codex-models/replace — payload validation', () =>
     expect(res.status).toBe(400);
   });
 
+  it('accepts an entry with an empty description (schema permits it)', async () => {
+    const t = convexTest(schema);
+    const models = [{ ...makeModel(), description: '' }];
+    const res = await post(t, { models });
+    expect(res.status).toBe(200);
+
+    const rows = await t.run((ctx) => ctx.db.query('codexModels').collect());
+    expect(rows[0]?.models[0]?.description).toBe('');
+  });
+
   it('rejects when models is not an array', async () => {
     const t = convexTest(schema);
     const res = await post(t, { models: 'nope' });

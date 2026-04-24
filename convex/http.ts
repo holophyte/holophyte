@@ -489,7 +489,6 @@ function isValidCodexModel(m: unknown): m is {
     label.length > 0 &&
     label.length <= MAX_CODEX_FIELD_LEN &&
     typeof description === 'string' &&
-    description.length > 0 &&
     description.length <= MAX_CODEX_FIELD_LEN
   );
 }
@@ -518,7 +517,7 @@ http.route({
       return jsonOk();
     } catch (err) {
       console.error('codexModels.replace failed:', err);
-      return jsonError('Mutation failed', 400);
+      return jsonError('Mutation failed', 500);
     }
   }),
 });
