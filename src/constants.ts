@@ -54,12 +54,18 @@ export const CODEX_EFFORTS = ['minimal', 'low', 'medium', 'high'] as const;
 
 /**
  * Claude effort picker values. `'auto'` = omit `effort` / `effortLevel`, let
- * adaptive thinking drive (matches Claude Code CLI `/effort auto`). `'max'`
- * omitted — start-only per SDK `Settings.effortLevel`. `'xhigh'` (Opus 4.7)
- * not yet in `@anthropic-ai/claude-agent-sdk@0.2.112`; add when the SDK
- * exposes it.
+ * adaptive thinking drive (matches Claude Code CLI `/effort auto`). The
+ * companion narrows these dynamically per selected model when the Claude SDK
+ * exposes `supportedEffortLevels`.
  */
-export const CLAUDE_EFFORTS = ['auto', 'low', 'medium', 'high'] as const;
+export const CLAUDE_EFFORTS = [
+  'auto',
+  'low',
+  'medium',
+  'high',
+  'xhigh',
+  'max',
+] as const;
 
 export const DEFAULT_CODEX_EFFORT: (typeof CODEX_EFFORTS)[number] = 'medium';
 export const DEFAULT_CLAUDE_EFFORT: (typeof CLAUDE_EFFORTS)[number] = 'auto';

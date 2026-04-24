@@ -1,4 +1,6 @@
 import type {
+  EffortLevel,
+  ModelInfo,
   Query,
   SDKMessage,
   SDKUserMessage,
@@ -32,6 +34,8 @@ type PermissionResult =
       toolUseID?: string;
     };
 
+type ClaudeFollowupEffortSetting = Exclude<EffortLevel, 'max'>;
+
 interface BufferedEvent {
   type: string;
   data: string; // JSON-serialized SDKMessage
@@ -53,6 +57,8 @@ interface Session {
   convexSessionId: string;
   permissionMode: PermissionMode;
   model?: string;
+  reasoningEffort?: EffortLevel;
+  supportedEffortLevels?: EffortLevel[];
   /** The live SDK query object — used to inject follow-up messages. */
   sdkQuery?: Query;
   /** Channel for pushing follow-up messages into the running SDK process. */
@@ -271,6 +277,51 @@ export function isApproachingSessionLimit(): boolean {
   return sessions.size >= WARN_ACTIVE_SESSIONS;
 }
 
+function normalizeClaudeEffort(
+  reasoningEffort: string | undefined,
+  supportedEffortLevels?: EffortLevel[],
+): EffortLevel | undefined {
+  if (
+    reasoningEffort === 'low' ||
+    reasoningEffort === 'medium' ||
+    reasoningEffort === 'high' ||
+    reasoningEffort === 'xhigh' ||
+    reasoningEffort === 'max'
+  ) {
+    if (
+      supportedEffortLevels &&
+      !supportedEffortLevels.includes(reasoningEffort)
+    ) {
+      return undefined;
+    }
+    return reasoningEffort;
+  }
+  return undefined;
+}
+
+function normalizeClaudeFollowupEffort(
+  reasoningEffort: string | undefined,
+  supportedEffortLevels?: EffortLevel[],
+): ClaudeFollowupEffortSetting | undefined {
+  const effort = normalizeClaudeEffort(reasoningEffort, supportedEffortLevels);
+  // The SDK start options support `max`, but `Settings.effortLevel` used for
+  // live follow-ups currently does not. Treat follow-up `max` as auto until the
+  // SDK exposes it there too.
+  if (effort === 'max') return undefined;
+  return effort;
+}
+
+function findModelInfo(
+  models: ModelInfo[],
+  selectedModel: string | undefined,
+): ModelInfo | undefined {
+  if (!selectedModel) return undefined;
+  return models.find(
+    (model) =>
+      model.value === selectedModel || model.displayName === selectedModel,
+  );
+}
+
 /**
  * Spawns a Claude Code SDK process for the given session and begins streaming
  * events to Convex.
@@ -296,6 +347,7 @@ export async function startSession(opts: {
   prompt: string;
   model?: string;
   permissionMode?: PermissionMode;
+  reasoningEffort?: string;
   resumeSdkSessionId?: string;
 }): Promise<{ sessionId: string; warning?: string }> {
   const { sessionId } = opts;
@@ -347,6 +399,7 @@ export async function startSession(opts: {
     convexSessionId: sessionId,
     permissionMode: mode,
     model: opts.model ?? DEFAULT_MODEL,
+    reasoningEffort: normalizeClaudeEffort(opts.reasoningEffort),
     messageChannel: new SdkMessageChannel(),
   };
 
@@ -475,6 +528,8 @@ export async function startSession(opts: {
   };
 
   sdkOptions.model = opts.model ?? DEFAULT_MODEL;
+  const effort = normalizeClaudeEffort(opts.reasoningEffort);
+  if (effort) sdkOptions.effort = effort;
   sdkOptions.promptSuggestions = true;
   sdkOptions.settingSources = ['project'];
 
@@ -501,6 +556,21 @@ async function consumeIterator(
   try {
     const iterator = sdkQuery({ prompt, options });
     session.sdkQuery = iterator;
+
+    const supportedModels = (iterator as Partial<Query>).supportedModels;
+    if (supportedModels) {
+      supportedModels
+        .call(iterator)
+        .then((models) => {
+          const currentModel = findModelInfo(models, session.model);
+          if (currentModel?.supportedEffortLevels) {
+            session.supportedEffortLevels = currentModel.supportedEffortLevels;
+          }
+        })
+        .catch((err) => {
+          console.error('Failed to fetch Claude supported models:', err);
+        });
+    }
 
     // Connect the message channel so follow-up messages can be injected.
     // Fire-and-forget — the promise stays pending until the channel closes.
@@ -666,11 +736,38 @@ export function stopSession(sessionId: string): void {
  * @returns `true` if the message was delivered, `false` if the session is not
  *   running or not yet initialized.
  */
-export function sendMessageToSession(sessionId: string, text: string): boolean {
+export function sendMessageToSession(
+  sessionId: string,
+  text: string,
+  reasoningEffort?: string,
+): boolean {
   const session = sessions.get(sessionId);
   // sdkSessionId is set from the system/init event — if not yet available,
   // return false so the message stays unconsumed and retries on the next poll.
   if (!session?.sdkQuery || !session.sdkSessionId) return false;
+
+  const effortLevel = normalizeClaudeFollowupEffort(
+    reasoningEffort,
+    session.supportedEffortLevels,
+  );
+  if (session.reasoningEffort !== effortLevel) {
+    session.reasoningEffort = effortLevel;
+    void (async () => {
+      await session.sdkQuery
+        ?.applyFlagSettings({ effortLevel })
+        .catch((err) => {
+          console.error('Failed to apply Claude effort setting:', err);
+        });
+      pushUserMessage(session, text);
+    })();
+    return true;
+  }
+
+  return pushUserMessage(session, text);
+}
+
+function pushUserMessage(session: Session, text: string): boolean {
+  if (!session.sdkSessionId) return false;
 
   const userMsg: SDKUserMessage = {
     type: 'user',

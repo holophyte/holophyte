@@ -49,6 +49,7 @@ function createMockIterator(events: Array<Record<string, unknown>>) {
     throw: vi.fn(),
     streamInput: vi.fn().mockResolvedValue(undefined),
     supportedCommands: vi.fn().mockResolvedValue([]),
+    supportedModels: vi.fn().mockResolvedValue([]),
   };
 }
 
@@ -155,6 +156,7 @@ describe('claude/manager (SDK-based)', () => {
         },
         streamInput: vi.fn().mockResolvedValue(undefined),
         supportedCommands: vi.fn().mockResolvedValue([]),
+        supportedModels: vi.fn().mockResolvedValue([]),
       };
       vi.mocked(mockSdkQuery).mockReturnValue(mockIter as never);
 
@@ -374,6 +376,7 @@ describe('claude/manager (SDK-based)', () => {
           },
           streamInput: vi.fn().mockResolvedValue(undefined),
           supportedCommands: vi.fn().mockResolvedValue([]),
+          supportedModels: vi.fn().mockResolvedValue([]),
         } as never;
       });
 
@@ -498,6 +501,7 @@ describe('claude/manager (SDK-based)', () => {
           },
           streamInput: vi.fn().mockResolvedValue(undefined),
           supportedCommands: vi.fn().mockResolvedValue([]),
+          supportedModels: vi.fn().mockResolvedValue([]),
         } as never;
       });
 
@@ -558,6 +562,7 @@ describe('claude/manager (SDK-based)', () => {
           },
           streamInput: vi.fn().mockResolvedValue(undefined),
           supportedCommands: vi.fn().mockResolvedValue([]),
+          supportedModels: vi.fn().mockResolvedValue([]),
         } as never;
       });
 
@@ -692,6 +697,7 @@ describe('claude/manager (SDK-based)', () => {
           },
           streamInput: vi.fn().mockResolvedValue(undefined),
           supportedCommands: vi.fn().mockResolvedValue([]),
+          supportedModels: vi.fn().mockResolvedValue([]),
         } as never;
       });
 
@@ -769,6 +775,7 @@ describe('claude/manager (SDK-based)', () => {
           },
           streamInput: vi.fn().mockResolvedValue(undefined),
           supportedCommands: vi.fn().mockResolvedValue([]),
+          supportedModels: vi.fn().mockResolvedValue([]),
         } as never;
       });
 
@@ -908,6 +915,16 @@ describe('claude/manager (SDK-based)', () => {
         },
         streamInput: mockIter.streamInput,
         supportedCommands: vi.fn().mockResolvedValue([]),
+        supportedModels: vi.fn().mockResolvedValue([
+          {
+            value: 'claude-sonnet-4-6',
+            displayName: 'Sonnet 4.6',
+            description: 'Balanced',
+            supportsEffort: true,
+            supportedEffortLevels: ['low', 'medium', 'high'],
+          },
+        ]),
+        applyFlagSettings: vi.fn().mockResolvedValue(undefined),
       };
       vi.mocked(mockSdkQuery).mockReturnValue(blockingIter as never);
 
@@ -965,6 +982,7 @@ describe('claude/manager (SDK-based)', () => {
         },
         streamInput: vi.fn().mockResolvedValue(undefined),
         supportedCommands: vi.fn().mockResolvedValue([]),
+        supportedModels: vi.fn().mockResolvedValue([]),
       };
       vi.mocked(mockSdkQuery).mockReturnValue(blockingIter as never);
 
@@ -981,6 +999,121 @@ describe('claude/manager (SDK-based)', () => {
       expect(sendMessageToSession('no-init-test', 'hello')).toBe(false);
 
       // Cleanup
+      resolveBlock?.();
+      await new Promise((r) => setTimeout(r, 100));
+    });
+
+    it('applies xhigh for follow-up messages when the selected model supports it', async () => {
+      let resolveBlock: (() => void) | undefined;
+      const blockPromise = new Promise<void>((r) => {
+        resolveBlock = r;
+      });
+      const applyFlagSettings = vi.fn().mockResolvedValue(undefined);
+      const blockingIter = {
+        async *[Symbol.asyncIterator]() {
+          yield {
+            type: 'system',
+            subtype: 'init',
+            session_id: 'sdk-xhigh-test',
+            tools: [],
+            model: 'claude-opus-4-6',
+          };
+          await blockPromise;
+        },
+        streamInput: vi.fn().mockResolvedValue(undefined),
+        supportedCommands: vi.fn().mockResolvedValue([]),
+        supportedModels: vi.fn().mockResolvedValue([
+          {
+            value: 'claude-opus-4-6',
+            displayName: 'Opus 4.6',
+            description: 'Most capable',
+            supportsEffort: true,
+            supportedEffortLevels: ['low', 'medium', 'high', 'xhigh', 'max'],
+          },
+        ]),
+        applyFlagSettings,
+      };
+      vi.mocked(mockSdkQuery).mockReturnValue(blockingIter as never);
+
+      const { startSession, sendMessageToSession } = await import('./manager');
+
+      await startSession({
+        sessionId: 'xhigh-followup-test',
+        repoPath: '/tmp/test',
+        prompt: 'test',
+        model: 'claude-opus-4-6',
+      });
+
+      await new Promise((r) => setTimeout(r, 50));
+      expect(
+        sendMessageToSession('xhigh-followup-test', 'go deep', 'xhigh'),
+      ).toBe(true);
+      await new Promise((r) => setTimeout(r, 50));
+
+      expect(applyFlagSettings).toHaveBeenCalledWith({ effortLevel: 'xhigh' });
+
+      resolveBlock?.();
+      await new Promise((r) => setTimeout(r, 100));
+    });
+
+    it('passes max on initial query options but treats max follow-ups as auto', async () => {
+      let resolveBlock: (() => void) | undefined;
+      const blockPromise = new Promise<void>((r) => {
+        resolveBlock = r;
+      });
+      const applyFlagSettings = vi.fn().mockResolvedValue(undefined);
+      const blockingIter = {
+        async *[Symbol.asyncIterator]() {
+          yield {
+            type: 'system',
+            subtype: 'init',
+            session_id: 'sdk-max-test',
+            tools: [],
+            model: 'claude-opus-4-6',
+          };
+          await blockPromise;
+        },
+        streamInput: vi.fn().mockResolvedValue(undefined),
+        supportedCommands: vi.fn().mockResolvedValue([]),
+        supportedModels: vi.fn().mockResolvedValue([
+          {
+            value: 'claude-opus-4-6',
+            displayName: 'Opus 4.6',
+            description: 'Most capable',
+            supportsEffort: true,
+            supportedEffortLevels: ['low', 'medium', 'high', 'xhigh', 'max'],
+          },
+        ]),
+        applyFlagSettings,
+      };
+      vi.mocked(mockSdkQuery).mockReturnValue(blockingIter as never);
+
+      const { startSession, sendMessageToSession } = await import('./manager');
+
+      await startSession({
+        sessionId: 'max-followup-test',
+        repoPath: '/tmp/test',
+        prompt: 'test',
+        model: 'claude-opus-4-6',
+        reasoningEffort: 'max',
+      });
+
+      expect(mockSdkQuery).toHaveBeenCalledWith(
+        expect.objectContaining({
+          options: expect.objectContaining({ effort: 'max' }),
+        }),
+      );
+
+      await new Promise((r) => setTimeout(r, 50));
+      expect(sendMessageToSession('max-followup-test', 'again', 'max')).toBe(
+        true,
+      );
+      await new Promise((r) => setTimeout(r, 50));
+
+      expect(applyFlagSettings).toHaveBeenCalledWith({
+        effortLevel: undefined,
+      });
+
       resolveBlock?.();
       await new Promise((r) => setTimeout(r, 100));
     });
@@ -1073,6 +1206,7 @@ describe('claude/manager (SDK-based)', () => {
         },
         streamInput: vi.fn().mockResolvedValue(undefined),
         supportedCommands: vi.fn().mockResolvedValue([]),
+        supportedModels: vi.fn().mockResolvedValue([]),
       };
 
       return { iter, resolveBlock: () => resolveBlock?.(), used: false };
