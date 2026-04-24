@@ -106,7 +106,35 @@ describe('probeCodexModels', () => {
         },
       ],
     });
+    expect(init.signal).toBeInstanceOf(AbortSignal);
+    expect((init.signal as AbortSignal).aborted).toBe(false);
     expect(codex.close).toHaveBeenCalledTimes(1);
+  });
+
+  it('aborts the in-flight HTTP request when the probe times out', async () => {
+    vi.useFakeTimers();
+    let capturedSignal: AbortSignal | undefined;
+    // Hang the fetch forever until aborted — mirrors a wedged Convex backend.
+    fetchMock.mockImplementation((_url, init: RequestInit) => {
+      capturedSignal = init.signal ?? undefined;
+      return new Promise((_, reject) => {
+        capturedSignal?.addEventListener('abort', () => {
+          reject(new DOMException('Aborted', 'AbortError'));
+        });
+      });
+    });
+    const codex = makeCodexStub({ models: [makeModel()] });
+    mockCreateClient.mockResolvedValue(codex);
+
+    const probe = probeCodexModels(target);
+    probe.catch(() => undefined);
+    await vi.advanceTimersByTimeAsync(0);
+    // Let the codex RPC + fetch path kick off.
+    await vi.advanceTimersByTimeAsync(0);
+    await vi.advanceTimersByTimeAsync(15_000);
+
+    await expect(probe).rejects.toThrow('Codex model probe timed out');
+    expect(capturedSignal?.aborted).toBe(true);
   });
 
   it('filters out hidden models', async () => {

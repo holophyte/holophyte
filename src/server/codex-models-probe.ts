@@ -30,10 +30,13 @@ export async function probeCodexModels(target: ProbeTarget): Promise<void> {
   let codex: Codex | null = null;
   let timedOut = false;
   let timer: ReturnType<typeof setTimeout> | undefined;
+  const abortController = new AbortController();
 
   const timeoutPromise = new Promise<never>((_, reject) => {
     timer = setTimeout(() => {
       timedOut = true;
+      // Abort the in-flight fetch to the HTTP action, if any.
+      abortController.abort();
       codex?.close().catch(() => undefined);
       reject(new Error('Codex model probe timed out'));
     }, PROBE_TIMEOUT_MS);
@@ -56,7 +59,7 @@ export async function probeCodexModels(target: ProbeTarget): Promise<void> {
           description: m.description,
         }));
       if (models.length === 0) return;
-      await replaceCodexModels(target, models);
+      await replaceCodexModels(target, models, abortController.signal);
     } finally {
       await codex.close().catch(() => undefined);
     }
@@ -73,6 +76,7 @@ export async function probeCodexModels(target: ProbeTarget): Promise<void> {
 async function replaceCodexModels(
   { siteUrl, secret }: ProbeTarget,
   models: Array<{ id: string; label: string; description: string }>,
+  signal: AbortSignal,
 ): Promise<void> {
   const res = await fetch(`${siteUrl}/api/internal/codex-models/replace`, {
     method: 'POST',
@@ -81,6 +85,7 @@ async function replaceCodexModels(
       Authorization: `Bearer ${secret}`,
     },
     body: JSON.stringify({ models }),
+    signal,
   });
   if (!res.ok) {
     throw new Error(`codex-models replace failed: ${res.status}`);
