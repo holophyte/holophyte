@@ -109,6 +109,13 @@ export async function companionPoll() {
   try {
     const client = getConvexClient();
 
+    // Keep retrying the Codex model probe until it succeeds. The success
+    // latch inside `ensureCodexModelsProbe` makes this a no-op after the
+    // first win; before then, this covers the cold-boot race where the
+    // probe fires before `convex dev` has pushed `http.ts` (404) as well
+    // as transient `codex` spawn failures.
+    if (client) tryCodexModelsProbe();
+
     // 1. Send heartbeat for all active sessions
     if (client) {
       const activeIds = getActiveSessions();
