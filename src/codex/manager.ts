@@ -248,6 +248,11 @@ async function finishSession(
   const session = sessions.get(sessionId);
   if (!session) return;
 
+  // Claim ownership synchronously: deleting from the map before any await
+  // ensures concurrent finishSession calls (e.g. user `stopSession` racing the
+  // post-`interrupt` `turn/completed`) bail at the guard above instead of
+  // double-closing the client and writing duplicate Convex statuses.
+  sessions.delete(sessionId);
   session.currentTurnId = undefined;
 
   await sleep(STOP_GRACE_MS);
@@ -271,7 +276,6 @@ async function finishSession(
   await session.client.close().catch((err: unknown) => {
     console.error('Failed to close Codex client:', err);
   });
-  sessions.delete(sessionId);
 }
 
 async function startTurn(
