@@ -227,21 +227,12 @@ function handleNotification(
       return;
     }
     // Idle: keep the session alive for follow-up turns. Flush any buffered
-    // events (the SDK can settle without further activity) and update Convex
-    // status so the UI shows the session as resumable.
-    void flushEvents(session).then(async () => {
-      try {
-        const client = getConvexClient();
-        if (client) {
-          await client.mutation(api.sessions.companionUpdateStatus, {
-            id: session.convexSessionId as Id<'sessions'>,
-            status: 'idle',
-          });
-        }
-      } catch (err) {
-        console.error('Failed to mark Codex session idle in Convex:', err);
-      }
-    });
+    // events but leave the Convex `status` as `'running'` — the session is
+    // still active locally and the upcoming subscription dispatcher routes
+    // follow-ups through `sessionMessages` → `sendMessageToSession`, not
+    // `queueResume` (which `handleQueuedSession` short-circuits when a local
+    // session exists). Writing `'idle'` here would create a stuck-queue race.
+    void flushEvents(session);
   }
 }
 
