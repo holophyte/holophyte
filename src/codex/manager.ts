@@ -34,6 +34,9 @@ interface Session {
   client: AppServerClient;
   threadId: string;
   currentTurnId?: string;
+  /** ID of the most recently completed turn — used to suppress the
+   * `turn.start` response-id fallback once that turn has already terminated. */
+  lastCompletedTurnId?: string;
   controller: AbortController;
   eventBuffer: BufferedEvent[];
   batchIndex: number;
@@ -213,9 +216,28 @@ function handleNotification(
   bufferEvent(session, notification);
 
   if (notification.method === 'turn/completed') {
-    const finalStatus =
-      notification.params.turn.status === 'failed' ? 'failed' : 'idle';
-    void finishSession(session.convexSessionId, finalStatus);
+    session.currentTurnId = undefined;
+    session.lastCompletedTurnId = notification.params.turn.id;
+    if (notification.params.turn.status === 'failed') {
+      void finishSession(session.convexSessionId, 'failed');
+      return;
+    }
+    // Idle: keep the session alive for follow-up turns. Flush any buffered
+    // events (the SDK can settle without further activity) and update Convex
+    // status so the UI shows the session as resumable.
+    void flushEvents(session).then(async () => {
+      try {
+        const client = getConvexClient();
+        if (client) {
+          await client.mutation(api.sessions.companionUpdateStatus, {
+            id: session.convexSessionId as Id<'sessions'>,
+            status: 'idle',
+          });
+        }
+      } catch (err) {
+        console.error('Failed to mark Codex session idle in Convex:', err);
+      }
+    });
   }
 }
 
@@ -266,8 +288,15 @@ async function startTurn(
 
   // `turn/started` is the authoritative stream event, but keeping the response
   // id as a fallback avoids a brief uninterruptible gap on clients that suppress
-  // the lifecycle notification.
-  session.currentTurnId ??= response.turn.id;
+  // the lifecycle notification. Skip the fallback if the turn already terminated
+  // (turn/completed cleared currentTurnId and recorded the id) — otherwise we'd
+  // resurrect a dead turn id and break follow-ups.
+  if (
+    session.currentTurnId === undefined &&
+    session.lastCompletedTurnId !== response.turn.id
+  ) {
+    session.currentTurnId = response.turn.id;
+  }
 }
 
 export async function startSession(opts: {

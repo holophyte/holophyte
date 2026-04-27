@@ -172,4 +172,40 @@ describe('codex/manager', () => {
       true,
     );
   });
+
+  it('keeps the session alive after an idle turn/completed so follow-ups can run', async () => {
+    const client = makeClientStub();
+    mockCreateClient.mockResolvedValue(client);
+
+    const { startSession, sendMessageToSession, getSession } = await import(
+      './manager'
+    );
+
+    await startSession({
+      sessionId: 'codex-multiturn',
+      repoPath: '/tmp/repo',
+      prompt: 'first turn',
+      permissionMode: 'bypass',
+      reasoningEffort: 'medium',
+    });
+
+    // Let the first turn complete (turn.start emits turn/started + turn/completed)
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    // Session must still be in the map — only 'failed' status tears it down
+    expect(getSession('codex-multiturn')).toBeDefined();
+
+    // Follow-up message must be accepted (returns true) and trigger a second turn.start
+    const delivered = sendMessageToSession('codex-multiturn', 'second turn');
+    expect(delivered).toBe(true);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    expect(client.turn.start).toHaveBeenCalledTimes(2);
+    expect(client.turn.start).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        threadId: 'thread-123',
+        input: [{ type: 'text', text: 'second turn', text_elements: [] }],
+      }),
+    );
+  });
 });
