@@ -444,11 +444,11 @@ export function stopSession(sessionId: string): void {
   })();
 }
 
-export function sendMessageToSession(
+export async function sendMessageToSession(
   sessionId: string,
   text: string,
   reasoningEffort?: string,
-): boolean {
+): Promise<boolean> {
   const session = sessions.get(sessionId);
   if (!session || session.currentTurnId) return false;
 
@@ -469,15 +469,19 @@ export function sendMessageToSession(
   if (reasoningEffort !== undefined) {
     session.reasoningEffort = effort;
   }
-  void startTurn(session, text, effort).catch((err) => {
+
+  try {
+    await startTurn(session, text, effort);
+    return true;
+  } catch (err) {
     console.error(`[codex session ${sessionId}] failed to start turn:`, err);
-    // Release the sentinel if turn.start never landed — finishSession will
-    // also clear it, but bailing here avoids a poisoned slot if the failure
-    // path never reaches finishSession (e.g. session already removed).
+    // Release the sentinel so the next polling tick can retry the message.
+    // finishSession will also clear it, but bailing here avoids a poisoned
+    // slot if the failure path never reaches finishSession.
     if (session.currentTurnId === TURN_PENDING_SENTINEL) {
       session.currentTurnId = undefined;
     }
     void finishSession(sessionId, 'failed');
-  });
-  return true;
+    return false;
+  }
 }

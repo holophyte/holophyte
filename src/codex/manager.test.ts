@@ -205,8 +205,11 @@ describe('codex/manager', () => {
     // Session must still be in the map — only 'failed' status tears it down
     expect(getSession('codex-multiturn')).toBeDefined();
 
-    // Follow-up message must be accepted (returns true) and trigger a second turn.start
-    const delivered = sendMessageToSession('codex-multiturn', 'second turn');
+    // Follow-up message must be accepted (resolves true) and trigger a second turn.start
+    const delivered = await sendMessageToSession(
+      'codex-multiturn',
+      'second turn',
+    );
     expect(delivered).toBe(true);
     await new Promise((resolve) => setTimeout(resolve, 50));
 
@@ -512,10 +515,11 @@ describe('codex/manager', () => {
     // Wait for first turn to fully complete (turn/completed clears currentTurnId)
     await new Promise((r) => setTimeout(r, 50));
 
-    // Now fire two concurrent follow-ups synchronously. The second must be
-    // rejected because the first claimed the turn slot.
-    const accepted1 = sendMessageToSession('codex-reentrancy', 'follow-up A');
-    const accepted2 = sendMessageToSession('codex-reentrancy', 'follow-up B');
+    // Fire two concurrent follow-ups. The second must be rejected synchronously
+    // because the first claimed the turn slot before its async tail runs.
+    const p1 = sendMessageToSession('codex-reentrancy', 'follow-up A');
+    const p2 = sendMessageToSession('codex-reentrancy', 'follow-up B');
+    const [accepted1, accepted2] = await Promise.all([p1, p2]);
     expect(accepted1).toBe(true);
     expect(accepted2).toBe(false);
 
@@ -524,6 +528,97 @@ describe('codex/manager', () => {
 
     // Only one follow-up turn.start call beyond the initial one
     expect(client.turn.start).toHaveBeenCalledTimes(2);
+  });
+
+  it('returns false when turn.start rejects so the pending message is not consumed', async () => {
+    // First turn succeeds; the follow-up turn.start rejects to simulate a
+    // transient app-server failure or an invalid thread state. The caller must
+    // see false so subscriptions.ts leaves the pending message unconsumed and
+    // the next polling tick can retry.
+    const handlers = new Map<
+      string,
+      Array<(notification: Notification) => void>
+    >();
+    const emit = (notification: Notification) => {
+      for (const handler of handlers.get(notification.method) ?? []) {
+        handler(notification);
+      }
+    };
+    let turnStartCalls = 0;
+    const client = {
+      thread: {
+        start: vi.fn().mockResolvedValue({
+          thread: { id: 'thread-fail' },
+          model: 'gpt-5.4-mini',
+          modelProvider: 'openai',
+          serviceTier: null,
+          cwd: '/tmp/repo',
+          approvalPolicy: 'never',
+          approvalsReviewer: 'client',
+          sandbox: { type: 'danger-full-access' },
+          reasoningEffort: 'medium',
+        }),
+        resume: vi.fn(),
+      },
+      turn: {
+        start: vi.fn(async () => {
+          turnStartCalls++;
+          if (turnStartCalls === 1) {
+            // First turn (from startSession) succeeds and completes
+            emit({
+              method: 'turn/started',
+              params: {
+                threadId: 'thread-fail',
+                turn: makeTurn('turn-1', 'inProgress'),
+              },
+            });
+            emit({
+              method: 'turn/completed',
+              params: {
+                threadId: 'thread-fail',
+                turn: makeTurn('turn-1', 'completed'),
+              },
+            });
+            return { turn: makeTurn('turn-1', 'completed') };
+          }
+          throw new Error('app-server unreachable');
+        }),
+        interrupt: vi.fn().mockResolvedValue({}),
+      },
+      onEvent: vi.fn(
+        (method: string, handler: (notification: Notification) => void) => {
+          const existing = handlers.get(method) ?? [];
+          existing.push(handler);
+          handlers.set(method, existing);
+          return () => {
+            handlers.set(
+              method,
+              (handlers.get(method) ?? []).filter((h) => h !== handler),
+            );
+          };
+        },
+      ),
+      close: vi.fn().mockResolvedValue(undefined),
+    };
+    mockCreateClient.mockResolvedValue(client);
+
+    const { startSession, sendMessageToSession } = await import('./manager');
+
+    await startSession({
+      sessionId: 'codex-turn-fail',
+      repoPath: '/tmp/repo',
+      prompt: 'first',
+      permissionMode: 'bypass',
+      reasoningEffort: 'medium',
+    });
+
+    await new Promise((r) => setTimeout(r, 50));
+
+    const accepted = await sendMessageToSession(
+      'codex-turn-fail',
+      'follow-up that fails',
+    );
+    expect(accepted).toBe(false);
   });
 
   it('preserves the session reasoningEffort when caller omits it on a follow-up', async () => {
@@ -544,7 +639,10 @@ describe('codex/manager', () => {
     await new Promise((r) => setTimeout(r, 50));
 
     // Caller omits reasoningEffort — must reuse 'high', not undefined.
-    const accepted = sendMessageToSession('codex-effort-keep', 'follow up');
+    const accepted = await sendMessageToSession(
+      'codex-effort-keep',
+      'follow up',
+    );
     expect(accepted).toBe(true);
     await new Promise((r) => setTimeout(r, 50));
 
