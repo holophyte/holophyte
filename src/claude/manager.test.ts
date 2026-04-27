@@ -939,7 +939,7 @@ describe('claude/manager (SDK-based)', () => {
       // Wait for init event to be processed (sets sdkSessionId)
       await new Promise((r) => setTimeout(r, 50));
 
-      const result = sendMessageToSession(
+      const result = await sendMessageToSession(
         'msg-delivery-test',
         'follow-up message',
       );
@@ -966,7 +966,9 @@ describe('claude/manager (SDK-based)', () => {
 
     it('returns false when session does not exist', async () => {
       const { sendMessageToSession } = await import('./manager');
-      expect(sendMessageToSession('nonexistent', 'hello')).toBe(false);
+      await expect(sendMessageToSession('nonexistent', 'hello')).resolves.toBe(
+        false,
+      );
     });
 
     it('returns false when sdkSessionId is not yet set', async () => {
@@ -996,7 +998,9 @@ describe('claude/manager (SDK-based)', () => {
 
       // sdkSessionId not set yet (no init event)
       await new Promise((r) => setTimeout(r, 20));
-      expect(sendMessageToSession('no-init-test', 'hello')).toBe(false);
+      await expect(sendMessageToSession('no-init-test', 'hello')).resolves.toBe(
+        false,
+      );
 
       // Cleanup
       resolveBlock?.();
@@ -1045,9 +1049,9 @@ describe('claude/manager (SDK-based)', () => {
       });
 
       await new Promise((r) => setTimeout(r, 50));
-      expect(
+      await expect(
         sendMessageToSession('xhigh-followup-test', 'go deep', 'xhigh'),
-      ).toBe(true);
+      ).resolves.toBe(true);
       await new Promise((r) => setTimeout(r, 50));
 
       expect(applyFlagSettings).toHaveBeenCalledWith({ effortLevel: 'xhigh' });
@@ -1102,9 +1106,9 @@ describe('claude/manager (SDK-based)', () => {
 
       // Production caller (subscriptions.ts:131) often calls this with no
       // effort. Should keep the session's chosen effort, NOT reset to undefined.
-      expect(
+      await expect(
         sendMessageToSession('omit-effort-followup-test', 'follow up'),
-      ).toBe(true);
+      ).resolves.toBe(true);
       await new Promise((r) => setTimeout(r, 50));
 
       expect(applyFlagSettings).not.toHaveBeenCalled();
@@ -1162,14 +1166,150 @@ describe('claude/manager (SDK-based)', () => {
       );
 
       await new Promise((r) => setTimeout(r, 50));
-      expect(sendMessageToSession('max-followup-test', 'again', 'max')).toBe(
-        true,
-      );
+      await expect(
+        sendMessageToSession('max-followup-test', 'again', 'max'),
+      ).resolves.toBe(true);
       await new Promise((r) => setTimeout(r, 50));
 
       expect(applyFlagSettings).toHaveBeenCalledWith({
         effortLevel: undefined,
       });
+
+      resolveBlock?.();
+      await new Promise((r) => setTimeout(r, 100));
+    });
+
+    it('still pushes the message when applyFlagSettings rejects', async () => {
+      let resolveBlock: (() => void) | undefined;
+      const blockPromise = new Promise<void>((r) => {
+        resolveBlock = r;
+      });
+      const applyFlagSettings = vi
+        .fn()
+        .mockRejectedValue(new Error('flag settings unavailable'));
+      const streamInput = vi.fn().mockResolvedValue(undefined);
+      const blockingIter = {
+        async *[Symbol.asyncIterator]() {
+          yield {
+            type: 'system',
+            subtype: 'init',
+            session_id: 'sdk-apply-reject',
+            tools: [],
+            model: 'claude-opus-4-6',
+          };
+          await blockPromise;
+        },
+        streamInput,
+        supportedCommands: vi.fn().mockResolvedValue([]),
+        supportedModels: vi.fn().mockResolvedValue([
+          {
+            value: 'claude-opus-4-6',
+            displayName: 'Opus 4.6',
+            description: 'Most capable',
+            supportsEffort: true,
+            supportedEffortLevels: ['low', 'medium', 'high', 'xhigh', 'max'],
+          },
+        ]),
+        applyFlagSettings,
+      };
+      vi.mocked(mockSdkQuery).mockReturnValue(blockingIter as never);
+
+      const { startSession, sendMessageToSession } = await import('./manager');
+
+      await startSession({
+        sessionId: 'apply-reject-test',
+        repoPath: '/tmp/test',
+        prompt: 'test',
+        model: 'claude-opus-4-6',
+      });
+
+      await new Promise((r) => setTimeout(r, 50));
+
+      // Effort change requested (auto → high) — applyFlagSettings will reject.
+      // The user message must still go through.
+      const result = await sendMessageToSession(
+        'apply-reject-test',
+        'go anyway',
+        'high',
+      );
+      expect(result).toBe(true);
+      expect(applyFlagSettings).toHaveBeenCalled();
+
+      await new Promise((r) => setTimeout(r, 50));
+      const insertCalls = mockMutation.mock.calls.filter(
+        (call) =>
+          typeof call[1] === 'object' &&
+          'events' in (call[1] as Record<string, unknown>),
+      );
+      const allEvents = insertCalls
+        .map((c) => JSON.stringify((c[1] as Record<string, unknown>).events))
+        .join(' ');
+      expect(allEvents).toContain('go anyway');
+
+      resolveBlock?.();
+      await new Promise((r) => setTimeout(r, 100));
+    });
+
+    it('still pushes the message when applyFlagSettings is missing on the iterator', async () => {
+      let resolveBlock: (() => void) | undefined;
+      const blockPromise = new Promise<void>((r) => {
+        resolveBlock = r;
+      });
+      // Iterator does NOT expose applyFlagSettings (older SDK build).
+      const blockingIter = {
+        async *[Symbol.asyncIterator]() {
+          yield {
+            type: 'system',
+            subtype: 'init',
+            session_id: 'sdk-no-apply',
+            tools: [],
+            model: 'claude-opus-4-6',
+          };
+          await blockPromise;
+        },
+        streamInput: vi.fn().mockResolvedValue(undefined),
+        supportedCommands: vi.fn().mockResolvedValue([]),
+        supportedModels: vi.fn().mockResolvedValue([
+          {
+            value: 'claude-opus-4-6',
+            displayName: 'Opus 4.6',
+            description: 'Most capable',
+            supportsEffort: true,
+            supportedEffortLevels: ['low', 'medium', 'high', 'xhigh', 'max'],
+          },
+        ]),
+      };
+      vi.mocked(mockSdkQuery).mockReturnValue(blockingIter as never);
+
+      const { startSession, sendMessageToSession } = await import('./manager');
+
+      await startSession({
+        sessionId: 'no-apply-test',
+        repoPath: '/tmp/test',
+        prompt: 'test',
+        model: 'claude-opus-4-6',
+      });
+
+      await new Promise((r) => setTimeout(r, 50));
+
+      // Should not throw — guarded — and should still push.
+      const result = await sendMessageToSession(
+        'no-apply-test',
+        'message body',
+        'high',
+      );
+      expect(result).toBe(true);
+
+      await new Promise((r) => setTimeout(r, 50));
+      const insertCalls = mockMutation.mock.calls.filter(
+        (call) =>
+          typeof call[1] === 'object' &&
+          'events' in (call[1] as Record<string, unknown>),
+      );
+      const allEvents = insertCalls
+        .map((c) => JSON.stringify((c[1] as Record<string, unknown>).events))
+        .join(' ');
+      expect(allEvents).toContain('message body');
 
       resolveBlock?.();
       await new Promise((r) => setTimeout(r, 100));

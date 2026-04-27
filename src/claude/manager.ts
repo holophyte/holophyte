@@ -736,11 +736,11 @@ export function stopSession(sessionId: string): void {
  * @returns `true` if the message was delivered, `false` if the session is not
  *   running or not yet initialized.
  */
-export function sendMessageToSession(
+export async function sendMessageToSession(
   sessionId: string,
   text: string,
   reasoningEffort?: string,
-): boolean {
+): Promise<boolean> {
   const session = sessions.get(sessionId);
   // sdkSessionId is set from the system/init event — if not yet available,
   // return false so the message stays unconsumed and retries on the next poll.
@@ -758,15 +758,17 @@ export function sendMessageToSession(
     );
     if (session.reasoningEffort !== effortLevel) {
       session.reasoningEffort = effortLevel;
-      void (async () => {
-        await session.sdkQuery
-          ?.applyFlagSettings({ effortLevel })
-          .catch((err) => {
-            console.error('Failed to apply Claude effort setting:', err);
-          });
-        pushUserMessage(session, text);
-      })();
-      return true;
+      // Existence-guard `applyFlagSettings` (older SDK builds may not expose
+      // it). Effort-application failure is logged but does not block the
+      // message — the user-visible follow-up matters more than the override.
+      const apply = (session.sdkQuery as Partial<Query>).applyFlagSettings;
+      if (apply) {
+        try {
+          await apply.call(session.sdkQuery, { effortLevel });
+        } catch (err) {
+          console.error('Failed to apply Claude effort setting:', err);
+        }
+      }
     }
   }
 
