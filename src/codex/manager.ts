@@ -430,7 +430,10 @@ export function stopSession(sessionId: string): void {
 
   void (async () => {
     try {
-      if (session.currentTurnId) {
+      if (
+        session.currentTurnId &&
+        session.currentTurnId !== TURN_PENDING_SENTINEL
+      ) {
         await session.client.turn.interrupt({
           threadId: session.threadId,
           turnId: session.currentTurnId,
