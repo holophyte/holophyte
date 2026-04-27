@@ -425,6 +425,107 @@ describe('codex/manager', () => {
     }
   });
 
+  it('rejects a second concurrent follow-up before turn/started lands', async () => {
+    // Custom stub: turn.start does NOT emit turn/started synchronously —
+    // it returns immediately so the test can fire two pending messages
+    // before any event handler claims the slot. The real-world race the
+    // adversarial review found: subscriptions.ts fans out pending messages
+    // with `void handlePendingMessage(msg)`, so two follow-ups for the same
+    // idle session can both pass the `currentTurnId` guard if nothing claims
+    // the slot synchronously.
+    const handlers = new Map<
+      string,
+      Array<(notification: Notification) => void>
+    >();
+    const emit = (notification: Notification) => {
+      for (const handler of handlers.get(notification.method) ?? []) {
+        handler(notification);
+      }
+    };
+    const client = {
+      thread: {
+        start: vi.fn().mockResolvedValue({
+          thread: { id: 'thread-reentrancy' },
+          model: 'gpt-5.4-mini',
+          modelProvider: 'openai',
+          serviceTier: null,
+          cwd: '/tmp/repo',
+          approvalPolicy: 'never',
+          approvalsReviewer: 'client',
+          sandbox: { type: 'danger-full-access' },
+          reasoningEffort: 'medium',
+        }),
+        resume: vi.fn(),
+      },
+      turn: {
+        start: vi.fn(async (params: { input: { text: string }[] }) => {
+          // Emit turn/started AFTER the start response resolves so the
+          // synchronous claim is the only thing protecting the slot.
+          const turnId = `turn-${params.input[0]?.text ?? 'x'}`;
+          queueMicrotask(() => {
+            emit({
+              method: 'turn/started',
+              params: {
+                threadId: 'thread-reentrancy',
+                turn: makeTurn(turnId, 'inProgress'),
+              },
+            });
+            emit({
+              method: 'turn/completed',
+              params: {
+                threadId: 'thread-reentrancy',
+                turn: makeTurn(turnId, 'completed'),
+              },
+            });
+          });
+          return { turn: makeTurn(turnId, 'inProgress') };
+        }),
+        interrupt: vi.fn().mockResolvedValue({}),
+      },
+      onEvent: vi.fn(
+        (method: string, handler: (notification: Notification) => void) => {
+          const existing = handlers.get(method) ?? [];
+          existing.push(handler);
+          handlers.set(method, existing);
+          return () => {
+            handlers.set(
+              method,
+              (handlers.get(method) ?? []).filter((h) => h !== handler),
+            );
+          };
+        },
+      ),
+      close: vi.fn().mockResolvedValue(undefined),
+    };
+    mockCreateClient.mockResolvedValue(client);
+
+    const { startSession, sendMessageToSession } = await import('./manager');
+
+    await startSession({
+      sessionId: 'codex-reentrancy',
+      repoPath: '/tmp/repo',
+      prompt: 'first turn',
+      permissionMode: 'bypass',
+      reasoningEffort: 'medium',
+    });
+
+    // Wait for first turn to fully complete (turn/completed clears currentTurnId)
+    await new Promise((r) => setTimeout(r, 50));
+
+    // Now fire two concurrent follow-ups synchronously. The second must be
+    // rejected because the first claimed the turn slot.
+    const accepted1 = sendMessageToSession('codex-reentrancy', 'follow-up A');
+    const accepted2 = sendMessageToSession('codex-reentrancy', 'follow-up B');
+    expect(accepted1).toBe(true);
+    expect(accepted2).toBe(false);
+
+    // Wait for the queueMicrotask emits so the turn settles
+    await new Promise((r) => setTimeout(r, 50));
+
+    // Only one follow-up turn.start call beyond the initial one
+    expect(client.turn.start).toHaveBeenCalledTimes(2);
+  });
+
   it('rejects startSession when permissionMode is omitted', async () => {
     const client = makeClientStub();
     mockCreateClient.mockResolvedValue(client);

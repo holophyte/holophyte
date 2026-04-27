@@ -282,6 +282,11 @@ async function finishSession(
   });
 }
 
+// Sentinel placed in currentTurnId between accepting a follow-up and the real
+// turn id arriving via turn/started. Prevents a re-entrant sendMessageToSession
+// from passing the `currentTurnId` check while we're awaiting turn.start.
+const TURN_PENDING_SENTINEL = '__codex_turn_pending__';
+
 async function startTurn(
   session: Session,
   text: string,
@@ -296,11 +301,13 @@ async function startTurn(
 
   // `turn/started` is the authoritative stream event, but keeping the response
   // id as a fallback avoids a brief uninterruptible gap on clients that suppress
-  // the lifecycle notification. Skip the fallback if the turn already terminated
-  // (turn/completed cleared currentTurnId and recorded the id) — otherwise we'd
-  // resurrect a dead turn id and break follow-ups.
+  // the lifecycle notification. Promote the pending sentinel to the real id;
+  // skip the fallback if the turn already terminated (turn/completed cleared
+  // currentTurnId and recorded the id) — otherwise we'd resurrect a dead turn
+  // id and break follow-ups.
   if (
-    session.currentTurnId === undefined &&
+    (session.currentTurnId === undefined ||
+      session.currentTurnId === TURN_PENDING_SENTINEL) &&
     session.lastCompletedTurnId !== response.turn.id
   ) {
     session.currentTurnId = response.turn.id;
@@ -454,10 +461,22 @@ export function sendMessageToSession(
   const session = sessions.get(sessionId);
   if (!session || session.currentTurnId) return false;
 
+  // Claim the turn slot synchronously. Two pending messages dispatched
+  // concurrently (e.g. via parallel `void handlePendingMessage(msg)` calls in
+  // the subscription layer) would otherwise both pass the guard above and
+  // open overlapping turns on the same Codex thread.
+  session.currentTurnId = TURN_PENDING_SENTINEL;
+
   const effort = normalizeReasoningEffort(reasoningEffort);
   session.reasoningEffort = effort;
   void startTurn(session, text, effort).catch((err) => {
     console.error(`[codex session ${sessionId}] failed to start turn:`, err);
+    // Release the sentinel if turn.start never landed — finishSession will
+    // also clear it, but bailing here avoids a poisoned slot if the failure
+    // path never reaches finishSession (e.g. session already removed).
+    if (session.currentTurnId === TURN_PENDING_SENTINEL) {
+      session.currentTurnId = undefined;
+    }
     void finishSession(sessionId, 'failed');
   });
   return true;
