@@ -154,12 +154,16 @@ async function flushEvents(session: Session): Promise<void> {
       session.eventBuffer.unshift(...events);
       return;
     }
-    const batchIndex = session.batchIndex++;
+    // Don't advance batchIndex until the mutation succeeds — otherwise a
+    // failure leaves a permanent gap when the next flush retries the
+    // restored events under a higher index.
+    const batchIndex = session.batchIndex;
     await client.mutation(api.sessionEvents.companionInsertBatch, {
       sessionId: session.convexSessionId as Id<'sessions'>,
       events,
       batchIndex,
     });
+    session.batchIndex = batchIndex + 1;
   } catch (err) {
     console.error('Failed to flush Codex events to Convex:', err);
     session.eventBuffer.unshift(...events);

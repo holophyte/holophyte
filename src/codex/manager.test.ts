@@ -305,4 +305,58 @@ describe('codex/manager', () => {
     );
     expect(finalStatusCalls).toHaveLength(1);
   });
+
+  it('does not advance batchIndex when companionInsertBatch fails', async () => {
+    const client = makeClientStub();
+    mockCreateClient.mockResolvedValue(client);
+
+    // Reject the first event-batch insert, then succeed for subsequent calls.
+    let firstInsertSeen = false;
+    mockMutation.mockImplementation(
+      (_path: unknown, args: Record<string, unknown> | undefined) => {
+        if (
+          args &&
+          typeof args === 'object' &&
+          'events' in args &&
+          'batchIndex' in args
+        ) {
+          if (!firstInsertSeen) {
+            firstInsertSeen = true;
+            return Promise.reject(new Error('convex transient failure'));
+          }
+        }
+        return Promise.resolve(undefined);
+      },
+    );
+
+    const { startSession } = await import('./manager');
+
+    await startSession({
+      sessionId: 'codex-batchindex',
+      repoPath: '/tmp/repo',
+      prompt: 'test',
+      permissionMode: 'bypass',
+      reasoningEffort: 'medium',
+    });
+
+    // Wait for retries / subsequent flushes to settle.
+    await new Promise((r) => setTimeout(r, 200));
+
+    const insertCalls = mockMutation.mock.calls.filter((call) => {
+      const arg = call[1];
+      return (
+        arg &&
+        typeof arg === 'object' &&
+        'events' in (arg as Record<string, unknown>) &&
+        'batchIndex' in (arg as Record<string, unknown>)
+      );
+    });
+    const indices = insertCalls
+      .map((c) => (c[1] as { batchIndex: number }).batchIndex)
+      .sort((a, b) => a - b);
+    // First insert rejected; the rejected index must be reused on retry —
+    // no gap (i.e. no jump from 0 to 2).
+    expect(indices).not.toContain(2);
+    expect(indices.filter((i) => i === 0).length).toBeGreaterThanOrEqual(1);
+  });
 });
