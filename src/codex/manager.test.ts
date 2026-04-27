@@ -359,4 +359,23 @@ describe('codex/manager', () => {
     expect(indices).not.toContain(2);
     expect(indices.filter((i) => i === 0).length).toBeGreaterThanOrEqual(1);
   });
+
+  it('rejects startSession when permissionMode is omitted', async () => {
+    const client = makeClientStub();
+    mockCreateClient.mockResolvedValue(client);
+
+    const { startSession } = await import('./manager');
+
+    // Cast through `unknown` — TS already enforces the requirement, but the
+    // runtime guard catches callers that drift in via dynamic dispatch (e.g.
+    // a future Convex-driven dispatcher passing a partial config).
+    await expect(
+      startSession({
+        sessionId: 'codex-no-mode',
+        repoPath: '/tmp/repo',
+        prompt: 'test',
+        reasoningEffort: 'medium',
+      } as unknown as Parameters<typeof startSession>[0]),
+    ).rejects.toThrow(/Invalid permissionMode/);
+  });
 });

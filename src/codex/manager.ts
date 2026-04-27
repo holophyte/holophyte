@@ -312,7 +312,7 @@ export async function startSession(opts: {
   repoPath: string;
   prompt: string;
   model?: string;
-  permissionMode?: PermissionMode;
+  permissionMode: PermissionMode;
   reasoningEffort?: string;
   resumeProviderSessionId?: string;
 }): Promise<{ sessionId: string; warning?: string }> {
@@ -329,8 +329,8 @@ export async function startSession(opts: {
       ? `Warning: ${activeCount} active sessions running. Consider stopping idle sessions to free resources.`
       : undefined;
 
-  const mode = opts.permissionMode ?? 'bypass';
-  if (!VALID_PERMISSION_MODES.has(mode)) {
+  const mode = opts.permissionMode;
+  if (!mode || !VALID_PERMISSION_MODES.has(mode)) {
     throw new Error(`Invalid permissionMode: ${mode}`);
   }
 
