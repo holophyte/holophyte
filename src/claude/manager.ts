@@ -525,6 +525,10 @@ export async function startSession(opts: {
   };
 
   sdkOptions.model = opts.model ?? DEFAULT_MODEL;
+  // The supported-effort-level list is fetched after sdkQuery is created, so
+  // we can't pre-validate `xhigh`/`max` against the model here. Task 6's
+  // picker is responsible for keeping the client-side selection within the
+  // model's supported range; the manager forwards whatever the caller asks.
   if (session.reasoningEffort) sdkOptions.effort = session.reasoningEffort;
   sdkOptions.promptSuggestions = true;
   sdkOptions.settingSources = ['project'];
