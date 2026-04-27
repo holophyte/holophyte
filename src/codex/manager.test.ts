@@ -526,6 +526,33 @@ describe('codex/manager', () => {
     expect(client.turn.start).toHaveBeenCalledTimes(2);
   });
 
+  it('preserves the session reasoningEffort when caller omits it on a follow-up', async () => {
+    const client = makeClientStub();
+    mockCreateClient.mockResolvedValue(client);
+
+    const { startSession, sendMessageToSession } = await import('./manager');
+
+    await startSession({
+      sessionId: 'codex-effort-keep',
+      repoPath: '/tmp/repo',
+      prompt: 'first',
+      permissionMode: 'bypass',
+      reasoningEffort: 'high',
+    });
+
+    // Let first turn settle
+    await new Promise((r) => setTimeout(r, 50));
+
+    // Caller omits reasoningEffort — must reuse 'high', not undefined.
+    const accepted = sendMessageToSession('codex-effort-keep', 'follow up');
+    expect(accepted).toBe(true);
+    await new Promise((r) => setTimeout(r, 50));
+
+    expect(client.turn.start).toHaveBeenLastCalledWith(
+      expect.objectContaining({ effort: 'high' }),
+    );
+  });
+
   it('rejects startSession when permissionMode is omitted', async () => {
     const client = makeClientStub();
     mockCreateClient.mockResolvedValue(client);

@@ -467,8 +467,17 @@ export function sendMessageToSession(
   // open overlapping turns on the same Codex thread.
   session.currentTurnId = TURN_PENDING_SENTINEL;
 
-  const effort = normalizeReasoningEffort(reasoningEffort);
-  session.reasoningEffort = effort;
+  // Only honor an effort change when the caller explicitly supplied one.
+  // Production callers (queued follow-ups in subscriptions.ts) often omit
+  // this; treating that as a request to clear the override would silently
+  // drop the user's chosen effort on every queued follow-up.
+  const effort =
+    reasoningEffort !== undefined
+      ? normalizeReasoningEffort(reasoningEffort)
+      : session.reasoningEffort;
+  if (reasoningEffort !== undefined) {
+    session.reasoningEffort = effort;
+  }
   void startTurn(session, text, effort).catch((err) => {
     console.error(`[codex session ${sessionId}] failed to start turn:`, err);
     // Release the sentinel if turn.start never landed — finishSession will
