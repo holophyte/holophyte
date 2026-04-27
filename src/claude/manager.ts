@@ -316,10 +316,7 @@ function findModelInfo(
   selectedModel: string | undefined,
 ): ModelInfo | undefined {
   if (!selectedModel) return undefined;
-  return models.find(
-    (model) =>
-      model.value === selectedModel || model.displayName === selectedModel,
-  );
+  return models.find((model) => model.value === selectedModel);
 }
 
 /**
@@ -528,8 +525,7 @@ export async function startSession(opts: {
   };
 
   sdkOptions.model = opts.model ?? DEFAULT_MODEL;
-  const effort = normalizeClaudeEffort(opts.reasoningEffort);
-  if (effort) sdkOptions.effort = effort;
+  if (session.reasoningEffort) sdkOptions.effort = session.reasoningEffort;
   sdkOptions.promptSuggestions = true;
   sdkOptions.settingSources = ['project'];
 
