@@ -746,21 +746,28 @@ export function sendMessageToSession(
   // return false so the message stays unconsumed and retries on the next poll.
   if (!session?.sdkQuery || !session.sdkSessionId) return false;
 
-  const effortLevel = normalizeClaudeFollowupEffort(
-    reasoningEffort,
-    session.supportedEffortLevels,
-  );
-  if (session.reasoningEffort !== effortLevel) {
-    session.reasoningEffort = effortLevel;
-    void (async () => {
-      await session.sdkQuery
-        ?.applyFlagSettings({ effortLevel })
-        .catch((err) => {
-          console.error('Failed to apply Claude effort setting:', err);
-        });
-      pushUserMessage(session, text);
-    })();
-    return true;
+  // Only honor an effort change when the caller actually supplied one.
+  // Production callers (e.g. queued follow-ups in subscriptions.ts) can
+  // legitimately omit `reasoningEffort`; treating that as a request to clear
+  // the override would clobber the session's chosen effort on every queued
+  // follow-up.
+  if (reasoningEffort !== undefined) {
+    const effortLevel = normalizeClaudeFollowupEffort(
+      reasoningEffort,
+      session.supportedEffortLevels,
+    );
+    if (session.reasoningEffort !== effortLevel) {
+      session.reasoningEffort = effortLevel;
+      void (async () => {
+        await session.sdkQuery
+          ?.applyFlagSettings({ effortLevel })
+          .catch((err) => {
+            console.error('Failed to apply Claude effort setting:', err);
+          });
+        pushUserMessage(session, text);
+      })();
+      return true;
+    }
   }
 
   return pushUserMessage(session, text);

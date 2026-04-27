@@ -1056,6 +1056,63 @@ describe('claude/manager (SDK-based)', () => {
       await new Promise((r) => setTimeout(r, 100));
     });
 
+    it('does not reset effort when caller omits reasoningEffort on follow-up', async () => {
+      let resolveBlock: (() => void) | undefined;
+      const blockPromise = new Promise<void>((r) => {
+        resolveBlock = r;
+      });
+      const applyFlagSettings = vi.fn().mockResolvedValue(undefined);
+      const blockingIter = {
+        async *[Symbol.asyncIterator]() {
+          yield {
+            type: 'system',
+            subtype: 'init',
+            session_id: 'sdk-omit-effort',
+            tools: [],
+            model: 'claude-opus-4-6',
+          };
+          await blockPromise;
+        },
+        streamInput: vi.fn().mockResolvedValue(undefined),
+        supportedCommands: vi.fn().mockResolvedValue([]),
+        supportedModels: vi.fn().mockResolvedValue([
+          {
+            value: 'claude-opus-4-6',
+            displayName: 'Opus 4.6',
+            description: 'Most capable',
+            supportsEffort: true,
+            supportedEffortLevels: ['low', 'medium', 'high', 'xhigh', 'max'],
+          },
+        ]),
+        applyFlagSettings,
+      };
+      vi.mocked(mockSdkQuery).mockReturnValue(blockingIter as never);
+
+      const { startSession, sendMessageToSession } = await import('./manager');
+
+      await startSession({
+        sessionId: 'omit-effort-followup-test',
+        repoPath: '/tmp/test',
+        prompt: 'test',
+        model: 'claude-opus-4-6',
+        reasoningEffort: 'high',
+      });
+
+      await new Promise((r) => setTimeout(r, 50));
+
+      // Production caller (subscriptions.ts:131) often calls this with no
+      // effort. Should keep the session's chosen effort, NOT reset to undefined.
+      expect(
+        sendMessageToSession('omit-effort-followup-test', 'follow up'),
+      ).toBe(true);
+      await new Promise((r) => setTimeout(r, 50));
+
+      expect(applyFlagSettings).not.toHaveBeenCalled();
+
+      resolveBlock?.();
+      await new Promise((r) => setTimeout(r, 100));
+    });
+
     it('passes max on initial query options but treats max follow-ups as auto', async () => {
       let resolveBlock: (() => void) | undefined;
       const blockPromise = new Promise<void>((r) => {
