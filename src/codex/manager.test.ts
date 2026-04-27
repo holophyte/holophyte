@@ -113,10 +113,20 @@ afterEach(async () => {
   for (const id of getActiveSessions()) {
     stopSession(id);
   }
-  await new Promise((resolve) => setTimeout(resolve, 650));
+  // Poll until the in-memory map is drained (commit 2 makes finishSession
+  // delete synchronously; this returns fast). Then wait a STOP_GRACE_MS-
+  // shaped tail to let the still-pending cleanup mutations (status update,
+  // client.close) settle before the next test installs new mocks.
+  const deadline = Date.now() + 2000;
+  while (getActiveSessions().length > 0 && Date.now() < deadline) {
+    await new Promise((r) => setTimeout(r, 25));
+  }
+  await new Promise((r) => setTimeout(r, 600));
   mockCreateClient.mockReset();
-  mockMutation.mockClear();
-  mockQuery.mockClear();
+  mockMutation.mockReset();
+  mockQuery.mockReset();
+  mockMutation.mockResolvedValue(undefined);
+  mockQuery.mockResolvedValue({ nextBatchIndex: 0 });
 });
 
 describe('codex/manager', () => {
@@ -358,6 +368,61 @@ describe('codex/manager', () => {
     // no gap (i.e. no jump from 0 to 2).
     expect(indices).not.toContain(2);
     expect(indices.filter((i) => i === 0).length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('resumes via thread.resume and honors the next batch index from Convex', async () => {
+    const client = makeClientStub();
+    client.thread.resume = vi.fn().mockResolvedValue({
+      thread: { id: 'thread-resumed' },
+      model: 'gpt-5.4-mini',
+      modelProvider: 'openai',
+      serviceTier: null,
+      cwd: '/tmp/repo',
+      approvalPolicy: 'never',
+      approvalsReviewer: 'client',
+      sandbox: { type: 'danger-full-access' },
+      reasoningEffort: 'medium',
+    });
+    mockCreateClient.mockResolvedValue(client);
+    mockQuery.mockResolvedValueOnce({ nextBatchIndex: 7 });
+
+    const { startSession } = await import('./manager');
+
+    await startSession({
+      sessionId: 'codex-resume-test',
+      repoPath: '/tmp/repo',
+      prompt: 'continue',
+      permissionMode: 'bypass',
+      reasoningEffort: 'medium',
+      resumeProviderSessionId: 'thread-resumed',
+    });
+
+    await new Promise((r) => setTimeout(r, 50));
+
+    expect(client.thread.resume).toHaveBeenCalledWith(
+      expect.objectContaining({ threadId: 'thread-resumed' }),
+    );
+    expect(client.thread.start).not.toHaveBeenCalled();
+
+    // companionGetNextBatchIndex must have been queried
+    const queryCalls = mockQuery.mock.calls;
+    expect(queryCalls.length).toBeGreaterThan(0);
+
+    // First insertBatch should use the returned nextBatchIndex (7), not 0
+    const insertCalls = mockMutation.mock.calls.filter((call) => {
+      const arg = call[1];
+      return (
+        arg &&
+        typeof arg === 'object' &&
+        'events' in (arg as Record<string, unknown>) &&
+        'batchIndex' in (arg as Record<string, unknown>)
+      );
+    });
+    if (insertCalls.length > 0) {
+      const firstBatchIndex = (insertCalls[0]?.[1] as { batchIndex: number })
+        .batchIndex;
+      expect(firstBatchIndex).toBe(7);
+    }
   });
 
   it('rejects startSession when permissionMode is omitted', async () => {
