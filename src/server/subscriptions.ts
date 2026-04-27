@@ -128,7 +128,7 @@ async function handlePendingMessage(msg: PendingMessage): Promise<void> {
 
   inFlightMessages.add(msg._id);
   try {
-    const delivered = sendMessageToSession(msg.sessionId, msg.text);
+    const delivered = await sendMessageToSession(msg.sessionId, msg.text);
     if (delivered) {
       await client.mutation(api.sessionMessages.companionMarkConsumed, {
         id: msg._id,
