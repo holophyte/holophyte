@@ -69,6 +69,25 @@ describe('sessions.create', () => {
     expect(session?.permissionMode).toBe('bypass');
   });
 
+  it("accepts provider: 'codex' without permissionMode (companion dispatcher provides the fallback)", async () => {
+    // The boundary intentionally accepts an omitted permissionMode — the
+    // companion dispatcher in src/server/subscriptions.ts coalesces undefined
+    // to 'default' for Codex (spec § Task 4) and 'safe-auto' for Claude
+    // (preserves the Claude manager's pre-existing default). Document that
+    // invariant here so a future reviewer sees the boundary doesn't reject.
+    const t = convexTest(schema);
+    const { authed, taskId } = await setupTaskEnv(t);
+
+    const sessionId = await authed.mutation(api.sessions.create, {
+      taskId,
+      provider: 'codex',
+    });
+
+    const session = await authed.query(api.sessions.get, { id: sessionId });
+    expect(session?.provider).toBe('codex');
+    expect(session?.permissionMode).toBeUndefined();
+  });
+
   it('requires member role', async () => {
     const t = convexTest(schema);
     const { authed: ownerAuthed, orgId, taskId } = await setupTaskEnv(t);
