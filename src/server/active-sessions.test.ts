@@ -47,4 +47,14 @@ describe('getAllActiveSessions', () => {
     ids.push('mutated');
     expect(getAllActiveSessions()).toEqual(['claude-1', 'codex-1']);
   });
+
+  it('dedupes IDs that appear in both managers', () => {
+    claudeActive.push('shared-1', 'claude-only');
+    codexActive.push('shared-1', 'codex-only');
+    expect(getAllActiveSessions()).toEqual([
+      'shared-1',
+      'claude-only',
+      'codex-only',
+    ]);
+  });
 });

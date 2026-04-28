@@ -7,9 +7,10 @@ import { getActiveSessions as getCodexActive } from '@/codex/manager';
  * count and per-session heartbeats include sessions from either provider.
  *
  * Lives in `src/server/` rather than either manager to avoid coupling the
- * two. Order is Claude IDs followed by Codex IDs; callers should not rely on
- * the order.
+ * two. Result is deduped via Set — by construction a session lives in only
+ * one manager map, but dedup avoids double heartbeats / inflated counts if a
+ * race ever transiently lists the same ID twice.
  */
 export function getAllActiveSessions(): string[] {
-  return [...getClaudeActive(), ...getCodexActive()];
+  return Array.from(new Set([...getClaudeActive(), ...getCodexActive()]));
 }

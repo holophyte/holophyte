@@ -835,6 +835,13 @@ describe('claude/manager (SDK-based)', () => {
       // Wait for the iterator to complete and all flushes to settle
       await new Promise((r) => setTimeout(r, 200));
 
+      // resumeProviderSessionId must be forwarded to the SDK as options.resume
+      expect(mockSdkQuery).toHaveBeenCalledWith(
+        expect.objectContaining({
+          options: expect.objectContaining({ resume: 'sdk-resume-flush' }),
+        }),
+      );
+
       // companionInsertBatch should have been called multiple times
       const insertCalls = mockMutation.mock.calls.filter(
         (call) =>
@@ -871,6 +878,12 @@ describe('claude/manager (SDK-based)', () => {
 
       // Wait for the iterator to complete
       await new Promise((r) => setTimeout(r, 200));
+
+      // No resumeProviderSessionId → SDK's options.resume must be unset
+      const sdkCall = vi.mocked(mockSdkQuery).mock.calls.at(-1);
+      const sdkOptions = (sdkCall?.[0] as { options?: { resume?: string } })
+        ?.options;
+      expect(sdkOptions?.resume).toBeUndefined();
 
       // All sessions flush per-event now
       const insertCalls = mockMutation.mock.calls.filter(
