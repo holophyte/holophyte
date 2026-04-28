@@ -3,7 +3,7 @@
 import { hostname } from 'node:os';
 import { api } from '@convex/_generated/api';
 import type { Id } from '@convex/_generated/dataModel';
-import { getActiveSessions } from '@/claude/manager';
+import { getAllActiveSessions } from './active-sessions';
 import type { TokenFileData } from './auth-token';
 import { readTokenFile, signInAnonymous } from './auth-token';
 import { ensureCodexModelsProbe } from './codex-models-probe';
@@ -23,6 +23,8 @@ export interface QueuedSession {
   _id: Id<'sessions'>;
   queuedPrompt?: string;
   sdkSessionId?: string;
+  providerSessionId?: string;
+  provider?: 'claude' | 'codex';
   model?: string;
   permissionMode?: string;
   repoPath: string;
@@ -118,7 +120,7 @@ export async function companionPoll() {
 
     // 1. Send heartbeat for all active sessions
     if (client) {
-      const activeIds = getActiveSessions();
+      const activeIds = getAllActiveSessions();
       if (activeIds.length > 0) {
         try {
           await client.mutation(api.sessions.companionBatchHeartbeat, {
@@ -219,7 +221,7 @@ export async function companionPoll() {
     if (heartbeatClient) {
       try {
         await heartbeatClient.mutation(api.companion.companionHeartbeat, {
-          activeSessionCount: getActiveSessions().length,
+          activeSessionCount: getAllActiveSessions().length,
           machineId: MACHINE_ID,
           instanceId: INSTANCE_ID,
           url: companionUrl,
