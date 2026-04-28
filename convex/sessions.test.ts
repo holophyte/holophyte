@@ -72,7 +72,8 @@ describe('sessions.create', () => {
   it("accepts provider: 'codex' without permissionMode (companion dispatcher provides the fallback)", async () => {
     // The boundary intentionally accepts an omitted permissionMode — the
     // companion dispatcher in src/server/subscriptions.ts coalesces undefined
-    // to 'default' for Codex (spec § Task 4) and 'safe-auto' for Claude
+    // to 'bypass' for Codex (Task 3's approvalPolicyForMode currently only
+    // supports bypass; widens in Task 5) and 'safe-auto' for Claude
     // (preserves the Claude manager's pre-existing default). Document that
     // invariant here so a future reviewer sees the boundary doesn't reject.
     const t = convexTest(schema);
