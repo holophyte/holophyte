@@ -804,7 +804,7 @@ describe('claude/manager (SDK-based)', () => {
   // ---------------------------------------------------------------------------
 
   describe('resumed session flush behavior', () => {
-    it('calls flushEvents for every event when resumeSdkSessionId is provided', async () => {
+    it('calls flushEvents for every event when resumeProviderSessionId is provided', async () => {
       // getNextBatchIndex returns nextBatchIndex = 5
       mockQuery.mockResolvedValueOnce({ nextBatchIndex: 5 });
 
@@ -829,7 +829,7 @@ describe('claude/manager (SDK-based)', () => {
         sessionId: 'resume-flush-test',
         repoPath: '/tmp',
         prompt: 'continue the work',
-        resumeSdkSessionId: 'sdk-resume-flush',
+        resumeProviderSessionId: 'sdk-resume-flush',
       });
 
       // Wait for the iterator to complete and all flushes to settle
@@ -845,7 +845,7 @@ describe('claude/manager (SDK-based)', () => {
       expect(insertCalls.length).toBeGreaterThanOrEqual(4);
     });
 
-    it('calls flushEvents for every event even without resumeSdkSessionId', async () => {
+    it('calls flushEvents for every event even without resumeProviderSessionId', async () => {
       const mockEvents = [
         { type: 'assistant', text: 'Hello' },
         { type: 'assistant', text: 'World' },
@@ -866,7 +866,7 @@ describe('claude/manager (SDK-based)', () => {
         sessionId: 'no-resume-flush-test',
         repoPath: '/tmp',
         prompt: 'fresh session',
-        // No resumeSdkSessionId — non-resumed session
+        // No resumeProviderSessionId — non-resumed session
       });
 
       // Wait for the iterator to complete

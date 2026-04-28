@@ -59,7 +59,7 @@ async function handleQueuedSession(session: QueuedSession): Promise<void> {
       prompt: session.queuedPrompt,
       model: session.model,
       permissionMode: session.permissionMode as PermissionMode | undefined,
-      resumeSdkSessionId: session.sdkSessionId,
+      resumeProviderSessionId: session.sdkSessionId,
     });
   } catch (err) {
     console.error(`Failed to start queued session ${session._id}:`, err);

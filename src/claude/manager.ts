@@ -250,7 +250,7 @@ function bufferEvent(session: Session, event: SDKMessage): void {
  *
  * Only active (running) sessions are present in memory — idle sessions exist
  * only in Convex and must be resumed via {@link startSession} with
- * `resumeSdkSessionId`.
+ * `resumeProviderSessionId`.
  */
 export function getSession(sessionId: string): Session | undefined {
   return sessions.get(sessionId);
@@ -323,11 +323,12 @@ function findModelInfo(
  * Spawns a Claude Code SDK process for the given session and begins streaming
  * events to Convex.
  *
- * **New session** — omit `resumeSdkSessionId`. A fresh conversation starts with
+ * **New session** — omit `resumeProviderSessionId`. A fresh conversation starts with
  * `prompt` as the first user message.
  *
- * **Resume** — pass the `sdkSessionId` from a previous idle session. The SDK
- * picks up the conversation context and treats `prompt` as a follow-up message.
+ * **Resume** — pass the `providerSessionId` (or legacy `sdkSessionId`) from a
+ * previous idle session. The SDK picks up the conversation context and treats
+ * `prompt` as a follow-up message.
  *
  * The function returns as soon as the background iterator is launched. Actual
  * SDK events are persisted to Convex for the frontend to subscribe to.
@@ -345,7 +346,7 @@ export async function startSession(opts: {
   model?: string;
   permissionMode?: PermissionMode;
   reasoningEffort?: string;
-  resumeSdkSessionId?: string;
+  resumeProviderSessionId?: string;
 }): Promise<{ sessionId: string; warning?: string }> {
   const { sessionId } = opts;
 
@@ -372,7 +373,7 @@ export async function startSession(opts: {
   // When resuming, start batchIndex after existing persisted batches so new
   // events sort after the previous session's history.
   let initialBatchIndex = 0;
-  if (opts.resumeSdkSessionId) {
+  if (opts.resumeProviderSessionId) {
     try {
       const httpClient = await getConvexHttpClient();
       if (!httpClient) throw new Error('Convex client not initialized');
@@ -533,8 +534,8 @@ export async function startSession(opts: {
   sdkOptions.promptSuggestions = true;
   sdkOptions.settingSources = ['project'];
 
-  if (opts.resumeSdkSessionId) {
-    sdkOptions.resume = opts.resumeSdkSessionId;
+  if (opts.resumeProviderSessionId) {
+    sdkOptions.resume = opts.resumeProviderSessionId;
   }
 
   // Consume the SDK iterator in the background (non-blocking)
