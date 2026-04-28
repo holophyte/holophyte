@@ -57,6 +57,14 @@ async function handleQueuedSession(session: QueuedSession): Promise<void> {
     });
     if (!claimed.ok) return;
 
+    // Codex requires permissionMode; Claude accepts it as optional. Per-provider
+    // fallback preserves Claude's existing 'safe-auto' default while giving
+    // Codex the 'default' fallback specified in the integration plan.
+    const fallbackMode: PermissionMode =
+      provider === 'codex' ? 'default' : 'safe-auto';
+    const permissionMode =
+      (session.permissionMode as PermissionMode | undefined) ?? fallbackMode;
+
     // Note: any stop request that arrived while claiming was deferred by
     // handleStoppedSession (it skips sessions with in-flight claims). It will
     // be processed on the next subscription re-evaluation once inFlightClaims
@@ -66,9 +74,7 @@ async function handleQueuedSession(session: QueuedSession): Promise<void> {
       repoPath: session.repoPath,
       prompt: session.queuedPrompt,
       model: session.model,
-      // Codex requires permissionMode; Claude accepts it as optional. Always
-      // pass an explicit value so a single opts shape satisfies both signatures.
-      permissionMode: (session.permissionMode as PermissionMode) ?? 'default',
+      permissionMode,
       resumeProviderSessionId:
         session.providerSessionId ?? session.sdkSessionId,
     });
