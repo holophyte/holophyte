@@ -5,14 +5,19 @@
 
 import { api } from '@convex/_generated/api';
 import type { PermissionMode } from '@/claude/manager';
-import {
-  getSession,
-  sendMessageToSession,
-  startSession,
-  stopSession,
-} from '@/claude/manager';
+import * as claude from '@/claude/manager';
+import * as codex from '@/codex/manager';
 import { getConvexClient } from './convex-client';
 import type { PendingMessage, QueuedSession, StoppedSession } from './polling';
+
+/** Returns whichever manager currently owns the in-memory session, or `null`. */
+function findOwningManager(
+  sessionId: string,
+): typeof claude | typeof codex | null {
+  if (claude.getSession(sessionId)) return claude;
+  if (codex.getSession(sessionId)) return codex;
+  return null;
+}
 
 let subscriptionsActive = false;
 // Incremented by onError callbacks; reset on each fresh startCompanionSubscriptions.
@@ -36,11 +41,14 @@ const inFlightMessages = new Set<string>();
 
 async function handleQueuedSession(session: QueuedSession): Promise<void> {
   if (!session.queuedPrompt) return;
-  if (getSession(session._id)) return;
+  if (findOwningManager(session._id)) return;
   if (inFlightClaims.has(session._id)) return;
 
   const client = getConvexClient();
   if (!client) return;
+
+  const provider = session.provider ?? 'claude';
+  const manager = provider === 'codex' ? codex : claude;
 
   inFlightClaims.add(session._id);
   try {
@@ -53,13 +61,16 @@ async function handleQueuedSession(session: QueuedSession): Promise<void> {
     // handleStoppedSession (it skips sessions with in-flight claims). It will
     // be processed on the next subscription re-evaluation once inFlightClaims
     // releases this ID via the finally block below.
-    await startSession({
+    await manager.startSession({
       sessionId: session._id,
       repoPath: session.repoPath,
       prompt: session.queuedPrompt,
       model: session.model,
-      permissionMode: session.permissionMode as PermissionMode | undefined,
-      resumeProviderSessionId: session.sdkSessionId,
+      // Codex requires permissionMode; Claude accepts it as optional. Always
+      // pass an explicit value so a single opts shape satisfies both signatures.
+      permissionMode: (session.permissionMode as PermissionMode) ?? 'default',
+      resumeProviderSessionId:
+        session.providerSessionId ?? session.sdkSessionId,
     });
   } catch (err) {
     console.error(`Failed to start queued session ${session._id}:`, err);
@@ -76,10 +87,10 @@ async function handleQueuedSession(session: QueuedSession): Promise<void> {
   }
 }
 
-/** Waits until a session is removed from the local manager map (max 10s). */
+/** Waits until a session is removed from both manager maps (max 10s). */
 async function waitForSessionGone(sessionId: string): Promise<void> {
   for (let i = 0; i < 100; i++) {
-    if (!getSession(sessionId)) return;
+    if (!findOwningManager(sessionId)) return;
     await new Promise<void>((resolve) => setTimeout(resolve, 100));
   }
   console.error(
@@ -90,20 +101,20 @@ async function waitForSessionGone(sessionId: string): Promise<void> {
 async function handleStoppedSession(session: StoppedSession): Promise<void> {
   if (inFlightStops.has(session._id)) return;
   // If a claim is in-flight for this session, skip — once startSession() makes
-  // it visible via getSession(), the next subscription re-evaluation will pick
-  // up any stop request correctly.
+  // it visible via the owning manager, the next subscription re-evaluation
+  // will pick up any stop request correctly.
   if (inFlightClaims.has(session._id)) return;
 
   const client = getConvexClient();
-  const local = getSession(session._id);
+  const owner = findOwningManager(session._id);
 
   // Nothing to do if the session isn't running locally and we can't reach Convex
-  if (!local && !client) return;
+  if (!owner && !client) return;
 
   inFlightStops.add(session._id);
   try {
-    if (local) {
-      stopSession(session._id);
+    if (owner) {
+      owner.stopSession(session._id);
       // Hold the lock until the session is cleaned up so that subscription
       // re-evaluations triggered by heartbeats don't call stopSession() again.
       await waitForSessionGone(session._id);
@@ -128,7 +139,14 @@ async function handlePendingMessage(msg: PendingMessage): Promise<void> {
 
   inFlightMessages.add(msg._id);
   try {
-    const delivered = await sendMessageToSession(msg.sessionId, msg.text);
+    // PendingMessage carries no provider field, so route by which manager
+    // currently owns the session. If neither does (session not yet running
+    // locally), leave the message unconsumed — the next subscription tick
+    // will retry once the session is claimed.
+    const owner = findOwningManager(msg.sessionId);
+    const delivered = owner
+      ? await owner.sendMessageToSession(msg.sessionId, msg.text)
+      : false;
     if (delivered) {
       await client.mutation(api.sessionMessages.companionMarkConsumed, {
         id: msg._id,
