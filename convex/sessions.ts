@@ -142,13 +142,6 @@ export const create = mutation({
     provider: v.union(v.literal('claude'), v.literal('codex')),
   },
   handler: async (ctx, args) => {
-    // Validator accepts 'codex' so the API shape is stable for Tasks 3–9, but
-    // the companion has no Codex dispatcher yet (lands in Task 4). Reject at
-    // the boundary until then so a queued Codex session can't be claimed by
-    // the Claude runner.
-    if (args.provider === 'codex') {
-      throw new Error('Codex provider not yet supported');
-    }
     const task = await ctx.db.get(args.taskId);
     if (!task) throw new Error('Task not found');
     const repo = await ctx.db.get(task.repoId);

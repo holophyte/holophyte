@@ -51,6 +51,44 @@ describe('sessions.create', () => {
     expect(session?.lastActivityAt).toBeLessThanOrEqual(after);
   });
 
+  it("accepts provider: 'codex' and persists it on the session row", async () => {
+    const t = convexTest(schema);
+    const { authed, taskId } = await setupTaskEnv(t);
+
+    const sessionId = await authed.mutation(api.sessions.create, {
+      taskId,
+      provider: 'codex',
+      model: 'gpt-5.4-mini',
+      permissionMode: 'bypass',
+    });
+
+    const session = await authed.query(api.sessions.get, { id: sessionId });
+    expect(session?.provider).toBe('codex');
+    expect(session?.status).toBe('queued');
+    expect(session?.model).toBe('gpt-5.4-mini');
+    expect(session?.permissionMode).toBe('bypass');
+  });
+
+  it("accepts provider: 'codex' without permissionMode (companion dispatcher provides the fallback)", async () => {
+    // The boundary intentionally accepts an omitted permissionMode — the
+    // companion dispatcher in src/server/subscriptions.ts coalesces undefined
+    // to 'bypass' for Codex (Task 3's approvalPolicyForMode currently only
+    // supports bypass; widens in Task 5) and 'safe-auto' for Claude
+    // (preserves the Claude manager's pre-existing default). Document that
+    // invariant here so a future reviewer sees the boundary doesn't reject.
+    const t = convexTest(schema);
+    const { authed, taskId } = await setupTaskEnv(t);
+
+    const sessionId = await authed.mutation(api.sessions.create, {
+      taskId,
+      provider: 'codex',
+    });
+
+    const session = await authed.query(api.sessions.get, { id: sessionId });
+    expect(session?.provider).toBe('codex');
+    expect(session?.permissionMode).toBeUndefined();
+  });
+
   it('requires member role', async () => {
     const t = convexTest(schema);
     const { authed: ownerAuthed, orgId, taskId } = await setupTaskEnv(t);

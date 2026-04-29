@@ -804,7 +804,7 @@ describe('claude/manager (SDK-based)', () => {
   // ---------------------------------------------------------------------------
 
   describe('resumed session flush behavior', () => {
-    it('calls flushEvents for every event when resumeSdkSessionId is provided', async () => {
+    it('calls flushEvents for every event when resumeProviderSessionId is provided', async () => {
       // getNextBatchIndex returns nextBatchIndex = 5
       mockQuery.mockResolvedValueOnce({ nextBatchIndex: 5 });
 
@@ -829,11 +829,18 @@ describe('claude/manager (SDK-based)', () => {
         sessionId: 'resume-flush-test',
         repoPath: '/tmp',
         prompt: 'continue the work',
-        resumeSdkSessionId: 'sdk-resume-flush',
+        resumeProviderSessionId: 'sdk-resume-flush',
       });
 
       // Wait for the iterator to complete and all flushes to settle
       await new Promise((r) => setTimeout(r, 200));
+
+      // resumeProviderSessionId must be forwarded to the SDK as options.resume
+      expect(mockSdkQuery).toHaveBeenCalledWith(
+        expect.objectContaining({
+          options: expect.objectContaining({ resume: 'sdk-resume-flush' }),
+        }),
+      );
 
       // companionInsertBatch should have been called multiple times
       const insertCalls = mockMutation.mock.calls.filter(
@@ -845,7 +852,7 @@ describe('claude/manager (SDK-based)', () => {
       expect(insertCalls.length).toBeGreaterThanOrEqual(4);
     });
 
-    it('calls flushEvents for every event even without resumeSdkSessionId', async () => {
+    it('calls flushEvents for every event even without resumeProviderSessionId', async () => {
       const mockEvents = [
         { type: 'assistant', text: 'Hello' },
         { type: 'assistant', text: 'World' },
@@ -866,11 +873,17 @@ describe('claude/manager (SDK-based)', () => {
         sessionId: 'no-resume-flush-test',
         repoPath: '/tmp',
         prompt: 'fresh session',
-        // No resumeSdkSessionId — non-resumed session
+        // No resumeProviderSessionId — non-resumed session
       });
 
       // Wait for the iterator to complete
       await new Promise((r) => setTimeout(r, 200));
+
+      // No resumeProviderSessionId → SDK's options.resume must be unset
+      const sdkCall = vi.mocked(mockSdkQuery).mock.calls.at(-1);
+      const sdkOptions = (sdkCall?.[0] as { options?: { resume?: string } })
+        ?.options;
+      expect(sdkOptions?.resume).toBeUndefined();
 
       // All sessions flush per-event now
       const insertCalls = mockMutation.mock.calls.filter(
