@@ -57,11 +57,18 @@ async function handleQueuedSession(session: QueuedSession): Promise<void> {
     });
     if (!claimed.ok) return;
 
-    // Codex requires permissionMode; Claude accepts it as optional. Both
-    // providers fall back to 'safe-auto' now that Task 5's approval handlers
-    // cover 'default' and 'safe-auto' on the Codex side.
+    // Phase 0 only routes the two `item/*` binary approval methods through
+    // the bridge; structured methods (user input, MCP elicitation,
+    // permissions) and top-level methods (applyPatch, execCommand) are
+    // denied upstream. For null-permissionMode Codex sessions the
+    // 'safe-auto' fallback would silently auto-deny those flows — a
+    // regression for sessions that previously ran fine under Phase 0's
+    // bypass-only Codex. Keep the Codex fallback on 'bypass' until Phase 0.1
+    // ships full structured-method coverage.
+    const fallback: PermissionMode =
+      provider === 'codex' ? 'bypass' : 'safe-auto';
     const permissionMode =
-      (session.permissionMode as PermissionMode | undefined) ?? 'safe-auto';
+      (session.permissionMode as PermissionMode | undefined) ?? fallback;
 
     // Note: any stop request that arrived while claiming was deferred by
     // handleStoppedSession (it skips sessions with in-flight claims). It will
