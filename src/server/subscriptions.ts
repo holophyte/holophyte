@@ -57,16 +57,11 @@ async function handleQueuedSession(session: QueuedSession): Promise<void> {
     });
     if (!claimed.ok) return;
 
-    // Codex requires permissionMode; Claude accepts it as optional. Per-provider
-    // fallback preserves Claude's existing 'safe-auto' default. Codex falls
-    // back to 'bypass' because Task 3's approvalPolicyForMode currently only
-    // supports bypass — the wider mode set lights up in Task 5 once approval
-    // handling lands. Until then, any other Codex fallback would throw inside
-    // codex.startSession and immediately fail the session.
-    const fallbackMode: PermissionMode =
-      provider === 'codex' ? 'bypass' : 'safe-auto';
+    // Codex requires permissionMode; Claude accepts it as optional. Both
+    // providers fall back to 'safe-auto' now that Task 5's approval handlers
+    // cover 'default' and 'safe-auto' on the Codex side.
     const permissionMode =
-      (session.permissionMode as PermissionMode | undefined) ?? fallbackMode;
+      (session.permissionMode as PermissionMode | undefined) ?? 'safe-auto';
 
     // Note: any stop request that arrived while claiming was deferred by
     // handleStoppedSession (it skips sessions with in-flight claims). It will
