@@ -304,11 +304,14 @@ async function persistAndAwaitApproval(
 
   return new Promise<AppServerClientApprovalResponse>((resolve) => {
     let intervalId: ReturnType<typeof setInterval> | undefined;
-    // Auto-deny on session abort so we don't leak this promise. If a poll
-    // tick is mid-await when abort fires, that tick may still call
-    // resolve(request.approve()) afterwards — Promise.resolve is idempotent
-    // so deny() wins by virtue of firing first. Acceptable: the session is
-    // ending; any user-late approval has nothing to act on.
+    // Single-flight guard: setInterval can fire a second tick while the
+    // first is awaiting Convex. Without this latch, two ticks could both
+    // observe the same resolved row before companionMarkConsumed lands and
+    // both call request.approve() / request.deny(). The SDK only consumes
+    // the first resolve, but the duplicated work and double mark-consumed
+    // mutation are wasted.
+    let polling = false;
+    // Auto-deny on session abort so we don't leak this promise.
     const onAbort = () => {
       if (intervalId !== undefined) clearInterval(intervalId);
       resolve(request.deny());
@@ -318,6 +321,8 @@ async function persistAndAwaitApproval(
     });
 
     intervalId = setInterval(async () => {
+      if (polling) return;
+      polling = true;
       try {
         const httpClient = await getConvexHttpClient();
         if (!httpClient) return;
@@ -341,6 +346,8 @@ async function persistAndAwaitApproval(
           });
       } catch (err) {
         console.error('Failed to poll Codex pending approvals:', err);
+      } finally {
+        polling = false;
       }
     }, APPROVAL_POLL_INTERVAL_MS);
   });
