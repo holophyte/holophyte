@@ -882,6 +882,49 @@ describe('codex/manager', () => {
     expect(response.decision).toBe('approve');
   });
 
+  it('returns request.deny() when persisting the approval fails', async () => {
+    const client = makeClientStub();
+    mockCreateClient.mockResolvedValue(client);
+
+    // Default mockMutation resolves; override only the companionCreate path
+    // (4-key arg shape with sessionId/requestId/tool/input).
+    mockMutation.mockImplementation(
+      (_path: unknown, args: Record<string, unknown> | undefined) => {
+        if (
+          args &&
+          typeof args === 'object' &&
+          'requestId' in args &&
+          'tool' in args
+        ) {
+          return Promise.reject(new Error('convex unreachable'));
+        }
+        return Promise.resolve(undefined);
+      },
+    );
+
+    const { startSession } = await import('./manager');
+    await startSession({
+      sessionId: 'codex-create-fail',
+      repoPath: '/tmp/repo',
+      prompt: 'test',
+      permissionMode: 'default',
+      reasoningEffort: 'medium',
+    });
+    await new Promise((r) => setTimeout(r, 30));
+
+    const inboundRequest = makeApprovalRequest(
+      'item/fileChange/requestApproval',
+      'req-fail-1',
+      { path: 'a.ts' },
+    );
+    const response = (await client.invokeApproval(
+      inboundRequest,
+    )) as ApprovalResponse;
+    expect(response.decision).toBe('deny');
+    expect(inboundRequest.deny).toHaveBeenCalledTimes(1);
+    expect(inboundRequest.approve).not.toHaveBeenCalled();
+  });
+
   it('auto-denies in-flight approvals when the session controller aborts', async () => {
     const client = makeClientStub();
     mockCreateClient.mockResolvedValue(client);

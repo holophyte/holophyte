@@ -130,8 +130,10 @@ function normalizeReasoningEffort(
 function approvalPolicyForMode(mode: PermissionMode): ApprovalPolicy {
   // Safety matrix per the integration spec. 'safe-auto' degrades to the same
   // policy as 'default' in Phase 0 — Codex has no command-allowlist analogue
-  // for Claude's SAFE_BASH_PATTERNS, so honoring the safety guarantee means
-  // every tool prompts. A pattern-pre-filter is Phase 0.1+.
+  // for Claude's SAFE_BASH_PATTERNS. Codex's 'on-request' policy still lets
+  // sandbox-permitted tools run unprompted; only side-effecting operations
+  // outside the sandbox prompt. A pattern-pre-filter for additional commands
+  // is Phase 0.1+.
   if (mode === 'bypass') return 'never';
   return 'on-request';
 }
@@ -265,7 +267,21 @@ async function persistAndAwaitApproval(
   }
 
   return new Promise<AppServerClientApprovalResponse>((resolve) => {
-    const intervalId = setInterval(async () => {
+    let intervalId: ReturnType<typeof setInterval> | undefined;
+    // Auto-deny on session abort so we don't leak this promise. If a poll
+    // tick is mid-await when abort fires, that tick may still call
+    // resolve(request.approve()) afterwards — Promise.resolve is idempotent
+    // so deny() wins by virtue of firing first. Acceptable: the session is
+    // ending; any user-late approval has nothing to act on.
+    const onAbort = () => {
+      if (intervalId !== undefined) clearInterval(intervalId);
+      resolve(request.deny());
+    };
+    session.controller.signal.addEventListener('abort', onAbort, {
+      once: true,
+    });
+
+    intervalId = setInterval(async () => {
       try {
         const httpClient = await getConvexHttpClient();
         if (!httpClient) return;
@@ -290,15 +306,6 @@ async function persistAndAwaitApproval(
         console.error('Failed to poll Codex pending approvals:', err);
       }
     }, APPROVAL_POLL_INTERVAL_MS);
-
-    // Auto-deny on session abort so we don't leak this promise.
-    const onAbort = () => {
-      clearInterval(intervalId);
-      resolve(request.deny());
-    };
-    session.controller.signal.addEventListener('abort', onAbort, {
-      once: true,
-    });
   });
 }
 
