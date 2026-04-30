@@ -651,6 +651,34 @@ describe('codex/manager', () => {
     );
   });
 
+  it.each([
+    ['default', 'on-request'],
+    ['safe-auto', 'on-request'],
+    ['bypass', 'never'],
+  ] as const)('maps permissionMode %s to approvalPolicy %s', async (mode, expectedPolicy) => {
+    const client = makeClientStub();
+    mockCreateClient.mockResolvedValue(client);
+
+    const { startSession } = await import('./manager');
+
+    await startSession({
+      sessionId: `codex-mode-${mode}`,
+      repoPath: '/tmp/repo',
+      prompt: 'check policy',
+      permissionMode: mode,
+      reasoningEffort: 'medium',
+    });
+
+    await new Promise((r) => setTimeout(r, 30));
+
+    expect(client.thread.start).toHaveBeenCalledWith(
+      expect.objectContaining({ approvalPolicy: expectedPolicy }),
+    );
+    expect(client.turn.start).toHaveBeenCalledWith(
+      expect.objectContaining({ approvalPolicy: expectedPolicy }),
+    );
+  });
+
   it('rejects startSession when permissionMode is omitted', async () => {
     const client = makeClientStub();
     mockCreateClient.mockResolvedValue(client);

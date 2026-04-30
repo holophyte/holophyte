@@ -126,10 +126,12 @@ function normalizeReasoningEffort(
 }
 
 function approvalPolicyForMode(mode: PermissionMode): ApprovalPolicy {
-  // Task 3 deliberately has no approval handlers. Only bypass can make forward
-  // progress until Task 5 wires request handling.
+  // Safety matrix per the integration spec. 'safe-auto' degrades to the same
+  // policy as 'default' in Phase 0 — Codex has no command-allowlist analogue
+  // for Claude's SAFE_BASH_PATTERNS, so honoring the safety guarantee means
+  // every tool prompts. A pattern-pre-filter is Phase 0.1+.
   if (mode === 'bypass') return 'never';
-  throw new Error(`Codex permissionMode is not supported yet: ${mode}`);
+  return 'on-request';
 }
 
 function sleep(ms: number): Promise<void> {
