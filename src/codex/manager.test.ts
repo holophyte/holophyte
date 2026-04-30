@@ -699,7 +699,7 @@ describe('codex/manager', () => {
   });
 
   it.each([
-    ['default', 'on-request'],
+    ['default', 'untrusted'],
     ['safe-auto', 'on-request'],
     ['bypass', 'never'],
   ] as const)('maps permissionMode %s to approvalPolicy %s', async (mode, expectedPolicy) => {
@@ -830,56 +830,43 @@ describe('codex/manager', () => {
     expect(inboundRequest.approve).not.toHaveBeenCalled();
   });
 
-  it('routes structured approval methods (tool/requestUserInput) through the same bridge', async () => {
-    // Spec line 350-358: Phase 0 treats all seven methods uniformly. The
-    // structured ones (tool/requestUserInput, mcpServer/elicitation/request,
-    // permissions/requestApproval) get a binary approve/deny in this phase;
-    // rich rendering with answer collection is Phase 0.1+.
+  it.each([
+    'item/tool/requestUserInput',
+    'mcpServer/elicitation/request',
+    'item/permissions/requestApproval',
+  ])('denies structured approval method %s without writing a pendingApprovals row', async (method) => {
+    // Phase 0 limitation: structured methods need response payloads (answers,
+    // content, permission scopes) the UI can't yet collect. Auto-approving
+    // them with empty defaults is unsafe; deny immediately and surface the
+    // failure to the agent so it can retry or fall back. Rich UI is Phase 0.1+.
     const client = makeClientStub();
     mockCreateClient.mockResolvedValue(client);
 
     const { startSession } = await import('./manager');
     await startSession({
-      sessionId: 'codex-approval-structured',
+      sessionId: `codex-structured-${method.replace(/\W/g, '-')}`,
       repoPath: '/tmp/repo',
-      prompt: 'ask a question',
+      prompt: 'kick off',
       permissionMode: 'default',
       reasoningEffort: 'medium',
     });
     await new Promise((r) => setTimeout(r, 30));
 
-    const inboundRequest = makeApprovalRequest(
-      'item/tool/requestUserInput',
-      'req-ui-1',
-      {
-        questions: [
-          { id: 'q1', prompt: 'Continue?', options: [], allowOther: true },
-        ],
-      },
-    );
-    const responsePromise = client.invokeApproval(inboundRequest);
-    await new Promise((r) => setTimeout(r, 30));
+    const inboundRequest = makeApprovalRequest(method, 'req-struct-1', {});
+    const response = (await client.invokeApproval(
+      inboundRequest,
+    )) as ApprovalResponse;
 
+    expect(response.decision).toBe('deny');
+    expect(inboundRequest.deny).toHaveBeenCalledTimes(1);
+    expect(inboundRequest.approve).not.toHaveBeenCalled();
+
+    // Must not persist — no pendingApprovals row written for structured methods.
     const createCall = mockMutation.mock.calls.find((call) => {
       const arg = call[1] as Record<string, unknown> | undefined;
-      return arg && arg.requestId === 'req-ui-1';
+      return arg && arg.requestId === 'req-struct-1';
     });
-    expect(createCall).toBeDefined();
-    expect((createCall?.[1] as Record<string, unknown>).tool).toBe(
-      'codex.item/tool/requestUserInput',
-    );
-
-    mockQuery.mockResolvedValue([
-      {
-        _id: 'pa-ui-1',
-        requestId: 'req-ui-1',
-        approved: true,
-        consumed: false,
-        resolved: true,
-      },
-    ]);
-    const response = (await responsePromise) as ApprovalResponse;
-    expect(response.decision).toBe('approve');
+    expect(createCall).toBeUndefined();
   });
 
   it('returns request.deny() when persisting the approval fails', async () => {

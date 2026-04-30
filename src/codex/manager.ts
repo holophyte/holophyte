@@ -128,14 +128,20 @@ function normalizeReasoningEffort(
 }
 
 function approvalPolicyForMode(mode: PermissionMode): ApprovalPolicy {
-  // Safety matrix per the integration spec. 'safe-auto' degrades to the same
-  // policy as 'default' in Phase 0 — Codex has no command-allowlist analogue
-  // for Claude's SAFE_BASH_PATTERNS. Codex's 'on-request' policy still lets
-  // sandbox-permitted tools run unprompted; only side-effecting operations
-  // outside the sandbox prompt. A pattern-pre-filter for additional commands
-  // is Phase 0.1+.
+  // Holophyte's `default` mode means "prompt for every tool" — match that
+  // semantic with Codex's `'untrusted'` policy, the only one that actually
+  // confirms every operation. The spec's safety matrix called for
+  // `'on-request'`, but in practice Codex's `'on-request'` only prompts on
+  // higher-risk operations — sandbox-permitted edits/commands run silently,
+  // which is materially weaker than Claude's `default` and surprises any
+  // user who picked the strictest mode.
+  //
+  // `safe-auto` keeps `'on-request'` because Phase 0 has no command
+  // allowlist analogous to Claude's `SAFE_BASH_PATTERNS` — a Codex-side
+  // pattern-pre-filter is Phase 0.1+.
   if (mode === 'bypass') return 'never';
-  return 'on-request';
+  if (mode === 'safe-auto') return 'on-request';
+  return 'untrusted';
 }
 
 function sleep(ms: number): Promise<void> {
@@ -217,30 +223,52 @@ function subscribeToEvents(session: Session): void {
 
 const APPROVAL_POLL_INTERVAL_MS = 500;
 
+/**
+ * Methods whose `approve()` produces a usable response shape from a single
+ * binary user decision. The other three methods
+ * (`item/tool/requestUserInput`, `mcpServer/elicitation/request`,
+ * `item/permissions/requestApproval`) need a payload — answers, content, or
+ * a permission scope — that Phase 0's UI can't collect, so an "approve"
+ * click would silently send empty defaults. Structured methods are denied
+ * immediately with a Phase-0.1+ marker until the rich UI lands.
+ */
+const BINARY_APPROVAL_METHODS = new Set<string>([
+  'applyPatchApproval',
+  'execCommandApproval',
+  'item/commandExecution/requestApproval',
+  'item/fileChange/requestApproval',
+]);
+
 function registerApprovalHandlers(session: Session): void {
   const unsubscribe = session.client.handleApprovalRequests(
-    (request: AppServerClientInboundApprovalRequest) =>
-      persistAndAwaitApproval(session, request),
+    (request: AppServerClientInboundApprovalRequest) => {
+      if (!BINARY_APPROVAL_METHODS.has(request.method)) {
+        console.warn(
+          `[codex session ${session.convexSessionId}] denying structured approval ${request.method}: rich response collection is Phase 0.1+`,
+        );
+        return request.deny();
+      }
+      return persistAndAwaitApproval(session, request);
+    },
   );
   session.unsubscribers.push(unsubscribe);
 }
 
 /**
- * Persist a Codex approval to `pendingApprovals`, then poll Convex until the
- * frontend resolves it. Mirrors `src/claude/manager.ts`'s `canUseTool` flow,
- * with two differences:
+ * Persist a Codex binary approval to `pendingApprovals`, then poll Convex
+ * until the frontend resolves it. Mirrors `src/claude/manager.ts`'s
+ * `canUseTool` flow, with two differences:
  *
- * - `tool` is prefixed `codex.<method>` so the frontend can route to a Codex
- *   approval renderer; the existing `pendingApprovals` schema absorbs all
- *   seven approval shapes via the JSON `input` field.
- * - The library's normalized `request.approve()` / `request.deny()` produce
- *   the right response shape per method, so the handler doesn't branch on
- *   `request.method`.
+ * - `tool` is prefixed `codex.<method>` so the frontend can route to a
+ *   Codex approval renderer; the existing `pendingApprovals` schema
+ *   absorbs the four supported shapes via the JSON `input` field.
+ * - The library's normalized `request.approve()` / `request.deny()`
+ *   produce the right response shape per method, so the handler doesn't
+ *   branch on `request.method`.
  *
- * Phase 0 limitation: structured methods (`tool/requestUserInput`,
- * `mcpServer/elicitation/request`, `permissions/requestApproval`) get a
- * binary approve/deny — `request.approve()` returns the library's default
- * payload (e.g. empty `answers`). Rich answer collection is Phase 0.1+.
+ * Only the four binary approval methods reach this function — structured
+ * methods (user input, MCP elicitation, permission scopes) are denied
+ * upstream because Phase 0's UI can't collect their required payloads.
  */
 async function persistAndAwaitApproval(
   session: Session,
