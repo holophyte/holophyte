@@ -912,6 +912,59 @@ describe('codex/manager', () => {
     expect(inboundRequest.approve).not.toHaveBeenCalled();
   });
 
+  it('denies (no polling leak) if abort lands while companionCreate is in flight', async () => {
+    // Race window: addEventListener('abort', ...) on an already-aborted
+    // signal does not retroactively fire. Without a recheck after the
+    // companionCreate await, the polling interval would run forever because
+    // companionDenyAll later patches the row consumed: true, hiding it from
+    // the poller. This test stalls companionCreate, fires stopSession during
+    // the stall, then asserts deny() is returned and no interval is left.
+    const client = makeClientStub();
+    mockCreateClient.mockResolvedValue(client);
+
+    let releaseCreate: (() => void) | undefined;
+    mockMutation.mockImplementation(
+      (_path: unknown, args: Record<string, unknown> | undefined) => {
+        if (args && 'requestId' in args && 'tool' in args) {
+          return new Promise<undefined>((resolve) => {
+            releaseCreate = () => resolve(undefined);
+          });
+        }
+        return Promise.resolve(undefined);
+      },
+    );
+
+    const { startSession, stopSession } = await import('./manager');
+    await startSession({
+      sessionId: 'codex-abort-during-create',
+      repoPath: '/tmp/repo',
+      prompt: 'kick off',
+      permissionMode: 'default',
+      reasoningEffort: 'medium',
+    });
+    await new Promise((r) => setTimeout(r, 30));
+
+    const inboundRequest = makeApprovalRequest(
+      'item/fileChange/requestApproval',
+      'req-race-1',
+      { path: 'a.ts' },
+    );
+    const responsePromise = client.invokeApproval(inboundRequest);
+
+    // Stop the session while companionCreate is parked
+    await new Promise((r) => setTimeout(r, 30));
+    stopSession('codex-abort-during-create');
+    await new Promise((r) => setTimeout(r, 20));
+
+    // Release the parked mutation; the post-await abort recheck must trigger
+    // request.deny() without arming the polling interval.
+    releaseCreate?.();
+
+    const response = (await responsePromise) as ApprovalResponse;
+    expect(response.decision).toBe('deny');
+    expect(inboundRequest.deny).toHaveBeenCalledTimes(1);
+  });
+
   it('auto-denies in-flight approvals when the session controller aborts', async () => {
     const client = makeClientStub();
     mockCreateClient.mockResolvedValue(client);

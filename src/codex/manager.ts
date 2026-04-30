@@ -294,6 +294,14 @@ async function persistAndAwaitApproval(
     return request.deny();
   }
 
+  // Recheck after the await: addEventListener('abort', ...) on an
+  // already-aborted signal does not retroactively fire, so an abort that
+  // landed during companionCreate would leak the polling interval below
+  // until process restart — companionDenyAll patches the row to
+  // consumed: true, which companionListResolvedUnconsumed permanently
+  // filters out.
+  if (session.controller.signal.aborted) return request.deny();
+
   return new Promise<AppServerClientApprovalResponse>((resolve) => {
     let intervalId: ReturnType<typeof setInterval> | undefined;
     // Auto-deny on session abort so we don't leak this promise. If a poll
@@ -321,15 +329,16 @@ async function persistAndAwaitApproval(
         if (!match) return;
         clearInterval(intervalId);
         session.controller.signal.removeEventListener('abort', onAbort);
-        try {
-          await convexClient.mutation(
-            api.pendingApprovals.companionMarkConsumed,
-            { id: match._id },
-          );
-        } catch (err) {
-          console.error('Failed to mark Codex approval consumed:', err);
-        }
+        // Hand the decision to Codex first; mark-consumed is bookkeeping
+        // and must not delay the turn if the mutation stalls.
         resolve(match.approved ? request.approve() : request.deny());
+        void convexClient
+          .mutation(api.pendingApprovals.companionMarkConsumed, {
+            id: match._id,
+          })
+          .catch((err: unknown) => {
+            console.error('Failed to mark Codex approval consumed:', err);
+          });
       } catch (err) {
         console.error('Failed to poll Codex pending approvals:', err);
       }
