@@ -2,7 +2,9 @@ import { api } from '@convex/_generated/api';
 import type { Id } from '@convex/_generated/dataModel';
 import {
   type AppServerClient,
+  type AppServerClientApprovalResponse,
   type AppServerClientEventMethod,
+  type AppServerClientInboundApprovalRequest,
   type AppServerClientNotification,
   createClient,
 } from 'codex-app-server-client';
@@ -211,6 +213,109 @@ function subscribeToEvents(session: Session): void {
   }
 }
 
+const APPROVAL_POLL_INTERVAL_MS = 500;
+
+function registerApprovalHandlers(session: Session): void {
+  const unsubscribe = session.client.handleApprovalRequests(
+    (request: AppServerClientInboundApprovalRequest) =>
+      persistAndAwaitApproval(session, request),
+  );
+  session.unsubscribers.push(unsubscribe);
+}
+
+/**
+ * Persist a Codex approval to `pendingApprovals`, then poll Convex until the
+ * frontend resolves it. Mirrors `src/claude/manager.ts`'s `canUseTool` flow,
+ * with two differences:
+ *
+ * - `tool` is prefixed `codex.<method>` so the frontend can route to a Codex
+ *   approval renderer; the existing `pendingApprovals` schema absorbs all
+ *   seven approval shapes via the JSON `input` field.
+ * - The library's normalized `request.approve()` / `request.deny()` produce
+ *   the right response shape per method, so the handler doesn't branch on
+ *   `request.method`.
+ *
+ * Phase 0 limitation: structured methods (`tool/requestUserInput`,
+ * `mcpServer/elicitation/request`, `permissions/requestApproval`) get a
+ * binary approve/deny — `request.approve()` returns the library's default
+ * payload (e.g. empty `answers`). Rich answer collection is Phase 0.1+.
+ */
+function persistAndAwaitApproval(
+  session: Session,
+  request: AppServerClientInboundApprovalRequest,
+): Promise<AppServerClientApprovalResponse> {
+  const requestId = String(request.id);
+  const tool = `codex.${request.method}`;
+  const input = JSON.stringify(request.rawParams);
+
+  return new Promise<AppServerClientApprovalResponse>((resolve) => {
+    let settled = false;
+    let intervalId: ReturnType<typeof setInterval> | undefined;
+    const settle = (value: AppServerClientApprovalResponse) => {
+      if (settled) return;
+      settled = true;
+      if (intervalId !== undefined) clearInterval(intervalId);
+      session.controller.signal.removeEventListener('abort', onAbort);
+      resolve(value);
+    };
+    const onAbort = () => settle(request.deny());
+    session.controller.signal.addEventListener('abort', onAbort, {
+      once: true,
+    });
+    if (session.controller.signal.aborted) {
+      settle(request.deny());
+      return;
+    }
+
+    intervalId = setInterval(async () => {
+      if (settled) return;
+      try {
+        const httpClient = await getConvexHttpClient();
+        if (!httpClient) return;
+        const resolved = await httpClient.query(
+          api.pendingApprovals.companionListResolvedUnconsumed,
+          { sessionId: session.convexSessionId as Id<'sessions'> },
+        );
+        const match = resolved?.find((r) => r.requestId === requestId);
+        if (!match) return;
+        try {
+          const markClient = getConvexClient();
+          if (markClient) {
+            await markClient.mutation(
+              api.pendingApprovals.companionMarkConsumed,
+              { id: match._id },
+            );
+          }
+        } catch (err) {
+          console.error('Failed to mark Codex approval consumed:', err);
+        }
+        settle(match.approved ? request.approve() : request.deny());
+      } catch (err) {
+        console.error('Failed to poll Codex pending approvals:', err);
+      }
+    }, APPROVAL_POLL_INTERVAL_MS);
+
+    void (async () => {
+      try {
+        const convexClient = getConvexClient();
+        if (!convexClient) {
+          settle(request.deny());
+          return;
+        }
+        await convexClient.mutation(api.pendingApprovals.companionCreate, {
+          sessionId: session.convexSessionId as Id<'sessions'>,
+          requestId,
+          tool,
+          input,
+        });
+      } catch (err) {
+        console.error('Failed to persist Codex approval:', err);
+        settle(request.deny());
+      }
+    })();
+  });
+}
+
 function handleNotification(
   session: Session,
   notification: AppServerClientNotification,
@@ -252,6 +357,13 @@ async function finishSession(
   sessions.delete(sessionId);
   session.currentTurnId = undefined;
 
+  // Abort first so any in-flight approval handler resolves with deny() and
+  // its polling interval clears. Without this, the natural-completion path
+  // (idle/failed turn/completed) would leave the handler polling forever
+  // after `companionDenyAll` patches the row to consumed: true (which
+  // companionListResolvedUnconsumed filters out).
+  if (!session.controller.signal.aborted) session.controller.abort();
+
   await sleep(STOP_GRACE_MS);
   await flushEvents(session);
 
@@ -273,6 +385,20 @@ async function finishSession(
   await session.client.close().catch((err: unknown) => {
     console.error('Failed to close Codex client:', err);
   });
+
+  // Deny any pendingApprovals rows the user never resolved. companionDenyAll
+  // is a no-op for already-resolved rows, so this is safe even after the
+  // abort listener above settled in-flight handler promises.
+  try {
+    const client = getConvexClient();
+    if (client) {
+      await client.mutation(api.pendingApprovals.companionDenyAll, {
+        sessionId: session.convexSessionId as Id<'sessions'>,
+      });
+    }
+  } catch (err) {
+    console.error('Failed to deny Codex pending approvals on cleanup:', err);
+  }
 }
 
 // Sentinel placed in currentTurnId between accepting a follow-up and the real
@@ -400,6 +526,7 @@ export async function startSession(opts: {
     };
     sessions.set(sessionId, session);
     subscribeToEvents(session);
+    registerApprovalHandlers(session);
 
     const convexClient = getConvexClient();
     if (convexClient) {

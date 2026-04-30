@@ -45,6 +45,8 @@ function makeTurn(id: string, status: TurnStatus) {
   };
 }
 
+type ApprovalHandler = (request: unknown) => unknown;
+
 function makeClientStub() {
   const handlers = new Map<
     string,
@@ -55,6 +57,7 @@ function makeClientStub() {
       handler(notification);
     }
   };
+  const approvalHandlers: ApprovalHandler[] = [];
 
   return {
     thread: {
@@ -104,7 +107,47 @@ function makeClientStub() {
         };
       },
     ),
+    handleApprovalRequests: vi.fn((handler: ApprovalHandler) => {
+      approvalHandlers.push(handler);
+      return () => {
+        const idx = approvalHandlers.indexOf(handler);
+        if (idx >= 0) approvalHandlers.splice(idx, 1);
+      };
+    }),
+    /** Returns the most recently registered approval handler. */
+    invokeApproval: (request: unknown) => {
+      const handler = approvalHandlers[approvalHandlers.length - 1];
+      if (!handler) throw new Error('No approval handler registered');
+      return handler(request);
+    },
+    approvalHandlerCount: () => approvalHandlers.length,
     close: vi.fn().mockResolvedValue(undefined),
+  };
+}
+
+interface ApprovalResponse {
+  decision: 'approve' | 'deny';
+  method: string;
+}
+
+function makeApprovalRequest(
+  method: string,
+  id: string,
+  rawParams: unknown,
+): ApprovalResponse & {
+  id: string;
+  method: string;
+  rawParams: unknown;
+  approve: () => ApprovalResponse;
+  deny: () => ApprovalResponse;
+} {
+  return {
+    id,
+    method,
+    rawParams,
+    decision: 'approve',
+    approve: vi.fn(() => ({ decision: 'approve' as const, method })),
+    deny: vi.fn(() => ({ decision: 'deny' as const, method })),
   };
 }
 
@@ -288,6 +331,7 @@ describe('codex/manager', () => {
           };
         },
       ),
+      handleApprovalRequests: vi.fn(() => () => {}),
       close: vi.fn().mockResolvedValue(undefined),
     };
     mockCreateClient.mockResolvedValue(client);
@@ -498,6 +542,7 @@ describe('codex/manager', () => {
           };
         },
       ),
+      handleApprovalRequests: vi.fn(() => () => {}),
       close: vi.fn().mockResolvedValue(undefined),
     };
     mockCreateClient.mockResolvedValue(client);
@@ -598,6 +643,7 @@ describe('codex/manager', () => {
           };
         },
       ),
+      handleApprovalRequests: vi.fn(() => () => {}),
       close: vi.fn().mockResolvedValue(undefined),
     };
     mockCreateClient.mockResolvedValue(client);
@@ -677,6 +723,224 @@ describe('codex/manager', () => {
     expect(client.turn.start).toHaveBeenCalledWith(
       expect.objectContaining({ approvalPolicy: expectedPolicy }),
     );
+  });
+
+  it('persists Codex approvals to pendingApprovals with the codex.<method> tool prefix', async () => {
+    const client = makeClientStub();
+    mockCreateClient.mockResolvedValue(client);
+
+    const { startSession } = await import('./manager');
+    await startSession({
+      sessionId: 'codex-approval-persist',
+      repoPath: '/tmp/repo',
+      prompt: 'edit a file',
+      permissionMode: 'default',
+      reasoningEffort: 'medium',
+    });
+
+    await new Promise((r) => setTimeout(r, 30));
+    expect(client.approvalHandlerCount()).toBe(1);
+
+    const rawParams = { path: 'src/foo.ts', content: 'hello' };
+    const inboundRequest = makeApprovalRequest(
+      'item/fileChange/requestApproval',
+      'req-fc-1',
+      rawParams,
+    );
+
+    const responsePromise = client.invokeApproval(inboundRequest);
+    // Let the persistence path queue up
+    await new Promise((r) => setTimeout(r, 30));
+
+    const createCall = mockMutation.mock.calls.find((call) => {
+      const arg = call[1] as Record<string, unknown> | undefined;
+      return arg && arg.requestId === 'req-fc-1';
+    });
+    expect(createCall).toBeDefined();
+    const args = createCall?.[1] as Record<string, unknown>;
+    expect(args.tool).toBe('codex.item/fileChange/requestApproval');
+    expect(JSON.parse(args.input as string)).toEqual(rawParams);
+    expect(args.sessionId).toBe('codex-approval-persist');
+
+    // Resolve via Convex with approve, then await the handler to settle.
+    mockQuery.mockResolvedValue([
+      {
+        _id: 'pa-1',
+        requestId: 'req-fc-1',
+        approved: true,
+        consumed: false,
+        resolved: true,
+      },
+    ]);
+
+    const response = (await responsePromise) as ApprovalResponse;
+    expect(response).toEqual({
+      decision: 'approve',
+      method: 'item/fileChange/requestApproval',
+    });
+    expect(inboundRequest.approve).toHaveBeenCalledTimes(1);
+
+    // companionMarkConsumed must have been called for the resolved row
+    const markCall = mockMutation.mock.calls.find((call) => {
+      const arg = call[1] as Record<string, unknown> | undefined;
+      return arg && arg.id === 'pa-1';
+    });
+    expect(markCall).toBeDefined();
+  });
+
+  it('returns request.deny() when the user denies a Codex approval', async () => {
+    const client = makeClientStub();
+    mockCreateClient.mockResolvedValue(client);
+
+    const { startSession } = await import('./manager');
+    await startSession({
+      sessionId: 'codex-approval-deny',
+      repoPath: '/tmp/repo',
+      prompt: 'try a command',
+      permissionMode: 'default',
+      reasoningEffort: 'medium',
+    });
+    await new Promise((r) => setTimeout(r, 30));
+
+    const inboundRequest = makeApprovalRequest(
+      'execCommandApproval',
+      'req-ec-1',
+      { command: ['rm', '-rf', '/'], cwd: '/tmp/repo' },
+    );
+    const responsePromise = client.invokeApproval(inboundRequest);
+
+    await new Promise((r) => setTimeout(r, 30));
+    mockQuery.mockResolvedValue([
+      {
+        _id: 'pa-2',
+        requestId: 'req-ec-1',
+        approved: false,
+        consumed: false,
+        resolved: true,
+      },
+    ]);
+
+    const response = (await responsePromise) as ApprovalResponse;
+    expect(response).toEqual({
+      decision: 'deny',
+      method: 'execCommandApproval',
+    });
+    expect(inboundRequest.deny).toHaveBeenCalledTimes(1);
+    expect(inboundRequest.approve).not.toHaveBeenCalled();
+  });
+
+  it('routes structured approval methods (tool/requestUserInput) through the same bridge', async () => {
+    // Spec line 350-358: Phase 0 treats all seven methods uniformly. The
+    // structured ones (tool/requestUserInput, mcpServer/elicitation/request,
+    // permissions/requestApproval) get a binary approve/deny in this phase;
+    // rich rendering with answer collection is Phase 0.1+.
+    const client = makeClientStub();
+    mockCreateClient.mockResolvedValue(client);
+
+    const { startSession } = await import('./manager');
+    await startSession({
+      sessionId: 'codex-approval-structured',
+      repoPath: '/tmp/repo',
+      prompt: 'ask a question',
+      permissionMode: 'default',
+      reasoningEffort: 'medium',
+    });
+    await new Promise((r) => setTimeout(r, 30));
+
+    const inboundRequest = makeApprovalRequest(
+      'item/tool/requestUserInput',
+      'req-ui-1',
+      {
+        questions: [
+          { id: 'q1', prompt: 'Continue?', options: [], allowOther: true },
+        ],
+      },
+    );
+    const responsePromise = client.invokeApproval(inboundRequest);
+    await new Promise((r) => setTimeout(r, 30));
+
+    const createCall = mockMutation.mock.calls.find((call) => {
+      const arg = call[1] as Record<string, unknown> | undefined;
+      return arg && arg.requestId === 'req-ui-1';
+    });
+    expect(createCall).toBeDefined();
+    expect((createCall?.[1] as Record<string, unknown>).tool).toBe(
+      'codex.item/tool/requestUserInput',
+    );
+
+    mockQuery.mockResolvedValue([
+      {
+        _id: 'pa-ui-1',
+        requestId: 'req-ui-1',
+        approved: true,
+        consumed: false,
+        resolved: true,
+      },
+    ]);
+    const response = (await responsePromise) as ApprovalResponse;
+    expect(response.decision).toBe('approve');
+  });
+
+  it('auto-denies in-flight approvals when the session controller aborts', async () => {
+    const client = makeClientStub();
+    mockCreateClient.mockResolvedValue(client);
+
+    const { startSession, stopSession } = await import('./manager');
+    await startSession({
+      sessionId: 'codex-approval-abort',
+      repoPath: '/tmp/repo',
+      prompt: 'kick off',
+      permissionMode: 'default',
+      reasoningEffort: 'medium',
+    });
+    await new Promise((r) => setTimeout(r, 30));
+
+    const inboundRequest = makeApprovalRequest(
+      'item/fileChange/requestApproval',
+      'req-abort-1',
+      { path: 'a.ts' },
+    );
+    const responsePromise = client.invokeApproval(inboundRequest);
+    await new Promise((r) => setTimeout(r, 30));
+
+    // No resolution from the user — abort the session instead.
+    stopSession('codex-approval-abort');
+
+    const response = (await responsePromise) as ApprovalResponse;
+    expect(response.decision).toBe('deny');
+    expect(inboundRequest.deny).toHaveBeenCalledTimes(1);
+  });
+
+  it('calls companionDenyAll when the session ends', async () => {
+    const client = makeClientStub();
+    mockCreateClient.mockResolvedValue(client);
+
+    const { startSession, stopSession } = await import('./manager');
+    await startSession({
+      sessionId: 'codex-deny-all',
+      repoPath: '/tmp/repo',
+      prompt: 'short turn',
+      permissionMode: 'default',
+      reasoningEffort: 'medium',
+    });
+    await new Promise((r) => setTimeout(r, 30));
+
+    stopSession('codex-deny-all');
+    await new Promise((r) => setTimeout(r, 700));
+
+    // Convex FunctionReferences are empty objects at runtime, so discriminate
+    // by args shape: companionDenyAll's args is exactly { sessionId }.
+    const denyAllCall = mockMutation.mock.calls.find((call) => {
+      const arg = call[1] as Record<string, unknown> | undefined;
+      if (!arg || typeof arg !== 'object') return false;
+      const keys = Object.keys(arg);
+      return (
+        keys.length === 1 &&
+        keys[0] === 'sessionId' &&
+        arg.sessionId === 'codex-deny-all'
+      );
+    });
+    expect(denyAllCall).toBeDefined();
   });
 
   it('rejects startSession when permissionMode is omitted', async () => {
