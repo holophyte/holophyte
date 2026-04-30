@@ -130,22 +130,23 @@ interface ApprovalResponse {
   method: string;
 }
 
-function makeApprovalRequest(
-  method: string,
-  id: string,
-  rawParams: unknown,
-): ApprovalResponse & {
+interface ApprovalRequestStub {
   id: string;
   method: string;
   rawParams: unknown;
   approve: () => ApprovalResponse;
   deny: () => ApprovalResponse;
-} {
+}
+
+function makeApprovalRequest(
+  method: string,
+  id: string,
+  rawParams: unknown,
+): ApprovalRequestStub {
   return {
     id,
     method,
     rawParams,
-    decision: 'approve',
     approve: vi.fn(() => ({ decision: 'approve' as const, method })),
     deny: vi.fn(() => ({ decision: 'deny' as const, method })),
   };

@@ -240,79 +240,65 @@ function registerApprovalHandlers(session: Session): void {
  * binary approve/deny — `request.approve()` returns the library's default
  * payload (e.g. empty `answers`). Rich answer collection is Phase 0.1+.
  */
-function persistAndAwaitApproval(
+async function persistAndAwaitApproval(
   session: Session,
   request: AppServerClientInboundApprovalRequest,
 ): Promise<AppServerClientApprovalResponse> {
   const requestId = String(request.id);
-  const tool = `codex.${request.method}`;
-  const input = JSON.stringify(request.rawParams);
+  const sessionId = session.convexSessionId as Id<'sessions'>;
+
+  if (session.controller.signal.aborted) return request.deny();
+
+  const convexClient = getConvexClient();
+  if (!convexClient) return request.deny();
+
+  try {
+    await convexClient.mutation(api.pendingApprovals.companionCreate, {
+      sessionId,
+      requestId,
+      tool: `codex.${request.method}`,
+      input: JSON.stringify(request.rawParams),
+    });
+  } catch (err) {
+    console.error('Failed to persist Codex approval:', err);
+    return request.deny();
+  }
 
   return new Promise<AppServerClientApprovalResponse>((resolve) => {
-    let settled = false;
-    let intervalId: ReturnType<typeof setInterval> | undefined;
-    const settle = (value: AppServerClientApprovalResponse) => {
-      if (settled) return;
-      settled = true;
-      if (intervalId !== undefined) clearInterval(intervalId);
-      session.controller.signal.removeEventListener('abort', onAbort);
-      resolve(value);
-    };
-    const onAbort = () => settle(request.deny());
-    session.controller.signal.addEventListener('abort', onAbort, {
-      once: true,
-    });
-    if (session.controller.signal.aborted) {
-      settle(request.deny());
-      return;
-    }
-
-    intervalId = setInterval(async () => {
-      if (settled) return;
+    const intervalId = setInterval(async () => {
       try {
         const httpClient = await getConvexHttpClient();
         if (!httpClient) return;
         const resolved = await httpClient.query(
           api.pendingApprovals.companionListResolvedUnconsumed,
-          { sessionId: session.convexSessionId as Id<'sessions'> },
+          { sessionId },
         );
         const match = resolved?.find((r) => r.requestId === requestId);
         if (!match) return;
+        clearInterval(intervalId);
+        session.controller.signal.removeEventListener('abort', onAbort);
         try {
-          const markClient = getConvexClient();
-          if (markClient) {
-            await markClient.mutation(
-              api.pendingApprovals.companionMarkConsumed,
-              { id: match._id },
-            );
-          }
+          await convexClient.mutation(
+            api.pendingApprovals.companionMarkConsumed,
+            { id: match._id },
+          );
         } catch (err) {
           console.error('Failed to mark Codex approval consumed:', err);
         }
-        settle(match.approved ? request.approve() : request.deny());
+        resolve(match.approved ? request.approve() : request.deny());
       } catch (err) {
         console.error('Failed to poll Codex pending approvals:', err);
       }
     }, APPROVAL_POLL_INTERVAL_MS);
 
-    void (async () => {
-      try {
-        const convexClient = getConvexClient();
-        if (!convexClient) {
-          settle(request.deny());
-          return;
-        }
-        await convexClient.mutation(api.pendingApprovals.companionCreate, {
-          sessionId: session.convexSessionId as Id<'sessions'>,
-          requestId,
-          tool,
-          input,
-        });
-      } catch (err) {
-        console.error('Failed to persist Codex approval:', err);
-        settle(request.deny());
-      }
-    })();
+    // Auto-deny on session abort so we don't leak this promise.
+    const onAbort = () => {
+      clearInterval(intervalId);
+      resolve(request.deny());
+    };
+    session.controller.signal.addEventListener('abort', onAbort, {
+      once: true,
+    });
   });
 }
 
