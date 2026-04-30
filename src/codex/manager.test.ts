@@ -1011,6 +1011,55 @@ describe('codex/manager', () => {
     expect(inboundRequest.deny).toHaveBeenCalledTimes(1);
   });
 
+  it('denies after the polling timeout if Convex never returns a resolution', async () => {
+    // Convex outage / unresolved row scenario. Without a bound, the poll
+    // would run forever and the Codex turn would park indefinitely. The
+    // bound denies, surfaces a deny() to the agent, and clears the
+    // interval so no more polling load hits the dependency.
+    process.env.CODEX_APPROVAL_POLL_TIMEOUT_MS = '300';
+    try {
+      const client = makeClientStub();
+      mockCreateClient.mockResolvedValue(client);
+
+      const { startSession } = await import('./manager');
+      await startSession({
+        sessionId: 'codex-poll-timeout',
+        repoPath: '/tmp/repo',
+        prompt: 'kick off',
+        permissionMode: 'default',
+        reasoningEffort: 'medium',
+      });
+      await new Promise((r) => setTimeout(r, 30));
+
+      // mockQuery defaults to {nextBatchIndex: 0}; force an array return for
+      // the listResolvedUnconsumed query so the poll path sees "no match"
+      // each tick rather than treating the default as malformed data.
+      mockQuery.mockResolvedValue([]);
+
+      const inboundRequest = makeApprovalRequest(
+        'item/fileChange/requestApproval',
+        'rpc-id-timeout-1',
+        { path: 'never.ts' },
+        'item-timeout-1',
+      );
+      const response = (await client.invokeApproval(
+        inboundRequest,
+      )) as ApprovalResponse;
+
+      expect(response.decision).toBe('deny');
+      expect(inboundRequest.deny).toHaveBeenCalledTimes(1);
+      expect(inboundRequest.approve).not.toHaveBeenCalled();
+
+      // Confirm the interval cleared by waiting another full poll cycle and
+      // asserting no further query fires beyond what already happened.
+      const queryCallsAtDeny = mockQuery.mock.calls.length;
+      await new Promise((r) => setTimeout(r, 600));
+      expect(mockQuery.mock.calls.length).toBe(queryCallsAtDeny);
+    } finally {
+      delete process.env.CODEX_APPROVAL_POLL_TIMEOUT_MS;
+    }
+  });
+
   it('calls companionDenyAll when the session ends', async () => {
     const client = makeClientStub();
     mockCreateClient.mockResolvedValue(client);

@@ -224,6 +224,23 @@ function subscribeToEvents(session: Session): void {
 const APPROVAL_POLL_INTERVAL_MS = 500;
 
 /**
+ * Bound on how long an unresolved Codex approval keeps polling Convex
+ * before failing closed. Without this, a Convex outage that lands after
+ * `companionCreate` succeeds would leave the polling interval running
+ * forever — the Codex turn parks indefinitely and the user can only
+ * recover by stopping the session manually. Read at call time so tests
+ * can shrink it via env without re-importing the module.
+ */
+function getApprovalPollTimeoutMs(): number {
+  const override = process.env.CODEX_APPROVAL_POLL_TIMEOUT_MS;
+  if (override) {
+    const parsed = Number(override);
+    if (Number.isFinite(parsed) && parsed > 0) return parsed;
+  }
+  return 5 * 60_000;
+}
+
+/**
  * Approval methods we route through the existing `pendingApprovals` UI in
  * Phase 0. Restricted to the two `item/*` methods because:
  *
@@ -316,6 +333,7 @@ async function persistAndAwaitApproval(
 
   return new Promise<AppServerClientApprovalResponse>((resolve) => {
     let intervalId: ReturnType<typeof setInterval> | undefined;
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
     // Single-flight guard: setInterval can fire a second tick while the
     // first is awaiting Convex. Without this latch, two ticks could both
     // observe the same resolved row before companionMarkConsumed lands and
@@ -323,14 +341,27 @@ async function persistAndAwaitApproval(
     // the first resolve, but the duplicated work and double mark-consumed
     // mutation are wasted.
     let polling = false;
-    // Auto-deny on session abort so we don't leak this promise.
-    const onAbort = () => {
+    const cleanup = () => {
       if (intervalId !== undefined) clearInterval(intervalId);
-      resolve(request.deny());
+      if (timeoutId !== undefined) clearTimeout(timeoutId);
+      session.controller.signal.removeEventListener('abort', onAbort);
     };
+    // Auto-deny on session abort so we don't leak this promise.
+    function onAbort() {
+      cleanup();
+      resolve(request.deny());
+    }
     session.controller.signal.addEventListener('abort', onAbort, {
       once: true,
     });
+
+    timeoutId = setTimeout(() => {
+      console.warn(
+        `[codex session ${session.convexSessionId}] approval ${requestId} timed out after ${getApprovalPollTimeoutMs()}ms — denying to free the turn`,
+      );
+      cleanup();
+      resolve(request.deny());
+    }, getApprovalPollTimeoutMs());
 
     intervalId = setInterval(async () => {
       if (polling) return;
@@ -344,8 +375,7 @@ async function persistAndAwaitApproval(
         );
         const match = resolved?.find((r) => r.requestId === requestId);
         if (!match) return;
-        clearInterval(intervalId);
-        session.controller.signal.removeEventListener('abort', onAbort);
+        cleanup();
         // Hand the decision to Codex first; mark-consumed is bookkeeping
         // and must not delay the turn if the mutation stalls.
         resolve(match.approved ? request.approve() : request.deny());
