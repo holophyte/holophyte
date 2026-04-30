@@ -224,17 +224,21 @@ function subscribeToEvents(session: Session): void {
 const APPROVAL_POLL_INTERVAL_MS = 500;
 
 /**
- * Methods whose `approve()` produces a usable response shape from a single
- * binary user decision. The other three methods
- * (`item/tool/requestUserInput`, `mcpServer/elicitation/request`,
- * `item/permissions/requestApproval`) need a payload — answers, content, or
- * a permission scope — that Phase 0's UI can't collect, so an "approve"
- * click would silently send empty defaults. Structured methods are denied
- * immediately with a Phase-0.1+ marker until the rich UI lands.
+ * Approval methods we route through the existing `pendingApprovals` UI in
+ * Phase 0. Restricted to the two `item/*` methods because:
+ *
+ * - `applyPatchApproval` and `execCommandApproval` have no `itemId`, so they
+ *   cannot key onto a rendered tool item in the session thread (the UI
+ *   matches `pendingApprovals.requestId === toolCallId`). Persisting them
+ *   would create rows the user can't see — they would stall the turn until
+ *   the polling timeout fires. Better to deny upstream so the agent
+ *   surfaces the rejection and can retry.
+ * - `item/tool/requestUserInput`, `mcpServer/elicitation/request`, and
+ *   `item/permissions/requestApproval` need rich response payloads
+ *   (answers, content, permission scopes) the binary approve/deny UI can't
+ *   produce; Phase 0.1+ ships the structured renderers.
  */
 const BINARY_APPROVAL_METHODS = new Set<string>([
-  'applyPatchApproval',
-  'execCommandApproval',
   'item/commandExecution/requestApproval',
   'item/fileChange/requestApproval',
 ]);
@@ -244,11 +248,17 @@ function registerApprovalHandlers(session: Session): void {
     (request: AppServerClientInboundApprovalRequest) => {
       if (!BINARY_APPROVAL_METHODS.has(request.method)) {
         console.warn(
-          `[codex session ${session.convexSessionId}] denying structured approval ${request.method}: rich response collection is Phase 0.1+`,
+          `[codex session ${session.convexSessionId}] denying ${request.method}: not yet supported by Phase 0 UI`,
         );
         return request.deny();
       }
-      return persistAndAwaitApproval(session, request);
+      // Phase 0 only routes `item/*` methods through the bridge, and those
+      // always carry an itemId. Defensive `??` in case the library ever
+      // surfaces a null itemId — falling back to the RPC id keeps the
+      // bridge functional, just unrenderable until the user resolves
+      // manually via the Convex dashboard.
+      const itemId = request.itemId ?? String(request.id);
+      return persistAndAwaitApproval(session, request, itemId);
     },
   );
   session.unsubscribers.push(unsubscribe);
@@ -261,20 +271,22 @@ function registerApprovalHandlers(session: Session): void {
  *
  * - `tool` is prefixed `codex.<method>` so the frontend can route to a
  *   Codex approval renderer; the existing `pendingApprovals` schema
- *   absorbs the four supported shapes via the JSON `input` field.
+ *   absorbs the supported shapes via the JSON `input` field.
  * - The library's normalized `request.approve()` / `request.deny()`
  *   produce the right response shape per method, so the handler doesn't
  *   branch on `request.method`.
  *
- * Only the four binary approval methods reach this function — structured
- * methods (user input, MCP elicitation, permission scopes) are denied
- * upstream because Phase 0's UI can't collect their required payloads.
+ * `requestId` is keyed by the request's `itemId`, not the RPC id: the
+ * frontend matches `pendingApprovals.requestId === toolCallId`, where
+ * `toolCallId` is the rendered tool item's id. Only `item/*` binary
+ * methods reach this function (see `registerApprovalHandlers`); other
+ * methods are denied upstream.
  */
 async function persistAndAwaitApproval(
   session: Session,
   request: AppServerClientInboundApprovalRequest,
+  requestId: string,
 ): Promise<AppServerClientApprovalResponse> {
-  const requestId = String(request.id);
   const sessionId = session.convexSessionId as Id<'sessions'>;
 
   if (session.controller.signal.aborted) return request.deny();

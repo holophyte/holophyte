@@ -132,6 +132,7 @@ interface ApprovalResponse {
 
 interface ApprovalRequestStub {
   id: string;
+  itemId: string | null;
   method: string;
   rawParams: unknown;
   approve: () => ApprovalResponse;
@@ -142,9 +143,11 @@ function makeApprovalRequest(
   method: string,
   id: string,
   rawParams: unknown,
+  itemId: string | null = null,
 ): ApprovalRequestStub {
   return {
     id,
+    itemId,
     method,
     rawParams,
     approve: vi.fn(() => ({ decision: 'approve' as const, method })),
@@ -726,7 +729,7 @@ describe('codex/manager', () => {
     );
   });
 
-  it('persists Codex approvals to pendingApprovals with the codex.<method> tool prefix', async () => {
+  it('persists Codex item approvals keyed by itemId (not request.id) so the frontend can match by tool item', async () => {
     const client = makeClientStub();
     mockCreateClient.mockResolvedValue(client);
 
@@ -743,10 +746,13 @@ describe('codex/manager', () => {
     expect(client.approvalHandlerCount()).toBe(1);
 
     const rawParams = { path: 'src/foo.ts', content: 'hello' };
+    // RPC id and tool itemId differ — frontend renders tool calls by itemId,
+    // so pendingApprovals.requestId must use itemId to match.
     const inboundRequest = makeApprovalRequest(
       'item/fileChange/requestApproval',
-      'req-fc-1',
+      'rpc-id-fc-1',
       rawParams,
+      'item-fc-1',
     );
 
     const responsePromise = client.invokeApproval(inboundRequest);
@@ -755,7 +761,7 @@ describe('codex/manager', () => {
 
     const createCall = mockMutation.mock.calls.find((call) => {
       const arg = call[1] as Record<string, unknown> | undefined;
-      return arg && arg.requestId === 'req-fc-1';
+      return arg && arg.requestId === 'item-fc-1';
     });
     expect(createCall).toBeDefined();
     const args = createCall?.[1] as Record<string, unknown>;
@@ -763,11 +769,11 @@ describe('codex/manager', () => {
     expect(JSON.parse(args.input as string)).toEqual(rawParams);
     expect(args.sessionId).toBe('codex-approval-persist');
 
-    // Resolve via Convex with approve, then await the handler to settle.
+    // Resolve via Convex with approve, keyed on itemId.
     mockQuery.mockResolvedValue([
       {
         _id: 'pa-1',
-        requestId: 'req-fc-1',
+        requestId: 'item-fc-1',
         approved: true,
         consumed: false,
         resolved: true,
@@ -804,9 +810,10 @@ describe('codex/manager', () => {
     await new Promise((r) => setTimeout(r, 30));
 
     const inboundRequest = makeApprovalRequest(
-      'execCommandApproval',
-      'req-ec-1',
-      { command: ['rm', '-rf', '/'], cwd: '/tmp/repo' },
+      'item/commandExecution/requestApproval',
+      'rpc-id-ec-1',
+      { command: 'echo hi', cwd: '/tmp/repo' },
+      'item-ec-1',
     );
     const responsePromise = client.invokeApproval(inboundRequest);
 
@@ -814,7 +821,7 @@ describe('codex/manager', () => {
     mockQuery.mockResolvedValue([
       {
         _id: 'pa-2',
-        requestId: 'req-ec-1',
+        requestId: 'item-ec-1',
         approved: false,
         consumed: false,
         resolved: true,
@@ -824,17 +831,23 @@ describe('codex/manager', () => {
     const response = (await responsePromise) as ApprovalResponse;
     expect(response).toEqual({
       decision: 'deny',
-      method: 'execCommandApproval',
+      method: 'item/commandExecution/requestApproval',
     });
     expect(inboundRequest.deny).toHaveBeenCalledTimes(1);
     expect(inboundRequest.approve).not.toHaveBeenCalled();
   });
 
   it.each([
+    // Structured methods: response payload (answers, content, permission
+    // scopes) needs UI Phase 0 cannot collect.
     'item/tool/requestUserInput',
     'mcpServer/elicitation/request',
     'item/permissions/requestApproval',
-  ])('denies structured approval method %s without writing a pendingApprovals row', async (method) => {
+    // Top-level methods: no `itemId`, so the rendered tool item in the
+    // session thread has nothing to attach to in the existing approval UI.
+    'applyPatchApproval',
+    'execCommandApproval',
+  ])('denies unsupported approval method %s without writing a pendingApprovals row', async (method) => {
     // Phase 0 limitation: structured methods need response payloads (answers,
     // content, permission scopes) the UI can't yet collect. Auto-approving
     // them with empty defaults is unsafe; deny immediately and surface the
@@ -901,8 +914,9 @@ describe('codex/manager', () => {
 
     const inboundRequest = makeApprovalRequest(
       'item/fileChange/requestApproval',
-      'req-fail-1',
+      'rpc-id-fail-1',
       { path: 'a.ts' },
+      'item-fail-1',
     );
     const response = (await client.invokeApproval(
       inboundRequest,
@@ -946,8 +960,9 @@ describe('codex/manager', () => {
 
     const inboundRequest = makeApprovalRequest(
       'item/fileChange/requestApproval',
-      'req-race-1',
+      'rpc-id-race-1',
       { path: 'a.ts' },
+      'item-race-1',
     );
     const responsePromise = client.invokeApproval(inboundRequest);
 
@@ -981,8 +996,9 @@ describe('codex/manager', () => {
 
     const inboundRequest = makeApprovalRequest(
       'item/fileChange/requestApproval',
-      'req-abort-1',
+      'rpc-id-abort-1',
       { path: 'a.ts' },
+      'item-abort-1',
     );
     const responsePromise = client.invokeApproval(inboundRequest);
     await new Promise((r) => setTimeout(r, 30));
