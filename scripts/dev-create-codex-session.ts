@@ -15,9 +15,11 @@ import { ConvexHttpClient } from 'convex/browser';
 import { api } from '../convex/_generated/api';
 import type { Id } from '../convex/_generated/dataModel';
 
+const VALID_MODES = ['default', 'safe-auto', 'bypass'] as const;
+type PermissionMode = (typeof VALID_MODES)[number];
+
 const [taskIdArg, modeArg, ...promptParts] = process.argv.slice(2);
 const taskId = taskIdArg as Id<'tasks'> | undefined;
-const mode = (modeArg ?? 'default') as 'default' | 'safe-auto' | 'bypass';
 const promptOverride = promptParts.length > 0 ? promptParts.join(' ') : undefined;
 
 if (!taskId) {
@@ -26,6 +28,14 @@ if (!taskId) {
   );
   process.exit(1);
 }
+
+if (modeArg && !VALID_MODES.includes(modeArg as PermissionMode)) {
+  console.error(
+    `Invalid permissionMode: ${modeArg}. Expected one of ${VALID_MODES.join(', ')}.`,
+  );
+  process.exit(1);
+}
+const mode: PermissionMode = (modeArg ?? 'default') as PermissionMode;
 
 const portsFile = await Bun.file('.dev-ports').text().catch(() => '');
 const portMatch = portsFile.match(/CONVEX_CLOUD_PORT=(\d+)/);
@@ -61,4 +71,6 @@ console.log(`Codex session queued: ${sessionId}`);
 console.log(`  permissionMode: ${mode}`);
 console.log(`  Convex URL: ${convexUrl}`);
 console.log('');
-console.log('Watch the [server] log for [codex session ...] warns to follow the bridge.');
+console.log(
+  `Watch pendingApprovals (Convex dashboard) for rows with sessionId=${sessionId} to follow the approval bridge.`,
+);
