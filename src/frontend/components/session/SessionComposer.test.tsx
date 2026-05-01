@@ -259,7 +259,7 @@ describe('SessionComposer', () => {
       await user.type(input, 'follow-up message');
       fireEvent.keyDown(input, { key: 'Enter' });
       await new Promise((r) => setTimeout(r, 0));
-      expect(sendMessage).toHaveBeenCalledWith('follow-up message', undefined);
+      expect(sendMessage).toHaveBeenCalledWith('follow-up message');
     });
 
     it('does not call sendMessage when Enter is pressed with whitespace-only text while running', async () => {

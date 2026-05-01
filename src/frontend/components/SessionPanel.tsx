@@ -11,7 +11,10 @@ import {
 import { useSession } from '@/frontend/hooks/useSession';
 import { toast } from '@/frontend/lib/toast';
 import { useAppStore } from '@/frontend/stores/app';
-import EffortPicker, { defaultEffortFor } from './EffortPicker';
+import EffortPicker, {
+  defaultEffortFor,
+  resolveEffortFor,
+} from './EffortPicker';
 import ProviderModelPicker, {
   type ProviderModelValue,
 } from './ProviderModelPicker';
@@ -341,17 +344,17 @@ function NoSessionPlaceholder({
     }
   }
 
-  const handleProviderModelChange = (next: ProviderModelValue) => {
-    if (next.provider === pick.provider) {
-      setPick({ ...pick, model: next.model });
-      return;
-    }
-    setPick({
-      provider: next.provider,
-      model: next.model,
-      effort: defaultEffortFor(next.provider),
-    });
-  };
+  const handleProviderModelChange = useCallback((next: ProviderModelValue) => {
+    setPick((prev) =>
+      next.provider === prev.provider
+        ? { ...prev, model: next.model }
+        : {
+            provider: next.provider,
+            model: next.model,
+            effort: resolveEffortFor(next.provider),
+          },
+    );
+  }, []);
 
   const handleSend = async () => {
     if (!text.trim() || !taskPath) return;

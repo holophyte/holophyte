@@ -105,14 +105,17 @@ export default function SessionComposer() {
       const trimmed = value.trim();
       if (!trimmed) return;
       try {
-        await sendMessage(trimmed, effort === 'auto' ? undefined : effort);
+        // Effort transmission is owned by SessionPanel.sendMessageWrapped,
+        // which applies dirty-tracking so an untouched picker preserves the
+        // manager's session-level effort. Don't pass effort from here.
+        await sendMessage(trimmed);
         setText('');
         history.push(trimmed);
       } catch (err) {
         console.error('Failed to send message:', err);
       }
     },
-    [sendMessage, history, effort],
+    [sendMessage, history],
   );
 
   const handleSubmit = useCallback(

@@ -539,7 +539,7 @@ export function TaskDetailContent({
                 id="detail-session-label"
                 className="text-xs text-muted-foreground"
               >
-                Claude Code Session
+                Code Session
               </span>
               <LaunchButton task={task} />
             </section>

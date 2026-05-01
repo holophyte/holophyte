@@ -3,6 +3,7 @@ import {
   CODEX_EFFORTS,
   DEFAULT_CLAUDE_EFFORT,
   DEFAULT_CODEX_EFFORT,
+  STORAGE_LAST_EFFORT_PREFIX,
 } from '@/constants';
 import { cn } from '@/frontend/lib/utils';
 import {
@@ -26,6 +27,20 @@ export function defaultEffortFor(provider: Provider): string {
 /** All effort options for a provider, in display order. */
 export function effortsFor(provider: Provider): readonly string[] {
   return provider === 'codex' ? CODEX_EFFORTS : CLAUDE_EFFORTS;
+}
+
+/**
+ * Resolve the effort value to display when switching to `provider` — prefers
+ * the last-used value in localStorage, falling back to the provider default.
+ */
+export function resolveEffortFor(provider: Provider): string {
+  if (typeof window !== 'undefined') {
+    const stored = window.localStorage.getItem(
+      STORAGE_LAST_EFFORT_PREFIX + provider,
+    );
+    if (stored) return stored;
+  }
+  return defaultEffortFor(provider);
 }
 
 const LABEL: Record<string, string> = {

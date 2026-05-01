@@ -73,10 +73,17 @@ export default function ProviderModelPicker({
   const providerFallback = allModels.find((m) => m.provider === value.provider);
   const selected = exactMatch ?? providerFallback ?? allModels[0];
 
+  // Use stable scalar deps for the self-heal effect — `selected` is a fresh
+  // object reference on every render (`.find()` result) and parents may pass
+  // an inline `onChange`, so depending on those would re-fire the effect on
+  // every parent render until the value stabilises.
+  const healProvider = !exactMatch && selected ? selected.provider : null;
+  const healModel = !exactMatch && selected ? selected.entry.id : null;
+  // biome-ignore lint/correctness/useExhaustiveDependencies: parents commonly pass an inline onChange; including it would re-fire the heal on every parent render. Scalar healProvider/healModel are the real triggers.
   useEffect(() => {
-    if (exactMatch || !selected) return;
-    onChange({ provider: selected.provider, model: selected.entry.id });
-  }, [exactMatch, selected, onChange]);
+    if (!healProvider || !healModel) return;
+    onChange({ provider: healProvider, model: healModel });
+  }, [healProvider, healModel]);
 
   const selectedLabel = selected
     ? `${selected.provider === 'codex' ? 'Codex' : 'Claude'} · ${selected.entry.label}`

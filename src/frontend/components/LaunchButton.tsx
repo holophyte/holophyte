@@ -3,14 +3,13 @@ import type { Doc } from '@convex/_generated/dataModel';
 import { useMatch, useNavigate } from '@tanstack/react-router';
 import { useMutation, useQuery } from 'convex/react';
 import { AlertTriangle, Loader2, Play, Square } from 'lucide-react';
-import { useState } from 'react';
-import { STORAGE_LAST_EFFORT_PREFIX } from '@/constants';
+import { useCallback, useState } from 'react';
 import { useCompanionStatus } from '@/frontend/hooks/useCompanionStatus';
 import { useLaunchDefaults } from '@/frontend/hooks/useLaunchDefaults';
 import { useStickyValue } from '@/frontend/hooks/useStickyValue';
 import { toast } from '@/frontend/lib/toast';
 import { useAppStore } from '@/frontend/stores/app';
-import EffortPicker, { defaultEffortFor } from './EffortPicker';
+import EffortPicker, { resolveEffortFor } from './EffortPicker';
 import ProviderModelPicker, {
   type ProviderModelValue,
 } from './ProviderModelPicker';
@@ -56,22 +55,17 @@ export function LaunchButton({ task }: LaunchButtonProps) {
     taskPageMatch?.params.taskId === task._id &&
     taskPageMatch?.params.repoId === String(task.repoId);
 
-  const handleProviderModelChange = (next: ProviderModelValue) => {
-    if (next.provider === pick.provider) {
-      setPick({ ...pick, model: next.model });
-      return;
-    }
-    // Provider switched — keep the clicked model, restore that provider's
-    // last-used effort, or fall back to its default.
-    let nextEffort = defaultEffortFor(next.provider);
-    if (typeof window !== 'undefined') {
-      const stored = window.localStorage.getItem(
-        STORAGE_LAST_EFFORT_PREFIX + next.provider,
-      );
-      if (stored) nextEffort = stored;
-    }
-    setPick({ provider: next.provider, model: next.model, effort: nextEffort });
-  };
+  const handleProviderModelChange = useCallback((next: ProviderModelValue) => {
+    setPick((prev) =>
+      next.provider === prev.provider
+        ? { ...prev, model: next.model }
+        : {
+            provider: next.provider,
+            model: next.model,
+            effort: resolveEffortFor(next.provider),
+          },
+    );
+  }, []);
 
   const handleLaunch = async () => {
     if (!task.repo) return;

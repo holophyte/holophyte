@@ -207,9 +207,10 @@ export default defineSchema({
     queuedPrompt: v.optional(v.string()),
     // Per-turn reasoning effort for the next companion-driven turn (first turn
     // after create or resume). Transient queue metadata — paired with
-    // `queuedPrompt`. Cleared by the companion once the turn starts. NOT a
-    // persistent session property: per-turn effort lives on `sessionMessages`
-    // for follow-ups.
+    // `queuedPrompt`. Read once by the companion when starting the turn; NOT
+    // explicitly cleared (left as a historical artefact once the session is
+    // running). NOT a persistent session property: per-turn effort lives on
+    // `sessionMessages` for follow-ups.
     queuedReasoningEffort: v.optional(v.string()),
     // Kept optional for backwards compatibility with pre-rethink documents
     endedAt: v.optional(v.number()),
