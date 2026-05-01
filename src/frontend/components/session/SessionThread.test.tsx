@@ -110,6 +110,9 @@ function withSessionActions(
         handleStop: vi.fn().mockResolvedValue(undefined),
         messageQueued: false,
         sendMessage: vi.fn().mockResolvedValue(undefined),
+        provider: 'claude',
+        effort: 'auto',
+        setEffort: vi.fn(),
       }}
     >
       {children}

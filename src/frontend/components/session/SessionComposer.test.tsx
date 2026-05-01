@@ -33,6 +33,9 @@ function withSession(
         messageQueued: overrides.messageQueued ?? false,
         sendMessage:
           overrides.sendMessage ?? vi.fn().mockResolvedValue(undefined),
+        provider: 'claude',
+        effort: 'auto',
+        setEffort: vi.fn(),
       }}
     >
       {children}
@@ -54,7 +57,9 @@ describe('SessionComposer', () => {
   describe('rendering', () => {
     it('renders a text input area', () => {
       render(withSession(<SessionComposer />));
-      expect(screen.getByRole('combobox')).toBeInTheDocument();
+      expect(
+        screen.getByRole('combobox', { name: /follow-up/i }),
+      ).toBeInTheDocument();
     });
 
     it('renders a send button', () => {
@@ -64,7 +69,9 @@ describe('SessionComposer', () => {
 
     it('renders with a placeholder', () => {
       render(withSession(<SessionComposer />));
-      const input = screen.getByRole('combobox') as HTMLTextAreaElement;
+      const input = screen.getByRole('combobox', {
+        name: /follow-up/i,
+      }) as HTMLTextAreaElement;
       expect(input.placeholder).toBeTruthy();
     });
 
@@ -88,7 +95,10 @@ describe('SessionComposer', () => {
     it('shows send button when input has text while running', async () => {
       const user = userEvent.setup();
       render(withSession(<SessionComposer />, { sessionStatus: 'running' }));
-      await user.type(screen.getByRole('combobox'), 'some text');
+      await user.type(
+        screen.getByRole('combobox', { name: /follow-up/i }),
+        'some text',
+      );
       expect(screen.getByLabelText('Send message')).toBeInTheDocument();
       expect(screen.queryByLabelText('Stop session')).not.toBeInTheDocument();
     });
@@ -120,7 +130,7 @@ describe('SessionComposer', () => {
           handleStop,
         }),
       );
-      const input = screen.getByRole('combobox');
+      const input = screen.getByRole('combobox', { name: /follow-up/i });
       fireEvent.keyDown(input, { key: 'Enter' });
       await new Promise((r) => setTimeout(r, 0));
       expect(handleStop).toHaveBeenCalledTimes(1);
@@ -130,13 +140,17 @@ describe('SessionComposer', () => {
   describe('input enabled state', () => {
     it('input is not disabled when session is running', () => {
       render(withSession(<SessionComposer />, { sessionStatus: 'running' }));
-      const input = screen.getByRole('combobox') as HTMLTextAreaElement;
+      const input = screen.getByRole('combobox', {
+        name: /follow-up/i,
+      }) as HTMLTextAreaElement;
       expect(input.disabled).toBe(false);
     });
 
     it('input is disabled when session is failed', () => {
       render(withSession(<SessionComposer />, { sessionStatus: 'failed' }));
-      const input = screen.getByRole('combobox') as HTMLTextAreaElement;
+      const input = screen.getByRole('combobox', {
+        name: /follow-up/i,
+      }) as HTMLTextAreaElement;
       expect(input.disabled).toBe(true);
     });
 
@@ -144,7 +158,9 @@ describe('SessionComposer', () => {
       render(
         withSession(<SessionComposer />, { sessionStatus: 'waiting_input' }),
       );
-      const input = screen.getByRole('combobox') as HTMLTextAreaElement;
+      const input = screen.getByRole('combobox', {
+        name: /follow-up/i,
+      }) as HTMLTextAreaElement;
       expect(input.disabled).toBe(true);
     });
   });
@@ -153,7 +169,7 @@ describe('SessionComposer', () => {
     it('accepts text input', async () => {
       const user = userEvent.setup();
       render(withSession(<SessionComposer />));
-      const input = screen.getByRole('combobox');
+      const input = screen.getByRole('combobox', { name: /follow-up/i });
       await user.type(input, 'Hello Claude');
       expect((input as HTMLTextAreaElement).value).toBe('Hello Claude');
     });
@@ -166,7 +182,7 @@ describe('SessionComposer', () => {
       render(
         withSession(<SessionComposer />, { promptSuggestion: suggestion }),
       );
-      const input = screen.getByRole('combobox');
+      const input = screen.getByRole('combobox', { name: /follow-up/i });
       expect(input).toHaveAttribute('placeholder', `${suggestion}  [tab]`);
     });
 
@@ -177,7 +193,7 @@ describe('SessionComposer', () => {
           promptSuggestion: suggestion,
         }),
       );
-      const input = screen.getByRole('combobox');
+      const input = screen.getByRole('combobox', { name: /follow-up/i });
       expect(input).toHaveAttribute(
         'placeholder',
         'Type a follow-up or press Enter to stop…',
@@ -186,7 +202,7 @@ describe('SessionComposer', () => {
 
     it('shows default placeholder when no suggestion', () => {
       render(withSession(<SessionComposer />));
-      const input = screen.getByRole('combobox');
+      const input = screen.getByRole('combobox', { name: /follow-up/i });
       expect(input).toHaveAttribute(
         'placeholder',
         'Send a follow-up… (Enter to send)',
@@ -197,14 +213,18 @@ describe('SessionComposer', () => {
       render(
         withSession(<SessionComposer />, { promptSuggestion: suggestion }),
       );
-      const input = screen.getByRole('combobox') as HTMLTextAreaElement;
+      const input = screen.getByRole('combobox', {
+        name: /follow-up/i,
+      }) as HTMLTextAreaElement;
       fireEvent.keyDown(input, { key: 'Tab' });
       expect(input.value).toBe(suggestion);
     });
 
     it('Tab key does nothing when no suggestion', () => {
       render(withSession(<SessionComposer />));
-      const input = screen.getByRole('combobox') as HTMLTextAreaElement;
+      const input = screen.getByRole('combobox', {
+        name: /follow-up/i,
+      }) as HTMLTextAreaElement;
       const before = input.value;
       fireEvent.keyDown(input, { key: 'Tab' });
       expect(input.value).toBe(before);
@@ -215,7 +235,9 @@ describe('SessionComposer', () => {
       render(
         withSession(<SessionComposer />, { promptSuggestion: suggestion }),
       );
-      const input = screen.getByRole('combobox') as HTMLTextAreaElement;
+      const input = screen.getByRole('combobox', {
+        name: /follow-up/i,
+      }) as HTMLTextAreaElement;
       await user.type(input, 'partial message');
       const valueBefore = input.value;
       fireEvent.keyDown(input, { key: 'Tab' });
@@ -233,11 +255,11 @@ describe('SessionComposer', () => {
           sendMessage,
         }),
       );
-      const input = screen.getByRole('combobox');
+      const input = screen.getByRole('combobox', { name: /follow-up/i });
       await user.type(input, 'follow-up message');
       fireEvent.keyDown(input, { key: 'Enter' });
       await new Promise((r) => setTimeout(r, 0));
-      expect(sendMessage).toHaveBeenCalledWith('follow-up message');
+      expect(sendMessage).toHaveBeenCalledWith('follow-up message', undefined);
     });
 
     it('does not call sendMessage when Enter is pressed with whitespace-only text while running', async () => {
@@ -248,7 +270,9 @@ describe('SessionComposer', () => {
           sendMessage,
         }),
       );
-      const input = screen.getByRole('combobox') as HTMLTextAreaElement;
+      const input = screen.getByRole('combobox', {
+        name: /follow-up/i,
+      }) as HTMLTextAreaElement;
       // Simulate whitespace-only value
       fireEvent.change(input, { target: { value: '   ' } });
       fireEvent.keyDown(input, { key: 'Enter' });
@@ -260,7 +284,9 @@ describe('SessionComposer', () => {
     it('clears textarea after sending while running', async () => {
       const user = userEvent.setup();
       render(withSession(<SessionComposer />, { sessionStatus: 'running' }));
-      const input = screen.getByRole('combobox') as HTMLTextAreaElement;
+      const input = screen.getByRole('combobox', {
+        name: /follow-up/i,
+      }) as HTMLTextAreaElement;
       await user.type(input, 'follow-up');
       fireEvent.keyDown(input, { key: 'Enter' });
       await new Promise((r) => setTimeout(r, 0));
@@ -279,7 +305,7 @@ describe('SessionComposer', () => {
           sendMessage,
         }),
       );
-      const input = screen.getByRole('combobox');
+      const input = screen.getByRole('combobox', { name: /follow-up/i });
       await user.type(input, 'some text');
       fireEvent.keyDown(input, { key: 'Enter' });
       await new Promise((r) => setTimeout(r, 10));
@@ -344,7 +370,9 @@ describe('SessionComposer', () => {
           sendMessage,
         }),
       );
-      const input = screen.getByRole('combobox') as HTMLTextAreaElement;
+      const input = screen.getByRole('combobox', {
+        name: /follow-up/i,
+      }) as HTMLTextAreaElement;
       await user.type(input, 'my command');
       fireEvent.keyDown(input, { key: 'Enter' });
       await new Promise((r) => setTimeout(r, 0));
@@ -366,7 +394,9 @@ describe('SessionComposer', () => {
 
     it('ArrowUp does nothing when history is empty and input is empty', () => {
       render(withSession(<SessionComposer />));
-      const input = screen.getByRole('combobox') as HTMLTextAreaElement;
+      const input = screen.getByRole('combobox', {
+        name: /follow-up/i,
+      }) as HTMLTextAreaElement;
       Object.defineProperty(input, 'selectionStart', {
         value: 0,
         configurable: true,

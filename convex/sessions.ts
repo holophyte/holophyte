@@ -135,9 +135,9 @@ export const create = mutation({
     prompt: v.optional(v.string()),
     model: v.optional(v.string()),
     permissionMode: v.optional(v.string()),
-    // Per-turn effort accepted at the boundary for forward compatibility; not
-    // persisted in Task 2 (see spec § Task 6 — no `sessions.reasoningEffort`
-    // column). Task 6 wires first-turn effort through its own channel.
+    // Per-turn effort for the first turn. Persisted as transient queue
+    // metadata on `sessions.queuedReasoningEffort` — read once by the
+    // companion when starting the turn.
     reasoningEffort: v.optional(v.string()),
     provider: v.union(v.literal('claude'), v.literal('codex')),
   },
@@ -156,6 +156,7 @@ export const create = mutation({
       startedAt: now,
       lastActivityAt: now,
       queuedPrompt: args.prompt,
+      queuedReasoningEffort: args.reasoningEffort,
       model: args.model,
       permissionMode: args.permissionMode,
       provider: args.provider,
@@ -278,6 +279,8 @@ export const queueResume = mutation({
   args: {
     id: v.id('sessions'),
     prompt: v.string(),
+    // Per-turn effort for the resumed turn (same channel as `create`).
+    reasoningEffort: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const session = await ctx.db.get(args.id);
@@ -296,6 +299,7 @@ export const queueResume = mutation({
     await ctx.db.patch(args.id, {
       status: 'queued',
       queuedPrompt: args.prompt,
+      queuedReasoningEffort: args.reasoningEffort,
       lastActivityAt: Date.now(),
     });
     return { ok: true };

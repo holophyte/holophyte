@@ -78,6 +78,7 @@ async function handleQueuedSession(session: QueuedSession): Promise<void> {
       prompt: session.queuedPrompt,
       model: session.model,
       permissionMode,
+      reasoningEffort: session.queuedReasoningEffort,
       resumeProviderSessionId:
         session.providerSessionId ?? session.sdkSessionId,
     });
@@ -154,7 +155,11 @@ async function handlePendingMessage(msg: PendingMessage): Promise<void> {
     // will retry once the session is claimed.
     const owner = findOwningManager(msg.sessionId);
     const delivered = owner
-      ? await owner.sendMessageToSession(msg.sessionId, msg.text)
+      ? await owner.sendMessageToSession(
+          msg.sessionId,
+          msg.text,
+          msg.reasoningEffort,
+        )
       : false;
     if (delivered) {
       await client.mutation(api.sessionMessages.companionMarkConsumed, {

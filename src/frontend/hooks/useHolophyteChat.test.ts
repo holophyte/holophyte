@@ -100,7 +100,11 @@ describe('useHolophyteChat — optimistic messages', () => {
     await act(async () => {
       await result.current.sendMessage('Hello');
     });
-    expect(props.sendMessage).toHaveBeenCalledWith('sess-1', 'Hello');
+    expect(props.sendMessage).toHaveBeenCalledWith(
+      'sess-1',
+      'Hello',
+      undefined,
+    );
     const lastMsg = result.current.messages.at(-1);
     expect(lastMsg?.role).toBe('user');
     expect(lastMsg?.parts[0]).toMatchObject({ type: 'text', text: 'Hello' });

@@ -19,7 +19,11 @@ export interface UseHolophyteChatProps {
   projectCommands: ProjectCommand[];
   approve: (requestId: string) => void;
   deny: (requestId: string, message?: string) => void;
-  sendMessage: (sessionId: string, text: string) => Promise<void>;
+  sendMessage: (
+    sessionId: string,
+    text: string,
+    reasoningEffort?: string,
+  ) => Promise<void>;
   handleStop: () => Promise<void>;
   messageQueued: boolean;
 }
@@ -27,7 +31,7 @@ export interface UseHolophyteChatProps {
 export interface UseHolophyteChatReturn {
   messages: UIMessage[];
   status: 'ready' | 'submitted' | 'streaming' | 'error';
-  sendMessage: (text: string) => Promise<void>;
+  sendMessage: (text: string, reasoningEffort?: string) => Promise<void>;
   stop: () => Promise<void>;
   approve: (requestId: string) => void;
   deny: (requestId: string, message?: string) => void;
@@ -182,11 +186,11 @@ export function useHolophyteChat(
   }, [sdkMessages, optimisticMsgs]);
 
   const sendMessage = useCallback(
-    async (text: string) => {
+    async (text: string, reasoningEffort?: string) => {
       if (!text.trim()) return;
       addOptimisticMessage(text);
       try {
-        await sendMessageProp(sessionId, text);
+        await sendMessageProp(sessionId, text, reasoningEffort);
       } catch (err) {
         console.error('[useHolophyteChat] sendMessage failed:', err);
         setOptimisticMsgs([]);

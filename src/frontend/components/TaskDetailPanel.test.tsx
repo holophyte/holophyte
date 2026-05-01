@@ -37,8 +37,8 @@ vi.mock('convex/react', () => ({
   useQuery: () => mockTask,
 }));
 
-vi.mock('./ClaudeButton', () => ({
-  ClaudeButton: () => <div>Claude button</div>,
+vi.mock('./LaunchButton', () => ({
+  LaunchButton: () => <div>Launch button</div>,
 }));
 
 vi.mock('./LabelPicker', () => ({
