@@ -1055,6 +1055,21 @@ describe('codex/manager', () => {
       const queryCallsAtDeny = mockQuery.mock.calls.length;
       await new Promise((r) => setTimeout(r, 600));
       expect(mockQuery.mock.calls.length).toBe(queryCallsAtDeny);
+
+      // Timeout must also settle the persisted row — otherwise the frontend
+      // would keep showing a pending approval that Codex has already denied.
+      // Wait one tick for the fire-and-forget mutation.
+      await new Promise((r) => setTimeout(r, 10));
+      const denyByRequestIdCall = mockMutation.mock.calls.find((call) => {
+        const arg = call[1] as Record<string, unknown> | undefined;
+        return arg && arg.denyMessage === 'Approval timed out';
+      });
+      expect(denyByRequestIdCall).toBeDefined();
+      expect(denyByRequestIdCall?.[1]).toMatchObject({
+        sessionId: 'codex-poll-timeout',
+        requestId: 'item-timeout-1',
+        denyMessage: 'Approval timed out',
+      });
     } finally {
       delete process.env.CODEX_APPROVAL_POLL_TIMEOUT_MS;
     }

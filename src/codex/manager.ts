@@ -357,6 +357,21 @@ async function persistAndAwaitApproval(
         `[codex session ${session.convexSessionId}] approval ${requestId} timed out after ${getApprovalPollTimeoutMs()}ms — denying to free the turn`,
       );
       cleanup();
+      // Settle the persisted row so the frontend doesn't show a stale prompt
+      // that Codex has already moved past. Best-effort — don't block the
+      // Codex deny on bookkeeping.
+      void convexClient
+        .mutation(api.pendingApprovals.companionDenyByRequestId, {
+          sessionId: sessionId as Id<'sessions'>,
+          requestId,
+          denyMessage: 'Approval timed out',
+        })
+        .catch((err) => {
+          console.error(
+            `Failed to settle timed-out approval ${requestId}:`,
+            err,
+          );
+        });
       resolve(request.deny());
     }, getApprovalPollTimeoutMs());
 
