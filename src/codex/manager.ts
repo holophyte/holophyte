@@ -264,9 +264,6 @@ function registerApprovalHandlers(session: Session): void {
   const unsubscribe = session.client.handleApprovalRequests(
     (request: AppServerClientInboundApprovalRequest) => {
       if (!BINARY_APPROVAL_METHODS.has(request.method)) {
-        console.warn(
-          `[codex session ${session.convexSessionId}] denying ${request.method}: not yet supported by Phase 0 UI`,
-        );
         return request.deny();
       }
       // Phase 0 only routes `item/*` methods through the bridge, and those
