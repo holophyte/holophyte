@@ -266,12 +266,14 @@ function ActiveSession({
   }, []);
 
   // Wrap sendMessage so effort is only forwarded when the user has explicitly
-  // changed it this session. Untouched picker → undefined → manager preserves.
-  // Claude `'auto'` collapses to undefined (omit `effortLevel` so adaptive
-  // thinking takes over).
+  // changed it this session. Untouched picker → undefined → manager preserves
+  // the existing session-level effort. When the user explicitly picks Claude's
+  // `'auto'`, we still transmit it so the manager can clear a prior override
+  // (otherwise a session running at e.g. `'high'` could never return to
+  // adaptive thinking once changed).
   const sendMessageWrapped = useCallback(
     (sid: string, text: string, _reasoningEffort?: string) => {
-      const value = effortDirty && effort !== 'auto' ? effort : undefined;
+      const value = effortDirty ? effort : undefined;
       return sendMessage(sid, text, value);
     },
     [sendMessage, effort, effortDirty],
