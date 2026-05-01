@@ -150,6 +150,41 @@ export const companionMarkConsumed = mutation({
   },
 });
 
+/**
+ * Denies a single unresolved approval, identified by `sessionId` + `requestId`.
+ *
+ * Used by the Codex bridge when a poll loop times out: the manager has already
+ * told Codex to deny, but the persisted row would otherwise stay unresolved
+ * until session end. Marking it resolved+consumed here keeps the frontend
+ * approval list in sync.
+ */
+export const companionDenyByRequestId = mutation({
+  args: {
+    sessionId: v.id('sessions'),
+    requestId: v.string(),
+    denyMessage: v.string(),
+  },
+  handler: async (ctx, args) => {
+    if (!isLocalDevMode()) {
+      await requireSessionOwnership(ctx, args.sessionId);
+    }
+    const row = await ctx.db
+      .query('pendingApprovals')
+      .withIndex('by_session_unresolved', (q) =>
+        q.eq('sessionId', args.sessionId).eq('resolved', false),
+      )
+      .filter((q) => q.eq(q.field('requestId'), args.requestId))
+      .first();
+    if (!row) return;
+    await ctx.db.patch(row._id, {
+      resolved: true,
+      approved: false,
+      denyMessage: args.denyMessage,
+      consumed: true,
+    });
+  },
+});
+
 /** Denies all unresolved approvals. Public equivalent of {@link serverDenyAll}. */
 export const companionDenyAll = mutation({
   args: { sessionId: v.id('sessions') },

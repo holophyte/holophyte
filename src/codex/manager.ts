@@ -2,7 +2,9 @@ import { api } from '@convex/_generated/api';
 import type { Id } from '@convex/_generated/dataModel';
 import {
   type AppServerClient,
+  type AppServerClientApprovalResponse,
   type AppServerClientEventMethod,
+  type AppServerClientInboundApprovalRequest,
   type AppServerClientNotification,
   createClient,
 } from 'codex-app-server-client';
@@ -126,10 +128,20 @@ function normalizeReasoningEffort(
 }
 
 function approvalPolicyForMode(mode: PermissionMode): ApprovalPolicy {
-  // Task 3 deliberately has no approval handlers. Only bypass can make forward
-  // progress until Task 5 wires request handling.
+  // Holophyte's `default` mode means "prompt for every tool" — match that
+  // semantic with Codex's `'untrusted'` policy, the only one that actually
+  // confirms every operation. The spec's safety matrix called for
+  // `'on-request'`, but in practice Codex's `'on-request'` only prompts on
+  // higher-risk operations — sandbox-permitted edits/commands run silently,
+  // which is materially weaker than Claude's `default` and surprises any
+  // user who picked the strictest mode.
+  //
+  // `safe-auto` keeps `'on-request'` because Phase 0 has no command
+  // allowlist analogous to Claude's `SAFE_BASH_PATTERNS` — a Codex-side
+  // pattern-pre-filter is Phase 0.1+.
   if (mode === 'bypass') return 'never';
-  throw new Error(`Codex permissionMode is not supported yet: ${mode}`);
+  if (mode === 'safe-auto') return 'on-request';
+  return 'untrusted';
 }
 
 function sleep(ms: number): Promise<void> {
@@ -209,6 +221,192 @@ function subscribeToEvents(session: Session): void {
   }
 }
 
+const APPROVAL_POLL_INTERVAL_MS = 500;
+
+/**
+ * Bound on how long an unresolved Codex approval keeps polling Convex
+ * before failing closed. Without this, a Convex outage that lands after
+ * `companionCreate` succeeds would leave the polling interval running
+ * forever — the Codex turn parks indefinitely and the user can only
+ * recover by stopping the session manually. Read at call time so tests
+ * can shrink it via env without re-importing the module.
+ */
+function getApprovalPollTimeoutMs(): number {
+  const override = process.env.CODEX_APPROVAL_POLL_TIMEOUT_MS;
+  if (override) {
+    const parsed = Number(override);
+    if (Number.isFinite(parsed) && parsed > 0) return parsed;
+  }
+  return 5 * 60_000;
+}
+
+/**
+ * Approval methods we route through the existing `pendingApprovals` UI in
+ * Phase 0. Restricted to the two `item/*` methods because:
+ *
+ * - `applyPatchApproval` and `execCommandApproval` have no `itemId`, so they
+ *   cannot key onto a rendered tool item in the session thread (the UI
+ *   matches `pendingApprovals.requestId === toolCallId`). Persisting them
+ *   would create rows the user can't see — they would stall the turn until
+ *   the polling timeout fires. Better to deny upstream so the agent
+ *   surfaces the rejection and can retry.
+ * - `item/tool/requestUserInput`, `mcpServer/elicitation/request`, and
+ *   `item/permissions/requestApproval` need rich response payloads
+ *   (answers, content, permission scopes) the binary approve/deny UI can't
+ *   produce; Phase 0.1+ ships the structured renderers.
+ */
+const BINARY_APPROVAL_METHODS = new Set<string>([
+  'item/commandExecution/requestApproval',
+  'item/fileChange/requestApproval',
+]);
+
+function registerApprovalHandlers(session: Session): void {
+  const unsubscribe = session.client.handleApprovalRequests(
+    (request: AppServerClientInboundApprovalRequest) => {
+      if (!BINARY_APPROVAL_METHODS.has(request.method)) {
+        return request.deny();
+      }
+      // Phase 0 only routes `item/*` methods through the bridge, and those
+      // always carry an itemId. Defensive `??` in case the library ever
+      // surfaces a null itemId — falling back to the RPC id keeps the
+      // bridge functional, just unrenderable until the user resolves
+      // manually via the Convex dashboard.
+      const itemId = request.itemId ?? String(request.id);
+      return persistAndAwaitApproval(session, request, itemId);
+    },
+  );
+  session.unsubscribers.push(unsubscribe);
+}
+
+/**
+ * Persist a Codex binary approval to `pendingApprovals`, then poll Convex
+ * until the frontend resolves it. Mirrors `src/claude/manager.ts`'s
+ * `canUseTool` flow, with two differences:
+ *
+ * - `tool` is prefixed `codex.<method>` so the frontend can route to a
+ *   Codex approval renderer; the existing `pendingApprovals` schema
+ *   absorbs the supported shapes via the JSON `input` field.
+ * - The library's normalized `request.approve()` / `request.deny()`
+ *   produce the right response shape per method, so the handler doesn't
+ *   branch on `request.method`.
+ *
+ * `requestId` is keyed by the request's `itemId`, not the RPC id: the
+ * frontend matches `pendingApprovals.requestId === toolCallId`, where
+ * `toolCallId` is the rendered tool item's id. Only `item/*` binary
+ * methods reach this function (see `registerApprovalHandlers`); other
+ * methods are denied upstream.
+ */
+async function persistAndAwaitApproval(
+  session: Session,
+  request: AppServerClientInboundApprovalRequest,
+  requestId: string,
+): Promise<AppServerClientApprovalResponse> {
+  const sessionId = session.convexSessionId as Id<'sessions'>;
+
+  if (session.controller.signal.aborted) return request.deny();
+
+  const convexClient = getConvexClient();
+  if (!convexClient) return request.deny();
+
+  try {
+    await convexClient.mutation(api.pendingApprovals.companionCreate, {
+      sessionId,
+      requestId,
+      tool: `codex.${request.method}`,
+      input: JSON.stringify(request.rawParams),
+    });
+  } catch (err) {
+    console.error('Failed to persist Codex approval:', err);
+    return request.deny();
+  }
+
+  // Recheck after the await: addEventListener('abort', ...) on an
+  // already-aborted signal does not retroactively fire, so an abort that
+  // landed during companionCreate would leak the polling interval below
+  // until process restart — companionDenyAll patches the row to
+  // consumed: true, which companionListResolvedUnconsumed permanently
+  // filters out.
+  if (session.controller.signal.aborted) return request.deny();
+
+  return new Promise<AppServerClientApprovalResponse>((resolve) => {
+    let intervalId: ReturnType<typeof setInterval> | undefined;
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
+    // Single-flight guard: setInterval can fire a second tick while the
+    // first is awaiting Convex. Without this latch, two ticks could both
+    // observe the same resolved row before companionMarkConsumed lands and
+    // both call request.approve() / request.deny(). The SDK only consumes
+    // the first resolve, but the duplicated work and double mark-consumed
+    // mutation are wasted.
+    let polling = false;
+    const cleanup = () => {
+      if (intervalId !== undefined) clearInterval(intervalId);
+      if (timeoutId !== undefined) clearTimeout(timeoutId);
+      session.controller.signal.removeEventListener('abort', onAbort);
+    };
+    // Auto-deny on session abort so we don't leak this promise.
+    function onAbort() {
+      cleanup();
+      resolve(request.deny());
+    }
+    session.controller.signal.addEventListener('abort', onAbort, {
+      once: true,
+    });
+
+    timeoutId = setTimeout(() => {
+      console.warn(
+        `[codex session ${session.convexSessionId}] approval ${requestId} timed out after ${getApprovalPollTimeoutMs()}ms — denying to free the turn`,
+      );
+      cleanup();
+      // Settle the persisted row so the frontend doesn't show a stale prompt
+      // that Codex has already moved past. Best-effort — don't block the
+      // Codex deny on bookkeeping.
+      void convexClient
+        .mutation(api.pendingApprovals.companionDenyByRequestId, {
+          sessionId: sessionId as Id<'sessions'>,
+          requestId,
+          denyMessage: 'Approval timed out',
+        })
+        .catch((err) => {
+          console.error(
+            `Failed to settle timed-out approval ${requestId}:`,
+            err,
+          );
+        });
+      resolve(request.deny());
+    }, getApprovalPollTimeoutMs());
+
+    intervalId = setInterval(async () => {
+      if (polling) return;
+      polling = true;
+      try {
+        const httpClient = await getConvexHttpClient();
+        if (!httpClient) return;
+        const resolved = await httpClient.query(
+          api.pendingApprovals.companionListResolvedUnconsumed,
+          { sessionId },
+        );
+        const match = resolved?.find((r) => r.requestId === requestId);
+        if (!match) return;
+        cleanup();
+        // Hand the decision to Codex first; mark-consumed is bookkeeping
+        // and must not delay the turn if the mutation stalls.
+        resolve(match.approved ? request.approve() : request.deny());
+        void convexClient
+          .mutation(api.pendingApprovals.companionMarkConsumed, {
+            id: match._id,
+          })
+          .catch((err: unknown) => {
+            console.error('Failed to mark Codex approval consumed:', err);
+          });
+      } catch (err) {
+        console.error('Failed to poll Codex pending approvals:', err);
+      } finally {
+        polling = false;
+      }
+    }, APPROVAL_POLL_INTERVAL_MS);
+  });
+}
+
 function handleNotification(
   session: Session,
   notification: AppServerClientNotification,
@@ -250,6 +448,13 @@ async function finishSession(
   sessions.delete(sessionId);
   session.currentTurnId = undefined;
 
+  // Abort first so any in-flight approval handler resolves with deny() and
+  // its polling interval clears. Without this, the natural-completion path
+  // (idle/failed turn/completed) would leave the handler polling forever
+  // after `companionDenyAll` patches the row to consumed: true (which
+  // companionListResolvedUnconsumed filters out).
+  if (!session.controller.signal.aborted) session.controller.abort();
+
   await sleep(STOP_GRACE_MS);
   await flushEvents(session);
 
@@ -271,6 +476,20 @@ async function finishSession(
   await session.client.close().catch((err: unknown) => {
     console.error('Failed to close Codex client:', err);
   });
+
+  // Deny any pendingApprovals rows the user never resolved. companionDenyAll
+  // is a no-op for already-resolved rows, so this is safe even after the
+  // abort listener above settled in-flight handler promises.
+  try {
+    const client = getConvexClient();
+    if (client) {
+      await client.mutation(api.pendingApprovals.companionDenyAll, {
+        sessionId: session.convexSessionId as Id<'sessions'>,
+      });
+    }
+  } catch (err) {
+    console.error('Failed to deny Codex pending approvals on cleanup:', err);
+  }
 }
 
 // Sentinel placed in currentTurnId between accepting a follow-up and the real
@@ -330,6 +549,18 @@ export async function startSession(opts: {
   const mode = opts.permissionMode;
   if (!mode || !VALID_PERMISSION_MODES.has(mode)) {
     throw new Error(`Invalid permissionMode: ${mode}`);
+  }
+
+  // Phase 0: the approval bridge persists rows, but no UI surface yet renders
+  // Codex approval prompts (`codex.item/*` notifications aren't bridged into
+  // sdkToUIMessages until Tasks 7+8). A non-bypass session that hits an
+  // approval will park the turn until the 5-min poll timeout, then auto-deny.
+  // The companion dispatch falls back to 'bypass' for null-mode Codex
+  // sessions, so this only fires for explicit opt-in (e.g. dev helper script).
+  if (mode !== 'bypass') {
+    console.warn(
+      `[codex session ${opts.sessionId}] permissionMode=${mode} selected, but Phase 0 has no Codex approval UI yet — approval prompts will park until the 5-min poll timeout and then auto-deny. Use 'bypass' for non-test sessions until Tasks 7+8 land.`,
+    );
   }
 
   let initialBatchIndex = 0;
@@ -398,6 +629,7 @@ export async function startSession(opts: {
     };
     sessions.set(sessionId, session);
     subscribeToEvents(session);
+    registerApprovalHandlers(session);
 
     const convexClient = getConvexClient();
     if (convexClient) {

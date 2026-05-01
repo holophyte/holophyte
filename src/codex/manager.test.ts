@@ -45,6 +45,8 @@ function makeTurn(id: string, status: TurnStatus) {
   };
 }
 
+type ApprovalHandler = (request: unknown) => unknown;
+
 function makeClientStub() {
   const handlers = new Map<
     string,
@@ -55,6 +57,7 @@ function makeClientStub() {
       handler(notification);
     }
   };
+  const approvalHandlers: ApprovalHandler[] = [];
 
   return {
     thread: {
@@ -104,7 +107,51 @@ function makeClientStub() {
         };
       },
     ),
+    handleApprovalRequests: vi.fn((handler: ApprovalHandler) => {
+      approvalHandlers.push(handler);
+      return () => {
+        const idx = approvalHandlers.indexOf(handler);
+        if (idx >= 0) approvalHandlers.splice(idx, 1);
+      };
+    }),
+    /** Returns the most recently registered approval handler. */
+    invokeApproval: (request: unknown) => {
+      const handler = approvalHandlers[approvalHandlers.length - 1];
+      if (!handler) throw new Error('No approval handler registered');
+      return handler(request);
+    },
+    approvalHandlerCount: () => approvalHandlers.length,
     close: vi.fn().mockResolvedValue(undefined),
+  };
+}
+
+interface ApprovalResponse {
+  decision: 'approve' | 'deny';
+  method: string;
+}
+
+interface ApprovalRequestStub {
+  id: string;
+  itemId: string | null;
+  method: string;
+  rawParams: unknown;
+  approve: () => ApprovalResponse;
+  deny: () => ApprovalResponse;
+}
+
+function makeApprovalRequest(
+  method: string,
+  id: string,
+  rawParams: unknown,
+  itemId: string | null = null,
+): ApprovalRequestStub {
+  return {
+    id,
+    itemId,
+    method,
+    rawParams,
+    approve: vi.fn(() => ({ decision: 'approve' as const, method })),
+    deny: vi.fn(() => ({ decision: 'deny' as const, method })),
   };
 }
 
@@ -288,6 +335,7 @@ describe('codex/manager', () => {
           };
         },
       ),
+      handleApprovalRequests: vi.fn(() => () => {}),
       close: vi.fn().mockResolvedValue(undefined),
     };
     mockCreateClient.mockResolvedValue(client);
@@ -498,6 +546,7 @@ describe('codex/manager', () => {
           };
         },
       ),
+      handleApprovalRequests: vi.fn(() => () => {}),
       close: vi.fn().mockResolvedValue(undefined),
     };
     mockCreateClient.mockResolvedValue(client);
@@ -598,6 +647,7 @@ describe('codex/manager', () => {
           };
         },
       ),
+      handleApprovalRequests: vi.fn(() => () => {}),
       close: vi.fn().mockResolvedValue(undefined),
     };
     mockCreateClient.mockResolvedValue(client);
@@ -649,6 +699,412 @@ describe('codex/manager', () => {
     expect(client.turn.start).toHaveBeenLastCalledWith(
       expect.objectContaining({ effort: 'high' }),
     );
+  });
+
+  it.each([
+    ['default', 'untrusted'],
+    ['safe-auto', 'on-request'],
+    ['bypass', 'never'],
+  ] as const)('maps permissionMode %s to approvalPolicy %s', async (mode, expectedPolicy) => {
+    const client = makeClientStub();
+    mockCreateClient.mockResolvedValue(client);
+
+    const { startSession } = await import('./manager');
+
+    await startSession({
+      sessionId: `codex-mode-${mode}`,
+      repoPath: '/tmp/repo',
+      prompt: 'check policy',
+      permissionMode: mode,
+      reasoningEffort: 'medium',
+    });
+
+    await new Promise((r) => setTimeout(r, 30));
+
+    expect(client.thread.start).toHaveBeenCalledWith(
+      expect.objectContaining({ approvalPolicy: expectedPolicy }),
+    );
+    expect(client.turn.start).toHaveBeenCalledWith(
+      expect.objectContaining({ approvalPolicy: expectedPolicy }),
+    );
+  });
+
+  it('persists Codex item approvals keyed by itemId (not request.id) so the frontend can match by tool item', async () => {
+    const client = makeClientStub();
+    mockCreateClient.mockResolvedValue(client);
+
+    const { startSession } = await import('./manager');
+    await startSession({
+      sessionId: 'codex-approval-persist',
+      repoPath: '/tmp/repo',
+      prompt: 'edit a file',
+      permissionMode: 'default',
+      reasoningEffort: 'medium',
+    });
+
+    await new Promise((r) => setTimeout(r, 30));
+    expect(client.approvalHandlerCount()).toBe(1);
+
+    const rawParams = { path: 'src/foo.ts', content: 'hello' };
+    // RPC id and tool itemId differ — frontend renders tool calls by itemId,
+    // so pendingApprovals.requestId must use itemId to match.
+    const inboundRequest = makeApprovalRequest(
+      'item/fileChange/requestApproval',
+      'rpc-id-fc-1',
+      rawParams,
+      'item-fc-1',
+    );
+
+    const responsePromise = client.invokeApproval(inboundRequest);
+    // Let the persistence path queue up
+    await new Promise((r) => setTimeout(r, 30));
+
+    const createCall = mockMutation.mock.calls.find((call) => {
+      const arg = call[1] as Record<string, unknown> | undefined;
+      return arg && arg.requestId === 'item-fc-1';
+    });
+    expect(createCall).toBeDefined();
+    const args = createCall?.[1] as Record<string, unknown>;
+    expect(args.tool).toBe('codex.item/fileChange/requestApproval');
+    expect(JSON.parse(args.input as string)).toEqual(rawParams);
+    expect(args.sessionId).toBe('codex-approval-persist');
+
+    // Resolve via Convex with approve, keyed on itemId.
+    mockQuery.mockResolvedValue([
+      {
+        _id: 'pa-1',
+        requestId: 'item-fc-1',
+        approved: true,
+        consumed: false,
+        resolved: true,
+      },
+    ]);
+
+    const response = (await responsePromise) as ApprovalResponse;
+    expect(response).toEqual({
+      decision: 'approve',
+      method: 'item/fileChange/requestApproval',
+    });
+    expect(inboundRequest.approve).toHaveBeenCalledTimes(1);
+
+    // companionMarkConsumed must have been called for the resolved row
+    const markCall = mockMutation.mock.calls.find((call) => {
+      const arg = call[1] as Record<string, unknown> | undefined;
+      return arg && arg.id === 'pa-1';
+    });
+    expect(markCall).toBeDefined();
+  });
+
+  it('returns request.deny() when the user denies a Codex approval', async () => {
+    const client = makeClientStub();
+    mockCreateClient.mockResolvedValue(client);
+
+    const { startSession } = await import('./manager');
+    await startSession({
+      sessionId: 'codex-approval-deny',
+      repoPath: '/tmp/repo',
+      prompt: 'try a command',
+      permissionMode: 'default',
+      reasoningEffort: 'medium',
+    });
+    await new Promise((r) => setTimeout(r, 30));
+
+    const inboundRequest = makeApprovalRequest(
+      'item/commandExecution/requestApproval',
+      'rpc-id-ec-1',
+      { command: 'echo hi', cwd: '/tmp/repo' },
+      'item-ec-1',
+    );
+    const responsePromise = client.invokeApproval(inboundRequest);
+
+    await new Promise((r) => setTimeout(r, 30));
+    mockQuery.mockResolvedValue([
+      {
+        _id: 'pa-2',
+        requestId: 'item-ec-1',
+        approved: false,
+        consumed: false,
+        resolved: true,
+      },
+    ]);
+
+    const response = (await responsePromise) as ApprovalResponse;
+    expect(response).toEqual({
+      decision: 'deny',
+      method: 'item/commandExecution/requestApproval',
+    });
+    expect(inboundRequest.deny).toHaveBeenCalledTimes(1);
+    expect(inboundRequest.approve).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    // Structured methods: response payload (answers, content, permission
+    // scopes) needs UI Phase 0 cannot collect.
+    'item/tool/requestUserInput',
+    'mcpServer/elicitation/request',
+    'item/permissions/requestApproval',
+    // Top-level methods: no `itemId`, so the rendered tool item in the
+    // session thread has nothing to attach to in the existing approval UI.
+    'applyPatchApproval',
+    'execCommandApproval',
+  ])('denies unsupported approval method %s without writing a pendingApprovals row', async (method) => {
+    // Phase 0 limitation: structured methods need response payloads (answers,
+    // content, permission scopes) the UI can't yet collect. Auto-approving
+    // them with empty defaults is unsafe; deny immediately and surface the
+    // failure to the agent so it can retry or fall back. Rich UI is Phase 0.1+.
+    const client = makeClientStub();
+    mockCreateClient.mockResolvedValue(client);
+
+    const { startSession } = await import('./manager');
+    await startSession({
+      sessionId: `codex-structured-${method.replace(/\W/g, '-')}`,
+      repoPath: '/tmp/repo',
+      prompt: 'kick off',
+      permissionMode: 'default',
+      reasoningEffort: 'medium',
+    });
+    await new Promise((r) => setTimeout(r, 30));
+
+    const inboundRequest = makeApprovalRequest(method, 'req-struct-1', {});
+    const response = (await client.invokeApproval(
+      inboundRequest,
+    )) as ApprovalResponse;
+
+    expect(response.decision).toBe('deny');
+    expect(inboundRequest.deny).toHaveBeenCalledTimes(1);
+    expect(inboundRequest.approve).not.toHaveBeenCalled();
+
+    // Must not persist — no pendingApprovals row written for structured methods.
+    const createCall = mockMutation.mock.calls.find((call) => {
+      const arg = call[1] as Record<string, unknown> | undefined;
+      return arg && arg.requestId === 'req-struct-1';
+    });
+    expect(createCall).toBeUndefined();
+  });
+
+  it('returns request.deny() when persisting the approval fails', async () => {
+    const client = makeClientStub();
+    mockCreateClient.mockResolvedValue(client);
+
+    // Default mockMutation resolves; override only the companionCreate path
+    // (4-key arg shape with sessionId/requestId/tool/input).
+    mockMutation.mockImplementation(
+      (_path: unknown, args: Record<string, unknown> | undefined) => {
+        if (
+          args &&
+          typeof args === 'object' &&
+          'requestId' in args &&
+          'tool' in args
+        ) {
+          return Promise.reject(new Error('convex unreachable'));
+        }
+        return Promise.resolve(undefined);
+      },
+    );
+
+    const { startSession } = await import('./manager');
+    await startSession({
+      sessionId: 'codex-create-fail',
+      repoPath: '/tmp/repo',
+      prompt: 'test',
+      permissionMode: 'default',
+      reasoningEffort: 'medium',
+    });
+    await new Promise((r) => setTimeout(r, 30));
+
+    const inboundRequest = makeApprovalRequest(
+      'item/fileChange/requestApproval',
+      'rpc-id-fail-1',
+      { path: 'a.ts' },
+      'item-fail-1',
+    );
+    const response = (await client.invokeApproval(
+      inboundRequest,
+    )) as ApprovalResponse;
+    expect(response.decision).toBe('deny');
+    expect(inboundRequest.deny).toHaveBeenCalledTimes(1);
+    expect(inboundRequest.approve).not.toHaveBeenCalled();
+  });
+
+  it('denies (no polling leak) if abort lands while companionCreate is in flight', async () => {
+    // Race window: addEventListener('abort', ...) on an already-aborted
+    // signal does not retroactively fire. Without a recheck after the
+    // companionCreate await, the polling interval would run forever because
+    // companionDenyAll later patches the row consumed: true, hiding it from
+    // the poller. This test stalls companionCreate, fires stopSession during
+    // the stall, then asserts deny() is returned and no interval is left.
+    const client = makeClientStub();
+    mockCreateClient.mockResolvedValue(client);
+
+    let releaseCreate: (() => void) | undefined;
+    mockMutation.mockImplementation(
+      (_path: unknown, args: Record<string, unknown> | undefined) => {
+        if (args && 'requestId' in args && 'tool' in args) {
+          return new Promise<undefined>((resolve) => {
+            releaseCreate = () => resolve(undefined);
+          });
+        }
+        return Promise.resolve(undefined);
+      },
+    );
+
+    const { startSession, stopSession } = await import('./manager');
+    await startSession({
+      sessionId: 'codex-abort-during-create',
+      repoPath: '/tmp/repo',
+      prompt: 'kick off',
+      permissionMode: 'default',
+      reasoningEffort: 'medium',
+    });
+    await new Promise((r) => setTimeout(r, 30));
+
+    const inboundRequest = makeApprovalRequest(
+      'item/fileChange/requestApproval',
+      'rpc-id-race-1',
+      { path: 'a.ts' },
+      'item-race-1',
+    );
+    const responsePromise = client.invokeApproval(inboundRequest);
+
+    // Stop the session while companionCreate is parked
+    await new Promise((r) => setTimeout(r, 30));
+    stopSession('codex-abort-during-create');
+    await new Promise((r) => setTimeout(r, 20));
+
+    // Release the parked mutation; the post-await abort recheck must trigger
+    // request.deny() without arming the polling interval.
+    releaseCreate?.();
+
+    const response = (await responsePromise) as ApprovalResponse;
+    expect(response.decision).toBe('deny');
+    expect(inboundRequest.deny).toHaveBeenCalledTimes(1);
+  });
+
+  it('auto-denies in-flight approvals when the session controller aborts', async () => {
+    const client = makeClientStub();
+    mockCreateClient.mockResolvedValue(client);
+
+    const { startSession, stopSession } = await import('./manager');
+    await startSession({
+      sessionId: 'codex-approval-abort',
+      repoPath: '/tmp/repo',
+      prompt: 'kick off',
+      permissionMode: 'default',
+      reasoningEffort: 'medium',
+    });
+    await new Promise((r) => setTimeout(r, 30));
+
+    const inboundRequest = makeApprovalRequest(
+      'item/fileChange/requestApproval',
+      'rpc-id-abort-1',
+      { path: 'a.ts' },
+      'item-abort-1',
+    );
+    const responsePromise = client.invokeApproval(inboundRequest);
+    await new Promise((r) => setTimeout(r, 30));
+
+    // No resolution from the user — abort the session instead.
+    stopSession('codex-approval-abort');
+
+    const response = (await responsePromise) as ApprovalResponse;
+    expect(response.decision).toBe('deny');
+    expect(inboundRequest.deny).toHaveBeenCalledTimes(1);
+  });
+
+  it('denies after the polling timeout if Convex never returns a resolution', async () => {
+    // Convex outage / unresolved row scenario. Without a bound, the poll
+    // would run forever and the Codex turn would park indefinitely. The
+    // bound denies, surfaces a deny() to the agent, and clears the
+    // interval so no more polling load hits the dependency.
+    process.env.CODEX_APPROVAL_POLL_TIMEOUT_MS = '300';
+    try {
+      const client = makeClientStub();
+      mockCreateClient.mockResolvedValue(client);
+
+      const { startSession } = await import('./manager');
+      await startSession({
+        sessionId: 'codex-poll-timeout',
+        repoPath: '/tmp/repo',
+        prompt: 'kick off',
+        permissionMode: 'default',
+        reasoningEffort: 'medium',
+      });
+      await new Promise((r) => setTimeout(r, 30));
+
+      // mockQuery defaults to {nextBatchIndex: 0}; force an array return for
+      // the listResolvedUnconsumed query so the poll path sees "no match"
+      // each tick rather than treating the default as malformed data.
+      mockQuery.mockResolvedValue([]);
+
+      const inboundRequest = makeApprovalRequest(
+        'item/fileChange/requestApproval',
+        'rpc-id-timeout-1',
+        { path: 'never.ts' },
+        'item-timeout-1',
+      );
+      const response = (await client.invokeApproval(
+        inboundRequest,
+      )) as ApprovalResponse;
+
+      expect(response.decision).toBe('deny');
+      expect(inboundRequest.deny).toHaveBeenCalledTimes(1);
+      expect(inboundRequest.approve).not.toHaveBeenCalled();
+
+      // Confirm the interval cleared by waiting another full poll cycle and
+      // asserting no further query fires beyond what already happened.
+      const queryCallsAtDeny = mockQuery.mock.calls.length;
+      await new Promise((r) => setTimeout(r, 600));
+      expect(mockQuery.mock.calls.length).toBe(queryCallsAtDeny);
+
+      // Timeout must also settle the persisted row — otherwise the frontend
+      // would keep showing a pending approval that Codex has already denied.
+      // Wait one tick for the fire-and-forget mutation.
+      await new Promise((r) => setTimeout(r, 10));
+      const denyByRequestIdCall = mockMutation.mock.calls.find((call) => {
+        const arg = call[1] as Record<string, unknown> | undefined;
+        return arg && arg.denyMessage === 'Approval timed out';
+      });
+      expect(denyByRequestIdCall).toBeDefined();
+      expect(denyByRequestIdCall?.[1]).toMatchObject({
+        sessionId: 'codex-poll-timeout',
+        requestId: 'item-timeout-1',
+        denyMessage: 'Approval timed out',
+      });
+    } finally {
+      delete process.env.CODEX_APPROVAL_POLL_TIMEOUT_MS;
+    }
+  });
+
+  it('calls companionDenyAll when the session ends', async () => {
+    const client = makeClientStub();
+    mockCreateClient.mockResolvedValue(client);
+
+    const { startSession, stopSession } = await import('./manager');
+    await startSession({
+      sessionId: 'codex-deny-all',
+      repoPath: '/tmp/repo',
+      prompt: 'short turn',
+      permissionMode: 'default',
+      reasoningEffort: 'medium',
+    });
+    await new Promise((r) => setTimeout(r, 30));
+
+    stopSession('codex-deny-all');
+    await new Promise((r) => setTimeout(r, 700));
+
+    // Convex FunctionReferences are empty objects at runtime, so discriminate
+    // by args shape: companionDenyAll's args is exactly { sessionId }.
+    const denyAllCall = mockMutation.mock.calls.find((call) => {
+      const arg = call[1] as Record<string, unknown> | undefined;
+      if (!arg || typeof arg !== 'object') return false;
+      const keys = Object.keys(arg);
+      return (
+        keys.length === 1 &&
+        keys[0] === 'sessionId' &&
+        arg.sessionId === 'codex-deny-all'
+      );
+    });
+    expect(denyAllCall).toBeDefined();
   });
 
   it('rejects startSession when permissionMode is omitted', async () => {
