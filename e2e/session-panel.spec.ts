@@ -84,9 +84,7 @@ test.describe('Session Panel', () => {
     await expect(
       page.locator('textarea[placeholder*="What would you like"]'),
     ).toBeVisible();
-    await expect(
-      page.locator('button', { hasText: 'Start session' }),
-    ).toBeVisible();
+    await expect(page.locator('button', { hasText: 'Send' })).toBeVisible();
   });
 
   test('no-session placeholder has disabled start button when empty', async ({
@@ -95,7 +93,7 @@ test.describe('Session Panel', () => {
     await createTask(page, 'E2E Empty Input Test');
     await openTaskPage(page, 'E2E Empty Input Test');
 
-    const startButton = page.locator('button', { hasText: 'Start session' });
+    const startButton = page.locator('button', { hasText: 'Send' });
     await expect(startButton).toBeDisabled();
   });
 
@@ -108,7 +106,7 @@ test.describe('Session Panel', () => {
     const textarea = page.locator(
       'textarea[placeholder*="What would you like"]',
     );
-    const startButton = page.locator('button', { hasText: 'Start session' });
+    const startButton = page.locator('button', { hasText: 'Send' });
 
     await expect(startButton).toBeDisabled();
     await textarea.fill('Hello Claude');
