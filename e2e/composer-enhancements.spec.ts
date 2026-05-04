@@ -46,12 +46,13 @@ async function openTaskPage(
 
   await page
     .locator(`button[aria-label="Open ${taskTitle} in task page"]`)
+    .first()
     .click({ timeout: 5000 });
 
   await expect(
     page
       .locator('text=Code Session')
-      .or(page.locator('text=No active session'))
+      .or(page.locator('text=Send a message to start the conversation'))
       .first(),
   ).toBeVisible({ timeout: 10000 });
 }
