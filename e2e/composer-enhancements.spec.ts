@@ -50,7 +50,7 @@ async function openTaskPage(
 
   await expect(
     page
-      .locator('text=Claude Code Session')
+      .locator('text=Code Session')
       .or(page.locator('text=No active session'))
       .first(),
   ).toBeVisible({ timeout: 10000 });
@@ -63,9 +63,7 @@ async function startSession(
   page: import('@playwright/test').Page,
   prompt: string,
 ) {
-  const textarea = page.locator(
-    'textarea[placeholder*="What would you like Claude"]',
-  );
+  const textarea = page.locator('textarea[placeholder*="What would you like"]');
   await textarea.fill(prompt);
   await page.locator('button', { hasText: 'Start session' }).click();
 
@@ -284,7 +282,7 @@ test.describe('Composer Enhancements — no session state', () => {
 
     // The NoSessionPlaceholder renders a textarea and Start session button
     await expect(
-      page.locator('textarea[placeholder*="What would you like Claude"]'),
+      page.locator('textarea[placeholder*="What would you like"]'),
     ).toBeVisible({ timeout: 5000 });
     await expect(
       page.locator('button', { hasText: 'Start session' }),

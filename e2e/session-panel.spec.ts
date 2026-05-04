@@ -59,7 +59,7 @@ async function openTaskPage(
   // Wait for the task page to load
   await expect(
     page
-      .locator('text=Claude Code Session')
+      .locator('text=Code Session')
       .or(page.locator('text=No active session'))
       .first(),
   ).toBeVisible({
@@ -82,7 +82,7 @@ test.describe('Session Panel', () => {
     // Session panel should show the no-session placeholder
     await expect(page.locator('text=No active session')).toBeVisible();
     await expect(
-      page.locator('textarea[placeholder*="What would you like Claude"]'),
+      page.locator('textarea[placeholder*="What would you like"]'),
     ).toBeVisible();
     await expect(
       page.locator('button', { hasText: 'Start session' }),
@@ -106,7 +106,7 @@ test.describe('Session Panel', () => {
     await openTaskPage(page, 'E2E Enable Button Test');
 
     const textarea = page.locator(
-      'textarea[placeholder*="What would you like Claude"]',
+      'textarea[placeholder*="What would you like"]',
     );
     const startButton = page.locator('button', { hasText: 'Start session' });
 
@@ -172,7 +172,7 @@ test.describe('Session Panel - Theme Rendering', () => {
       // Verify key elements are still visible and styled
       await expect(page.locator('text=No active session')).toBeVisible();
       await expect(
-        page.locator('textarea[placeholder*="What would you like Claude"]'),
+        page.locator('textarea[placeholder*="What would you like"]'),
       ).toBeVisible();
 
       // Verify background color is set (theme CSS variables are active)
