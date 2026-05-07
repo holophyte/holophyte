@@ -213,6 +213,9 @@ function handleNotification(
   session: Session,
   notification: AppServerClientNotification,
 ): void {
+  console.log(
+    `[codex] notification for session ${session.convexSessionId}: ${notification.method}`,
+  );
   if (notification.method === 'turn/started') {
     session.currentTurnId = notification.params.turn.id;
   }
@@ -287,12 +290,18 @@ async function startTurn(
   text: string,
   reasoningEffort = session.reasoningEffort,
 ): Promise<void> {
+  console.log(
+    `[codex] turn.start → session=${session.convexSessionId} thread=${session.threadId} model=${session.model} effort=${reasoningEffort ?? '(none)'}`,
+  );
   const response = await session.client.turn.start({
     threadId: session.threadId,
     input: [{ type: 'text', text, text_elements: [] }],
     approvalPolicy: approvalPolicyForMode(session.permissionMode),
     effort: reasoningEffort,
   });
+  console.log(
+    `[codex] turn.start ← session=${session.convexSessionId} turnId=${response.turn.id}`,
+  );
 
   // `turn/started` is the authoritative stream event, but keeping the response
   // id as a fallback avoids a brief uninterruptible gap on clients that suppress
