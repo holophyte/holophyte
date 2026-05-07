@@ -54,13 +54,14 @@ async function openTaskPage(
   // Side panel should open — click maximize to go to full page
   await page
     .locator(`button[aria-label="Open ${taskTitle} in task page"]`)
+    .first()
     .click({ timeout: 5000 });
 
   // Wait for the task page to load
   await expect(
     page
-      .locator('text=Claude Code Session')
-      .or(page.locator('text=No active session'))
+      .locator('text=Code Session')
+      .or(page.locator('text=Send a message to start the conversation'))
       .first(),
   ).toBeVisible({
     timeout: 10000,
@@ -80,13 +81,13 @@ test.describe('Session Panel', () => {
     await openTaskPage(page, 'E2E Session Test');
 
     // Session panel should show the no-session placeholder
-    await expect(page.locator('text=No active session')).toBeVisible();
     await expect(
-      page.locator('textarea[placeholder*="What would you like Claude"]'),
+      page.locator('text=Send a message to start the conversation'),
     ).toBeVisible();
     await expect(
-      page.locator('button', { hasText: 'Start session' }),
+      page.locator('textarea[placeholder*="What would you like"]'),
     ).toBeVisible();
+    await expect(page.locator('button', { hasText: 'Send' })).toBeVisible();
   });
 
   test('no-session placeholder has disabled start button when empty', async ({
@@ -95,7 +96,7 @@ test.describe('Session Panel', () => {
     await createTask(page, 'E2E Empty Input Test');
     await openTaskPage(page, 'E2E Empty Input Test');
 
-    const startButton = page.locator('button', { hasText: 'Start session' });
+    const startButton = page.locator('button', { hasText: 'Send' });
     await expect(startButton).toBeDisabled();
   });
 
@@ -106,9 +107,9 @@ test.describe('Session Panel', () => {
     await openTaskPage(page, 'E2E Enable Button Test');
 
     const textarea = page.locator(
-      'textarea[placeholder*="What would you like Claude"]',
+      'textarea[placeholder*="What would you like"]',
     );
-    const startButton = page.locator('button', { hasText: 'Start session' });
+    const startButton = page.locator('button', { hasText: 'Send' });
 
     await expect(startButton).toBeDisabled();
     await textarea.fill('Hello Claude');
@@ -140,7 +141,9 @@ test.describe('Session Panel', () => {
     await expect(page.locator('#detail-description').first()).toBeVisible();
 
     // Right panel should show session panel (no-session state)
-    await expect(page.locator('text=No active session')).toBeVisible();
+    await expect(
+      page.locator('text=Send a message to start the conversation'),
+    ).toBeVisible();
   });
 });
 
@@ -170,9 +173,11 @@ test.describe('Session Panel - Theme Rendering', () => {
       expect(appliedTheme).toBe(theme);
 
       // Verify key elements are still visible and styled
-      await expect(page.locator('text=No active session')).toBeVisible();
       await expect(
-        page.locator('textarea[placeholder*="What would you like Claude"]'),
+        page.locator('text=Send a message to start the conversation'),
+      ).toBeVisible();
+      await expect(
+        page.locator('textarea[placeholder*="What would you like"]'),
       ).toBeVisible();
 
       // Verify background color is set (theme CSS variables are active)

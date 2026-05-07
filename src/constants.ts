@@ -50,7 +50,9 @@ export const CODEX_MODELS_FALLBACK = [
   },
 ] as const;
 
-export const CODEX_EFFORTS = ['minimal', 'low', 'medium', 'high'] as const;
+// 'minimal' is intentionally excluded: Codex's API rejects it when the default
+// `image_gen` / `web_search` tools are enabled, and we don't expose tool toggles.
+export const CODEX_EFFORTS = ['low', 'medium', 'high'] as const;
 
 /**
  * Claude effort picker values. `'auto'` = omit `effort` / `effortLevel`, let

@@ -100,7 +100,11 @@ export interface UseSessionReturn {
    * @param sessionId - The Convex session ID (same as used by the hook).
    * @param text - The message text to inject into the SDK conversation.
    */
-  sendMessage: (sessionId: string, text: string) => Promise<void>;
+  sendMessage: (
+    sessionId: string,
+    text: string,
+    reasoningEffort?: string,
+  ) => Promise<void>;
 }
 
 /** Handles both old string[] and new {name, description}[] formats from Convex. */
@@ -246,10 +250,11 @@ export function useSession(sessionId: string | null): UseSessionReturn {
   );
 
   const sendMessage = useCallback(
-    async (sid: string, text: string) => {
+    async (sid: string, text: string, reasoningEffort?: string) => {
       await sendSessionMessage({
         sessionId: sid as Id<'sessions'>,
         text,
+        reasoningEffort,
       });
       // If the session was running, the message is queued — show an indicator
       if (sessionStatus === 'running') {

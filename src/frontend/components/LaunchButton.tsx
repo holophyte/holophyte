@@ -3,21 +3,31 @@ import type { Doc } from '@convex/_generated/dataModel';
 import { useMatch, useNavigate } from '@tanstack/react-router';
 import { useMutation, useQuery } from 'convex/react';
 import { AlertTriangle, Loader2, Play, Square } from 'lucide-react';
-import { useState } from 'react';
-import { DEFAULT_MODEL } from '@/constants';
+import { useCallback, useState } from 'react';
 import { useCompanionStatus } from '@/frontend/hooks/useCompanionStatus';
+import { useLaunchDefaults } from '@/frontend/hooks/useLaunchDefaults';
 import { useStickyValue } from '@/frontend/hooks/useStickyValue';
 import { toast } from '@/frontend/lib/toast';
 import { useAppStore } from '@/frontend/stores/app';
-import type { ClaudeModelId } from './ModelPicker';
-import ModelPicker from './ModelPicker';
+import EffortPicker, { resolveEffortFor } from './EffortPicker';
+import ProviderModelPicker, {
+  type ProviderModelValue,
+} from './ProviderModelPicker';
 import Button from './ui/Button';
 
-interface ClaudeButtonProps {
+interface LaunchButtonProps {
   task: Doc<'tasks'> & { repo?: Doc<'repos'> | null };
 }
 
-export function ClaudeButton({ task }: ClaudeButtonProps) {
+/**
+ * Launch / resume / stop button for a task's session.
+ *
+ * Renders a provider+model picker and an effort picker beside the launch
+ * button when the task has a stored prompt, so the user can choose what to
+ * launch with before queueing the first turn. Without a stored prompt,
+ * navigates to the task page so the in-panel composer can collect one.
+ */
+export function LaunchButton({ task }: LaunchButtonProps) {
   const session = useStickyValue(
     useQuery(api.sessions.getByTask, { taskId: task._id }),
     task._id,
@@ -31,35 +41,45 @@ export function ClaudeButton({ task }: ClaudeButtonProps) {
     from: '/repos/$repoId/tasks/$taskId/page',
     shouldThrow: false,
   });
+  const { defaults, save } = useLaunchDefaults();
   const [loading, setLoading] = useState(false);
-  const [model, setModel] = useState<ClaudeModelId>(DEFAULT_MODEL);
-  const [prevTaskId, setPrevTaskId] = useState(task._id);
+  const [pick, setPick] = useState<{
+    provider: 'claude' | 'codex';
+    model: string;
+    effort: string;
+  }>(defaults);
   const selectedOrgId = useAppStore((s) => s.selectedOrgId);
   const { state: companionState } = useCompanionStatus(selectedOrgId);
-
-  // Reset model to default when switching to a different task
-  if (task._id !== prevTaskId) {
-    setPrevTaskId(task._id);
-    setModel(DEFAULT_MODEL);
-  }
 
   const isOnThisTaskPage =
     taskPageMatch?.params.taskId === task._id &&
     taskPageMatch?.params.repoId === String(task.repoId);
 
+  const handleProviderModelChange = useCallback((next: ProviderModelValue) => {
+    setPick((prev) =>
+      next.provider === prev.provider
+        ? { ...prev, model: next.model }
+        : {
+            provider: next.provider,
+            model: next.model,
+            effort: resolveEffortFor(next.provider),
+          },
+    );
+  }, []);
+
   const handleLaunch = async () => {
     if (!task.repo) return;
 
     if (task.prompt) {
-      // Has prompt: create + queue session immediately
       setLoading(true);
       try {
-        // Create session in Convex with 'queued' status — the companion picks it up
+        save(pick);
         const sessionId = await createSession({
           taskId: task._id,
           prompt: task.prompt,
-          model,
-          provider: 'claude',
+          model: pick.model,
+          provider: pick.provider,
+          reasoningEffort: pick.effort === 'auto' ? undefined : pick.effort,
         });
         openSession(sessionId);
         if (!isOnThisTaskPage) {
@@ -76,7 +96,6 @@ export function ClaudeButton({ task }: ClaudeButtonProps) {
         setLoading(false);
       }
     } else {
-      // No prompt: clear active session so task page shows the empty composer
       closeSession();
       if (!isOnThisTaskPage) {
         void navigate({
@@ -150,16 +169,28 @@ export function ClaudeButton({ task }: ClaudeButtonProps) {
           disabled={!task.repo || companionState === 'loading'}
         >
           <Play className="h-4 w-4 mr-1" />
-          Launch Claude Code
+          Launch session
         </Button>
-        {task.prompt && <ModelPicker value={model} onChange={setModel} />}
+        {task.prompt && (
+          <>
+            <ProviderModelPicker
+              value={{ provider: pick.provider, model: pick.model }}
+              onChange={handleProviderModelChange}
+            />
+            <EffortPicker
+              provider={pick.provider}
+              value={pick.effort}
+              onChange={(effort) => setPick({ ...pick, effort })}
+            />
+          </>
+        )}
       </div>
       {(companionState === 'offline' || companionState === 'stale') && (
         <p className="text-xs text-yellow-600 mt-1 flex items-center gap-1">
           <AlertTriangle className="h-3 w-3 shrink-0" />
           {companionState === 'offline'
-            ? "Companion offline \u2014 task will queue but won't start until it reconnects."
-            : 'Companion connection is stale \u2014 task may be delayed.'}
+            ? "Companion offline — task will queue but won't start until it reconnects."
+            : 'Companion connection is stale — task may be delayed.'}
         </p>
       )}
     </>

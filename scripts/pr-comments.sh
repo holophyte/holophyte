@@ -12,7 +12,7 @@ set -euo pipefail
 #   bun run pr-comments -- --resolve 42      # resolve threads on specific PR
 
 # Review bots to track (bare login — GraphQL omits [bot] suffix)
-BOT_LOGINS=("greptile-apps" "coderabbitai")
+BOT_LOGINS=("greptile-apps" "coderabbitai" "chatgpt-codex-connector")
 
 POLL=false
 RESOLVE=false

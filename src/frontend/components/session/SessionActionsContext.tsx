@@ -16,7 +16,13 @@ interface SessionActions {
   availableCommands: ProjectCommand[];
   handleStop: () => Promise<void>;
   messageQueued: boolean;
-  sendMessage: (text: string) => Promise<void>;
+  sendMessage: (text: string, reasoningEffort?: string) => Promise<void>;
+  /** Provider running this session — drives the effort picker option set. */
+  provider: 'claude' | 'codex';
+  /** Currently selected effort (per-turn). */
+  effort: string;
+  /** Update effort — persists for subsequent turns within the session. */
+  setEffort: (effort: string) => void;
 }
 
 export const SessionActionsContext = createContext<SessionActions | null>(null);
@@ -37,6 +43,9 @@ export function SessionActionsProvider({
   handleStop,
   messageQueued,
   sendMessage,
+  provider,
+  effort,
+  setEffort,
 }: SessionActionsProviderProps) {
   return (
     <SessionActionsContext.Provider
@@ -50,6 +59,9 @@ export function SessionActionsProvider({
         handleStop,
         messageQueued,
         sendMessage,
+        provider,
+        effort,
+        setEffort,
       }}
     >
       {children}

@@ -9,6 +9,7 @@ import {
   PromptInputTextarea,
 } from '@/frontend/components/ai-elements/prompt-input';
 import { useMessageHistory } from '@/frontend/hooks/useMessageHistory';
+import EffortPicker from '../EffortPicker';
 import { useSessionActions } from './SessionActionsContext';
 import SlashCommandMenu, { filterCommands } from './SlashCommandMenu';
 
@@ -33,6 +34,9 @@ export default function SessionComposer() {
     handleStop,
     messageQueued,
     sendMessage,
+    provider,
+    effort,
+    setEffort,
   } = useSessionActions();
 
   const [text, setText] = useState('');
@@ -101,6 +105,9 @@ export default function SessionComposer() {
       const trimmed = value.trim();
       if (!trimmed) return;
       try {
+        // Effort transmission is owned by SessionPanel.sendMessageWrapped,
+        // which applies dirty-tracking so an untouched picker preserves the
+        // manager's session-level effort. Don't pass effort from here.
         await sendMessage(trimmed);
         setText('');
         history.push(trimmed);
@@ -290,13 +297,20 @@ export default function SessionComposer() {
             />
           </PromptInputBody>
           <PromptInputFooter>
-            <div aria-live="polite" aria-atomic="true">
-              {messageQueued && (
-                <p className="px-1 text-xs text-muted-foreground">
-                  Message queued — will be delivered when the current turn
-                  finishes.
-                </p>
-              )}
+            <div className="flex items-center gap-2">
+              <EffortPicker
+                provider={provider}
+                value={effort}
+                onChange={setEffort}
+              />
+              <div aria-live="polite" aria-atomic="true">
+                {messageQueued && (
+                  <p className="px-1 text-xs text-muted-foreground">
+                    Message queued — will be delivered when the current turn
+                    finishes.
+                  </p>
+                )}
+              </div>
             </div>
             <PromptInputSubmit
               status={chatStatus}

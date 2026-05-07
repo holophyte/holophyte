@@ -46,12 +46,13 @@ async function openTaskPage(
 
   await page
     .locator(`button[aria-label="Open ${taskTitle} in task page"]`)
+    .first()
     .click({ timeout: 5000 });
 
   await expect(
     page
-      .locator('text=Claude Code Session')
-      .or(page.locator('text=No active session'))
+      .locator('text=Code Session')
+      .or(page.locator('text=Send a message to start the conversation'))
       .first(),
   ).toBeVisible({ timeout: 10000 });
 }
@@ -63,11 +64,9 @@ async function startSession(
   page: import('@playwright/test').Page,
   prompt: string,
 ) {
-  const textarea = page.locator(
-    'textarea[placeholder*="What would you like Claude"]',
-  );
+  const textarea = page.locator('textarea[placeholder*="What would you like"]');
   await textarea.fill(prompt);
-  await page.locator('button', { hasText: 'Start session' }).click();
+  await page.locator('button', { hasText: 'Send' }).click();
 
   // Wait for the composer to appear — it replaces the NoSessionPlaceholder
   // once a sessionId exists in the store.
@@ -282,13 +281,11 @@ test.describe('Composer Enhancements — no session state', () => {
     await createTask(page, title);
     await openTaskPage(page, title);
 
-    // The NoSessionPlaceholder renders a textarea and Start session button
+    // The NoSessionPlaceholder renders a textarea and Send button
     await expect(
-      page.locator('textarea[placeholder*="What would you like Claude"]'),
+      page.locator('textarea[placeholder*="What would you like"]'),
     ).toBeVisible({ timeout: 5000 });
-    await expect(
-      page.locator('button', { hasText: 'Start session' }),
-    ).toBeVisible();
+    await expect(page.locator('button', { hasText: 'Send' })).toBeVisible();
   });
 
   test('no-session placeholder does not show stop button', async ({ page }) => {

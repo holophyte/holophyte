@@ -22,6 +22,8 @@ import {
 export interface QueuedSession {
   _id: Id<'sessions'>;
   queuedPrompt?: string;
+  /** Per-turn effort for the first turn, captured at create/queueResume time. */
+  queuedReasoningEffort?: string;
   sdkSessionId?: string;
   providerSessionId?: string;
   provider?: 'claude' | 'codex';
@@ -38,6 +40,8 @@ export interface PendingMessage {
   _id: Id<'sessionMessages'>;
   sessionId: Id<'sessions'>;
   text: string;
+  /** Per-turn effort captured when the user sent this follow-up. */
+  reasoningEffort?: string;
 }
 
 let codexProbeEnvWarned = false;

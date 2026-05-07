@@ -26,6 +26,10 @@ export const send = mutation({
   args: {
     sessionId: v.id('sessions'),
     text: v.string(),
+    // Per-turn reasoning effort captured at send time. The companion reads it
+    // when delivering the message to the SDK so this turn runs at the chosen
+    // level. Omit / undefined = leave the manager's current setting unchanged.
+    reasoningEffort: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const session = await ctx.db.get(args.sessionId);
@@ -42,6 +46,7 @@ export const send = mutation({
       text: args.text,
       consumed: false,
       createdAt: Date.now(),
+      reasoningEffort: args.reasoningEffort,
     });
   },
 });

@@ -421,6 +421,10 @@ function handleNotification(
     session.currentTurnId = undefined;
     session.lastCompletedTurnId = notification.params.turn.id;
     if (notification.params.turn.status === 'failed') {
+      console.error(
+        `[codex] turn failed for session ${session.convexSessionId} (turn ${notification.params.turn.id}):`,
+        JSON.stringify(notification.params.turn, null, 2),
+      );
       void finishSession(session.convexSessionId, 'failed');
       return;
     }

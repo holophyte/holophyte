@@ -20,8 +20,8 @@ import {
 import { isEditableElement } from '@/frontend/lib/dom';
 import { toast } from '@/frontend/lib/toast';
 import { cn } from '@/frontend/lib/utils';
-import { ClaudeButton } from './ClaudeButton';
 import { LabelDots, LabelPicker } from './LabelPicker';
+import { LaunchButton } from './LaunchButton';
 import { PromptHistory } from './PromptHistory';
 import { PromptTemplatePicker } from './PromptTemplatePicker';
 import { SubtaskList } from './SubtaskList';
@@ -539,9 +539,9 @@ export function TaskDetailContent({
                 id="detail-session-label"
                 className="text-xs text-muted-foreground"
               >
-                Claude Code Session
+                Code Session
               </span>
-              <ClaudeButton task={task} />
+              <LaunchButton task={task} />
             </section>
           </>
         )}

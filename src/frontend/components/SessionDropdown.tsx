@@ -60,7 +60,7 @@ export default function SessionDropdown({
     // Clear the active session so the panel shows an empty state.
     // The user types a prompt in the input and submits it — that creates the
     // Convex session record and starts the SDK process atomically (same flow as
-    // ClaudeButton). We never pre-create a session record without a prompt
+    // LaunchButton). We never pre-create a session record without a prompt
     // because that would leave an orphan 'running' record with no backend process.
     switchSession(null);
   };
