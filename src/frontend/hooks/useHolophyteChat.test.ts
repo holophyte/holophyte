@@ -313,3 +313,79 @@ describe('useHolophyteChat — isInterrupted', () => {
     expect(result.current.isInterrupted).toBe(false);
   });
 });
+
+// ---------------------------------------------------------------------------
+// isThinking — Codex turn awareness
+// ---------------------------------------------------------------------------
+
+function makeCodexEvent(method: string, params: unknown = {}): SDKMessage {
+  return {
+    type: `codex.${method}`,
+    data: JSON.stringify({ method, params }),
+  } as unknown as SDKMessage;
+}
+
+describe('useHolophyteChat — isThinking', () => {
+  it('is true for a running Claude session (no codex events)', () => {
+    const { result } = renderHook(() =>
+      useHolophyteChat(
+        makeProps({
+          events: [makeAssistantEvent('Hello')],
+          sessionStatus: 'running',
+        }),
+      ),
+    );
+    expect(result.current.isThinking).toBe(true);
+  });
+
+  it('is false when session is idle', () => {
+    const { result } = renderHook(() =>
+      useHolophyteChat(makeProps({ sessionStatus: 'idle' })),
+    );
+    expect(result.current.isThinking).toBe(false);
+  });
+
+  it('is true when last codex turn marker is turn/started', () => {
+    const { result } = renderHook(() =>
+      useHolophyteChat(
+        makeProps({
+          events: [makeCodexEvent('turn/started')],
+          sessionStatus: 'running',
+        }),
+      ),
+    );
+    expect(result.current.isThinking).toBe(true);
+  });
+
+  it('is false when last codex turn marker is turn/completed', () => {
+    const { result } = renderHook(() =>
+      useHolophyteChat(
+        makeProps({
+          events: [
+            makeCodexEvent('turn/started'),
+            makeCodexEvent('item/agentMessage/delta'),
+            makeCodexEvent('turn/completed'),
+          ],
+          sessionStatus: 'running',
+        }),
+      ),
+    );
+    expect(result.current.isThinking).toBe(false);
+  });
+
+  it('is true again after a new turn/started follows a completed turn', () => {
+    const { result } = renderHook(() =>
+      useHolophyteChat(
+        makeProps({
+          events: [
+            makeCodexEvent('turn/started'),
+            makeCodexEvent('turn/completed'),
+            makeCodexEvent('turn/started'),
+          ],
+          sessionStatus: 'running',
+        }),
+      ),
+    );
+    expect(result.current.isThinking).toBe(true);
+  });
+});

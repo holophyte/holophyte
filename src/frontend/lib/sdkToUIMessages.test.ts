@@ -408,3 +408,285 @@ describe('extractPromptSuggestion', () => {
     expect(extractPromptSuggestion(events)).toBe('do something');
   });
 });
+
+// ---------------------------------------------------------------------------
+// Codex events
+// ---------------------------------------------------------------------------
+
+function makeCodexEvent(method: string, params: unknown): SDKMessage {
+  return {
+    type: `codex.${method}`,
+    data: JSON.stringify({ method, params }),
+  } as unknown as SDKMessage;
+}
+
+describe('sdkToUIMessages — Codex agent message', () => {
+  it('builds a streaming bubble from agentMessage deltas while turn is active', () => {
+    const events: SDKMessage[] = [
+      makeCodexEvent('turn/started', { threadId: 't', turn: { id: 'turn-1' } }),
+      makeCodexEvent('item/agentMessage/delta', {
+        threadId: 't',
+        turnId: 'turn-1',
+        itemId: 'msg-1',
+        delta: 'Hello',
+      }),
+      makeCodexEvent('item/agentMessage/delta', {
+        threadId: 't',
+        turnId: 'turn-1',
+        itemId: 'msg-1',
+        delta: ' world',
+      }),
+    ];
+    const result = sdkToUIMessages(events, true, noPending);
+    expect(result).toHaveLength(1);
+    const part = result[0]?.parts[0] as {
+      type: string;
+      text: string;
+      state?: string;
+    };
+    expect(part.type).toBe('text');
+    expect(part.text).toBe('Hello world');
+    expect(part.state).toBe('streaming');
+  });
+
+  it('marks the bubble as done after item/completed agentMessage', () => {
+    const events: SDKMessage[] = [
+      makeCodexEvent('turn/started', { threadId: 't', turn: { id: 'turn-1' } }),
+      makeCodexEvent('item/agentMessage/delta', {
+        threadId: 't',
+        turnId: 'turn-1',
+        itemId: 'msg-1',
+        delta: 'Hi',
+      }),
+      makeCodexEvent('item/completed', {
+        threadId: 't',
+        turnId: 'turn-1',
+        item: { type: 'agentMessage', id: 'msg-1', text: 'Hi there' },
+      }),
+    ];
+    const result = sdkToUIMessages(events, true, noPending);
+    const part = result[0]?.parts[0] as {
+      type: string;
+      text: string;
+      state?: string;
+    };
+    expect(part.text).toBe('Hi there');
+    expect(part.state).toBe('done');
+  });
+
+  it('marks deltas as done after turn/completed', () => {
+    const events: SDKMessage[] = [
+      makeCodexEvent('turn/started', { threadId: 't', turn: { id: 'turn-1' } }),
+      makeCodexEvent('item/agentMessage/delta', {
+        threadId: 't',
+        turnId: 'turn-1',
+        itemId: 'msg-1',
+        delta: 'Done',
+      }),
+      makeCodexEvent('turn/completed', {
+        threadId: 't',
+        turn: { id: 'turn-1', status: 'completed' },
+      }),
+    ];
+    const result = sdkToUIMessages(events, true, noPending);
+    const part = result[0]?.parts[0] as { state?: string };
+    expect(part.state).toBe('done');
+  });
+
+  it('marks deltas as done when session is no longer running', () => {
+    const events: SDKMessage[] = [
+      makeCodexEvent('turn/started', { threadId: 't', turn: { id: 'turn-1' } }),
+      makeCodexEvent('item/agentMessage/delta', {
+        threadId: 't',
+        turnId: 'turn-1',
+        itemId: 'msg-1',
+        delta: 'Hi',
+      }),
+    ];
+    const result = sdkToUIMessages(events, false, noPending);
+    const part = result[0]?.parts[0] as { state?: string };
+    expect(part.state).toBe('done');
+  });
+});
+
+describe('sdkToUIMessages — Codex user messages', () => {
+  it('renders a userMessage item as a role=user UIMessage', () => {
+    const events: SDKMessage[] = [
+      makeCodexEvent('item/completed', {
+        item: {
+          type: 'userMessage',
+          id: 'um-1',
+          content: [{ type: 'text', text: 'hello codex' }],
+        },
+      }),
+    ];
+    const result = sdkToUIMessages(events, false, noPending);
+    expect(result).toHaveLength(1);
+    expect(result[0]?.role).toBe('user');
+    const part = result[0]?.parts[0] as { type: string; text: string };
+    expect(part.text).toBe('hello codex');
+  });
+});
+
+describe('sdkToUIMessages — Codex tool items', () => {
+  it('renders a commandExecution as a Bash dynamic-tool with output', () => {
+    const events: SDKMessage[] = [
+      makeCodexEvent('item/completed', {
+        item: {
+          type: 'commandExecution',
+          id: 'cmd-1',
+          command: 'ls',
+          cwd: '/tmp',
+          status: 'completed',
+          aggregatedOutput: 'file.txt\n',
+          exitCode: 0,
+        },
+      }),
+    ];
+    const result = sdkToUIMessages(events, false, noPending);
+    expect(result).toHaveLength(1);
+    const part = result[0]?.parts[0] as {
+      type: string;
+      toolName: string;
+      state: string;
+      input: { command: string };
+      output?: unknown;
+    };
+    expect(part.type).toBe('dynamic-tool');
+    expect(part.toolName).toBe('Bash');
+    expect(part.state).toBe('output-available');
+    expect(part.input.command).toBe('ls');
+    expect(part.output).toBe('file.txt\n');
+  });
+
+  it('renders a failed commandExecution as output-error', () => {
+    const events: SDKMessage[] = [
+      makeCodexEvent('item/completed', {
+        item: {
+          type: 'commandExecution',
+          id: 'cmd-2',
+          command: 'false',
+          cwd: '/tmp',
+          status: 'failed',
+          aggregatedOutput: 'failed',
+          exitCode: 1,
+        },
+      }),
+    ];
+    const result = sdkToUIMessages(events, false, noPending);
+    const part = result[0]?.parts[0] as { state: string; errorText?: string };
+    expect(part.state).toBe('output-error');
+    expect(part.errorText).toBe('failed');
+  });
+
+  it('renders a fileChange as an Edit dynamic-tool', () => {
+    const events: SDKMessage[] = [
+      makeCodexEvent('item/completed', {
+        item: {
+          type: 'fileChange',
+          id: 'fc-1',
+          status: 'completed',
+          changes: [
+            { path: 'a.ts', kind: 'update', diff: '...' },
+            { path: 'b.ts', kind: 'add', diff: '...' },
+          ],
+        },
+      }),
+    ];
+    const result = sdkToUIMessages(events, false, noPending);
+    const part = result[0]?.parts[0] as { toolName: string; output?: unknown };
+    expect(part.toolName).toBe('Edit');
+    expect(part.output).toBe('2 file changes');
+  });
+
+  it('renders an mcpToolCall with namespaced tool name', () => {
+    const events: SDKMessage[] = [
+      makeCodexEvent('item/completed', {
+        item: {
+          type: 'mcpToolCall',
+          id: 'mcp-1',
+          server: 'github',
+          tool: 'list_prs',
+          status: 'completed',
+          arguments: { owner: 'foo' },
+          result: { ok: true },
+          error: null,
+        },
+      }),
+    ];
+    const result = sdkToUIMessages(events, false, noPending);
+    const part = result[0]?.parts[0] as { toolName: string; state: string };
+    expect(part.toolName).toBe('mcp__github__list_prs');
+    expect(part.state).toBe('output-available');
+  });
+
+  it('renders a webSearch item', () => {
+    const events: SDKMessage[] = [
+      makeCodexEvent('item/completed', {
+        item: { type: 'webSearch', id: 'ws-1', query: 'how to bun' },
+      }),
+    ];
+    const result = sdkToUIMessages(events, false, noPending);
+    const part = result[0]?.parts[0] as {
+      toolName: string;
+      input: { query: string };
+    };
+    expect(part.toolName).toBe('WebSearch');
+    expect(part.input.query).toBe('how to bun');
+  });
+
+  it('renders a reasoning item as a reasoning part', () => {
+    const events: SDKMessage[] = [
+      makeCodexEvent('item/completed', {
+        item: {
+          type: 'reasoning',
+          id: 'r-1',
+          summary: ['Looking at...'],
+          content: ['detailed thought'],
+        },
+      }),
+    ];
+    const result = sdkToUIMessages(events, false, noPending);
+    const part = result[0]?.parts[0] as { type: string; text: string };
+    expect(part.type).toBe('reasoning');
+    expect(part.text).toContain('Looking at');
+    expect(part.text).toContain('detailed thought');
+  });
+
+  it('silently skips unknown codex methods', () => {
+    const events: SDKMessage[] = [
+      makeCodexEvent('thread/tokenUsage/updated', {
+        threadId: 't',
+        tokenUsage: { total: { totalTokens: 10 } },
+      }),
+      makeCodexEvent('account/rateLimits/updated', {}),
+      makeCodexEvent('mcpServer/startupStatus/updated', {}),
+      makeCodexEvent('some/future/method', { foo: 'bar' }),
+    ];
+    expect(() => sdkToUIMessages(events, false, noPending)).not.toThrow();
+    expect(sdkToUIMessages(events, false, noPending)).toHaveLength(0);
+  });
+
+  it('does not crash on malformed codex event data', () => {
+    const events = [
+      { type: 'codex.item/completed', data: 'not json' },
+    ] as unknown as SDKMessage[];
+    expect(() => sdkToUIMessages(events, false, noPending)).not.toThrow();
+  });
+
+  it('mixes Codex and Claude events without interfering', () => {
+    const events: SDKMessage[] = [
+      makeAssistantEvent([{ type: 'text', text: 'Claude here' }], 'claude-1'),
+      makeCodexEvent('turn/started', { threadId: 't', turn: { id: 'turn-1' } }),
+      makeCodexEvent('item/completed', {
+        item: { type: 'agentMessage', id: 'codex-msg', text: 'Codex here' },
+      }),
+    ];
+    const result = sdkToUIMessages(events, false, noPending);
+    expect(result).toHaveLength(2);
+    const claudePart = result[0]?.parts[0] as { text: string };
+    const codexPart = result[1]?.parts[0] as { text: string };
+    expect(claudePart.text).toBe('Claude here');
+    expect(codexPart.text).toBe('Codex here');
+  });
+});

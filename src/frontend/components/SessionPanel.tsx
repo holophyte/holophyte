@@ -311,6 +311,7 @@ function ActiveSession({
         messages={chat.messages}
         status={chat.status}
         isInterrupted={chat.isInterrupted}
+        isThinking={chat.isThinking}
       />
     </SessionActionsProvider>
   );

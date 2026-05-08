@@ -62,15 +62,24 @@ interface SessionThreadProps {
    * "— interrupted —" divider after the last message.
    */
   isInterrupted?: boolean;
+  /**
+   * Override for the thinking-indicator visibility. When provided, gates the
+   * indicator instead of `sessionStatus === 'running'`. Codex sessions stay
+   * `running` between turns, so session status alone leaves the spinner stuck;
+   * the parent hook (`useHolophyteChat.isThinking`) factors in turn boundaries.
+   */
+  isThinking?: boolean;
 }
 
 export default function SessionThread({
   messages,
   status,
   isInterrupted = false,
+  isThinking,
 }: SessionThreadProps) {
   const { sessionStatus } = useSessionActions();
-  const isRunning = sessionStatus === 'running';
+  const isRunning =
+    isThinking !== undefined ? isThinking : sessionStatus === 'running';
   const isStreaming = status === 'streaming';
   // A user message is "queued" when it's still optimistic (no corresponding
   // SDK event yet) while the session is actively processing a prior turn.

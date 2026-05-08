@@ -146,8 +146,37 @@ export function sdkToUIMessages(
     .filter((e) => e.type === 'assistant')
     .at(-1);
 
+  // Codex agent-message text accumulator (delta → in-place merge)
+  const codexAgentText = new Map<string, string>();
+  // Set of Codex agentMessage itemIds that received an `item/completed`.
+  // These are authoritative — never re-marked as streaming in the post-pass.
+  const codexCompletedAgentIds = new Set<string>();
+  // Track the most recent Codex agentMessage itemId so we can mark it as
+  // 'streaming' when a turn is in flight. Updated as agentMessage events flow.
+  let lastCodexAgentItemId: string | null = null;
+  // Whether a Codex turn is currently in flight (turn/started seen with no
+  // matching turn/completed). When true and isRunning, the most recent
+  // agent-message bubble is marked as streaming.
+  let codexTurnActive = false;
+
   // Second pass: build UIMessage entries
   for (const event of events) {
+    const eventType = (event as { type?: unknown }).type;
+    if (typeof eventType === 'string' && eventType.startsWith('codex.')) {
+      const result = handleCodexEvent(
+        event as unknown as CodexEvent,
+        eventType,
+        messages,
+        codexAgentText,
+        codexCompletedAgentIds,
+        codexTurnActive,
+      );
+      codexTurnActive = result.turnActive;
+      if (result.lastAgentItemId !== undefined) {
+        lastCodexAgentItemId = result.lastAgentItemId;
+      }
+      continue;
+    }
     if (event.type === 'assistant') {
       const msg = event.message as { id?: string; content?: unknown[] };
       const uuid = (event as { uuid?: string }).uuid ?? '';
@@ -292,7 +321,289 @@ export function sdkToUIMessages(
     // 'result', 'system/init' and other types are ignored
   }
 
+  // Final pass: resolve Codex agent-message text states.
+  // Bubbles built from `item/agentMessage/delta` default to 'streaming' so the
+  // typing animation appears live. Once their turn ends OR the session is no
+  // longer running, mark non-completed ones as 'done'. The active bubble
+  // (last id, turn still in flight, session running) keeps 'streaming'.
+  for (const itemId of codexAgentText.keys()) {
+    if (codexCompletedAgentIds.has(itemId)) continue;
+    const idx = messages.findIndex((m) => m.id === itemId);
+    if (idx === -1) continue;
+    const msg = messages[idx];
+    if (!msg) continue;
+    const isLive =
+      isRunning && codexTurnActive && itemId === lastCodexAgentItemId;
+    const targetState = isLive ? 'streaming' : 'done';
+    // biome-ignore lint/suspicious/noExplicitAny: parts union is complex
+    const newParts = (msg.parts as any[]).map((p) =>
+      p.type === 'text' ? { ...p, state: targetState } : p,
+    );
+    messages[idx] = { ...msg, parts: newParts };
+  }
+
   return messages;
+}
+
+// ---------------------------------------------------------------------------
+// Codex event handling
+// ---------------------------------------------------------------------------
+
+type CodexEvent = { type: string; data: string };
+
+interface CodexHandlerResult {
+  turnActive: boolean;
+  /** Updated when an agentMessage item is observed; otherwise undefined. */
+  lastAgentItemId?: string;
+}
+
+/**
+ * Handles a single Codex stream event (`type: 'codex.<method>'`) and mutates
+ * `messages` to reflect Codex thread state. Codex events arrive as buffered
+ * `{ type, data }` rows; `data` is the JSON-serialized notification payload
+ * from `codex-app-server-client`. Unknown methods are silently skipped.
+ */
+function handleCodexEvent(
+  event: CodexEvent,
+  eventType: string,
+  // biome-ignore lint/suspicious/noExplicitAny: UIMessage parts union is complex
+  messages: any[],
+  codexAgentText: Map<string, string>,
+  codexCompletedAgentIds: Set<string>,
+  turnActive: boolean,
+): CodexHandlerResult {
+  const method = eventType.slice('codex.'.length);
+
+  // Parse payload defensively — malformed JSON shouldn't take down the renderer.
+  let payload: Record<string, unknown> = {};
+  try {
+    const data = (event as { data?: unknown }).data;
+    if (typeof data === 'string') {
+      const parsed = JSON.parse(data) as { params?: unknown };
+      const params = (parsed as { params?: unknown }).params;
+      payload = (params ?? {}) as Record<string, unknown>;
+    }
+  } catch {
+    return { turnActive };
+  }
+
+  switch (method) {
+    case 'turn/started':
+      return { turnActive: true };
+    case 'turn/completed':
+      return { turnActive: false };
+    case 'item/agentMessage/delta': {
+      const itemId = String(payload.itemId ?? '');
+      const delta = String(payload.delta ?? '');
+      if (!itemId) return { turnActive };
+      const text = (codexAgentText.get(itemId) ?? '') + delta;
+      codexAgentText.set(itemId, text);
+      upsertCodexAgentMessage(messages, itemId, text);
+      return { turnActive, lastAgentItemId: itemId };
+    }
+    case 'item/completed': {
+      const item = (payload.item ?? {}) as Record<string, unknown>;
+      const itemType = String(item.type ?? '');
+      const itemId = String(item.id ?? '');
+      if (!itemId) return { turnActive };
+
+      switch (itemType) {
+        case 'userMessage': {
+          const content = Array.isArray(item.content)
+            ? (item.content as Array<Record<string, unknown>>)
+            : [];
+          const text = content
+            .filter((c) => c.type === 'text')
+            .map((c) => String(c.text ?? ''))
+            .join('');
+          if (!text) return { turnActive };
+          messages.push({
+            id: `codex-${itemId}`,
+            role: 'user',
+            parts: [{ type: 'text', text }],
+          });
+          return { turnActive };
+        }
+        case 'agentMessage': {
+          const text = String(item.text ?? codexAgentText.get(itemId) ?? '');
+          codexAgentText.set(itemId, text);
+          codexCompletedAgentIds.add(itemId);
+          upsertCodexAgentMessage(messages, itemId, text, 'done');
+          return { turnActive, lastAgentItemId: itemId };
+        }
+        case 'reasoning': {
+          const summary = Array.isArray(item.summary)
+            ? (item.summary as unknown[]).map(String).filter(Boolean)
+            : [];
+          const content = Array.isArray(item.content)
+            ? (item.content as unknown[]).map(String).filter(Boolean)
+            : [];
+          const text = [...summary, ...content].join('\n\n');
+          if (!text) return { turnActive };
+          messages.push({
+            id: `codex-${itemId}`,
+            role: 'assistant',
+            parts: [{ type: 'reasoning', text, state: 'done' }],
+          });
+          return { turnActive };
+        }
+        case 'commandExecution': {
+          const status = String(item.status ?? '');
+          const part = makeCodexToolPart({
+            toolName: 'Bash',
+            toolCallId: itemId,
+            input: { command: item.command, cwd: item.cwd },
+            status,
+            output: item.aggregatedOutput,
+          });
+          messages.push({
+            id: `codex-${itemId}`,
+            role: 'assistant',
+            parts: [part],
+          });
+          return { turnActive };
+        }
+        case 'fileChange': {
+          const status = String(item.status ?? '');
+          const changes = Array.isArray(item.changes) ? item.changes : [];
+          const part = makeCodexToolPart({
+            toolName: 'Edit',
+            toolCallId: itemId,
+            input: { changes },
+            status,
+            output: `${changes.length} file change${changes.length === 1 ? '' : 's'}`,
+          });
+          messages.push({
+            id: `codex-${itemId}`,
+            role: 'assistant',
+            parts: [part],
+          });
+          return { turnActive };
+        }
+        case 'mcpToolCall': {
+          const status = String(item.status ?? '');
+          const server = String(item.server ?? '');
+          const tool = String(item.tool ?? '');
+          const error = item.error as Record<string, unknown> | null;
+          const part = makeCodexToolPart({
+            toolName: `mcp__${server}__${tool}`,
+            toolCallId: itemId,
+            input: item.arguments,
+            status: error ? 'failed' : status,
+            output: item.result,
+            errorText: error
+              ? String(error.message ?? JSON.stringify(error))
+              : undefined,
+          });
+          messages.push({
+            id: `codex-${itemId}`,
+            role: 'assistant',
+            parts: [part],
+          });
+          return { turnActive };
+        }
+        case 'webSearch': {
+          const part = makeCodexToolPart({
+            toolName: 'WebSearch',
+            toolCallId: itemId,
+            input: { query: item.query },
+            status: 'completed',
+            output: '',
+          });
+          messages.push({
+            id: `codex-${itemId}`,
+            role: 'assistant',
+            parts: [part],
+          });
+          return { turnActive };
+        }
+        default:
+          // Unknown / Phase 0+ item types: skip silently
+          return { turnActive };
+      }
+    }
+    default:
+      // Other Codex methods (item/started, thread/*, account/*, mcpServer/*,
+      // tokenUsage, etc.) are not surfaced in Phase 0.
+      return { turnActive };
+  }
+}
+
+/**
+ * Insert or update an in-flight Codex agent-message UIMessage. Multiple
+ * agentMessage items per turn each get their own bubble (keyed by itemId).
+ */
+function upsertCodexAgentMessage(
+  // biome-ignore lint/suspicious/noExplicitAny: UIMessage parts union is complex
+  messages: any[],
+  itemId: string,
+  text: string,
+  state: 'streaming' | 'done' = 'streaming',
+): void {
+  if (!text) return;
+  const id = itemId;
+  const idx = messages.findIndex((m) => m.id === id);
+  const part = { type: 'text', text, state };
+  if (idx === -1) {
+    messages.push({ id, role: 'assistant', parts: [part] });
+  } else {
+    messages[idx] = { ...messages[idx], parts: [part] };
+  }
+}
+
+interface CodexToolPartInput {
+  toolName: string;
+  toolCallId: string;
+  input: unknown;
+  status: string;
+  output?: unknown;
+  errorText?: string;
+}
+
+/** Map a Codex item status to a `DynamicToolUIPart`. */
+function makeCodexToolPart(args: CodexToolPartInput): DynamicToolUIPart {
+  const { toolName, toolCallId, input, status, output, errorText } = args;
+  // biome-ignore lint/suspicious/noExplicitAny: input is intentionally unknown
+  const safeInput = (input ?? {}) as any;
+
+  if (status === 'failed') {
+    return {
+      type: 'dynamic-tool',
+      toolName,
+      toolCallId,
+      state: 'output-error',
+      input: safeInput,
+      errorText: errorText ?? String(output ?? 'Tool call failed'),
+    };
+  }
+  if (status === 'declined') {
+    return {
+      type: 'dynamic-tool',
+      toolName,
+      toolCallId,
+      state: 'output-denied',
+      input: safeInput,
+      approval: { id: toolCallId, approved: false },
+    };
+  }
+  if (status === 'completed') {
+    return {
+      type: 'dynamic-tool',
+      toolName,
+      toolCallId,
+      state: 'output-available',
+      input: safeInput,
+      output: output ?? '',
+    };
+  }
+  // 'inProgress' or unknown — show input only
+  return {
+    type: 'dynamic-tool',
+    toolName,
+    toolCallId,
+    state: 'input-available',
+    input: safeInput,
+  };
 }
 
 /**
