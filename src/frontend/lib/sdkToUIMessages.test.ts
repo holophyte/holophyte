@@ -640,6 +640,56 @@ describe('sdkToUIMessages — Codex tool items', () => {
     expect(part.state).toBe('output-available');
   });
 
+  it('shows an in-progress Bash card on item/started before completion', () => {
+    const events: SDKMessage[] = [
+      makeCodexEvent('item/started', {
+        item: {
+          type: 'commandExecution',
+          id: 'cmd-pending',
+          command: 'sleep 30',
+          cwd: '/tmp',
+          status: 'inProgress',
+        },
+      }),
+    ];
+    const result = sdkToUIMessages(events, true, noPending);
+    expect(result).toHaveLength(1);
+    const part = result[0]?.parts[0] as { state: string; toolName: string };
+    expect(part.toolName).toBe('Bash');
+    expect(part.state).toBe('input-available');
+  });
+
+  it('updates the same message when item/started is followed by item/completed', () => {
+    const events: SDKMessage[] = [
+      makeCodexEvent('item/started', {
+        item: {
+          type: 'commandExecution',
+          id: 'cmd-x',
+          command: 'echo hi',
+          cwd: '/tmp',
+          status: 'inProgress',
+        },
+      }),
+      makeCodexEvent('item/completed', {
+        item: {
+          type: 'commandExecution',
+          id: 'cmd-x',
+          command: 'echo hi',
+          cwd: '/tmp',
+          status: 'completed',
+          aggregatedOutput: 'hi\n',
+          exitCode: 0,
+        },
+      }),
+    ];
+    const result = sdkToUIMessages(events, false, noPending);
+    expect(result).toHaveLength(1);
+    expect(result[0]?.id).toBe('codex-cmd-x');
+    const part = result[0]?.parts[0] as { state: string; output?: unknown };
+    expect(part.state).toBe('output-available');
+    expect(part.output).toBe('hi\n');
+  });
+
   it('renders a webSearch item', () => {
     const events: SDKMessage[] = [
       makeCodexEvent('item/completed', {

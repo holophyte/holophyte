@@ -401,6 +401,20 @@ function handleCodexEvent(
       upsertCodexAgentMessage(messages, itemId, text);
       return { turnActive, lastAgentItemId: itemId };
     }
+    case 'item/started': {
+      // Phase 0: only emit placeholder messages for tool-like items so
+      // long-running commands / file edits / MCP calls / web searches are
+      // visible in the thread before they complete. Text items
+      // (agentMessage, reasoning, userMessage) finalize on item/completed
+      // or stream via dedicated delta events.
+      const item = (payload.item ?? {}) as Record<string, unknown>;
+      const itemId = String(item.id ?? '');
+      if (!itemId) return { turnActive };
+      const part = mapCodexToolItem(item, itemId);
+      if (!part) return { turnActive };
+      upsertCodexToolMessage(messages, itemId, part);
+      return { turnActive };
+    }
     case 'item/completed': {
       const item = (payload.item ?? {}) as Record<string, unknown>;
       const itemType = String(item.type ?? '');
@@ -458,84 +472,13 @@ function handleCodexEvent(
           });
           return { turnActive };
         }
-        case 'commandExecution': {
-          const status = String(item.status ?? '');
-          const part = makeCodexToolPart({
-            toolName: 'Bash',
-            toolCallId: itemId,
-            input: { command: item.command, cwd: item.cwd },
-            status,
-            output: item.aggregatedOutput,
-          });
-          messages.push({
-            id: `codex-${itemId}`,
-            role: 'assistant',
-            parts: [part],
-          });
-          return { turnActive };
-        }
-        case 'fileChange': {
-          const status = String(item.status ?? '');
-          const changes = Array.isArray(item.changes) ? item.changes : [];
-          const part = makeCodexToolPart({
-            toolName: 'Edit',
-            toolCallId: itemId,
-            input: { changes },
-            status,
-            output: `${changes.length} file change${changes.length === 1 ? '' : 's'}`,
-          });
-          messages.push({
-            id: `codex-${itemId}`,
-            role: 'assistant',
-            parts: [part],
-          });
-          return { turnActive };
-        }
-        case 'mcpToolCall': {
-          const status = String(item.status ?? '');
-          const server = String(item.server ?? '');
-          const tool = String(item.tool ?? '');
-          const error = item.error as Record<string, unknown> | string | null;
-          // Codex may report errors as plain strings (`"timeout"`) or as
-          // structured objects (`{ message: '...' }`). Coerce both shapes
-          // without wrapping bare strings in JSON quotes.
-          let errorText: string | undefined;
-          if (error) {
-            if (typeof error === 'string') {
-              errorText = error;
-            } else {
-              const msg = (error as Record<string, unknown>).message;
-              errorText = typeof msg === 'string' ? msg : JSON.stringify(error);
-            }
-          }
-          const part = makeCodexToolPart({
-            toolName: `mcp__${server}__${tool}`,
-            toolCallId: itemId,
-            input: item.arguments,
-            status: error ? 'failed' : status,
-            output: item.result,
-            errorText,
-          });
-          messages.push({
-            id: `codex-${itemId}`,
-            role: 'assistant',
-            parts: [part],
-          });
-          return { turnActive };
-        }
+        case 'commandExecution':
+        case 'fileChange':
+        case 'mcpToolCall':
         case 'webSearch': {
-          const part = makeCodexToolPart({
-            toolName: 'WebSearch',
-            toolCallId: itemId,
-            input: { query: item.query },
-            status: 'completed',
-            output: '',
-          });
-          messages.push({
-            id: `codex-${itemId}`,
-            role: 'assistant',
-            parts: [part],
-          });
+          const part = mapCodexToolItem(item, itemId);
+          if (!part) return { turnActive };
+          upsertCodexToolMessage(messages, itemId, part);
           return { turnActive };
         }
         default:
@@ -547,6 +490,96 @@ function handleCodexEvent(
       // Other Codex methods (item/started, thread/*, account/*, mcpServer/*,
       // tokenUsage, etc.) are not surfaced in Phase 0.
       return { turnActive };
+  }
+}
+
+/**
+ * Map a Codex tool-shaped `ThreadItem` (from `item/started` or `item/completed`)
+ * to a `DynamicToolUIPart`. Returns `null` for non-tool items so callers can
+ * skip without re-checking the type.
+ */
+function mapCodexToolItem(
+  item: Record<string, unknown>,
+  itemId: string,
+): DynamicToolUIPart | null {
+  const itemType = String(item.type ?? '');
+  switch (itemType) {
+    case 'commandExecution':
+      return makeCodexToolPart({
+        toolName: 'Bash',
+        toolCallId: itemId,
+        input: { command: item.command, cwd: item.cwd },
+        status: String(item.status ?? 'inProgress'),
+        output: item.aggregatedOutput,
+      });
+    case 'fileChange': {
+      const changes = Array.isArray(item.changes) ? item.changes : [];
+      return makeCodexToolPart({
+        toolName: 'Edit',
+        toolCallId: itemId,
+        input: { changes },
+        status: String(item.status ?? 'inProgress'),
+        output: `${changes.length} file change${changes.length === 1 ? '' : 's'}`,
+      });
+    }
+    case 'mcpToolCall': {
+      const server = String(item.server ?? '');
+      const tool = String(item.tool ?? '');
+      const error = item.error as Record<string, unknown> | string | null;
+      // Codex may report errors as plain strings (`"timeout"`) or as
+      // structured objects (`{ message: '...' }`). Coerce both without
+      // wrapping bare strings in JSON quotes.
+      let errorText: string | undefined;
+      if (error) {
+        if (typeof error === 'string') {
+          errorText = error;
+        } else {
+          const msg = (error as Record<string, unknown>).message;
+          errorText = typeof msg === 'string' ? msg : JSON.stringify(error);
+        }
+      }
+      return makeCodexToolPart({
+        toolName: `mcp__${server}__${tool}`,
+        toolCallId: itemId,
+        input: item.arguments,
+        status: error ? 'failed' : String(item.status ?? 'inProgress'),
+        output: item.result,
+        errorText,
+      });
+    }
+    case 'webSearch':
+      return makeCodexToolPart({
+        toolName: 'WebSearch',
+        toolCallId: itemId,
+        input: { query: item.query },
+        // webSearch items have no status field on the ThreadItem; Phase 0
+        // treats `item/started` as in-progress and `item/completed` as done.
+        status: typeof item.query === 'string' ? 'completed' : 'inProgress',
+        output: '',
+      });
+    default:
+      return null;
+  }
+}
+
+/**
+ * Insert or replace a tool-call UIMessage keyed by `codex-${itemId}` so the
+ * same message updates from `item/started` (input-available) → `item/completed`
+ * (output-available / output-error / output-denied).
+ */
+function upsertCodexToolMessage(
+  // biome-ignore lint/suspicious/noExplicitAny: UIMessage parts union is complex
+  messages: any[],
+  itemId: string,
+  part: DynamicToolUIPart,
+): void {
+  const id = `codex-${itemId}`;
+  const idx = messages.findIndex((m) => m.id === id);
+  const msg = { id, role: 'assistant', parts: [part] };
+  if (idx === -1) {
+    messages.push(msg);
+  } else {
+    messages[idx] = msg;
   }
 }
 
