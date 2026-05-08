@@ -510,6 +510,26 @@ describe('sdkToUIMessages — Codex agent message', () => {
 });
 
 describe('sdkToUIMessages — Codex user messages', () => {
+  it('renders a placeholder for image-only userMessage so the turn stays visible', () => {
+    const events: SDKMessage[] = [
+      makeCodexEvent('item/completed', {
+        item: {
+          type: 'userMessage',
+          id: 'um-img',
+          content: [
+            { type: 'image', url: 'https://example.com/x.png' },
+            { type: 'localImage', path: '/tmp/x.png' },
+          ],
+        },
+      }),
+    ];
+    const result = sdkToUIMessages(events, false, noPending);
+    expect(result).toHaveLength(1);
+    expect(result[0]?.role).toBe('user');
+    const part = result[0]?.parts[0] as { text: string };
+    expect(part.text).toMatch(/image|localImage/);
+  });
+
   it('renders a userMessage item as a role=user UIMessage', () => {
     const events: SDKMessage[] = [
       makeCodexEvent('item/completed', {

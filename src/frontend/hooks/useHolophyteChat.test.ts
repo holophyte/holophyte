@@ -345,6 +345,13 @@ describe('useHolophyteChat — isThinking', () => {
     expect(result.current.isThinking).toBe(false);
   });
 
+  it('is false when session is waiting_input (approval pending, not actively thinking)', () => {
+    const { result } = renderHook(() =>
+      useHolophyteChat(makeProps({ sessionStatus: 'waiting_input' })),
+    );
+    expect(result.current.isThinking).toBe(false);
+  });
+
   it('is true when last codex turn marker is turn/started', () => {
     const { result } = renderHook(() =>
       useHolophyteChat(

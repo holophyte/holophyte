@@ -328,7 +328,7 @@ export function sdkToUIMessages(
   // (last id, turn still in flight, session running) keeps 'streaming'.
   for (const itemId of codexAgentText.keys()) {
     if (codexCompletedAgentIds.has(itemId)) continue;
-    const idx = messages.findIndex((m) => m.id === itemId);
+    const idx = messages.findIndex((m) => m.id === `codex-${itemId}`);
     if (idx === -1) continue;
     const msg = messages[idx];
     if (!msg) continue;
@@ -412,10 +412,21 @@ function handleCodexEvent(
           const content = Array.isArray(item.content)
             ? (item.content as Array<Record<string, unknown>>)
             : [];
-          const text = content
+          const textParts = content
             .filter((c) => c.type === 'text')
             .map((c) => String(c.text ?? ''))
-            .join('');
+            .filter(Boolean);
+          // Non-text inputs (image/localImage/skill/mention) lose their content
+          // payload in Phase 0 — the UI doesn't render attachments yet — but we
+          // emit a placeholder so the turn boundary stays visible in the thread.
+          const nonTextKinds = content
+            .map((c) => String(c.type ?? ''))
+            .filter((t) => t && t !== 'text');
+          let text = textParts.join('');
+          if (!text && nonTextKinds.length > 0) {
+            const unique = Array.from(new Set(nonTextKinds));
+            text = `[${unique.join(', ')}]`;
+          }
           if (!text) return { turnActive };
           messages.push({
             id: `codex-${itemId}`,
@@ -484,16 +495,26 @@ function handleCodexEvent(
           const status = String(item.status ?? '');
           const server = String(item.server ?? '');
           const tool = String(item.tool ?? '');
-          const error = item.error as Record<string, unknown> | null;
+          const error = item.error as Record<string, unknown> | string | null;
+          // Codex may report errors as plain strings (`"timeout"`) or as
+          // structured objects (`{ message: '...' }`). Coerce both shapes
+          // without wrapping bare strings in JSON quotes.
+          let errorText: string | undefined;
+          if (error) {
+            if (typeof error === 'string') {
+              errorText = error;
+            } else {
+              const msg = (error as Record<string, unknown>).message;
+              errorText = typeof msg === 'string' ? msg : JSON.stringify(error);
+            }
+          }
           const part = makeCodexToolPart({
             toolName: `mcp__${server}__${tool}`,
             toolCallId: itemId,
             input: item.arguments,
             status: error ? 'failed' : status,
             output: item.result,
-            errorText: error
-              ? String(error.message ?? JSON.stringify(error))
-              : undefined,
+            errorText,
           });
           messages.push({
             id: `codex-${itemId}`,
@@ -541,7 +562,7 @@ function upsertCodexAgentMessage(
   state: 'streaming' | 'done' = 'streaming',
 ): void {
   if (!text) return;
-  const id = itemId;
+  const id = `codex-${itemId}`;
   const idx = messages.findIndex((m) => m.id === id);
   const part = { type: 'text', text, state };
   if (idx === -1) {
