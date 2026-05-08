@@ -718,6 +718,76 @@ describe('sdkToUIMessages — Codex tool items', () => {
     expect(part.state).toBe('input-available');
   });
 
+  it('renders a completed dynamicToolCall with text output', () => {
+    const events: SDKMessage[] = [
+      makeCodexEvent('item/completed', {
+        item: {
+          type: 'dynamicToolCall',
+          id: 'dtc-1',
+          tool: 'fetch_weather',
+          arguments: { city: 'Tokyo' },
+          status: 'completed',
+          contentItems: [{ type: 'inputText', text: '21°C, clear' }],
+          success: true,
+          durationMs: 412,
+        },
+      }),
+    ];
+    const result = sdkToUIMessages(events, false, noPending);
+    const part = result[0]?.parts[0] as Record<string, unknown>;
+    expect(part).toMatchObject({
+      type: 'dynamic-tool',
+      toolName: 'fetch_weather',
+      state: 'output-available',
+      output: '21°C, clear',
+    });
+  });
+
+  it('renders a failed dynamicToolCall as output-error', () => {
+    const events: SDKMessage[] = [
+      makeCodexEvent('item/completed', {
+        item: {
+          type: 'dynamicToolCall',
+          id: 'dtc-2',
+          tool: 'broken_tool',
+          arguments: {},
+          status: 'failed',
+          contentItems: [{ type: 'inputText', text: 'tool exploded' }],
+          success: false,
+          durationMs: 0,
+        },
+      }),
+    ];
+    const result = sdkToUIMessages(events, false, noPending);
+    const part = result[0]?.parts[0] as Record<string, unknown>;
+    expect(part).toMatchObject({
+      type: 'dynamic-tool',
+      state: 'output-error',
+      errorText: 'tool exploded',
+    });
+  });
+
+  it('renders a dynamicToolCall item/started as in-progress', () => {
+    const events: SDKMessage[] = [
+      makeCodexEvent('item/started', {
+        item: {
+          type: 'dynamicToolCall',
+          id: 'dtc-3',
+          tool: 'long_running',
+          arguments: { x: 1 },
+          status: 'inProgress',
+          contentItems: null,
+          success: null,
+          durationMs: null,
+        },
+      }),
+    ];
+    const result = sdkToUIMessages(events, false, noPending);
+    const part = result[0]?.parts[0] as { state: string; toolName: string };
+    expect(part.state).toBe('input-available');
+    expect(part.toolName).toBe('long_running');
+  });
+
   it('renders a reasoning item as a reasoning part', () => {
     const events: SDKMessage[] = [
       makeCodexEvent('item/completed', {

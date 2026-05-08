@@ -475,7 +475,8 @@ function handleCodexEvent(
         case 'commandExecution':
         case 'fileChange':
         case 'mcpToolCall':
-        case 'webSearch': {
+        case 'webSearch':
+        case 'dynamicToolCall': {
           const part = mapCodexToolItem(item, itemId, true);
           if (!part) return { turnActive };
           upsertCodexToolMessage(messages, itemId, part);
@@ -559,6 +560,39 @@ function mapCodexToolItem(
         status: completed ? 'completed' : 'inProgress',
         output: '',
       });
+    case 'dynamicToolCall': {
+      // User-installed / function tools surface here. Concatenate text content
+      // items into a single output blob; image items are placeholdered until
+      // the UI gains attachment rendering.
+      const contentItems = Array.isArray(item.contentItems)
+        ? (item.contentItems as Array<Record<string, unknown>>)
+        : [];
+      const output = contentItems
+        .map((c) =>
+          c.type === 'inputText'
+            ? String(c.text ?? '')
+            : c.type === 'inputImage'
+              ? '[image]'
+              : '',
+        )
+        .filter(Boolean)
+        .join('');
+      const success = item.success;
+      const status =
+        success === false
+          ? 'failed'
+          : (String(item.status ?? '') as
+              | 'inProgress'
+              | 'completed'
+              | 'failed');
+      return makeCodexToolPart({
+        toolName: String(item.tool ?? 'dynamic'),
+        toolCallId: itemId,
+        input: item.arguments,
+        status,
+        output,
+      });
+    }
     default:
       return null;
   }
