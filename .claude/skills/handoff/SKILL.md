@@ -1,12 +1,13 @@
 ---
 name: handoff
 description: Generate a paste-ready prompt to update the holophyte-thoughts wiki with whatever just shipped on a feature branch
-user-invocable: true
 ---
 
 # Handoff to Wiki
 
 Generate a paste-ready prompt the user runs in a separate Claude Code session inside the `holophyte-thoughts` wiki repo. The receiving agent already knows the wiki conventions from that repo's `CLAUDE.md` — your job is to give it a tight brief about *this* shipped work.
+
+The prompt is paste-not-direct on purpose: a fresh-context wiki session avoids polluting the shipping-side context with wiki-maintenance turns.
 
 ## Usage
 
@@ -16,50 +17,50 @@ Generate a paste-ready prompt the user runs in a separate Claude Code session in
 
 ### 1. Auto-pull context
 
-Run these in parallel (always with `dangerouslyDisableSandbox: true` for `gh`):
+All `gh` commands run with `dangerouslyDisableSandbox: true`. The block below is **pseudocode**, not a script — gather these values one at a time and substitute as you go.
 
-```bash
-git branch --show-current
-gh pr list --state merged --head "$(git branch --show-current)" --json number,title,headRefName,mergedAt,url --limit 1
-# Fallback if on main or no branch PR:
-gh pr list --state merged --json number,title,headRefName,mergedAt,url --limit 1
-git log "$(gh pr view <num> --json baseRefOid -q .baseRefOid)..<headSha>" --oneline   # if PR found
-# else: git log main..HEAD --oneline
-```
+- `BRANCH = git branch --show-current`
+- `REPO = gh repo view --json nameWithOwner -q .nameWithOwner`
+- Find the merged PR for this branch:
+  - `gh pr list --repo "$REPO" --state merged --head "$BRANCH" --json number,title,url,mergedAt,baseRefOid,headRefOid --limit 1`
+  - If on `main` or the head match is empty (e.g. branch deleted post-merge), **do not** silently fall back to "latest merged PR in repo" — that can grab unrelated work. Either:
+    - Pick the merged PR whose `mergedAt` is closest to `HEAD`'s commit date (`git log -1 --format=%cI`), confirm with the user before using it, or
+    - Ask the user to supply the PR number / branch name explicitly.
+  - If no merged PR exists at all, fall back to `git log main..HEAD --oneline` for the commit list and skip PR-specific fields.
+- Once the PR is identified, capture `BASE_OID`, `HEAD_OID`, `PR_NUM`, `PR_URL`, `PR_TITLE`, `MERGED_AT`.
+- Commits: `git log "$BASE_OID..$HEAD_OID" --oneline` (or `git log main..HEAD --oneline` for the no-PR fallback).
+- Files changed: `gh pr view "$PR_NUM" --repo "$REPO" --json files -q '.files[].path'` (or `git diff --name-only main...HEAD`).
+- PR body (for issue-reference scanning): `gh pr view "$PR_NUM" --repo "$REPO" --json body -q .body`.
 
-For the PR (or branch), gather:
-- PR number, title, URL, merge date, head branch
-- Commit list (sha + subject)
-- Files changed (`gh pr view <num> --json files -q '.files[].path'` or `git diff --name-only main...<branch>`)
-- Issues filed by the user during the branch's lifetime (use the merged-PR base date or first commit date as the floor):
-  ```bash
-  gh issue list --search "author:@me created:>=<YYYY-MM-DD>" --state all --json number,title,state,url
-  ```
-- Branch name. If on `main` with no recently merged PR, ask the user which branch/PR to hand off.
+**Issue references — scoped, not date-swept.** Extract `#NNN` / `Closes #NNN` / `Fixes #NNN` / `Refs #NNN` matches from commit messages **and** PR body. Resolve each via `gh issue view "$NNN" --repo "$REPO" --json number,title,state,url`. These become the primary Q3 candidates.
 
-Scan commit subjects for keywords: `fix`, `skip`, `xfail`, `decision`, `rejected`, `deferred`, `revert`, `workaround`. Each match becomes a candidate finding.
+If the user wants a broader sweep, you may *additionally* run `gh issue list --repo "$REPO" --search "author:@me created:>=<branch-start-date>" --state all --json number,title,state,url` and label those candidates "may be unrelated — confirm" in Q3. Never use an unscoped `gh issue list` — it leaks issues from every repo the user can access.
+
+**Commit keyword scan** for findings: match (case-insensitive) `skip`, `xfail`, `defer`, `reject`, `revert`, `workaround`, `decision`. Do **not** match `fix` — too noisy.
 
 ### 2. Ask the user (AskUserQuestion)
 
 Branch later questions on earlier answers.
 
-**Q1 — Was this work spec-driven?** (single-select)
-- "Yes — driven by a wiki spec/plan/task" → unlocks "What differed from the plan" section.
-- "No — ad-hoc; wiki just needs to learn about it" → skip that section.
+**Q1 — Was this work spec-driven?**
+- "Yes — driven by a wiki spec/plan/task" → unlocks "What differed from the plan" (Q4).
+- "No — ad-hoc; wiki just needs to learn about it" → skip Q4.
 
-**Q2 — Authority for the receiving agent** (single-select)
-- "Apply edits; surface out-of-scope as findings" (default)
+**Q2 — Authority for the receiving agent**
+- "Apply edits; surface out-of-scope as findings"
 - "Apply edits + filing new GH issues is OK"
 - "Report only — let me apply"
 
-**Q3 — Findings to surface** (multiSelect; pre-populated)
-- One option per open issue from the auto-pulled list (label: `#NNN — <title>`).
+**Q3 — Findings to surface** (multiSelect, pre-populated)
+- One option per referenced issue (label: `#NNN — <title>`).
 - One option per keyword-matching commit (label: `<sha7> <subject>`).
-- "Other" is auto-injected for free-text additions.
+- Any "may be unrelated — confirm" issues from the optional date sweep, clearly labeled.
 
-**Q4 — Anything that differed from the plan?** (only if Q1 = spec-driven; free-text via "Other")
+**Q4 — Anything that differed from the plan?** *(only if Q1 = spec-driven)* — free-text via "Other".
 
-If a step has nothing to ask (e.g. no candidate findings for Q3), skip it.
+**Q5 — Audit gaps the wiki agent should triage but not fix?** — free-text via "Other". Skip if the user has nothing.
+
+If a step has no candidates (e.g. no matching commits and no referenced issues), skip Q3 entirely.
 
 ### 3. Emit the prompt
 
@@ -67,7 +68,7 @@ Print the assembled prompt to the user as a fenced block they can copy. Do not i
 
 ## Output template
 
-Fill in the bracketed placeholders from auto-pull + answers. Drop sections that don't apply. Keep it terse — second-person, specific shas/paths/issue links, no filler.
+Fill bracketed placeholders from auto-pull + answers. Drop sections that don't apply. Keep it terse — second-person, real shas/paths/issue links, no filler.
 
 ```
 Update the wiki for [PR #NNN — <title>] (<url>), merged <date> from `<branch>`.
@@ -79,18 +80,18 @@ Source material:
 
 [IF Q1 = spec-driven]
 What differed from the plan:
-- <Q4 free-text bullet 1>
-- <Q4 free-text bullet 2>
+- <Q4 free-text bullet>
 
-Follow-up issues filed during this branch:
+Follow-up issues referenced from this branch:
 - #NNN <title> — <url>
   Decide where this fits — own task, sub-task, or existing phase — and link the issue.
 
 Considered-and-rejected / deferred decisions worth recording:
 - <commit sha7> <subject> — <one-line gloss from Q3>
 
+[IF Q5 has content]
 Audit gaps to triage (don't fix):
-- <bullet from Q3 "Other" or commit scan>
+- <Q5 bullet>
 
 Also update the corresponding holophyte kanban task(s) via the `mcp__holophyte__*` tools, scoped to the authority below. Find the task by searching for the PR title or branch name; update status, description, or sub-tasks as the shipped work warrants.
 
