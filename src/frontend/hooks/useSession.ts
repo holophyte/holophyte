@@ -239,6 +239,11 @@ export function useSession(sessionId: string | null): UseSessionReturn {
     }
     return n;
   }, [events]);
+  // Mirror the count into a ref so async callbacks (sendMessage) read the
+  // latest value after their `await`, not the closure-captured snapshot from
+  // when the callback was memoized.
+  const codexTurnCompletedCountRef = useRef(0);
+  codexTurnCompletedCountRef.current = codexTurnCompletedCount;
   const queuedAtCodexTurnCount = useRef<number | null>(null);
   if (
     messageQueued &&
@@ -295,11 +300,11 @@ export function useSession(sessionId: string | null): UseSessionReturn {
       });
       // If the session was running, the message is queued — show an indicator
       if (sessionStatus === 'running') {
-        queuedAtCodexTurnCount.current = codexTurnCompletedCount;
+        queuedAtCodexTurnCount.current = codexTurnCompletedCountRef.current;
         setMessageQueued(true);
       }
     },
-    [sessionStatus, sendSessionMessage, codexTurnCompletedCount],
+    [sessionStatus, sendSessionMessage],
   );
 
   return {
