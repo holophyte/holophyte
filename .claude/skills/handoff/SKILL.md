@@ -83,7 +83,7 @@ Print the assembled prompt to the user as a fenced block they can copy. Do not i
 
 Fill bracketed placeholders from auto-pull + answers. Drop sections that don't apply. Keep it terse — second-person, real shas/paths/issue links, no filler.
 
-```
+```text
 Update the wiki for [PR #NNN — <title>](<url>), [merged <date> | to be merged] from `<branch>`.
 
 Source material:
@@ -155,7 +155,7 @@ Run on branch `feat/codex-events-renderer` after merging PR #279.
 
 ### Rendered output
 
-```
+```text
 Update the wiki for PR #279 — feat: render Codex events + isThinking signal (https://github.com/holophyte/holophyte/pull/279), merged 2026-05-08 from `feat/codex-events-renderer`.
 
 Source material:
