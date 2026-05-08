@@ -1,6 +1,7 @@
 ---
 name: handoff
 description: Generate a paste-ready prompt to update the holophyte-thoughts wiki with whatever just shipped on a feature branch
+allowed-tools: Bash(gh:*), Bash(git:*), AskUserQuestion
 ---
 
 # Handoff to Wiki
@@ -27,14 +28,16 @@ All `gh` commands run with `dangerouslyDisableSandbox: true`. The block below is
     - Pick the merged PR whose `mergedAt` is closest to `HEAD`'s commit date (`git log -1 --format=%cI`), confirm with the user before using it, or
     - Ask the user to supply the PR number / branch name explicitly.
   - If no merged PR exists at all, fall back to `git log main..HEAD --oneline` for the commit list and skip PR-specific fields.
-- Once the PR is identified, capture `BASE_OID`, `HEAD_OID`, `PR_NUM`, `PR_URL`, `PR_TITLE`, `MERGED_AT`.
-- Commits: `git log "$BASE_OID..$HEAD_OID" --oneline` (or `git log main..HEAD --oneline` for the no-PR fallback).
-- Files changed: `gh pr view "$PR_NUM" --repo "$REPO" --json files -q '.files[].path'` (or `git diff --name-only main...HEAD`).
+- Once the PR is identified, capture `PR_NUM`, `PR_URL`, `PR_TITLE`, `MERGED_AT`, `HEAD_OID`.
+- Commit list: pull from the PR directly so the range is stable even if `main` has advanced —
+  - `gh pr view "$PR_NUM" --repo "$REPO" --json commits -q '.commits[] | "\(.oid[0:7]) \(.messageHeadline)"'`
+  - No-PR fallback: `BASE=$(git merge-base main HEAD)`; `git log "$BASE..HEAD" --oneline`.
+- Files changed: `gh pr view "$PR_NUM" --repo "$REPO" --json files -q '.files[].path'` (or `git diff --name-only "$(git merge-base main HEAD)...HEAD"`).
 - PR body (for issue-reference scanning): `gh pr view "$PR_NUM" --repo "$REPO" --json body -q .body`.
 
-**Issue references — scoped, not date-swept.** Extract `#NNN` / `Closes #NNN` / `Fixes #NNN` / `Refs #NNN` matches from commit messages **and** PR body. Resolve each via `gh issue view "$NNN" --repo "$REPO" --json number,title,state,url`. These become the primary Q3 candidates.
+**Issue references — scoped, not date-swept.** Extract `#NNN` / `Closes #NNN` / `Fixes #NNN` / `Refs #NNN` matches from commit messages **and** PR body. Resolve each via `gh issue view "$NNN" --repo "$REPO" --json number,title,state,url` (include both open and closed — closed issues filed during the branch are usually still worth linking). These become the Q3a candidates.
 
-If the user wants a broader sweep, you may *additionally* run `gh issue list --repo "$REPO" --search "author:@me created:>=<branch-start-date>" --state all --json number,title,state,url` and label those candidates "may be unrelated — confirm" in Q3. Never use an unscoped `gh issue list` — it leaks issues from every repo the user can access.
+If the user wants a broader sweep, you may *additionally* run `gh issue list --repo "$REPO" --search "author:@me created:>=<branch-start-date>" --state all --json number,title,state,url` and label those candidates "may be unrelated — confirm" in Q3a. Never use an unscoped `gh issue list` — it leaks issues from every repo the user can access.
 
 **Commit keyword scan** for findings: match (case-insensitive) `skip`, `xfail`, `defer`, `reject`, `revert`, `workaround`, `decision`. Do **not** match `fix` — too noisy.
 
@@ -51,16 +54,21 @@ Branch later questions on earlier answers.
 - "Apply edits + filing new GH issues is OK"
 - "Report only — let me apply"
 
-**Q3 — Findings to surface** (multiSelect, pre-populated)
-- One option per referenced issue (label: `#NNN — <title>`).
-- One option per keyword-matching commit (label: `<sha7> <subject>`).
-- Any "may be unrelated — confirm" issues from the optional date sweep, clearly labeled.
+**Q3a — Referenced issues to link** (multiSelect; skip if zero candidates)
+- One option per referenced issue (label: `#NNN — <title>`, including closed ones).
+- Any optional date-sweep candidates, labeled "may be unrelated — confirm".
+- `AskUserQuestion` caps options at 4. If you have more candidates, take the top 3 most relevant and let the user add the rest via "Other"; mention the omitted count in the question text.
 
-**Q4 — Anything that differed from the plan?** *(only if Q1 = spec-driven)* — free-text via "Other".
+**Q3b — Decisions to record from commits** (multiSelect; skip if zero candidates)
+- One option per keyword-matching commit (label: `<sha7> <subject>`). Same 4-option cap as Q3a.
 
-**Q5 — Audit gaps the wiki agent should triage but not fix?** — free-text via "Other". Skip if the user has nothing.
+**Q4 — Anything that differed from the plan?** *(only if Q1 = spec-driven)*
+- "Nothing notable"
+- "Other" — free-text deltas
 
-If a step has no candidates (e.g. no matching commits and no referenced issues), skip Q3 entirely.
+**Q5 — Audit gaps the wiki agent should triage but not fix**
+- "None"
+- "Other" — free-text bullets
 
 ### 3. Emit the prompt
 
@@ -78,18 +86,20 @@ Source material:
 - Commits: <sha7> <subject>; <sha7> <subject>; …
 - Files changed: <path>; <path>; …
 
-[IF Q1 = spec-driven]
+[IF Q1 = spec-driven AND Q4 != "Nothing notable"]
 What differed from the plan:
 - <Q4 free-text bullet>
 
+[IF Q3a has selections]
 Follow-up issues referenced from this branch:
 - #NNN <title> — <url>
   Decide where this fits — own task, sub-task, or existing phase — and link the issue.
 
+[IF Q3b has selections]
 Considered-and-rejected / deferred decisions worth recording:
-- <commit sha7> <subject> — <one-line gloss from Q3>
+- <commit sha7> <subject> — <one-line gloss from Q3b>
 
-[IF Q5 has content]
+[IF Q5 != "None"]
 Audit gaps to triage (don't fix):
 - <Q5 bullet>
 
