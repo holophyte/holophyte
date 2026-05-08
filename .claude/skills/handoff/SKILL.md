@@ -26,7 +26,8 @@ All `gh` commands run with `dangerouslyDisableSandbox: true`. The block below is
   - `gh pr list --repo "$REPO" --state all --head "$BRANCH" --json number,state,title,url,mergedAt,headRefOid --limit 5`
   - State labels in the output prompt should reflect reality: "merged <date>" vs "to be merged from PR #NNN".
   - If multiple PRs match the branch, or no head match exists, run **Q0** (below) to disambiguate. Never silently grab "latest merged PR in repo".
-  - If neither a PR nor a usable branch exists, fall back to `BASE=$(git merge-base main HEAD)` + `git log "$BASE..HEAD" --oneline` and skip PR-specific fields.
+  - If the branch is pushed but no PR exists yet (`gh pr list --head` empty, both states), tell the user "open a PR first, or supply a title manually" and either bail or fall back to `BASE=$(git merge-base main HEAD)` + `git log "$BASE..HEAD" --oneline` plus a manual title via Q0's "Other".
+  - If neither a PR nor a usable branch exists, same fallback: skip PR-specific fields.
 - Once the PR is identified, capture `PR_NUM`, `PR_URL`, `PR_TITLE`, `MERGED_AT`, `HEAD_OID`.
 - Commit list: pull from the PR directly so the range is stable even if `main` has advanced —
   - `gh pr view "$PR_NUM" --repo "$REPO" --json commits -q '.commits[] | "\(.oid[0:7]) \(.messageHeadline)"'`
@@ -38,7 +39,7 @@ All `gh` commands run with `dangerouslyDisableSandbox: true`. The block below is
 
 If the user wants a broader sweep, you may *additionally* run `gh issue list --repo "$REPO" --search "author:@me created:>=<branch-start-date>" --state all --json number,title,state,url` and label those candidates "may be unrelated — confirm" in Q3a. Never use an unscoped `gh issue list` — it leaks issues from every repo the user can access.
 
-**Commit keyword scan** for findings: match (case-insensitive) `skip`, `xfail`, `defer`, `reject`, `revert`, `workaround`, `decision`. Do **not** match `fix` — too noisy.
+**Commit keyword scan** for findings: match (case-insensitive) `skip`, `xfail`, `defer`, `reject`, `revert`, `workaround`, `decision`. Do **not** match `fix` — too noisy. Real-world commits often don't follow these keywords (e.g. `wiki: session auto-update`); the scan is best-effort and Q3b's "Other" lets the user type in findings the scan missed.
 
 ### 2. Ask the user (AskUserQuestion)
 
@@ -56,7 +57,7 @@ Skip Q0 if step 1 found exactly one PR.
 **Q2 — Authority for the receiving agent**
 - "Apply edits; surface out-of-scope as findings"
 - "Apply edits + filing new GH issues is OK"
-- "Report only — let me apply"
+- "Report only — let me apply" → output prompt instructs the agent to produce a findings markdown (proposed page paths + diffs as fenced blocks + an itemized checklist of changes), and **not** to write to disk or call `mcp__holophyte__*` mutations.
 
 **Q3a — Referenced issues to link** (multiSelect; skip if zero candidates)
 - One option per referenced issue (label: `#NNN — <title>`, including closed ones).
@@ -83,7 +84,7 @@ Print the assembled prompt to the user as a fenced block they can copy. Do not i
 Fill bracketed placeholders from auto-pull + answers. Drop sections that don't apply. Keep it terse — second-person, real shas/paths/issue links, no filler.
 
 ```
-Update the wiki for [PR #NNN — <title>] (<url>), [merged <date> | to be merged] from `<branch>`.
+Update the wiki for [PR #NNN — <title>](<url>), [merged <date> | to be merged] from `<branch>`.
 
 Source material:
 - PR: <url>
@@ -107,7 +108,7 @@ Considered-and-rejected / deferred decisions worth recording:
 Audit gaps to triage (don't fix):
 - <Q5 bullet>
 
-Also update the corresponding holophyte kanban task(s) via the `mcp__holophyte__*` tools, scoped to the authority below. Use `mcp__holophyte__holophyte_list_tasks` and grep titles for the PR title / branch slug. For shipped work, archive the task with a one-line shipped note (the Done column is intentionally empty — completed work is archived directly). For ongoing scope that the PR only partially advanced, update the description or sub-tasks instead.
+Also update the corresponding holophyte kanban task(s) via the `mcp__holophyte__*` tools, scoped to the authority below. Use `mcp__holophyte__holophyte_list_tasks` and grep titles for the PR title / branch slug. For shipped work, archive the task with a one-line shipped note (the Done column is intentionally empty — completed work is archived directly). For ongoing scope that the PR only partially advanced, update the description or sub-tasks instead. If no task matches, skip the kanban update — don't create one retroactively.
 
 Authority: <Q2 verbatim>.
 
@@ -120,7 +121,7 @@ Guardrails:
 
 - Wiki-maintainer framing ("you are the wiki maintainer for…") — the receiving repo's `CLAUDE.md` already orients the agent.
 - Specific spec/wiki paths — the wiki maintainer searches the index.
-- Journal / `_hot.md` / `index.md` / `log.md` update instructions — Stop hooks in `holophyte-thoughts` handle those.
+- Journal / `_hot.md` / `index.md` / `log.md` update instructions — the wiki's `CLAUDE.md` end-of-session rule, Dataview, and ingest/capture/lint workflows already drive these. Don't restate them.
 - Restating CLAUDE.md schema (frontmatter, page types, tone, etc.).
 
 ## Style
