@@ -166,11 +166,26 @@ export function useSession(sessionId: string | null): UseSessionReturn {
     sessionId ? { sessionId: sessionId as Id<'sessions'> } : 'skip',
   );
 
-  // Flatten persisted batches into a single event list
+  // Flatten persisted batches into a single event list.
+  //
+  // Claude events: `e.data` is a serialized SDKMessage whose own `type` field
+  //   (`'assistant'`, `'user'`, `'result'`, …) is what the renderer keys off.
+  //   Parse and unwrap.
+  // Codex events: `e.type` is `'codex.<method>'` and `e.data` is the raw
+  //   `{ jsonrpc, method, params }` notification — which has NO `type` field.
+  //   If we unwrapped these, the renderer / `isThinking` lose the `'codex.*'`
+  //   tag and silently drop every event. Pass through as `{ type, data }` so
+  //   the renderer's `event.type.startsWith('codex.')` branch fires and its
+  //   inner `JSON.parse(data)` step still works.
   const events = useMemo<SDKMessage[]>(() => {
     if (!persistedBatches) return [];
     return persistedBatches.flatMap((batch) =>
-      batch.events.map((e) => JSON.parse(e.data) as SDKMessage),
+      batch.events.map((e) => {
+        if (typeof e.type === 'string' && e.type.startsWith('codex.')) {
+          return { type: e.type, data: e.data } as unknown as SDKMessage;
+        }
+        return JSON.parse(e.data) as SDKMessage;
+      }),
     );
   }, [persistedBatches]);
 
@@ -211,6 +226,33 @@ export function useSession(sessionId: string | null): UseSessionReturn {
     setMessageQueued(false);
   }
   prevStatusRef.current = sessionStatus;
+
+  // Codex sessions stay `running` between turns (no idle status), so the
+  // status-transition reset above never fires. Use `codex.turn/completed`
+  // count as the per-turn boundary instead: when a new turn completes after
+  // we set `messageQueued`, the queued message has been (or is about to be)
+  // delivered as a follow-up turn — clear the indicator.
+  const codexTurnCompletedCount = useMemo(() => {
+    let n = 0;
+    for (const ev of events) {
+      if ((ev as { type?: unknown })?.type === 'codex.turn/completed') n++;
+    }
+    return n;
+  }, [events]);
+  // Mirror the count into a ref so async callbacks (sendMessage) read the
+  // latest value after their `await`, not the closure-captured snapshot from
+  // when the callback was memoized.
+  const codexTurnCompletedCountRef = useRef(0);
+  codexTurnCompletedCountRef.current = codexTurnCompletedCount;
+  const queuedAtCodexTurnCount = useRef<number | null>(null);
+  if (
+    messageQueued &&
+    queuedAtCodexTurnCount.current !== null &&
+    codexTurnCompletedCount > queuedAtCodexTurnCount.current
+  ) {
+    setMessageQueued(false);
+    queuedAtCodexTurnCount.current = null;
+  }
 
   // Refresh "now" every 5s to keep companionOnline fresh
   const [now, setNow] = useState(() => Date.now());
@@ -258,6 +300,7 @@ export function useSession(sessionId: string | null): UseSessionReturn {
       });
       // If the session was running, the message is queued — show an indicator
       if (sessionStatus === 'running') {
+        queuedAtCodexTurnCount.current = codexTurnCompletedCountRef.current;
         setMessageQueued(true);
       }
     },

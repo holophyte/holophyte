@@ -319,5 +319,22 @@ describe('SessionThread', () => {
       });
       expect(screen.queryByText(/thinking/i)).not.toBeInTheDocument();
     });
+
+    it('hides thinking indicator when isThinking={false} overrides session status', () => {
+      render(
+        <SessionThread messages={[]} status="streaming" isThinking={false} />,
+        { wrapper: withSessionActions('running') },
+      );
+      expect(
+        screen.queryByTestId('thinking-indicator'),
+      ).not.toBeInTheDocument();
+    });
+
+    it('shows thinking indicator when isThinking={true} even if session is idle', () => {
+      render(<SessionThread messages={[]} status="ready" isThinking={true} />, {
+        wrapper: withSessionActions('idle'),
+      });
+      expect(screen.queryByTestId('thinking-indicator')).toBeInTheDocument();
+    });
   });
 });

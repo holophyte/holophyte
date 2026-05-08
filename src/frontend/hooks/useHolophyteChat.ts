@@ -47,6 +47,14 @@ export interface UseHolophyteChatReturn {
    * "— interrupted —" indicator after the last assistant message.
    */
   isInterrupted: boolean;
+  /**
+   * True when the session is actively producing output and the thinking
+   * indicator should render. Combines session status with provider-specific
+   * turn-state derivation: Codex sessions stay `running` between turns, so we
+   * additionally require an active turn (`codex.turn/started` with no matching
+   * `codex.turn/completed`) before showing the indicator.
+   */
+  isThinking: boolean;
 }
 
 /**
@@ -121,6 +129,28 @@ export function useHolophyteChat(
       if (ev.type === 'user') return true;
     }
     return false;
+  }, [events, sessionStatus]);
+
+  // Thinking-indicator gating. Codex sessions stay `running` between turns
+  // (the manager keeps the local app-server child alive for follow-ups), so
+  // session status alone leaves the spinner stuck. Look for a Codex turn
+  // boundary in the event stream: indicator shows iff session is running AND
+  // (no Codex events have been seen — pure Claude session) OR (a
+  // `codex.turn/started` is the most recent turn marker without a matching
+  // `codex.turn/completed`).
+  const isThinking = useMemo(() => {
+    if (sessionStatus !== 'running') return false;
+    for (let i = events.length - 1; i >= 0; i--) {
+      const ev = events[i];
+      const t = (ev as { type?: unknown } | undefined)?.type;
+      if (typeof t !== 'string' || !t.startsWith('codex.')) continue;
+      if (t === 'codex.turn/completed') return false;
+      if (t === 'codex.turn/started') return true;
+      // Other Codex events (item/*, thread/*, tokenUsage, etc.) carry no
+      // turn-boundary signal — keep scanning.
+    }
+    // Pure Claude session, or Codex session before any turn marker arrived.
+    return true;
   }, [events, sessionStatus]);
 
   // Extract the latest prompt suggestion from the event stream
@@ -212,5 +242,6 @@ export function useHolophyteChat(
     availableCommands,
     messageQueued,
     isInterrupted,
+    isThinking,
   };
 }

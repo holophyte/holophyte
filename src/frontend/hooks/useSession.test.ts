@@ -100,12 +100,13 @@ function makeConvexApproval(overrides: Record<string, unknown> = {}) {
 
 // Build a Convex event batch
 function makeBatch(
-  events: Array<{ data: string; timestamp?: number }>,
+  events: Array<{ data: string; type?: string; timestamp?: number }>,
   batchIndex = 0,
 ) {
   return {
     batchIndex,
     events: events.map((e) => ({
+      type: e.type,
       data: e.data,
       timestamp: e.timestamp ?? Date.now(),
     })),
@@ -735,6 +736,69 @@ describe('useSession', () => {
       rerender();
 
       expect(result.current.messageQueued).toBe(false);
+    });
+
+    it('resets messageQueued on codex.turn/completed (Codex sessions stay running across turns)', async () => {
+      mockSendSessionMessage.mockResolvedValue(undefined);
+
+      let batches: ReturnType<typeof makeBatch>[] = [];
+      mockedUseQuery.mockImplementation((query: unknown) => {
+        if (query === 'sessions:get')
+          return makeSessionRecord({ status: 'running' });
+        if (query === 'sessionEvents:getBySession') return batches;
+        return [];
+      });
+
+      const { result, rerender } = renderSession('session-1');
+
+      await act(async () => {
+        await result.current.sendMessage('session-1', 'hi');
+      });
+      expect(result.current.messageQueued).toBe(true);
+
+      // A new codex.turn/completed event arrives — queued message has been
+      // (or is about to be) delivered as a follow-up turn.
+      batches = [
+        makeBatch([
+          {
+            type: 'codex.turn/completed',
+            data: JSON.stringify({ method: 'turn/completed', params: {} }),
+          },
+        ]),
+      ];
+      rerender();
+
+      expect(result.current.messageQueued).toBe(false);
+    });
+
+    it('keeps messageQueued true while a Codex turn is still in flight', async () => {
+      mockSendSessionMessage.mockResolvedValue(undefined);
+
+      // The turn that was running when sendMessage was called: count=1 already.
+      const initialBatches = [
+        makeBatch([
+          {
+            type: 'codex.turn/completed',
+            data: JSON.stringify({ method: 'turn/completed', params: {} }),
+          },
+        ]),
+      ];
+
+      mockedUseQuery.mockImplementation((query: unknown) => {
+        if (query === 'sessions:get')
+          return makeSessionRecord({ status: 'running' });
+        if (query === 'sessionEvents:getBySession') return initialBatches;
+        return [];
+      });
+
+      const { result } = renderSession('session-1');
+
+      // Send while a previous turn already completed (count snapshot = 1)
+      await act(async () => {
+        await result.current.sendMessage('session-1', 'hi');
+      });
+      // No new turn/completed since send → still queued
+      expect(result.current.messageQueued).toBe(true);
     });
 
     it('does NOT reset messageQueued when session transitions to waiting_input', async () => {

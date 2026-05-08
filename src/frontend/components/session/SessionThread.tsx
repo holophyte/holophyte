@@ -44,7 +44,7 @@ function ThinkingIndicator({ isRunning }: ThinkingIndicatorProps) {
   return (
     <output
       data-testid="thinking-indicator"
-      aria-label="Claude is thinking"
+      aria-label="Assistant is thinking"
       className="flex items-center gap-1.5 py-1 text-xs text-muted-foreground/70"
     >
       <Sparkles className="h-3.5 w-3.5 pulse-spin animate-[pulse-spin_2s_linear_infinite]" />
@@ -62,16 +62,30 @@ interface SessionThreadProps {
    * "— interrupted —" divider after the last message.
    */
   isInterrupted?: boolean;
+  /**
+   * Override for the thinking-indicator visibility. When provided, gates the
+   * indicator instead of `sessionStatus === 'running'`. Codex sessions stay
+   * `running` between turns, so session status alone leaves the spinner stuck;
+   * the parent hook (`useHolophyteChat.isThinking`) factors in turn boundaries.
+   */
+  isThinking?: boolean;
 }
 
 export default function SessionThread({
   messages,
   status,
   isInterrupted = false,
+  isThinking,
 }: SessionThreadProps) {
   const { sessionStatus } = useSessionActions();
-  const isRunning = sessionStatus === 'running';
-  const isStreaming = status === 'streaming';
+  const isRunning =
+    isThinking !== undefined ? isThinking : sessionStatus === 'running';
+  // Animate streaming text/reasoning only while a turn is actually in flight.
+  // For Codex sessions, `status` stays `'streaming'` between turns (session
+  // status remains `running`), so deriving from `status` alone leaves prior
+  // turns visually "in progress" after `turn/completed`. `isRunning` already
+  // factors in turn boundaries when `isThinking` is provided.
+  const isStreaming = isRunning && status === 'streaming';
   // A user message is "queued" when it's still optimistic (no corresponding
   // SDK event yet) while the session is actively processing a prior turn.
   // The first active prompt is not optimistic — by the time the session is
