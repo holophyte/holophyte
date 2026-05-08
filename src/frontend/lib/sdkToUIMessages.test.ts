@@ -700,9 +700,22 @@ describe('sdkToUIMessages — Codex tool items', () => {
     const part = result[0]?.parts[0] as {
       toolName: string;
       input: { query: string };
+      state: string;
     };
     expect(part.toolName).toBe('WebSearch');
     expect(part.input.query).toBe('how to bun');
+    expect(part.state).toBe('output-available');
+  });
+
+  it('renders a webSearch item/started as in-progress (query is in started payload too)', () => {
+    const events: SDKMessage[] = [
+      makeCodexEvent('item/started', {
+        item: { type: 'webSearch', id: 'ws-1', query: 'how to bun' },
+      }),
+    ];
+    const result = sdkToUIMessages(events, false, noPending);
+    const part = result[0]?.parts[0] as { state: string };
+    expect(part.state).toBe('input-available');
   });
 
   it('renders a reasoning item as a reasoning part', () => {

@@ -410,7 +410,7 @@ function handleCodexEvent(
       const item = (payload.item ?? {}) as Record<string, unknown>;
       const itemId = String(item.id ?? '');
       if (!itemId) return { turnActive };
-      const part = mapCodexToolItem(item, itemId);
+      const part = mapCodexToolItem(item, itemId, false);
       if (!part) return { turnActive };
       upsertCodexToolMessage(messages, itemId, part);
       return { turnActive };
@@ -476,7 +476,7 @@ function handleCodexEvent(
         case 'fileChange':
         case 'mcpToolCall':
         case 'webSearch': {
-          const part = mapCodexToolItem(item, itemId);
+          const part = mapCodexToolItem(item, itemId, true);
           if (!part) return { turnActive };
           upsertCodexToolMessage(messages, itemId, part);
           return { turnActive };
@@ -501,6 +501,7 @@ function handleCodexEvent(
 function mapCodexToolItem(
   item: Record<string, unknown>,
   itemId: string,
+  completed: boolean,
 ): DynamicToolUIPart | null {
   const itemType = String(item.type ?? '');
   switch (itemType) {
@@ -552,9 +553,10 @@ function mapCodexToolItem(
         toolName: 'WebSearch',
         toolCallId: itemId,
         input: { query: item.query },
-        // webSearch items have no status field on the ThreadItem; Phase 0
-        // treats `item/started` as in-progress and `item/completed` as done.
-        status: typeof item.query === 'string' ? 'completed' : 'inProgress',
+        // webSearch ThreadItem has no `status` field, and `query` is present in
+        // both item/started and item/completed payloads — so we rely on the
+        // event boundary the caller passes in.
+        status: completed ? 'completed' : 'inProgress',
         output: '',
       });
     default:
