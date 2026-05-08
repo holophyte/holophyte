@@ -1,6 +1,6 @@
 ---
 name: handoff
-description: Generate a paste-ready prompt to update the holophyte-thoughts wiki with whatever just shipped on a feature branch
+description: Generate a paste-ready prompt to update the holophyte-thoughts wiki with what just shipped (or is about to ship) on a feature branch
 allowed-tools: Bash(gh:*), Bash(git:*), AskUserQuestion
 ---
 
@@ -18,16 +18,15 @@ The prompt is paste-not-direct on purpose: a fresh-context wiki session avoids p
 
 ### 1. Auto-pull context
 
-All `gh` commands run with `dangerouslyDisableSandbox: true`. The block below is **pseudocode**, not a script — gather these values one at a time and substitute as you go.
+All `gh` commands run with `dangerouslyDisableSandbox: true`. The block below is **pseudocode**, not a script — gather these values one at a time and substitute as you go. Issue these as **parallel Bash tool calls in a single tool block** wherever the values don't depend on each other (branch + repo + PR lookup are independent of each other).
 
 - `BRANCH = git branch --show-current`
 - `REPO = gh repo view --json nameWithOwner -q .nameWithOwner`
-- Find the merged PR for this branch:
-  - `gh pr list --repo "$REPO" --state merged --head "$BRANCH" --json number,title,url,mergedAt,baseRefOid,headRefOid --limit 1`
-  - If on `main` or the head match is empty (e.g. branch deleted post-merge), **do not** silently fall back to "latest merged PR in repo" — that can grab unrelated work. Either:
-    - Pick the merged PR whose `mergedAt` is closest to `HEAD`'s commit date (`git log -1 --format=%cI`), confirm with the user before using it, or
-    - Ask the user to supply the PR number / branch name explicitly.
-  - If no merged PR exists at all, fall back to `git log main..HEAD --oneline` for the commit list and skip PR-specific fields.
+- Find the PR for this branch — search **both merged and open** (a handoff can be pre-merge — "what's about to ship" — or post-merge):
+  - `gh pr list --repo "$REPO" --state all --head "$BRANCH" --json number,state,title,url,mergedAt,headRefOid --limit 5`
+  - State labels in the output prompt should reflect reality: "merged <date>" vs "to be merged from PR #NNN".
+  - If multiple PRs match the branch, or no head match exists, run **Q0** (below) to disambiguate. Never silently grab "latest merged PR in repo".
+  - If neither a PR nor a usable branch exists, fall back to `BASE=$(git merge-base main HEAD)` + `git log "$BASE..HEAD" --oneline` and skip PR-specific fields.
 - Once the PR is identified, capture `PR_NUM`, `PR_URL`, `PR_TITLE`, `MERGED_AT`, `HEAD_OID`.
 - Commit list: pull from the PR directly so the range is stable even if `main` has advanced —
   - `gh pr view "$PR_NUM" --repo "$REPO" --json commits -q '.commits[] | "\(.oid[0:7]) \(.messageHeadline)"'`
@@ -44,6 +43,11 @@ If the user wants a broader sweep, you may *additionally* run `gh issue list --r
 ### 2. Ask the user (AskUserQuestion)
 
 Branch later questions on earlier answers.
+
+**Q0 — Which PR / branch is this handoff about?** *(only if step 1 found 0 or >1 candidates)*
+- One option per auto-detected candidate (label: `#NNN <state> — <title>`), top 3 by `mergedAt`/createdAt proximity to `HEAD`'s commit date.
+- "Other" — free-text PR number or branch name.
+Skip Q0 if step 1 found exactly one PR.
 
 **Q1 — Was this work spec-driven?**
 - "Yes — driven by a wiki spec/plan/task" → unlocks "What differed from the plan" (Q4).
@@ -79,7 +83,7 @@ Print the assembled prompt to the user as a fenced block they can copy. Do not i
 Fill bracketed placeholders from auto-pull + answers. Drop sections that don't apply. Keep it terse — second-person, real shas/paths/issue links, no filler.
 
 ```
-Update the wiki for [PR #NNN — <title>] (<url>), merged <date> from `<branch>`.
+Update the wiki for [PR #NNN — <title>] (<url>), [merged <date> | to be merged] from `<branch>`.
 
 Source material:
 - PR: <url>
@@ -103,12 +107,12 @@ Considered-and-rejected / deferred decisions worth recording:
 Audit gaps to triage (don't fix):
 - <Q5 bullet>
 
-Also update the corresponding holophyte kanban task(s) via the `mcp__holophyte__*` tools, scoped to the authority below. Find the task by searching for the PR title or branch name; update status, description, or sub-tasks as the shipped work warrants.
+Also update the corresponding holophyte kanban task(s) via the `mcp__holophyte__*` tools, scoped to the authority below. Use `mcp__holophyte__holophyte_list_tasks` and grep titles for the PR title / branch slug. For shipped work, archive the task with a one-line shipped note (the Done column is intentionally empty — completed work is archived directly). For ongoing scope that the PR only partially advanced, update the description or sub-tasks instead.
 
 Authority: <Q2 verbatim>.
 
 Guardrails:
-- Don't edit shipped task pages.
+- Don't rewrite history of already-shipped specs; append a "shipped" note instead.
 - Don't file new GitHub issues unless the authority above explicitly allows it.
 ```
 
@@ -122,3 +126,60 @@ Guardrails:
 ## Style
 
 The skill itself is a guided question flow. The *output* prompt is read cold by an agent in a different repo, so it must be self-contained: real PR numbers, real shas, real issue URLs, real file paths. No placeholders, no "TBD", no filler.
+
+## Example
+
+Run on branch `feat/codex-events-renderer` after merging PR #279.
+
+### Auto-pulled context
+
+- PR: #279 — "feat: render Codex events + isThinking signal" — https://github.com/holophyte/holophyte/pull/279, merged 2026-05-08, head `feat/codex-events-renderer`
+- Commits:
+  - `a1b2c3d` feat: branch sdkToUIMessages on codex.* events
+  - `e4f5a6b` feat: derive isThinking from turn/started + turn/completed
+  - `7c8d9e0` fix: drop tool-ordering reorder, keep in-place at item/started
+  - `1f2a3b4` defer: split-state for codex idle vs running → #280
+  - `5d6e7f8` chore: camelCase event normalization table
+- Files changed: `src/frontend/lib/sdkToUIMessages.ts`, `src/frontend/hooks/useHolophyteChat.ts`, `wiki-pointers/codex-integration-spec.md`
+- Issues referenced in commits/PR body: #280 (split-state follow-up, open)
+
+### User answers
+
+- **Q1** Spec-driven? → Yes (driven by Codex Integration Phase 0 spec, Task 7)
+- **Q2** Authority → "Apply edits + filing new GH issues is OK"
+- **Q3a** Referenced issues to link → [x] #280 — Codex split-state follow-up
+- **Q3b** Decisions to record → [x] `7c8d9e0` drop tool-ordering reorder; [x] `1f2a3b4` defer split-state → #280
+- **Q4** What differed from the plan? → "Real root cause was in `useSession.ts` (persisted-batch flatten dropped the `codex.<method>` wrapper), not the renderer. PR #277's hypothesis was file-wrong; Task 7's spec scope was incomplete."
+- **Q5** Audit gaps → None
+
+### Rendered output
+
+```
+Update the wiki for PR #279 — feat: render Codex events + isThinking signal (https://github.com/holophyte/holophyte/pull/279), merged 2026-05-08 from `feat/codex-events-renderer`.
+
+Source material:
+- PR: https://github.com/holophyte/holophyte/pull/279
+- Commits: a1b2c3d feat: branch sdkToUIMessages on codex.* events; e4f5a6b feat: derive isThinking from turn/started + turn/completed; 7c8d9e0 fix: drop tool-ordering reorder; 1f2a3b4 defer: split-state for codex idle vs running → #280; 5d6e7f8 chore: camelCase event normalization table
+- Files changed: src/frontend/lib/sdkToUIMessages.ts; src/frontend/hooks/useHolophyteChat.ts; wiki-pointers/codex-integration-spec.md
+
+What differed from the plan:
+- Real root cause was in src/frontend/hooks/useSession.ts (persisted-batch flatten dropped the codex.<method> wrapper), not the renderer. PR #277's file-scope hypothesis was wrong; Task 7's spec scope was incomplete.
+
+Follow-up issues referenced from this branch:
+- #280 Codex split-state follow-up — https://github.com/holophyte/holophyte/issues/280
+  Decide where this fits — own task, sub-task, or existing phase — and link the issue.
+
+Considered-and-rejected / deferred decisions worth recording:
+- 7c8d9e0 drop tool-ordering reorder — in-place at item/started is better UX; reorder rejected.
+- 1f2a3b4 defer split-state for codex idle vs running — deferred to #280; Phase 0 ships with FE-derived isThinking only.
+
+Also update the corresponding holophyte kanban task(s) via the `mcp__holophyte__*` tools, scoped to the authority below. Use `mcp__holophyte__holophyte_list_tasks` and grep titles for the PR title / branch slug. For shipped work, archive the task with a one-line shipped note (the Done column is intentionally empty — completed work is archived directly). For ongoing scope that the PR only partially advanced, update the description or sub-tasks instead.
+
+Authority: Apply edits + filing new GH issues is OK.
+
+Guardrails:
+- Don't rewrite history of already-shipped specs; append a "shipped" note instead.
+- Don't file new GitHub issues unless the authority above explicitly allows it.
+```
+
+This example exercises every conditional section (spec-driven, Q3a issues, Q3b decisions; Q5 omitted). Use it as a shape check when tweaking the template.
