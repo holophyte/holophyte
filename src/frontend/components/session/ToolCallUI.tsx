@@ -26,6 +26,119 @@ interface ToolCallUIProps {
 
 const BASH_TOOLS = new Set(['Bash']);
 
+interface CodexApprovalMarker {
+  tool: string;
+  input: Record<string, unknown>;
+}
+
+/**
+ * Pull the Codex approval marker off a `dynamic-tool` part if present.
+ * Bridge-routed Codex approvals carry `approval.codex = { tool, input }`
+ * (see `sdkToUIMessages.ts`). Returns `null` for SDK / non-Codex parts.
+ */
+function getCodexApproval(part: DynamicToolUIPart): CodexApprovalMarker | null {
+  if (
+    part.state !== 'approval-requested' &&
+    part.state !== 'approval-responded' &&
+    part.state !== 'output-denied'
+  ) {
+    return null;
+  }
+  const approval = (part as { approval?: unknown }).approval;
+  if (!approval || typeof approval !== 'object') return null;
+  const codex = (approval as { codex?: unknown }).codex;
+  if (!codex || typeof codex !== 'object') return null;
+  const c = codex as { tool?: unknown; input?: unknown };
+  if (typeof c.tool !== 'string') return null;
+  return {
+    tool: c.tool,
+    input: (c.input ?? {}) as Record<string, unknown>,
+  };
+}
+
+/**
+ * Phase 0 Codex approval copy. The companion bridges only two methods:
+ * `item/commandExecution/requestApproval` and `item/fileChange/requestApproval`.
+ * Title is plain text — path is rendered as inline code in the body when
+ * applicable, not embedded in the header.
+ */
+function codexApprovalTitle(marker: CodexApprovalMarker): string {
+  switch (marker.tool) {
+    case 'codex.item/commandExecution/requestApproval':
+      return 'Run shell command?';
+    case 'codex.item/fileChange/requestApproval': {
+      const path = firstFileChangePath(marker.input);
+      return path ? `Write to file?` : 'Write to files?';
+    }
+    default:
+      return 'Approve Codex action?';
+  }
+}
+
+function firstFileChangePath(
+  input: Record<string, unknown>,
+): string | undefined {
+  // Codex `item/fileChange/requestApproval` carries the request payload —
+  // shape varies by Codex version. Probe a few common keys defensively.
+  const changes = (input.changes ?? input.files) as unknown;
+  if (Array.isArray(changes) && changes.length > 0) {
+    const first = changes[0] as Record<string, unknown> | undefined;
+    if (first && typeof first === 'object') {
+      const path = first.path ?? first.file;
+      if (typeof path === 'string') return path;
+    }
+  }
+  if (typeof input.path === 'string') return input.path;
+  return undefined;
+}
+
+function fileChangeCount(input: Record<string, unknown>): number {
+  const changes = (input.changes ?? input.files) as unknown;
+  if (Array.isArray(changes)) return changes.length;
+  return 0;
+}
+
+/**
+ * Phase 0 Codex approval preview. Command approvals render the proposed
+ * shell command in a terminal-styled block; file-change approvals render
+ * the path(s) inline. Diff / syntax-highlight previews are deferred to
+ * Phase 0.1.
+ */
+function CodexApprovalPreview({ marker }: { marker: CodexApprovalMarker }) {
+  if (marker.tool === 'codex.item/commandExecution/requestApproval') {
+    const command = String(marker.input.command ?? '');
+    const cwd =
+      typeof marker.input.cwd === 'string' ? marker.input.cwd : undefined;
+    return (
+      <div className="px-4 pb-2">
+        {command && <Terminal output={command} />}
+        {cwd && (
+          <p className="mt-1.5 text-xs text-muted-foreground">
+            in <code className="font-mono">{cwd}</code>
+          </p>
+        )}
+      </div>
+    );
+  }
+  if (marker.tool === 'codex.item/fileChange/requestApproval') {
+    const path = firstFileChangePath(marker.input);
+    const count = fileChangeCount(marker.input);
+    return (
+      <div className="px-4 pb-2 text-xs text-muted-foreground">
+        {path ? (
+          <span>
+            <code className="font-mono">{path}</code>
+            {count > 1 && <span> and {count - 1} more</span>}
+          </span>
+        ) : (
+          <span>{count > 0 ? `${count} files` : 'unknown path'}</span>
+        )}
+      </div>
+    );
+  }
+  return null;
+}
+
 export default function ToolCallUI({ part }: ToolCallUIProps) {
   const { approve, deny } = useSessionActions();
   const [denyMode, setDenyMode] = useState(false);
@@ -44,10 +157,10 @@ export default function ToolCallUI({ part }: ToolCallUIProps) {
     if (isApprovalRequested) setOpen(true);
   }, [isApprovalRequested]);
 
-  const titleSummary = toolSummary(
-    part.toolName,
-    part.input as Record<string, unknown>,
-  );
+  const codexMarker = getCodexApproval(part);
+  const titleSummary = codexMarker
+    ? codexApprovalTitle(codexMarker)
+    : toolSummary(part.toolName, part.input as Record<string, unknown>);
 
   const handleApprove = () => {
     approve(part.toolCallId);
@@ -95,7 +208,11 @@ export default function ToolCallUI({ part }: ToolCallUIProps) {
         title={titleSummary || part.toolName}
       />
       <ToolContent>
-        <ToolInput input={part.input} />
+        {codexMarker ? (
+          <CodexApprovalPreview marker={codexMarker} />
+        ) : (
+          <ToolInput input={part.input} />
+        )}
         {renderOutput()}
 
         {/* Approval UI — rendered inline within the tool content */}
