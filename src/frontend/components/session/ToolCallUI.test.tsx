@@ -404,6 +404,99 @@ describe('ToolCallUI', () => {
     });
   });
 
+  describe('Codex approval markers', () => {
+    it('renders "Run shell command?" header for commandExecution approvals', () => {
+      const part = makePart({
+        toolName: 'Bash',
+        toolCallId: 'cmd-1',
+        state: 'approval-requested',
+        input: { command: 'ls' },
+        approval: {
+          id: 'cmd-1',
+          codex: {
+            tool: 'codex.item/commandExecution/requestApproval',
+            input: { command: 'ls -la', cwd: '/tmp' },
+          },
+        },
+      } as unknown as DynamicToolUIPart);
+      render(<ToolCallUI part={part} />, { wrapper: withSessionActions() });
+      expect(screen.getByTestId('collapsible-trigger').textContent).toContain(
+        'Run shell command?',
+      );
+      // Command preview comes from the approval payload (input.command),
+      // not the placeholder tool input.
+      expect(screen.getByTestId('terminal').textContent).toContain('ls -la');
+    });
+
+    it('renders "Write to file?" header and shows path for fileChange approvals', () => {
+      const part = makePart({
+        toolName: 'Edit',
+        toolCallId: 'fc-1',
+        state: 'approval-requested',
+        input: {},
+        approval: {
+          id: 'fc-1',
+          codex: {
+            tool: 'codex.item/fileChange/requestApproval',
+            input: { changes: [{ path: '/tmp/x.ts' }] },
+          },
+        },
+      } as unknown as DynamicToolUIPart);
+      render(<ToolCallUI part={part} />, { wrapper: withSessionActions() });
+      expect(screen.getByTestId('collapsible-trigger').textContent).toContain(
+        'Write to file?',
+      );
+      expect(screen.getByText('/tmp/x.ts')).toBeInTheDocument();
+    });
+
+    it('renders "+N more" suffix when fileChange approval lists multiple paths', () => {
+      const part = makePart({
+        toolName: 'Edit',
+        toolCallId: 'fc-multi',
+        state: 'approval-requested',
+        input: {},
+        approval: {
+          id: 'fc-multi',
+          codex: {
+            tool: 'codex.item/fileChange/requestApproval',
+            input: {
+              changes: [
+                { path: '/tmp/a.ts' },
+                { path: '/tmp/b.ts' },
+                { path: '/tmp/c.ts' },
+              ],
+            },
+          },
+        },
+      } as unknown as DynamicToolUIPart);
+      render(<ToolCallUI part={part} />, { wrapper: withSessionActions() });
+      expect(screen.getByText('/tmp/a.ts')).toBeInTheDocument();
+      expect(screen.getByText(/and 2 more/)).toBeInTheDocument();
+    });
+
+    it('routes Approve click through approve(toolCallId) for codex parts', async () => {
+      const approve = vi.fn();
+      const part = makePart({
+        toolName: 'Bash',
+        toolCallId: 'cmd-route',
+        state: 'approval-requested',
+        input: {},
+        approval: {
+          id: 'cmd-route',
+          codex: {
+            tool: 'codex.item/commandExecution/requestApproval',
+            input: { command: 'ls' },
+          },
+        },
+      } as unknown as DynamicToolUIPart);
+      render(<ToolCallUI part={part} />, {
+        wrapper: withSessionActions(approve),
+      });
+      await userEvent.click(screen.getByRole('button', { name: /approve/i }));
+      expect(approve).toHaveBeenCalledWith('cmd-route');
+    });
+  });
+
   describe('state: output-denied', () => {
     it('does not show approval buttons for output-denied state', () => {
       const part = makePart({

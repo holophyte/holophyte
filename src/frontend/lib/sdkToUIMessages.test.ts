@@ -827,6 +827,114 @@ describe('sdkToUIMessages — Codex tool items', () => {
     expect(() => sdkToUIMessages(events, false, noPending)).not.toThrow();
   });
 
+  it('flips a commandExecution tool message to approval-requested when a matching Codex pendingApproval is unresolved', () => {
+    const events: SDKMessage[] = [
+      makeCodexEvent('item/started', {
+        item: {
+          type: 'commandExecution',
+          id: 'cmd-approve',
+          command: 'rm -rf /',
+          cwd: '/tmp',
+          status: 'inProgress',
+        },
+      }),
+    ];
+    const pending: PendingApproval[] = [
+      {
+        requestId: 'cmd-approve',
+        tool: 'codex.item/commandExecution/requestApproval',
+        input: { command: 'rm -rf /', cwd: '/tmp' },
+        resolved: undefined,
+      },
+    ];
+    const result = sdkToUIMessages(events, true, pending);
+    expect(result).toHaveLength(1);
+    const part = result[0]?.parts[0] as Record<string, unknown>;
+    expect(part.state).toBe('approval-requested');
+    expect(part.toolCallId).toBe('cmd-approve');
+    const approval = part.approval as {
+      id: string;
+      codex: { tool: string; input: { command: string } };
+    };
+    expect(approval.id).toBe('cmd-approve');
+    expect(approval.codex.tool).toBe(
+      'codex.item/commandExecution/requestApproval',
+    );
+    expect(approval.codex.input.command).toBe('rm -rf /');
+  });
+
+  it('flips an approved fileChange to approval-responded with codex marker', () => {
+    const events: SDKMessage[] = [
+      makeCodexEvent('item/started', {
+        item: {
+          type: 'fileChange',
+          id: 'fc-approve',
+          status: 'inProgress',
+          changes: [{ path: '/tmp/x.ts', kind: 'add', diff: '...' }],
+        },
+      }),
+    ];
+    const pending: PendingApproval[] = [
+      {
+        requestId: 'fc-approve',
+        tool: 'codex.item/fileChange/requestApproval',
+        input: { changes: [{ path: '/tmp/x.ts' }] },
+        resolved: { approved: true },
+      },
+    ];
+    const result = sdkToUIMessages(events, false, pending);
+    const part = result[0]?.parts[0] as Record<string, unknown>;
+    expect(part.state).toBe('approval-responded');
+    const approval = part.approval as { approved: boolean; codex: unknown };
+    expect(approval.approved).toBe(true);
+    expect(approval.codex).toBeDefined();
+  });
+
+  it('flips a denied commandExecution to output-denied with codex marker', () => {
+    const events: SDKMessage[] = [
+      makeCodexEvent('item/started', {
+        item: {
+          type: 'commandExecution',
+          id: 'cmd-deny',
+          command: 'ls',
+          cwd: '/tmp',
+          status: 'inProgress',
+        },
+      }),
+    ];
+    const pending: PendingApproval[] = [
+      {
+        requestId: 'cmd-deny',
+        tool: 'codex.item/commandExecution/requestApproval',
+        input: { command: 'ls' },
+        resolved: { approved: false },
+      },
+    ];
+    const result = sdkToUIMessages(events, false, pending);
+    const part = result[0]?.parts[0] as Record<string, unknown>;
+    expect(part.state).toBe('output-denied');
+    const approval = part.approval as { approved: boolean; codex: unknown };
+    expect(approval.approved).toBe(false);
+    expect(approval.codex).toBeDefined();
+  });
+
+  it('synthesizes a placeholder tool message when the approval arrives before item/started', () => {
+    const pending: PendingApproval[] = [
+      {
+        requestId: 'cmd-orphan',
+        tool: 'codex.item/commandExecution/requestApproval',
+        input: { command: 'echo hi' },
+        resolved: undefined,
+      },
+    ];
+    const result = sdkToUIMessages([], false, pending);
+    expect(result).toHaveLength(1);
+    expect(result[0]?.id).toBe('codex-cmd-orphan');
+    const part = result[0]?.parts[0] as Record<string, unknown>;
+    expect(part.state).toBe('approval-requested');
+    expect(part.toolName).toBe('Bash');
+  });
+
   it('mixes Codex and Claude events without interfering', () => {
     const events: SDKMessage[] = [
       makeAssistantEvent([{ type: 'text', text: 'Claude here' }], 'claude-1'),
