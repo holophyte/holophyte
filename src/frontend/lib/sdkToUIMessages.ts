@@ -401,6 +401,19 @@ export function sdkToUIMessages(
     // biome-ignore lint/suspicious/noExplicitAny: parts union is complex
     const newParts = (msg.parts as any[]).map((p) => {
       if (p.type !== 'dynamic-tool') return p;
+      // Skip parts that already reached a terminal output state. Once Codex
+      // emits `item/completed` with output / error / declined, that result
+      // is the source of truth — overlaying a stale `approval-responded`
+      // would hide the actual command output indefinitely (the resolved
+      // approval row stays in `pendingApprovals` for the life of the
+      // session).
+      if (
+        p.state === 'output-available' ||
+        p.state === 'output-error' ||
+        p.state === 'output-denied'
+      ) {
+        return p;
+      }
       const codexMarker = { tool: approval.tool, input: approval.input };
       if (!approval.resolved) {
         return {

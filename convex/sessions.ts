@@ -149,6 +149,15 @@ export const create = mutation({
     const { membership } = await requireOrgMembership(ctx, repo.orgId);
     requireRole(membership, 'member');
     const now = Date.now();
+    // Codex sessions require a permissionMode at the companion layer
+    // (companion no longer applies a fallback as of Task 8). Until the
+    // launch UI surfaces a permissionMode picker, default to 'default' so
+    // approvals route through the bridge + UI shipped with Tasks 5/7/8.
+    // Claude sessions still allow undefined — the Claude manager tolerates
+    // it via its own 'safe-auto' default.
+    const permissionMode =
+      args.permissionMode ??
+      (args.provider === 'codex' ? 'default' : undefined);
     return await ctx.db.insert('sessions', {
       taskId: args.taskId,
       orgId: repo.orgId,
@@ -158,7 +167,7 @@ export const create = mutation({
       queuedPrompt: args.prompt,
       queuedReasoningEffort: args.reasoningEffort,
       model: args.model,
-      permissionMode: args.permissionMode,
+      permissionMode,
       provider: args.provider,
     });
   },

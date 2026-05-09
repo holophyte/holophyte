@@ -918,6 +918,46 @@ describe('sdkToUIMessages — Codex tool items', () => {
     expect(approval.codex).toBeDefined();
   });
 
+  it('preserves item/completed output when the approval row is later resolved-approved', () => {
+    // After Codex emits item/completed with output, the resolved approval
+    // row stays in pendingApprovals for the session lifetime. The overlay
+    // must not clobber the terminal output state.
+    const events: SDKMessage[] = [
+      makeCodexEvent('item/started', {
+        item: {
+          type: 'commandExecution',
+          id: 'cmd-done',
+          command: 'echo hi',
+          cwd: '/tmp',
+          status: 'inProgress',
+        },
+      }),
+      makeCodexEvent('item/completed', {
+        item: {
+          type: 'commandExecution',
+          id: 'cmd-done',
+          command: 'echo hi',
+          cwd: '/tmp',
+          status: 'completed',
+          aggregatedOutput: 'hi\n',
+          exitCode: 0,
+        },
+      }),
+    ];
+    const pending: PendingApproval[] = [
+      {
+        requestId: 'cmd-done',
+        tool: 'codex.item/commandExecution/requestApproval',
+        input: { command: 'echo hi' },
+        resolved: { approved: true },
+      },
+    ];
+    const result = sdkToUIMessages(events, false, pending);
+    const part = result[0]?.parts[0] as Record<string, unknown>;
+    expect(part.state).toBe('output-available');
+    expect(part.output).toBe('hi\n');
+  });
+
   it('synthesizes a placeholder tool message when the approval arrives before item/started', () => {
     const pending: PendingApproval[] = [
       {
