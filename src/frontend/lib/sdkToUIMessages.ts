@@ -80,8 +80,14 @@ type DynamicToolUIPart =
  * @param events - Accumulated SDK events from `useSession`.
  * @param isRunning - When `true`, the last assistant message is marked as
  *   streaming (text parts get `state: 'streaming'`); otherwise `'done'`.
- * @param pendingApprovals - Unresolved approval requests annotate tool parts
- *   with `approval-requested` state.
+ * @param pendingApprovals - Approval requests from the Convex
+ *   `pendingApprovals` table. Rows whose `tool` name matches an SDK
+ *   `tool_use_id` flip the corresponding part to `approval-requested`
+ *   (or `approval-responded` / `output-denied` once resolved). Rows
+ *   whose `tool` is prefixed `codex.` are bridged from the Codex
+ *   approval handler — the renderer overlays them onto the matching
+ *   Codex tool message keyed by `codex-${itemId}` and stamps an
+ *   `approval.codex` marker so the consuming UI can render Codex copy.
  */
 export function sdkToUIMessages(
   events: SDKMessage[],

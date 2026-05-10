@@ -26,6 +26,13 @@ interface ToolCallUIProps {
 
 const BASH_TOOLS = new Set(['Bash']);
 
+/**
+ * Codex-side approval metadata threaded onto a `dynamic-tool` part by
+ * `sdkToUIMessages`. `tool` is the Codex method (e.g.
+ * `'codex.item/commandExecution/requestApproval'`); `input` is the
+ * request's `rawParams` payload (shape varies by method and by Codex
+ * version, hence the `Record<string, unknown>`).
+ */
 interface CodexApprovalMarker {
   tool: string;
   input: Record<string, unknown>;
@@ -75,11 +82,16 @@ function codexApprovalTitle(marker: CodexApprovalMarker): string {
   }
 }
 
+/**
+ * Pulls the first changed path out of an `item/fileChange/requestApproval`
+ * payload. The Codex protocol's request shape isn't tightly versioned —
+ * `changes`, `files`, and a top-level `path` have all surfaced — so probe
+ * each common key. Returns `undefined` when the shape is unrecognised, so
+ * callers can fall back to a path-less label.
+ */
 function firstFileChangePath(
   input: Record<string, unknown>,
 ): string | undefined {
-  // Codex `item/fileChange/requestApproval` carries the request payload —
-  // shape varies by Codex version. Probe a few common keys defensively.
   const changes = (input.changes ?? input.files) as unknown;
   if (Array.isArray(changes) && changes.length > 0) {
     const first = changes[0] as Record<string, unknown> | undefined;
@@ -92,6 +104,11 @@ function firstFileChangePath(
   return undefined;
 }
 
+/**
+ * Counts entries in an `item/fileChange/requestApproval` payload. Returns
+ * `0` when the shape is unrecognised — used by the title to pick singular
+ * vs. plural copy and by the body to render an "and N more" suffix.
+ */
 function fileChangeCount(input: Record<string, unknown>): number {
   const changes = (input.changes ?? input.files) as unknown;
   if (Array.isArray(changes)) return changes.length;
@@ -139,6 +156,16 @@ function CodexApprovalPreview({ marker }: { marker: CodexApprovalMarker }) {
   return null;
 }
 
+/**
+ * Renders a single `dynamic-tool` UIMessage part — Claude SDK tool calls
+ * (`Bash`, `Edit`, etc.) and Codex tool items (`commandExecution`,
+ * `fileChange`, `mcpToolCall`, ...) share this surface. Branches on
+ * `part.state` to render input only / streaming output / final output /
+ * error / approval prompt. Codex approvals are detected via the
+ * `approval.codex` marker (see {@link CodexApprovalMarker}); the title
+ * and preview swap to Codex copy while the Approve / Deny buttons keep
+ * the same shape.
+ */
 export default function ToolCallUI({ part }: ToolCallUIProps) {
   const { approve, deny } = useSessionActions();
   const [denyMode, setDenyMode] = useState(false);
