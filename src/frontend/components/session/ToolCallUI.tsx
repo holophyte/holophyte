@@ -67,8 +67,8 @@ function codexApprovalTitle(marker: CodexApprovalMarker): string {
     case 'codex.item/commandExecution/requestApproval':
       return 'Run shell command?';
     case 'codex.item/fileChange/requestApproval': {
-      const path = firstFileChangePath(marker.input);
-      return path ? `Write to file?` : 'Write to files?';
+      const count = fileChangeCount(marker.input);
+      return count > 1 ? 'Write to files?' : 'Write to file?';
     }
     default:
       return 'Approve Codex action?';

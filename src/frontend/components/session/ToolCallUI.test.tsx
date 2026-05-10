@@ -449,6 +449,28 @@ describe('ToolCallUI', () => {
       expect(screen.getByText('/tmp/x.ts')).toBeInTheDocument();
     });
 
+    it('uses plural "Write to files?" header when multiple paths', () => {
+      const part = makePart({
+        toolName: 'Edit',
+        toolCallId: 'fc-plural',
+        state: 'approval-requested',
+        input: {},
+        approval: {
+          id: 'fc-plural',
+          codex: {
+            tool: 'codex.item/fileChange/requestApproval',
+            input: {
+              changes: [{ path: '/tmp/a.ts' }, { path: '/tmp/b.ts' }],
+            },
+          },
+        },
+      } as unknown as DynamicToolUIPart);
+      render(<ToolCallUI part={part} />, { wrapper: withSessionActions() });
+      expect(screen.getByTestId('collapsible-trigger').textContent).toContain(
+        'Write to files?',
+      );
+    });
+
     it('renders "+N more" suffix when fileChange approval lists multiple paths', () => {
       const part = makePart({
         toolName: 'Edit',
