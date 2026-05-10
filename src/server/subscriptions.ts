@@ -58,15 +58,16 @@ async function handleQueuedSession(session: QueuedSession): Promise<void> {
     if (!claimed.ok) return;
 
     // Claude sessions tolerate a missing permissionMode and fall back to
-    // 'safe-auto'. Codex sessions must carry an explicit mode set by the
-    // picker (Task 6); a null mode flows through unchanged and Codex's
-    // `startSession` rejects it via `Invalid permissionMode`. The earlier
-    // `'bypass'` fallback was a Task 5 holdover from when Codex had no
-    // approval UI — Tasks 7 + 8 surfaced approvals, so the fallback is
-    // gone.
-    const permissionMode: PermissionMode | undefined =
+    // 'safe-auto'. Codex sessions are stamped with a default ('bypass')
+    // by `sessions.create` post-Task-8, so freshly-queued rows always
+    // carry a value. The `'bypass'` coalesce here is a migration shim
+    // for queued Codex rows created before Task 8 deployed (queued rows
+    // can outlive a deploy). Drop once the in-flight queue is known
+    // empty, e.g. once a Phase 0.1 picker ships and supersedes this
+    // path.
+    const permissionMode: PermissionMode =
       (session.permissionMode as PermissionMode | undefined) ??
-      (provider === 'codex' ? undefined : 'safe-auto');
+      (provider === 'codex' ? 'bypass' : 'safe-auto');
 
     // Note: any stop request that arrived while claiming was deferred by
     // handleStoppedSession (it skips sessions with in-flight claims). It will

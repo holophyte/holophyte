@@ -533,7 +533,7 @@ export async function startSession(opts: {
   repoPath: string;
   prompt: string;
   model?: string;
-  permissionMode?: PermissionMode;
+  permissionMode: PermissionMode;
   reasoningEffort?: string;
   resumeProviderSessionId?: string;
 }): Promise<{ sessionId: string; warning?: string }> {

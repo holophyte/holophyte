@@ -69,12 +69,13 @@ describe('sessions.create', () => {
     expect(session?.permissionMode).toBe('bypass');
   });
 
-  it("defaults Codex sessions without permissionMode to 'default'", async () => {
-    // Task 8 dropped the companion-side fallback ('bypass' for Codex). The
-    // mutation now stamps 'default' for Codex sessions launched without an
-    // explicit mode, so approvals route through the bridge + UI shipped
-    // alongside this task. Claude sessions still allow undefined — the
-    // Claude manager has its own 'safe-auto' default.
+  it("defaults Codex sessions without permissionMode to 'bypass'", async () => {
+    // Task 8 dropped the companion-side fallback for Codex. The mutation
+    // stamps 'bypass' for Codex sessions launched without an explicit mode
+    // — Phase 0 only renders 2 of 7 Codex approval methods, so a stricter
+    // default would silently auto-deny common operations. Claude sessions
+    // still allow undefined — the Claude manager has its own 'safe-auto'
+    // default.
     const t = convexTest(schema);
     const { authed, taskId } = await setupTaskEnv(t);
 
@@ -86,7 +87,7 @@ describe('sessions.create', () => {
       id: codexSessionId,
     });
     expect(codexSession?.provider).toBe('codex');
-    expect(codexSession?.permissionMode).toBe('default');
+    expect(codexSession?.permissionMode).toBe('bypass');
 
     const claudeSessionId = await authed.mutation(api.sessions.create, {
       taskId,
