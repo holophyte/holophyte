@@ -1,6 +1,14 @@
 'use client';
 
-import Ansi from 'ansi-to-react';
+// `ansi-to-react` is CJS; Bun's browser bundler can hand us the module
+// namespace object (with a `.default` property) instead of the component
+// function depending on HMR state. Coerce both shapes to the same function so
+// React.createElement always gets a component, not an object.
+import AnsiImport from 'ansi-to-react';
+
+const Ansi = ((AnsiImport as unknown as { default?: typeof AnsiImport })
+  .default ?? AnsiImport) as typeof AnsiImport;
+
 import { CheckIcon, CopyIcon, TerminalIcon, Trash2Icon } from 'lucide-react';
 import type { ComponentProps, HTMLAttributes } from 'react';
 import {
