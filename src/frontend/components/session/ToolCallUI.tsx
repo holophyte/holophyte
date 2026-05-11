@@ -69,12 +69,15 @@ function getCodexApproval(part: DynamicToolUIPart): CodexApprovalMarker | null {
  * Title is plain text — path is rendered as inline code in the body when
  * applicable, not embedded in the header.
  */
-function codexApprovalTitle(marker: CodexApprovalMarker): string {
+function codexApprovalTitle(
+  marker: CodexApprovalMarker,
+  partInput: Record<string, unknown>,
+): string {
   switch (marker.tool) {
     case 'codex.item/commandExecution/requestApproval':
       return 'Run shell command?';
     case 'codex.item/fileChange/requestApproval': {
-      const count = fileChangeCount(marker.input);
+      const count = fileChangeCount(partInput);
       return count > 1 ? 'Write to files?' : 'Write to file?';
     }
     default:
@@ -121,11 +124,19 @@ function fileChangeCount(input: Record<string, unknown>): number {
  * the path(s) inline. Diff / syntax-highlight previews are deferred to
  * Phase 0.1.
  */
-function CodexApprovalPreview({ marker }: { marker: CodexApprovalMarker }) {
+function CodexApprovalPreview({
+  marker,
+  partInput,
+}: {
+  marker: CodexApprovalMarker;
+  partInput: Record<string, unknown>;
+}) {
   if (marker.tool === 'codex.item/commandExecution/requestApproval') {
-    const command = String(marker.input.command ?? '');
-    const cwd =
-      typeof marker.input.cwd === 'string' ? marker.input.cwd : undefined;
+    // Command/cwd come from the rendered tool item's input (set by
+    // `mapCodexToolItem` from `item/started`), not the approval params —
+    // `CommandExecutionRequestApprovalParams` only carries thread/turn/item ids.
+    const command = String(partInput.command ?? '');
+    const cwd = typeof partInput.cwd === 'string' ? partInput.cwd : undefined;
     return (
       <div className="px-4 pb-2">
         {command && <Terminal output={command} />}
@@ -138,8 +149,8 @@ function CodexApprovalPreview({ marker }: { marker: CodexApprovalMarker }) {
     );
   }
   if (marker.tool === 'codex.item/fileChange/requestApproval') {
-    const path = firstFileChangePath(marker.input);
-    const count = fileChangeCount(marker.input);
+    const path = firstFileChangePath(partInput);
+    const count = fileChangeCount(partInput);
     return (
       <div className="px-4 pb-2 text-xs text-muted-foreground">
         {path ? (
@@ -185,9 +196,10 @@ export default function ToolCallUI({ part }: ToolCallUIProps) {
   }, [isApprovalRequested]);
 
   const codexMarker = getCodexApproval(part);
+  const partInput = (part.input ?? {}) as Record<string, unknown>;
   const titleSummary = codexMarker
-    ? codexApprovalTitle(codexMarker)
-    : toolSummary(part.toolName, part.input as Record<string, unknown>);
+    ? codexApprovalTitle(codexMarker, partInput)
+    : toolSummary(part.toolName, partInput);
 
   const handleApprove = () => {
     approve(part.toolCallId);
@@ -236,7 +248,7 @@ export default function ToolCallUI({ part }: ToolCallUIProps) {
       />
       <ToolContent>
         {codexMarker ? (
-          <CodexApprovalPreview marker={codexMarker} />
+          <CodexApprovalPreview marker={codexMarker} partInput={partInput} />
         ) : (
           <ToolInput input={part.input} />
         )}

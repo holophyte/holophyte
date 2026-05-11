@@ -410,12 +410,12 @@ describe('ToolCallUI', () => {
         toolName: 'Bash',
         toolCallId: 'cmd-1',
         state: 'approval-requested',
-        input: { command: 'ls' },
+        input: { command: 'ls -la', cwd: '/tmp' },
         approval: {
           id: 'cmd-1',
           codex: {
             tool: 'codex.item/commandExecution/requestApproval',
-            input: { command: 'ls -la', cwd: '/tmp' },
+            input: {},
           },
         },
       } as unknown as DynamicToolUIPart);
@@ -423,8 +423,9 @@ describe('ToolCallUI', () => {
       expect(screen.getByTestId('collapsible-trigger').textContent).toContain(
         'Run shell command?',
       );
-      // Command preview comes from the approval payload (input.command),
-      // not the placeholder tool input.
+      // Command/cwd come from the tool part's `input` (set by
+      // `mapCodexToolItem` from `item/started`). The Codex approval
+      // `rawParams` itself only carries thread/turn/item ids.
       expect(screen.getByTestId('terminal').textContent).toContain('ls -la');
     });
 
@@ -433,12 +434,12 @@ describe('ToolCallUI', () => {
         toolName: 'Edit',
         toolCallId: 'fc-1',
         state: 'approval-requested',
-        input: {},
+        input: { changes: [{ path: '/tmp/x.ts' }] },
         approval: {
           id: 'fc-1',
           codex: {
             tool: 'codex.item/fileChange/requestApproval',
-            input: { changes: [{ path: '/tmp/x.ts' }] },
+            input: {},
           },
         },
       } as unknown as DynamicToolUIPart);
@@ -454,14 +455,14 @@ describe('ToolCallUI', () => {
         toolName: 'Edit',
         toolCallId: 'fc-plural',
         state: 'approval-requested',
-        input: {},
+        input: {
+          changes: [{ path: '/tmp/a.ts' }, { path: '/tmp/b.ts' }],
+        },
         approval: {
           id: 'fc-plural',
           codex: {
             tool: 'codex.item/fileChange/requestApproval',
-            input: {
-              changes: [{ path: '/tmp/a.ts' }, { path: '/tmp/b.ts' }],
-            },
+            input: {},
           },
         },
       } as unknown as DynamicToolUIPart);
@@ -476,18 +477,18 @@ describe('ToolCallUI', () => {
         toolName: 'Edit',
         toolCallId: 'fc-multi',
         state: 'approval-requested',
-        input: {},
+        input: {
+          changes: [
+            { path: '/tmp/a.ts' },
+            { path: '/tmp/b.ts' },
+            { path: '/tmp/c.ts' },
+          ],
+        },
         approval: {
           id: 'fc-multi',
           codex: {
             tool: 'codex.item/fileChange/requestApproval',
-            input: {
-              changes: [
-                { path: '/tmp/a.ts' },
-                { path: '/tmp/b.ts' },
-                { path: '/tmp/c.ts' },
-              ],
-            },
+            input: {},
           },
         },
       } as unknown as DynamicToolUIPart);
