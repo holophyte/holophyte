@@ -1,14 +1,5 @@
 'use client';
 
-// `ansi-to-react` is CJS; Bun's browser bundler can hand us the module
-// namespace object (with a `.default` property) instead of the component
-// function depending on HMR state. Coerce both shapes to the same function so
-// React.createElement always gets a component, not an object.
-import AnsiImport from 'ansi-to-react';
-
-const Ansi = ((AnsiImport as unknown as { default?: typeof AnsiImport })
-  .default ?? AnsiImport) as typeof AnsiImport;
-
 import { CheckIcon, CopyIcon, TerminalIcon, Trash2Icon } from 'lucide-react';
 import type { ComponentProps, HTMLAttributes } from 'react';
 import {
@@ -21,6 +12,11 @@ import {
   useState,
 } from 'react';
 import { Button } from '@/frontend/components/ui/Button';
+// CUSTOMIZED: imports the normalized `Ansi` from `@/frontend/lib/ansi`
+// instead of `ansi-to-react` directly to work around Bun's browser-bundle
+// CJS interop. If this file is regenerated via `bunx shadcn add terminal`,
+// reapply this import change. See `src/frontend/lib/ansi.ts` for context.
+import { Ansi } from '@/frontend/lib/ansi';
 import { cn } from '@/frontend/lib/utils';
 
 interface TerminalContextType {
