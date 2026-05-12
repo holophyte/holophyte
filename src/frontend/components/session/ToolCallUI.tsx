@@ -26,6 +26,157 @@ interface ToolCallUIProps {
 
 const BASH_TOOLS = new Set(['Bash']);
 
+/**
+ * Codex-side approval metadata threaded onto a `dynamic-tool` part by
+ * `sdkToUIMessages`. `tool` is the Codex method (e.g.
+ * `'codex.item/commandExecution/requestApproval'`); `input` is the
+ * request's `rawParams` payload (shape varies by method and by Codex
+ * version, hence the `Record<string, unknown>`).
+ */
+interface CodexApprovalMarker {
+  tool: string;
+  input: Record<string, unknown>;
+}
+
+/**
+ * Pull the Codex approval marker off a `dynamic-tool` part if present.
+ * Bridge-routed Codex approvals carry `approval.codex = { tool, input }`
+ * (see `sdkToUIMessages.ts`). Returns `null` for SDK / non-Codex parts.
+ */
+function getCodexApproval(part: DynamicToolUIPart): CodexApprovalMarker | null {
+  if (
+    part.state !== 'approval-requested' &&
+    part.state !== 'approval-responded' &&
+    part.state !== 'output-denied'
+  ) {
+    return null;
+  }
+  const approval = (part as { approval?: unknown }).approval;
+  if (!approval || typeof approval !== 'object') return null;
+  const codex = (approval as { codex?: unknown }).codex;
+  if (!codex || typeof codex !== 'object') return null;
+  const c = codex as { tool?: unknown; input?: unknown };
+  if (typeof c.tool !== 'string') return null;
+  return {
+    tool: c.tool,
+    input: (c.input ?? {}) as Record<string, unknown>,
+  };
+}
+
+/**
+ * Phase 0 Codex approval copy. The companion bridges only two methods:
+ * `item/commandExecution/requestApproval` and `item/fileChange/requestApproval`.
+ * Title is plain text — path is rendered as inline code in the body when
+ * applicable, not embedded in the header.
+ */
+function codexApprovalTitle(
+  marker: CodexApprovalMarker,
+  partInput: Record<string, unknown>,
+): string {
+  switch (marker.tool) {
+    case 'codex.item/commandExecution/requestApproval':
+      return 'Run shell command?';
+    case 'codex.item/fileChange/requestApproval': {
+      const count = fileChangeCount(partInput);
+      return count > 1 ? 'Write to files?' : 'Write to file?';
+    }
+    default:
+      return 'Approve Codex action?';
+  }
+}
+
+/**
+ * Pulls the first changed path out of an `item/fileChange/requestApproval`
+ * payload. The Codex protocol's request shape isn't tightly versioned —
+ * `changes`, `files`, and a top-level `path` have all surfaced — so probe
+ * each common key. Returns `undefined` when the shape is unrecognised, so
+ * callers can fall back to a path-less label.
+ */
+function firstFileChangePath(
+  input: Record<string, unknown>,
+): string | undefined {
+  const changes = (input.changes ?? input.files) as unknown;
+  if (Array.isArray(changes) && changes.length > 0) {
+    const first = changes[0] as Record<string, unknown> | undefined;
+    if (first && typeof first === 'object') {
+      const path = first.path ?? first.file;
+      if (typeof path === 'string') return path;
+    }
+  }
+  if (typeof input.path === 'string') return input.path;
+  return undefined;
+}
+
+/**
+ * Counts entries in an `item/fileChange/requestApproval` payload. Returns
+ * `0` when the shape is unrecognised — used by the title to pick singular
+ * vs. plural copy and by the body to render an "and N more" suffix.
+ */
+function fileChangeCount(input: Record<string, unknown>): number {
+  const changes = (input.changes ?? input.files) as unknown;
+  if (Array.isArray(changes)) return changes.length;
+  return 0;
+}
+
+/**
+ * Phase 0 Codex approval preview. Command approvals render the proposed
+ * shell command in a terminal-styled block; file-change approvals render
+ * the path(s) inline. Diff / syntax-highlight previews are deferred to
+ * Phase 0.1.
+ */
+function CodexApprovalPreview({
+  marker,
+  partInput,
+}: {
+  marker: CodexApprovalMarker;
+  partInput: Record<string, unknown>;
+}) {
+  if (marker.tool === 'codex.item/commandExecution/requestApproval') {
+    // Command/cwd come from the rendered tool item's input (set by
+    // `mapCodexToolItem` from `item/started`), not the approval params —
+    // `CommandExecutionRequestApprovalParams` only carries thread/turn/item ids.
+    const command = String(partInput.command ?? '');
+    const cwd = typeof partInput.cwd === 'string' ? partInput.cwd : undefined;
+    return (
+      <div className="px-4 pb-2">
+        {command && <Terminal output={command} />}
+        {cwd && (
+          <p className="mt-1.5 text-xs text-muted-foreground">
+            in <code className="font-mono">{cwd}</code>
+          </p>
+        )}
+      </div>
+    );
+  }
+  if (marker.tool === 'codex.item/fileChange/requestApproval') {
+    const path = firstFileChangePath(partInput);
+    const count = fileChangeCount(partInput);
+    return (
+      <div className="px-4 pb-2 text-xs text-muted-foreground">
+        {path ? (
+          <span>
+            <code className="font-mono">{path}</code>
+            {count > 1 && <span> and {count - 1} more</span>}
+          </span>
+        ) : (
+          <span>{count > 0 ? `${count} files` : 'unknown path'}</span>
+        )}
+      </div>
+    );
+  }
+  return null;
+}
+
+/**
+ * Renders a single `dynamic-tool` UIMessage part — Claude SDK tool calls
+ * (`Bash`, `Edit`, etc.) and Codex tool items (`commandExecution`,
+ * `fileChange`, `mcpToolCall`, ...) share this surface. Branches on
+ * `part.state` to render input only / streaming output / final output /
+ * error / approval prompt. Codex approvals are detected via the
+ * `approval.codex` marker (see {@link CodexApprovalMarker}); the title
+ * and preview swap to Codex copy while the Approve / Deny buttons keep
+ * the same shape.
+ */
 export default function ToolCallUI({ part }: ToolCallUIProps) {
   const { approve, deny } = useSessionActions();
   const [denyMode, setDenyMode] = useState(false);
@@ -44,10 +195,11 @@ export default function ToolCallUI({ part }: ToolCallUIProps) {
     if (isApprovalRequested) setOpen(true);
   }, [isApprovalRequested]);
 
-  const titleSummary = toolSummary(
-    part.toolName,
-    part.input as Record<string, unknown>,
-  );
+  const codexMarker = getCodexApproval(part);
+  const partInput = (part.input ?? {}) as Record<string, unknown>;
+  const titleSummary = codexMarker
+    ? codexApprovalTitle(codexMarker, partInput)
+    : toolSummary(part.toolName, partInput);
 
   const handleApprove = () => {
     approve(part.toolCallId);
@@ -95,7 +247,11 @@ export default function ToolCallUI({ part }: ToolCallUIProps) {
         title={titleSummary || part.toolName}
       />
       <ToolContent>
-        <ToolInput input={part.input} />
+        {codexMarker ? (
+          <CodexApprovalPreview marker={codexMarker} partInput={partInput} />
+        ) : (
+          <ToolInput input={part.input} />
+        )}
         {renderOutput()}
 
         {/* Approval UI — rendered inline within the tool content */}

@@ -39,6 +39,20 @@ const inFlightClaims = new Set<string>();
 const inFlightStops = new Set<string>();
 const inFlightMessages = new Set<string>();
 
+/**
+ * Claim a queued session out of Convex and hand it to the matching
+ * provider manager (`claude` or `codex`). Idempotent against a manager
+ * that already owns the session and against in-flight claims (the
+ * Convex subscription can fire multiple times before the claim mutation
+ * resolves). On `claim` failure the session is left for a future tick;
+ * on `startSession` failure the session is patched to `failed`.
+ *
+ * `permissionMode` is taken from the session row directly. New rows
+ * always carry a value (Codex defaults to `'bypass'` upstream in
+ * `sessions.create` — see Task 8). The `'bypass'` / `'safe-auto'`
+ * coalesce here is a migration shim for in-flight queued rows that
+ * pre-date Task 8 and can be removed once the queue has drained.
+ */
 async function handleQueuedSession(session: QueuedSession): Promise<void> {
   if (!session.queuedPrompt) return;
   if (findOwningManager(session._id)) return;
@@ -57,18 +71,17 @@ async function handleQueuedSession(session: QueuedSession): Promise<void> {
     });
     if (!claimed.ok) return;
 
-    // Phase 0 only routes the two `item/*` binary approval methods through
-    // the bridge; structured methods (user input, MCP elicitation,
-    // permissions) and top-level methods (applyPatch, execCommand) are
-    // denied upstream. For null-permissionMode Codex sessions the
-    // 'safe-auto' fallback would silently auto-deny those flows — a
-    // regression for sessions that previously ran fine under Phase 0's
-    // bypass-only Codex. Keep the Codex fallback on 'bypass' until Phase 0.1
-    // ships full structured-method coverage.
-    const fallback: PermissionMode =
-      provider === 'codex' ? 'bypass' : 'safe-auto';
-    const permissionMode =
-      (session.permissionMode as PermissionMode | undefined) ?? fallback;
+    // Claude sessions tolerate a missing permissionMode and fall back to
+    // 'safe-auto'. Codex sessions are stamped with a default ('bypass')
+    // by `sessions.create` post-Task-8, so freshly-queued rows always
+    // carry a value. The `'bypass'` coalesce here is a migration shim
+    // for queued Codex rows created before Task 8 deployed (queued rows
+    // can outlive a deploy). Drop once the in-flight queue is known
+    // empty, e.g. once a Phase 0.1 picker ships and supersedes this
+    // path.
+    const permissionMode: PermissionMode =
+      (session.permissionMode as PermissionMode | undefined) ??
+      (provider === 'codex' ? 'bypass' : 'safe-auto');
 
     // Note: any stop request that arrived while claiming was deferred by
     // handleStoppedSession (it skips sessions with in-flight claims). It will
