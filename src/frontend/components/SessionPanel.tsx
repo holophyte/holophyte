@@ -6,6 +6,7 @@ import { QUEUED_WARNING_THRESHOLD_MS } from '@/constants';
 import { useHolophyteChat } from '@/frontend/hooks/useHolophyteChat';
 import {
   type LaunchDefaults,
+  resolvePermissionModeFor,
   useLaunchDefaults,
 } from '@/frontend/hooks/useLaunchDefaults';
 import { useSession } from '@/frontend/hooks/useSession';
@@ -15,6 +16,7 @@ import EffortPicker, {
   defaultEffortFor,
   resolveEffortFor,
 } from './EffortPicker';
+import PermissionModePicker from './PermissionModePicker';
 import ProviderModelPicker, {
   type ProviderModelValue,
 } from './ProviderModelPicker';
@@ -136,6 +138,7 @@ export default function SessionPanel({ taskId }: SessionPanelProps) {
       model: pick.model,
       provider: pick.provider,
       reasoningEffort: pick.effort === 'auto' ? undefined : pick.effort,
+      permissionMode: pick.permissionMode,
     });
     openSession(newSessionId);
   };
@@ -355,6 +358,7 @@ function NoSessionPlaceholder({
             provider: next.provider,
             model: next.model,
             effort: resolveEffortFor(next.provider),
+            permissionMode: resolvePermissionModeFor(next.provider),
           },
     );
   }, []);
@@ -405,6 +409,11 @@ function NoSessionPlaceholder({
             provider={pick.provider}
             value={pick.effort}
             onChange={(effort) => setPick({ ...pick, effort })}
+          />
+          <PermissionModePicker
+            value={pick.permissionMode}
+            onChange={(permissionMode) => setPick({ ...pick, permissionMode })}
+            disabled={sending}
           />
           <Button
             className="ml-auto"

@@ -76,6 +76,7 @@ export const DEFAULT_CLAUDE_EFFORT: (typeof CLAUDE_EFFORTS)[number] = 'auto';
 export const STORAGE_LAST_PROVIDER = 'holophyte.lastProvider';
 export const STORAGE_LAST_MODEL_PREFIX = 'holophyte.lastModel.'; // e.g. `holophyte.lastModel.codex`
 export const STORAGE_LAST_EFFORT_PREFIX = 'holophyte.lastEffort.'; // e.g. `holophyte.lastEffort.codex`
+export const STORAGE_LAST_PERMISSION_PREFIX = 'holophyte.lastPermission.'; // e.g. `holophyte.lastPermission.codex`
 
 /**
  * How long a session may remain in `queued` status before the Convex cron
