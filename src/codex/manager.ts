@@ -9,15 +9,10 @@ import {
   createClient,
 } from 'codex-app-server-client';
 import { DEFAULT_CODEX_MODEL } from '@/constants';
+import { isPermissionMode, type PermissionMode } from '@/permissionMode';
 import { getConvexClient, getConvexHttpClient } from '@/server/convex-client';
 
-export type PermissionMode = 'default' | 'safe-auto' | 'bypass';
-
-const VALID_PERMISSION_MODES = new Set<PermissionMode>([
-  'default',
-  'safe-auto',
-  'bypass',
-]);
+export type { PermissionMode } from '@/permissionMode';
 
 type ReasoningEffort = NonNullable<
   Parameters<AppServerClient['turn']['start']>[0]['effort']
@@ -551,20 +546,8 @@ export async function startSession(opts: {
       : undefined;
 
   const mode = opts.permissionMode;
-  if (!mode || !VALID_PERMISSION_MODES.has(mode)) {
+  if (!isPermissionMode(mode)) {
     throw new Error(`Invalid permissionMode: ${mode}`);
-  }
-
-  // Phase 0: the approval bridge persists rows, but no UI surface yet renders
-  // Codex approval prompts (`codex.item/*` notifications aren't bridged into
-  // sdkToUIMessages until Tasks 7+8). A non-bypass session that hits an
-  // approval will park the turn until the 5-min poll timeout, then auto-deny.
-  // The companion dispatch falls back to 'bypass' for null-mode Codex
-  // sessions, so this only fires for explicit opt-in (e.g. dev helper script).
-  if (mode !== 'bypass') {
-    console.warn(
-      `[codex session ${opts.sessionId}] permissionMode=${mode} selected, but Phase 0 has no Codex approval UI yet — approval prompts will park until the 5-min poll timeout and then auto-deny. Use 'bypass' for non-test sessions until Tasks 7+8 land.`,
-    );
   }
 
   let initialBatchIndex = 0;

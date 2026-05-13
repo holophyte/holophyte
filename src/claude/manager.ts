@@ -9,16 +9,10 @@ import { query as sdkQuery } from '@anthropic-ai/claude-agent-sdk';
 import { api } from '@convex/_generated/api';
 import type { Id } from '@convex/_generated/dataModel';
 import { DEFAULT_MODEL } from '@/constants';
+import { isPermissionMode, type PermissionMode } from '@/permissionMode';
 import { getConvexClient, getConvexHttpClient } from '@/server/convex-client';
 
-/** Permission mode for a session's canUseTool behavior. */
-export type PermissionMode = 'default' | 'safe-auto' | 'bypass';
-
-const VALID_PERMISSION_MODES = new Set<PermissionMode>([
-  'default',
-  'safe-auto',
-  'bypass',
-]);
+export type { PermissionMode } from '@/permissionMode';
 
 export type SessionStatus = 'running' | 'waiting_input' | 'idle' | 'failed';
 
@@ -365,8 +359,8 @@ export async function startSession(opts: {
 
   const controller = new AbortController();
 
-  const mode = opts.permissionMode ?? 'safe-auto';
-  if (!VALID_PERMISSION_MODES.has(mode)) {
+  const mode: PermissionMode = opts.permissionMode ?? 'safe-auto';
+  if (!isPermissionMode(mode)) {
     throw new Error(`Invalid permissionMode: ${mode}`);
   }
 
