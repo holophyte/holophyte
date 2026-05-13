@@ -64,7 +64,7 @@ test.describe('PermissionModePicker on launch surface', () => {
     await expect(picker).toHaveText(/Safe auto/);
   });
 
-  test('selection is persisted to localStorage', async ({ page }) => {
+  test('seeded localStorage value is read on mount', async ({ page }) => {
     const title = `E2E PermissionPersist ${Date.now()}`;
     await createTask(page, title);
     await openTaskPage(page, title);
@@ -76,11 +76,16 @@ test.describe('PermissionModePicker on launch surface', () => {
       window.localStorage.setItem('holophyte.lastPermission.claude', 'bypass');
     });
     await page.reload();
-    await expect(
-      page.locator('text=Send a message to start the conversation'),
-    ).toBeVisible({ timeout: 10000 });
-
+    // Don't use waitForApp here — it navigates to '/' and leaves the task
+    // page. Instead, wait for the picker to hydrate on the current route.
     const picker = page.getByRole('combobox', { name: 'Permission mode' });
+    await expect(picker).toBeVisible({ timeout: 15000 });
     await expect(picker).toHaveText(/Bypass/);
   });
+
+  // The write path (`save()` → localStorage) is unit-tested directly in
+  // `useLaunchDefaults.test.ts` ("save() writes provider-scoped permission
+  // key to localStorage"). Radix Select + Playwright option-click flows are
+  // historically fragile under the test runner, so we don't duplicate that
+  // assertion via E2E; the seeded-read test above covers the integration.
 });

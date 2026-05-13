@@ -8,6 +8,7 @@ import * as claude from '@/claude/manager';
 import * as codex from '@/codex/manager';
 import {
   defaultPermissionModeFor,
+  isPermissionMode,
   type PermissionMode,
 } from '@/permissionMode';
 import { getConvexClient } from './convex-client';
@@ -79,9 +80,11 @@ async function handleQueuedSession(session: QueuedSession): Promise<void> {
     // launches that omit the field. Provider-aware via
     // `defaultPermissionModeFor` so Codex preserves its Phase-0 one-click
     // UX (`bypass`) while Claude stays on `safe-auto`.
-    const permissionMode: PermissionMode =
-      (session.permissionMode as PermissionMode | undefined) ??
-      defaultPermissionModeFor(provider);
+    const permissionMode: PermissionMode = isPermissionMode(
+      session.permissionMode,
+    )
+      ? session.permissionMode
+      : defaultPermissionModeFor(provider);
 
     // Note: any stop request that arrived while claiming was deferred by
     // handleStoppedSession (it skips sessions with in-flight claims). It will

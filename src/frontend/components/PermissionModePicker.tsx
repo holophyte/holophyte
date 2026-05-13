@@ -1,5 +1,9 @@
 import { cn } from '@/frontend/lib/utils';
-import { PERMISSION_MODES, type PermissionMode } from '@/permissionMode';
+import {
+  isPermissionMode,
+  PERMISSION_MODES,
+  type PermissionMode,
+} from '@/permissionMode';
 import {
   Select,
   SelectContent,
@@ -48,7 +52,9 @@ export default function PermissionModePicker({
   return (
     <Select
       value={value}
-      onValueChange={(next) => onChange(next as PermissionMode)}
+      onValueChange={(next) => {
+        if (isPermissionMode(next)) onChange(next);
+      }}
       disabled={disabled}
     >
       <SelectTrigger
