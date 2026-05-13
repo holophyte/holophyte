@@ -69,24 +69,34 @@ describe('sessions.create', () => {
     expect(session?.permissionMode).toBe('bypass');
   });
 
-  it("accepts provider: 'codex' without permissionMode (companion dispatcher provides the fallback)", async () => {
-    // The boundary intentionally accepts an omitted permissionMode — the
-    // companion dispatcher in src/server/subscriptions.ts coalesces undefined
-    // to 'bypass' for Codex (Task 3's approvalPolicyForMode currently only
-    // supports bypass; widens in Task 5) and 'safe-auto' for Claude
-    // (preserves the Claude manager's pre-existing default). Document that
-    // invariant here so a future reviewer sees the boundary doesn't reject.
+  it("defaults Codex sessions without permissionMode to 'bypass'", async () => {
+    // Task 8 dropped the companion-side fallback for Codex. The mutation
+    // stamps 'bypass' for Codex sessions launched without an explicit mode
+    // — Phase 0 only renders 2 of 7 Codex approval methods, so a stricter
+    // default would silently auto-deny common operations. Claude sessions
+    // still allow undefined — the Claude manager has its own 'safe-auto'
+    // default.
     const t = convexTest(schema);
     const { authed, taskId } = await setupTaskEnv(t);
 
-    const sessionId = await authed.mutation(api.sessions.create, {
+    const codexSessionId = await authed.mutation(api.sessions.create, {
       taskId,
       provider: 'codex',
     });
+    const codexSession = await authed.query(api.sessions.get, {
+      id: codexSessionId,
+    });
+    expect(codexSession?.provider).toBe('codex');
+    expect(codexSession?.permissionMode).toBe('bypass');
 
-    const session = await authed.query(api.sessions.get, { id: sessionId });
-    expect(session?.provider).toBe('codex');
-    expect(session?.permissionMode).toBeUndefined();
+    const claudeSessionId = await authed.mutation(api.sessions.create, {
+      taskId,
+      provider: 'claude',
+    });
+    const claudeSession = await authed.query(api.sessions.get, {
+      id: claudeSessionId,
+    });
+    expect(claudeSession?.permissionMode).toBeUndefined();
   });
 
   it('requires member role', async () => {

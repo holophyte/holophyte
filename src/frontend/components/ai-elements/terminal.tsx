@@ -1,6 +1,5 @@
 'use client';
 
-import Ansi from 'ansi-to-react';
 import { CheckIcon, CopyIcon, TerminalIcon, Trash2Icon } from 'lucide-react';
 import type { ComponentProps, HTMLAttributes } from 'react';
 import {
@@ -13,6 +12,11 @@ import {
   useState,
 } from 'react';
 import { Button } from '@/frontend/components/ui/Button';
+// CUSTOMIZED: imports the normalized `Ansi` from `@/frontend/lib/ansi`
+// instead of `ansi-to-react` directly to work around Bun's browser-bundle
+// CJS interop. If this file is regenerated via `bunx shadcn add terminal`,
+// reapply this import change. See `src/frontend/lib/ansi.ts` for context.
+import { Ansi } from '@/frontend/lib/ansi';
 import { cn } from '@/frontend/lib/utils';
 
 interface TerminalContextType {

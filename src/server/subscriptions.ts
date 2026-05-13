@@ -42,6 +42,20 @@ const inFlightClaims = new Set<string>();
 const inFlightStops = new Set<string>();
 const inFlightMessages = new Set<string>();
 
+/**
+ * Claim a queued session out of Convex and hand it to the matching
+ * provider manager (`claude` or `codex`). Idempotent against a manager
+ * that already owns the session and against in-flight claims (the
+ * Convex subscription can fire multiple times before the claim mutation
+ * resolves). On `claim` failure the session is left for a future tick;
+ * on `startSession` failure the session is patched to `failed`.
+ *
+ * `permissionMode` is taken from the session row directly. New rows
+ * always carry a value (Codex defaults to `'bypass'` upstream in
+ * `sessions.create` — see Task 8). The `'bypass'` / `'safe-auto'`
+ * coalesce here is a migration shim for in-flight queued rows that
+ * pre-date Task 8 and can be removed once the queue has drained.
+ */
 async function handleQueuedSession(session: QueuedSession): Promise<void> {
   if (!session.queuedPrompt) return;
   if (findOwningManager(session._id)) return;
@@ -62,8 +76,9 @@ async function handleQueuedSession(session: QueuedSession): Promise<void> {
 
     // The launch UI always supplies an explicit permissionMode, so this
     // fallback only fires for legacy queued sessions and MCP / dev-helper
-    // launches that omit the field. Provider-aware so Codex preserves its
-    // Phase-0 one-click UX (`bypass`) while Claude stays on `safe-auto`.
+    // launches that omit the field. Provider-aware via
+    // `defaultPermissionModeFor` so Codex preserves its Phase-0 one-click
+    // UX (`bypass`) while Claude stays on `safe-auto`.
     const permissionMode: PermissionMode =
       (session.permissionMode as PermissionMode | undefined) ??
       defaultPermissionModeFor(provider);

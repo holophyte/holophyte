@@ -27,7 +27,10 @@ type DynamicToolUIPart =
       toolCallId: string;
       state: 'approval-requested';
       input: unknown;
-      approval: { id: string };
+      approval: {
+        id: string;
+        codex?: { tool: string; input: Record<string, unknown> };
+      };
     }
   | {
       type: 'dynamic-tool';
@@ -51,7 +54,11 @@ type DynamicToolUIPart =
       toolCallId: string;
       state: 'approval-responded';
       input: unknown;
-      approval: { id: string; approved: true };
+      approval: {
+        id: string;
+        approved: true;
+        codex?: { tool: string; input: Record<string, unknown> };
+      };
     }
   | {
       type: 'dynamic-tool';
@@ -59,7 +66,11 @@ type DynamicToolUIPart =
       toolCallId: string;
       state: 'output-denied';
       input: unknown;
-      approval: { id: string; approved: false };
+      approval: {
+        id: string;
+        approved: false;
+        codex?: { tool: string; input: Record<string, unknown> };
+      };
     };
 
 /**
@@ -69,8 +80,14 @@ type DynamicToolUIPart =
  * @param events - Accumulated SDK events from `useSession`.
  * @param isRunning - When `true`, the last assistant message is marked as
  *   streaming (text parts get `state: 'streaming'`); otherwise `'done'`.
- * @param pendingApprovals - Unresolved approval requests annotate tool parts
- *   with `approval-requested` state.
+ * @param pendingApprovals - Approval requests from the Convex
+ *   `pendingApprovals` table. Rows whose `tool` name matches an SDK
+ *   `tool_use_id` flip the corresponding part to `approval-requested`
+ *   (or `approval-responded` / `output-denied` once resolved). Rows
+ *   whose `tool` is prefixed `codex.` are bridged from the Codex
+ *   approval handler — the renderer overlays them onto the matching
+ *   Codex tool message keyed by `codex-${itemId}` and stamps an
+ *   `approval.codex` marker so the consuming UI can render Codex copy.
  */
 export function sdkToUIMessages(
   events: SDKMessage[],
@@ -88,6 +105,18 @@ export function sdkToUIMessages(
       .filter((a) => a.resolved !== undefined)
       .map((a) => [a.requestId, a.resolved?.approved ?? false]),
   );
+
+  // Codex approvals are bridged through `pendingApprovals` with
+  // `tool: 'codex.<method>'` and `requestId` keyed by the Codex item id
+  // (which equals the rendered tool message's `toolCallId`). Indexed
+  // separately so the Codex post-pass can override the tool part state
+  // without mixing with SDK approval matching above.
+  const codexApprovalsByItemId = new Map<string, PendingApproval>();
+  for (const a of pendingApprovals) {
+    if (a.tool?.startsWith('codex.')) {
+      codexApprovalsByItemId.set(a.requestId, a);
+    }
+  }
 
   // First pass: collect tool results keyed by tool_use_id
   const toolResults = new Map<string, { result: string; isError: boolean }>();
@@ -342,7 +371,106 @@ export function sdkToUIMessages(
     messages[idx] = { ...msg, parts: newParts };
   }
 
+  // Final pass: overlay Codex pending approvals onto their matching tool
+  // message. The bridge persists `pendingApprovals` rows keyed by the Codex
+  // item id, which equals the rendered tool message's `codex-${itemId}`.
+  // Unresolved → approval-requested; resolved approve → approval-responded;
+  // resolved deny → output-denied. Carries a `codex` marker on the approval
+  // object so `ToolCallUI` can render Codex-specific copy.
+  for (const [itemId, approval] of codexApprovalsByItemId) {
+    let idx = messages.findIndex((m) => m.id === `codex-${itemId}`);
+    if (idx === -1) {
+      // Approval arrived before the matching item/started event (or the
+      // event was dropped). Synthesize a placeholder tool message keyed
+      // by the same id so the post-pass below can apply state — input
+      // is left empty; the `codex` marker on the approval carries the
+      // request payload for the renderer to display.
+      const toolName = approvalToolName(approval.tool);
+      messages.push({
+        id: `codex-${itemId}`,
+        role: 'assistant',
+        parts: [
+          {
+            type: 'dynamic-tool',
+            toolName,
+            toolCallId: itemId,
+            state: 'input-available',
+            input: {},
+          },
+        ],
+        // biome-ignore lint/suspicious/noExplicitAny: UIMessage parts union is complex
+      } as any);
+      idx = messages.length - 1;
+    }
+    const msg = messages[idx];
+    if (!msg) continue;
+    // biome-ignore lint/suspicious/noExplicitAny: parts union is complex
+    const newParts = (msg.parts as any[]).map((p) => {
+      if (p.type !== 'dynamic-tool') return p;
+      // Skip parts that already reached a terminal output state. Once Codex
+      // emits `item/completed` with output / error / declined, that result
+      // is the source of truth — overlaying a stale `approval-responded`
+      // would hide the actual command output indefinitely (the resolved
+      // approval row stays in `pendingApprovals` for the life of the
+      // session).
+      if (
+        p.state === 'output-available' ||
+        p.state === 'output-error' ||
+        p.state === 'output-denied'
+      ) {
+        return p;
+      }
+      const codexMarker = { tool: approval.tool, input: approval.input };
+      if (!approval.resolved) {
+        return {
+          type: 'dynamic-tool',
+          toolName: p.toolName,
+          toolCallId: p.toolCallId,
+          state: 'approval-requested',
+          input: p.input,
+          approval: { id: itemId, codex: codexMarker },
+        };
+      }
+      if (approval.resolved.approved) {
+        return {
+          type: 'dynamic-tool',
+          toolName: p.toolName,
+          toolCallId: p.toolCallId,
+          state: 'approval-responded',
+          input: p.input,
+          approval: { id: itemId, approved: true, codex: codexMarker },
+        };
+      }
+      return {
+        type: 'dynamic-tool',
+        toolName: p.toolName,
+        toolCallId: p.toolCallId,
+        state: 'output-denied',
+        input: p.input,
+        approval: { id: itemId, approved: false, codex: codexMarker },
+      };
+    });
+    messages[idx] = { ...msg, parts: newParts };
+  }
+
   return messages;
+}
+
+/**
+ * Derive a sensible `toolName` from a Codex approval `tool` string when
+ * synthesizing a placeholder tool message (no matching `item/started` was
+ * observed). Phase 0 only bridges two methods; unknown tools fall back to
+ * a generic 'Codex' label.
+ */
+function approvalToolName(tool: string): string {
+  switch (tool) {
+    case 'codex.item/commandExecution/requestApproval':
+      return 'Bash';
+    case 'codex.item/fileChange/requestApproval':
+      return 'Edit';
+    default:
+      return 'Codex';
+  }
 }
 
 // ---------------------------------------------------------------------------

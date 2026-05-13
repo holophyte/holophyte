@@ -149,6 +149,19 @@ export const create = mutation({
     const { membership } = await requireOrgMembership(ctx, repo.orgId);
     requireRole(membership, 'member');
     const now = Date.now();
+    // Codex sessions require a permissionMode at the companion layer
+    // (companion no longer applies a fallback as of Task 8). Until the
+    // launch UI surfaces a permissionMode picker, default to 'bypass'.
+    // 'default' (untrusted) is intentionally NOT the default yet — Phase 0
+    // only renders 2 of the 7 Codex approval methods, so 'default' would
+    // silently auto-deny the other 5 (applyPatchApproval, execCommand-
+    // Approval, item/permissions/requestApproval, item/tool/requestUser-
+    // Input, mcpServer/elicitation/request). Opt into 'default' or
+    // 'safe-auto' via the dev script until Phase 0.1 covers the full
+    // approval surface. Claude sessions still allow undefined — the Claude
+    // manager tolerates it via its own 'safe-auto' default.
+    const permissionMode =
+      args.permissionMode ?? (args.provider === 'codex' ? 'bypass' : undefined);
     return await ctx.db.insert('sessions', {
       taskId: args.taskId,
       orgId: repo.orgId,
@@ -158,7 +171,7 @@ export const create = mutation({
       queuedPrompt: args.prompt,
       queuedReasoningEffort: args.reasoningEffort,
       model: args.model,
-      permissionMode: args.permissionMode,
+      permissionMode,
       provider: args.provider,
     });
   },
