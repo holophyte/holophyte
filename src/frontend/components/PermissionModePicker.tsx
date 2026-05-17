@@ -4,6 +4,7 @@ import {
   PERMISSION_MODES,
   type PermissionMode,
 } from '@/permissionMode';
+import { LAUNCH_PICKER_TRIGGER_CLASS } from './launchPickerStyles';
 import {
   Select,
   SelectContent,
@@ -61,7 +62,7 @@ export default function PermissionModePicker({
         size="sm"
         aria-label="Permission mode"
         title={DESCRIPTIONS[value]}
-        className={cn('h-7 px-2 text-xs', className)}
+        className={cn(LAUNCH_PICKER_TRIGGER_CLASS, className)}
       >
         <SelectValue />
       </SelectTrigger>

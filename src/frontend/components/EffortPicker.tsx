@@ -6,6 +6,7 @@ import {
   STORAGE_LAST_EFFORT_PREFIX,
 } from '@/constants';
 import { cn } from '@/frontend/lib/utils';
+import { LAUNCH_PICKER_TRIGGER_CLASS } from './launchPickerStyles';
 import {
   Select,
   SelectContent,
@@ -82,7 +83,7 @@ export default function EffortPicker({
       <SelectTrigger
         size="sm"
         aria-label="Reasoning effort"
-        className={cn('h-7 px-2 text-xs', className)}
+        className={cn(LAUNCH_PICKER_TRIGGER_CLASS, className)}
       >
         <SelectValue />
       </SelectTrigger>
