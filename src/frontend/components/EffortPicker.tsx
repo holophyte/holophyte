@@ -6,6 +6,7 @@ import {
   STORAGE_LAST_EFFORT_PREFIX,
 } from '@/constants';
 import { cn } from '@/frontend/lib/utils';
+import { LAUNCH_PICKER_TRIGGER_CLASS } from './launchPickerStyles';
 import {
   Select,
   SelectContent,
@@ -82,14 +83,7 @@ export default function EffortPicker({
       <SelectTrigger
         size="sm"
         aria-label="Reasoning effort"
-        // Mirror ProviderModelPicker so the three launch-row pickers share
-        // one visual style. Descendant selectors override the
-        // SelectTrigger's built-in chevron (size-4 opacity-50) to the
-        // smaller muted variant used by ProviderModelPicker.
-        className={cn(
-          '!h-auto gap-1.5 rounded border-input bg-background px-2 py-1 text-xs font-medium leading-4 text-foreground shadow-none transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:border-input focus-visible:ring-1 focus-visible:ring-ring [&_svg]:size-3 [&_svg]:text-muted-foreground [&_svg]:opacity-100',
-          className,
-        )}
+        className={cn(LAUNCH_PICKER_TRIGGER_CLASS, className)}
       >
         <SelectValue />
       </SelectTrigger>
