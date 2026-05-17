@@ -1,6 +1,8 @@
 # Prompt: Upgrade `@anthropic-ai/claude-agent-sdk` to `0.3.143`
 
-Upgrade Holophyte from `@anthropic-ai/claude-agent-sdk@0.2.141` to `0.3.143`.
+Upgrade Holophyte from `@anthropic-ai/claude-agent-sdk@0.2.141` to the latest `0.3.x` release.
+
+Before starting, run `npm info @anthropic-ai/claude-agent-sdk dist-tags.latest` to get the current latest version and use that instead of the `0.3.143` referenced below (the SDK ships patches frequently).
 
 Context:
 - The current dependency-upgrade branch has already upgraded compatible dependencies and added security overrides.
