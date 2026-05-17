@@ -9,15 +9,10 @@ import {
   createClient,
 } from 'codex-app-server-client';
 import { DEFAULT_CODEX_MODEL } from '@/constants';
+import { isPermissionMode, type PermissionMode } from '@/permissionMode';
 import { getConvexClient, getConvexHttpClient } from '@/server/convex-client';
 
-export type PermissionMode = 'default' | 'safe-auto' | 'bypass';
-
-const VALID_PERMISSION_MODES = new Set<PermissionMode>([
-  'default',
-  'safe-auto',
-  'bypass',
-]);
+export type { PermissionMode } from '@/permissionMode';
 
 type ReasoningEffort = NonNullable<
   Parameters<AppServerClient['turn']['start']>[0]['effort']
@@ -551,7 +546,7 @@ export async function startSession(opts: {
       : undefined;
 
   const mode = opts.permissionMode;
-  if (!mode || !VALID_PERMISSION_MODES.has(mode)) {
+  if (!isPermissionMode(mode)) {
     throw new Error(`Invalid permissionMode: ${mode}`);
   }
 

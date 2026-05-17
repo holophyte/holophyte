@@ -5,11 +5,16 @@ import { useMutation, useQuery } from 'convex/react';
 import { AlertTriangle, Loader2, Play, Square } from 'lucide-react';
 import { useCallback, useState } from 'react';
 import { useCompanionStatus } from '@/frontend/hooks/useCompanionStatus';
-import { useLaunchDefaults } from '@/frontend/hooks/useLaunchDefaults';
+import {
+  resolvePermissionModeFor,
+  useLaunchDefaults,
+} from '@/frontend/hooks/useLaunchDefaults';
 import { useStickyValue } from '@/frontend/hooks/useStickyValue';
 import { toast } from '@/frontend/lib/toast';
 import { useAppStore } from '@/frontend/stores/app';
+import type { PermissionMode } from '@/permissionMode';
 import EffortPicker, { resolveEffortFor } from './EffortPicker';
+import PermissionModePicker from './PermissionModePicker';
 import ProviderModelPicker, {
   type ProviderModelValue,
 } from './ProviderModelPicker';
@@ -47,6 +52,7 @@ export function LaunchButton({ task }: LaunchButtonProps) {
     provider: 'claude' | 'codex';
     model: string;
     effort: string;
+    permissionMode: PermissionMode;
   }>(defaults);
   const selectedOrgId = useAppStore((s) => s.selectedOrgId);
   const { state: companionState } = useCompanionStatus(selectedOrgId);
@@ -63,6 +69,7 @@ export function LaunchButton({ task }: LaunchButtonProps) {
             provider: next.provider,
             model: next.model,
             effort: resolveEffortFor(next.provider),
+            permissionMode: resolvePermissionModeFor(next.provider),
           },
     );
   }, []);
@@ -80,6 +87,7 @@ export function LaunchButton({ task }: LaunchButtonProps) {
           model: pick.model,
           provider: pick.provider,
           reasoningEffort: pick.effort === 'auto' ? undefined : pick.effort,
+          permissionMode: pick.permissionMode,
         });
         openSession(sessionId);
         if (!isOnThisTaskPage) {
@@ -181,6 +189,12 @@ export function LaunchButton({ task }: LaunchButtonProps) {
               provider={pick.provider}
               value={pick.effort}
               onChange={(effort) => setPick({ ...pick, effort })}
+            />
+            <PermissionModePicker
+              value={pick.permissionMode}
+              onChange={(permissionMode) =>
+                setPick({ ...pick, permissionMode })
+              }
             />
           </>
         )}

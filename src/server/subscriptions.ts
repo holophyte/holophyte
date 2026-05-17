@@ -4,9 +4,13 @@
 // instead of polling. Fires immediately when data changes.
 
 import { api } from '@convex/_generated/api';
-import type { PermissionMode } from '@/claude/manager';
 import * as claude from '@/claude/manager';
 import * as codex from '@/codex/manager';
+import {
+  defaultPermissionModeFor,
+  isPermissionMode,
+  type PermissionMode,
+} from '@/permissionMode';
 import { getConvexClient } from './convex-client';
 import type { PendingMessage, QueuedSession, StoppedSession } from './polling';
 
@@ -71,17 +75,16 @@ async function handleQueuedSession(session: QueuedSession): Promise<void> {
     });
     if (!claimed.ok) return;
 
-    // Claude sessions tolerate a missing permissionMode and fall back to
-    // 'safe-auto'. Codex sessions are stamped with a default ('bypass')
-    // by `sessions.create` post-Task-8, so freshly-queued rows always
-    // carry a value. The `'bypass'` coalesce here is a migration shim
-    // for queued Codex rows created before Task 8 deployed (queued rows
-    // can outlive a deploy). Drop once the in-flight queue is known
-    // empty, e.g. once a Phase 0.1 picker ships and supersedes this
-    // path.
-    const permissionMode: PermissionMode =
-      (session.permissionMode as PermissionMode | undefined) ??
-      (provider === 'codex' ? 'bypass' : 'safe-auto');
+    // The launch UI always supplies an explicit permissionMode, so this
+    // fallback only fires for legacy queued sessions and MCP / dev-helper
+    // launches that omit the field. Provider-aware via
+    // `defaultPermissionModeFor` so Codex preserves its Phase-0 one-click
+    // UX (`bypass`) while Claude stays on `safe-auto`.
+    const permissionMode: PermissionMode = isPermissionMode(
+      session.permissionMode,
+    )
+      ? session.permissionMode
+      : defaultPermissionModeFor(provider);
 
     // Note: any stop request that arrived while claiming was deferred by
     // handleStoppedSession (it skips sessions with in-flight claims). It will
