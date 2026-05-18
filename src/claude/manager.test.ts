@@ -417,6 +417,10 @@ describe('claude/manager (SDK-based)', () => {
         'WebFetch',
         'WebSearch',
         'TodoRead',
+        'TaskCreate',
+        'TaskUpdate',
+        'TaskGet',
+        'TaskList',
       ]) {
         const result = await canUseTool(
           tool,

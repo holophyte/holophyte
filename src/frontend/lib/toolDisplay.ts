@@ -3,6 +3,7 @@ import {
   FileSearch,
   FileText,
   Globe,
+  ListTodo,
   Search,
   Terminal,
   Wrench,
@@ -30,6 +31,11 @@ export function toolIcon(name: string): ReactElement {
     case 'WebFetch':
     case 'WebSearch':
       return createElement(Globe, { className: 'h-3.5 w-3.5' });
+    case 'TaskCreate':
+    case 'TaskUpdate':
+    case 'TaskGet':
+    case 'TaskList':
+      return createElement(ListTodo, { className: 'h-3.5 w-3.5' });
     default:
       return createElement(Wrench, { className: 'h-3.5 w-3.5' });
   }
@@ -79,6 +85,18 @@ export function toolSummary(
             : '';
       return url.length > 80 ? `${url.slice(0, 80)}…` : url || name;
     }
+    case 'TaskCreate':
+      return 'Create task';
+    case 'TaskUpdate': {
+      const id = typeof input.id === 'string' ? input.id : '';
+      return id ? `Update task ${id}` : 'Update task';
+    }
+    case 'TaskGet': {
+      const id = typeof input.id === 'string' ? input.id : '';
+      return id ? `Get task ${id}` : 'Get task';
+    }
+    case 'TaskList':
+      return 'List tasks';
     default:
       return JSON.stringify(input).slice(0, 80);
   }

@@ -90,6 +90,10 @@ const SAFE_TOOLS = new Set([
   'WebFetch',
   'WebSearch',
   'TodoRead',
+  'TaskCreate',
+  'TaskUpdate',
+  'TaskGet',
+  'TaskList',
 ]);
 
 /**
