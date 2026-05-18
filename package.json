@@ -59,6 +59,7 @@
     "jsdom": "^29.1.1",
     "storybook": "^10.4.0",
     "tailwindcss": "^4.3.0",
+    "typescript": "^6.0.3",
     "vitest": "^4.1.6"
   },
   "dependencies": {
@@ -95,7 +96,7 @@
     "zustand": "^5.0.13"
   },
   "peerDependencies": {
-    "typescript": "^5.9.3"
+    "typescript": "^6.0.3"
   },
   "overrides": {
     "vite": "^7.3.2",
