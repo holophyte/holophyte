@@ -82,14 +82,13 @@ const SAFE_BASH_PATTERNS = [
 /** Shell operators and redirects — never auto-approve commands containing these. */
 const SHELL_OPERATOR_PATTERN = /[;&|`$\n<>]|\$\(/;
 
-/** Tools that are always safe to auto-approve (read-only operations). */
+/** Tools that are always safe to auto-approve (read-only lookups and internal task-tracker writes). */
 const SAFE_TOOLS = new Set([
   'Read',
   'Glob',
   'Grep',
   'WebFetch',
   'WebSearch',
-  'TodoRead',
   'TaskCreate',
   'TaskUpdate',
   'TaskGet',

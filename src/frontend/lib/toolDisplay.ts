@@ -85,15 +85,18 @@ export function toolSummary(
             : '';
       return url.length > 80 ? `${url.slice(0, 80)}…` : url || name;
     }
-    case 'TaskCreate':
-      return 'Create task';
+    case 'TaskCreate': {
+      const subject = typeof input.subject === 'string' ? input.subject : '';
+      if (!subject) return 'Create task';
+      return subject.length > 80 ? `${subject.slice(0, 80)}…` : subject;
+    }
     case 'TaskUpdate': {
-      const id = typeof input.id === 'string' ? input.id : '';
-      return id ? `Update task ${id}` : 'Update task';
+      const taskId = typeof input.taskId === 'string' ? input.taskId : '';
+      return taskId ? `Update task ${taskId}` : 'Update task';
     }
     case 'TaskGet': {
-      const id = typeof input.id === 'string' ? input.id : '';
-      return id ? `Get task ${id}` : 'Get task';
+      const taskId = typeof input.taskId === 'string' ? input.taskId : '';
+      return taskId ? `Get task ${taskId}` : 'Get task';
     }
     case 'TaskList':
       return 'List tasks';

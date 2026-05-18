@@ -416,7 +416,6 @@ describe('claude/manager (SDK-based)', () => {
         'Grep',
         'WebFetch',
         'WebSearch',
-        'TodoRead',
         'TaskCreate',
         'TaskUpdate',
         'TaskGet',
