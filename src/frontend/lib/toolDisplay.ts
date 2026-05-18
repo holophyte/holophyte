@@ -35,6 +35,7 @@ export function toolIcon(name: string): ReactElement {
     case 'TaskUpdate':
     case 'TaskGet':
     case 'TaskList':
+    case 'TaskStop':
       return createElement(ListTodo, { className: 'h-3.5 w-3.5' });
     default:
       return createElement(Wrench, { className: 'h-3.5 w-3.5' });
@@ -100,6 +101,10 @@ export function toolSummary(
     }
     case 'TaskList':
       return 'List tasks';
+    case 'TaskStop': {
+      const task_id = typeof input.task_id === 'string' ? input.task_id : '';
+      return task_id ? `Stop task ${task_id}` : 'Stop task';
+    }
     default:
       return JSON.stringify(input).slice(0, 80);
   }
