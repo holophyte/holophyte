@@ -416,7 +416,10 @@ describe('claude/manager (SDK-based)', () => {
         'Grep',
         'WebFetch',
         'WebSearch',
-        'TodoRead',
+        'TaskCreate',
+        'TaskUpdate',
+        'TaskGet',
+        'TaskList',
       ]) {
         const result = await canUseTool(
           tool,
@@ -528,6 +531,54 @@ describe('claude/manager (SDK-based)', () => {
           true,
         );
       }
+    });
+
+    it('calls companionCreate for TaskStop (destructive, not in SAFE_TOOLS)', async () => {
+      vi.mocked(mockSdkQuery).mockImplementation((params: unknown) => {
+        const { options } = params as {
+          options: {
+            canUseTool: CanUseTool;
+            abortController: AbortController;
+          };
+        };
+        return {
+          // biome-ignore lint/correctness/useYield: blocking mock — parks via await without yielding events
+          async *[Symbol.asyncIterator]() {
+            await options.canUseTool(
+              'TaskStop',
+              { task_id: 'abc' },
+              {
+                toolUseID: 'ts1',
+                signal: options.abortController.signal,
+              },
+            );
+          },
+          streamInput: vi.fn().mockResolvedValue(undefined),
+          supportedCommands: vi.fn().mockResolvedValue([]),
+          supportedModels: vi.fn().mockResolvedValue([]),
+        } as never;
+      });
+
+      const { startSession } = await import('./manager');
+      await startSession({
+        sessionId: 'taskstop-test',
+        repoPath: '/tmp',
+        prompt: 'test',
+        permissionMode: 'safe-auto',
+      });
+
+      await new Promise((r) => setTimeout(r, 100));
+
+      const createCalls = mockMutation.mock.calls.filter(
+        (call) =>
+          typeof call[1] === 'object' &&
+          'requestId' in (call[1] as Record<string, unknown>),
+      );
+      expect(
+        createCalls.some(
+          (c) => (c[1] as Record<string, unknown>).requestId === 'ts1',
+        ),
+      ).toBe(true);
     });
 
     it('calls companionCreate for write-side tools (Write, Edit)', async () => {

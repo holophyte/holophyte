@@ -3,6 +3,7 @@ import {
   FileSearch,
   FileText,
   Globe,
+  ListTodo,
   Search,
   Terminal,
   Wrench,
@@ -30,6 +31,12 @@ export function toolIcon(name: string): ReactElement {
     case 'WebFetch':
     case 'WebSearch':
       return createElement(Globe, { className: 'h-3.5 w-3.5' });
+    case 'TaskCreate':
+    case 'TaskUpdate':
+    case 'TaskGet':
+    case 'TaskList':
+    case 'TaskStop':
+      return createElement(ListTodo, { className: 'h-3.5 w-3.5' });
     default:
       return createElement(Wrench, { className: 'h-3.5 w-3.5' });
   }
@@ -78,6 +85,25 @@ export function toolSummary(
             ? input.query
             : '';
       return url.length > 80 ? `${url.slice(0, 80)}…` : url || name;
+    }
+    case 'TaskCreate': {
+      const subject = typeof input.subject === 'string' ? input.subject : '';
+      if (!subject) return 'Create task';
+      return subject.length > 80 ? `${subject.slice(0, 80)}…` : subject;
+    }
+    case 'TaskUpdate': {
+      const taskId = typeof input.taskId === 'string' ? input.taskId : '';
+      return taskId ? `Update task ${taskId}` : 'Update task';
+    }
+    case 'TaskGet': {
+      const taskId = typeof input.taskId === 'string' ? input.taskId : '';
+      return taskId ? `Get task ${taskId}` : 'Get task';
+    }
+    case 'TaskList':
+      return 'List tasks';
+    case 'TaskStop': {
+      const task_id = typeof input.task_id === 'string' ? input.task_id : '';
+      return task_id ? `Stop task ${task_id}` : 'Stop task';
     }
     default:
       return JSON.stringify(input).slice(0, 80);
