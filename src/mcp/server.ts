@@ -19,7 +19,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { ConvexHttpClient } from 'convex/browser';
 import { z } from 'zod';
-import { DEFAULT_MODEL } from '@/constants';
+import { DEFAULT_MODEL, DEFAULT_PROVIDER } from '@/constants';
 import { readApiKeyFile, signInWithApiKey } from '@/server/auth-token';
 
 // ── Types ────────────────────────────────────────────────────────────
@@ -610,7 +610,7 @@ server.tool(
 
 server.tool(
   'holophyte_launch_session',
-  'Launch a new session for a task (requires a running companion process to pick it up)',
+  'Launch a new Claude or Codex session for a task (requires a running companion process to pick it up)',
   {
     taskId: z.string().describe('Task ID to launch session for'),
     prompt: z
@@ -621,8 +621,14 @@ server.tool(
       .string()
       .optional()
       .describe(`Model to use (default: ${DEFAULT_MODEL})`),
+    provider: z
+      .enum(['claude', 'codex'])
+      .optional()
+      .describe(
+        `AI provider to use: 'claude' (Anthropic Claude Code) or 'codex' (OpenAI Codex). Default: ${DEFAULT_PROVIDER}`,
+      ),
   },
-  async ({ taskId, prompt, model }) => {
+  async ({ taskId, prompt, model, provider }) => {
     const client = requireClient();
 
     // Verify task exists and has a prompt
@@ -657,7 +663,7 @@ server.tool(
       taskId: taskId as Id<'tasks'>,
       prompt: effectivePrompt,
       model,
-      provider: 'claude',
+      provider: provider ?? DEFAULT_PROVIDER,
     });
 
     return textResponse(

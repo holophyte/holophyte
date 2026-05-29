@@ -1137,6 +1137,63 @@ describe('holophyte_launch_session', () => {
       expect.objectContaining({ model: 'claude-opus-4' }),
     );
   });
+
+  it("forwards provider:'codex' to the create mutation", async () => {
+    mockQuery.mockResolvedValueOnce({
+      _id: 'task1',
+      prompt: 'build something',
+      repoId: 'r1',
+    });
+    mockQuery.mockResolvedValueOnce({ lastSeen: Date.now() });
+    mockMutation.mockResolvedValueOnce('session-codex-1');
+
+    await tool('holophyte_launch_session')({
+      taskId: 'task1',
+      provider: 'codex',
+    });
+
+    expect(mockMutation).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ provider: 'codex' }),
+    );
+  });
+
+  it("forwards provider:'claude' to the create mutation", async () => {
+    mockQuery.mockResolvedValueOnce({
+      _id: 'task1',
+      prompt: 'build something',
+      repoId: 'r1',
+    });
+    mockQuery.mockResolvedValueOnce({ lastSeen: Date.now() });
+    mockMutation.mockResolvedValueOnce('session-claude-1');
+
+    await tool('holophyte_launch_session')({
+      taskId: 'task1',
+      provider: 'claude',
+    });
+
+    expect(mockMutation).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ provider: 'claude' }),
+    );
+  });
+
+  it('defaults to DEFAULT_PROVIDER (claude) when provider is omitted', async () => {
+    mockQuery.mockResolvedValueOnce({
+      _id: 'task1',
+      prompt: 'build something',
+      repoId: 'r1',
+    });
+    mockQuery.mockResolvedValueOnce({ lastSeen: Date.now() });
+    mockMutation.mockResolvedValueOnce('session-default-1');
+
+    await tool('holophyte_launch_session')({ taskId: 'task1' });
+
+    expect(mockMutation).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ provider: 'claude' }),
+    );
+  });
 });
 
 // ── holophyte_stop_session ────────────────────────────────────────────
