@@ -146,7 +146,10 @@ export default function SessionPanel({ taskId }: SessionPanelProps) {
   const sessionProvider: 'claude' | 'codex' = session?.provider ?? 'claude';
 
   return (
-    <div className="flex h-full flex-col bg-background">
+    <div
+      className="flex h-full flex-col bg-background"
+      data-provider-session-id={session?.providerSessionId ?? undefined}
+    >
       <div className="flex shrink-0 items-center gap-2 border-b border-border/50 px-3 py-2">
         <SessionDropdown taskId={taskId} activeSessionId={sessionId} />
         {sessionId && (

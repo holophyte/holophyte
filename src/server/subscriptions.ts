@@ -68,6 +68,14 @@ async function handleQueuedSession(session: QueuedSession): Promise<void> {
   const provider = session.provider ?? 'claude';
   const manager = provider === 'codex' ? codex : claude;
 
+  // E2E fake-transport mode (CODEX_FAKE_TRANSPORT=1) exercises only the Codex
+  // path via a scripted in-process transport. Leave non-codex sessions queued
+  // so specs that assert the queued-session UI (composer-enhancements.spec.ts)
+  // continue to behave as if the companion is idle for Claude launches.
+  if (process.env.CODEX_FAKE_TRANSPORT === '1' && provider !== 'codex') {
+    return;
+  }
+
   inFlightClaims.add(session._id);
   try {
     const claimed = await client.mutation(api.sessions.companionClaimQueued, {

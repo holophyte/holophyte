@@ -11,6 +11,7 @@ import {
 import { DEFAULT_CODEX_MODEL } from '@/constants';
 import { isPermissionMode, type PermissionMode } from '@/permissionMode';
 import { getConvexClient, getConvexHttpClient } from '@/server/convex-client';
+import { createFakeClient } from './fakeTransport';
 
 export type { PermissionMode } from '@/permissionMode';
 
@@ -577,10 +578,13 @@ export async function startSession(opts: {
   delete codexEnv.CLAUDECODE;
   delete codexEnv.CLAUDE_CODE_ENTRYPOINT;
 
-  const client = await createClient({
-    cwd: opts.repoPath,
-    env: codexEnv,
-  });
+  const client: AppServerClient =
+    process.env.CODEX_FAKE_TRANSPORT === '1'
+      ? createFakeClient()
+      : await createClient({
+          cwd: opts.repoPath,
+          env: codexEnv,
+        });
 
   try {
     const threadResponse = opts.resumeProviderSessionId

@@ -92,6 +92,12 @@ export default defineConfig({
       ...(process.env.E2E_INTERNAL_API_SECRET && {
         INTERNAL_API_SECRET: process.env.E2E_INTERNAL_API_SECRET,
       }),
+      CODEX_FAKE_TRANSPORT: '1',
+      // Shrink approval poll timeout for E2E so the test doesn't wait 5 minutes
+      CODEX_APPROVAL_POLL_TIMEOUT_MS: '30000',
+      // Allow the companion to sign in anonymously (same as ALLOW_PASSWORD_AUTH).
+      // Without this the companion can't pick up queued sessions in E2E.
+      ALLOW_ANONYMOUS_AUTH: '1',
     },
   },
 });
