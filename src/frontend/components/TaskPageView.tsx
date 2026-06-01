@@ -114,7 +114,7 @@ export default function TaskPageView() {
   }, [latestSession?.status]);
 
   const runningElapsed = useMemo(() => {
-    if (!latestSession || latestSession.status !== 'running') return null;
+    if (latestSession?.status !== 'running') return null;
     const seconds = Math.max(
       0,
       Math.floor((now - latestSession.startedAt) / 1000),
