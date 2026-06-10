@@ -38,6 +38,14 @@ export interface Session {
   createdAt: number;
   /** when `status` last changed — drives elapsed display + aging bonus */
   statusSince: number;
+  /** harness-native session id (e.g. claude --session-id UUID), when supported */
+  harnessSessionId?: string;
+}
+
+export interface HarnessInfo {
+  id: HarnessId;
+  /** false → shown grayed in the new-session picker, not hidden */
+  configured: boolean;
 }
 
 export interface QueueItem {
@@ -51,6 +59,10 @@ export interface StateSnapshot {
   sessions: Session[];
   /** scored, sorted descending — top item is "the next thing" */
   queue: QueueItem[];
+  /** which harnesses are usable on this machine (for the new-session picker) */
+  harnesses: HarnessInfo[];
+  /** most-recent-first spawn targets (for the cwd picker), deduped, capped */
+  recentCwds: string[];
 }
 
 export interface HarnessAdapter {

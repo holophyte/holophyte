@@ -14,13 +14,14 @@
  * then receives its Response and exits with it.
  */
 
-import type { HarnessId, QueueItem, Session, StateSnapshot } from './types';
+import type { HarnessId, Session, StateSnapshot } from './types';
 
 /**
  * Harness-agnostic lifecycle events. Hook adapters translate harness-native
  * hooks (Claude hooks, Codex notify) into these before they reach the daemon.
  *
  * State transitions (see spec.md "State detection"):
+ * - ready         → idle ("awaiting first prompt" — harness booted, hooks live)
  * - prompt        → running
  * - tool          → running (clears needs_input)
  * - question      → needs_input (with question text)
@@ -30,6 +31,7 @@ import type { HarnessId, QueueItem, Session, StateSnapshot } from './types';
  * - error         → error
  */
 export type SessionEvent =
+  | { kind: 'ready' }
   | { kind: 'prompt' }
   | { kind: 'tool' }
   | { kind: 'question'; text: string }
@@ -72,10 +74,8 @@ export type Response =
 export type PermissionDecision = 'allow' | 'deny' | 'timeout';
 
 /** pushed to subscribers on every state change */
-export interface StatePush {
+export interface StatePush extends StateSnapshot {
   type: 'state';
-  sessions: Session[];
-  queue: QueueItem[];
 }
 
 export function isStatePush(value: unknown): value is StatePush {
