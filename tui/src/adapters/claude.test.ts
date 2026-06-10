@@ -1,0 +1,162 @@
+// @vitest-environment node
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { sessionSettingsPath } from '../paths';
+import type { Session } from '../types';
+import { buildClaudeSettings, ClaudeAdapter, hookCommand } from './claude';
+
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function makeSession(overrides: Partial<Session> = {}): Session {
+  return {
+    id: 'claude-1',
+    harness: 'claude',
+    cwd: '/tmp/some-repo',
+    tmuxWindow: '@1',
+    status: 'running',
+    createdAt: 0,
+    statusSince: 0,
+    ...overrides,
+  };
+}
+
+describe('hookCommand', () => {
+  it('quotes bun and the hook main path, then appends harness + session id', () => {
+    const mainPath = fileURLToPath(new URL('../hook/main.ts', import.meta.url));
+    expect(hookCommand('claude', 'claude-1')).toBe(
+      `'${process.execPath}' '${mainPath}' claude claude-1`,
+    );
+  });
+
+  it('points at src/hook/main.ts', () => {
+    expect(hookCommand('codex', 'codex-2')).toMatch(
+      /\/src\/hook\/main\.ts' codex codex-2$/,
+    );
+  });
+});
+
+describe('buildClaudeSettings', () => {
+  const settings = buildClaudeSettings('claude-1', 'CMD') as {
+    preferredNotifChannel: string;
+    hooks: Record<
+      string,
+      Array<{ hooks: Array<{ type: string; command: string; timeout?: number }> }>
+    >;
+  };
+
+  it('disables OS notifications so hooks are the single signal source', () => {
+    expect(settings.preferredNotifChannel).toBe('notifications_disabled');
+  });
+
+  it('registers exactly the seven holo hook events', () => {
+    expect(Object.keys(settings.hooks).sort()).toEqual(
+      [
+        'Notification',
+        'PermissionRequest',
+        'PreToolUse',
+        'SessionEnd',
+        'SessionStart',
+        'Stop',
+        'UserPromptSubmit',
+      ].sort(),
+    );
+  });
+
+  it.each([
+    'SessionStart',
+    'UserPromptSubmit',
+    'PreToolUse',
+    'Notification',
+    'Stop',
+    'SessionEnd',
+  ])('%s entry is a single command hook without timeout', (event) => {
+    expect(settings.hooks[event]).toEqual([
+      { hooks: [{ type: 'command', command: 'CMD' }] },
+    ]);
+  });
+
+  it('PermissionRequest hook has a 150s timeout exceeding the 90s daemon hold', () => {
+    expect(settings.hooks.PermissionRequest).toEqual([
+      { hooks: [{ type: 'command', command: 'CMD', timeout: 150 }] },
+    ]);
+  });
+
+  it('survives a JSON round-trip (what actually lands in the settings file)', () => {
+    expect(JSON.parse(JSON.stringify(settings))).toEqual(settings);
+  });
+});
+
+describe('ClaudeAdapter', () => {
+  let holoHomeDir: string;
+  const savedHoloHome = process.env.HOLO_HOME;
+
+  beforeEach(() => {
+    holoHomeDir = mkdtempSync(join(tmpdir(), 'holo-test-'));
+    process.env.HOLO_HOME = holoHomeDir;
+  });
+
+  afterEach(() => {
+    if (savedHoloHome === undefined) delete process.env.HOLO_HOME;
+    else process.env.HOLO_HOME = savedHoloHome;
+    rmSync(holoHomeDir, { recursive: true, force: true });
+  });
+
+  it('has id claude and full remote capabilities', () => {
+    const adapter = new ClaudeAdapter();
+    expect(adapter.id).toBe('claude');
+    expect(adapter.capabilities).toEqual({
+      remotePermission: true,
+      questionText: true,
+    });
+  });
+
+  it('configured() uses the injected checker', () => {
+    expect(new ClaudeAdapter({ configured: () => true }).configured()).toBe(true);
+    expect(new ClaudeAdapter({ configured: () => false }).configured()).toBe(false);
+  });
+
+  it('spawnCommand writes settings under HOLO_HOME and returns the claude argv', async () => {
+    const adapter = new ClaudeAdapter({ configured: () => true });
+    const session = makeSession({ harnessSessionId: 'a1b2c3d4-0000-4000-8000-000000000000' });
+
+    const argv = await adapter.spawnCommand(session);
+    const settingsPath = sessionSettingsPath('claude-1');
+
+    expect(argv).toEqual([
+      'claude',
+      '--session-id',
+      'a1b2c3d4-0000-4000-8000-000000000000',
+      '--settings',
+      settingsPath,
+    ]);
+    expect(settingsPath.startsWith(holoHomeDir)).toBe(true);
+    expect(existsSync(settingsPath)).toBe(true);
+
+    const written = JSON.parse(readFileSync(settingsPath, 'utf8'));
+    expect(written).toEqual(
+      JSON.parse(
+        JSON.stringify(
+          buildClaudeSettings('claude-1', hookCommand('claude', 'claude-1')),
+        ),
+      ),
+    );
+  });
+
+  it('spawnCommand generates a valid UUID when harnessSessionId is unset', async () => {
+    const adapter = new ClaudeAdapter({ configured: () => true });
+    const argv = await adapter.spawnCommand(makeSession());
+    expect(argv[0]).toBe('claude');
+    expect(argv[1]).toBe('--session-id');
+    expect(argv[2]).toMatch(UUID_RE);
+  });
+
+  it('written hook command targets this session', async () => {
+    const adapter = new ClaudeAdapter({ configured: () => true });
+    await adapter.spawnCommand(makeSession({ id: 'claude-7' }));
+    const written = readFileSync(sessionSettingsPath('claude-7'), 'utf8');
+    expect(written).toContain('claude claude-7');
+  });
+});
