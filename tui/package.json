@@ -8,8 +8,8 @@
   },
   "scripts": {
     "dev": "bun src/index.tsx",
-    "test": "vitest run",
-    "test:watch": "vitest",
+    "test": "bun node_modules/vitest/vitest.mjs run",
+    "test:watch": "bun node_modules/vitest/vitest.mjs",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
