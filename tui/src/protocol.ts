@@ -5,8 +5,9 @@
  * - request/response (hooks, CLI): write one Request line, read one Response
  *   line. Hook calls must complete in <50ms on the daemon side (write + ack);
  *   never block the agent.
- * - subscription (TUI): `{cmd:"subscribe"}` → initial snapshot Response, then
- *   a StatePush line on every state change. No polling.
+ * - subscription (TUI): `{cmd:"subscribe"}` → daemon immediately sends a full
+ *   StatePush snapshot (no ok-envelope), then another on every change. No
+ *   polling.
  *
  * Exception: `{cmd:"permission"}` is a HELD connection — the hook process
  * stays connected until respondPermission arrives or `timeoutMs` elapses,
