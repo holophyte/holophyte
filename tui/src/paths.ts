@@ -31,3 +31,8 @@ export function sessionSettingsPath(id: string): string {
 export function tmuxSessionName(): string {
   return process.env.HOLO_TMUX_SESSION ?? 'holo';
 }
+
+/** key (after the tmux prefix) that jumps back to the TUI window */
+export function returnBindingKey(): string {
+  return process.env.HOLO_RETURN_KEY ?? 'Space';
+}

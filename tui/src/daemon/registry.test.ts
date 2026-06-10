@@ -13,14 +13,14 @@ function setup(now = T0) {
 }
 
 describe('createSession', () => {
-  it('initializes a session awaiting its first prompt', () => {
+  it('initializes a session as starting (ready flips it to awaiting first prompt)', () => {
     const { session } = setup();
     expect(session.id).toBe('claude-1');
     expect(session.harness).toBe('claude');
     expect(session.cwd).toBe('/repo/a');
     expect(session.tmuxWindow).toBe('');
     expect(session.status).toBe('idle');
-    expect(session.attentionReason).toBe('awaiting first prompt');
+    expect(session.attentionReason).toBe('starting…');
     expect(session.createdAt).toBe(T0);
     expect(session.statusSince).toBe(T0);
     expect(session.pendingPermission).toBeUndefined();
@@ -195,8 +195,10 @@ describe('applyEvent transitions', () => {
 
   it('returns false when nothing changes', () => {
     const { registry, session } = setup();
-    // fresh session is already idle / awaiting first prompt
-    expect(registry.applyEvent(session.id, { kind: 'ready' }, T0 + 1)).toBe(false);
+    // first ready is observable: 'starting…' → 'awaiting first prompt'
+    expect(registry.applyEvent(session.id, { kind: 'ready' }, T0 + 1)).toBe(true);
+    // a repeat ready changes nothing
+    expect(registry.applyEvent(session.id, { kind: 'ready' }, T0 + 2)).toBe(false);
     expect(session.statusSince).toBe(T0);
   });
 

@@ -8,7 +8,7 @@
 
 import { resolve } from 'node:path';
 import { homedir } from 'node:os';
-import { holoHome } from './paths';
+import { holoHome, returnBindingKey } from './paths';
 import type { request } from './client';
 import type { HarnessId, HarnessInfo, StateSnapshot } from './types';
 import type { Tmux } from './tmux';
@@ -254,7 +254,9 @@ export async function runCli(cmd: CliCommand, deps: CliDeps): Promise<number> {
       // Try to install tmux return binding
       try {
         await deps.tmux.installReturnBinding();
-        deps.stdout('tmux return binding installed (prefix+Space → TUI window)');
+        deps.stdout(
+          `tmux return binding installed (prefix+${returnBindingKey()} → TUI window)`,
+        );
       } catch {
         deps.stdout('tmux server not running — binding installs on first `holo`');
       }

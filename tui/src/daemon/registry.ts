@@ -61,7 +61,9 @@ export class SessionRegistry {
       cwd,
       tmuxWindow: '', // caller assigns via setTmuxWindow after spawning
       status: 'idle',
-      attentionReason: 'awaiting first prompt',
+      // 'ready' (SessionStart hook) flips this to 'awaiting first prompt' —
+      // the observable signal that the harness booted and hooks are live.
+      attentionReason: 'starting…',
       createdAt: now,
       statusSince: now,
       harnessSessionId: randomUUID(),

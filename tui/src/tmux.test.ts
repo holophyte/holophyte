@@ -201,6 +201,22 @@ describe('RealTmux', () => {
         ['bind-key', 'Space', 'select-window', '-t', 'holo:tui'],
       ]);
     });
+
+    it('respects HOLO_RETURN_KEY (spec: binding key is configurable)', async () => {
+      const saved = process.env.HOLO_RETURN_KEY;
+      process.env.HOLO_RETURN_KEY = 'C-g';
+      try {
+        const { runner, calls } = fakeRunner([{}]);
+        const tmux = new RealTmux(runner, 'holo');
+        await tmux.installReturnBinding();
+        expect(calls).toEqual([
+          ['bind-key', 'C-g', 'select-window', '-t', 'holo:tui'],
+        ]);
+      } finally {
+        if (saved === undefined) delete process.env.HOLO_RETURN_KEY;
+        else process.env.HOLO_RETURN_KEY = saved;
+      }
+    });
   });
 });
 

@@ -6,7 +6,7 @@
  */
 
 import { execFile, spawnSync } from 'node:child_process';
-import { tmuxSessionName } from './paths';
+import { returnBindingKey, tmuxSessionName } from './paths';
 
 export type TmuxRunner = (
   args: string[],
@@ -43,10 +43,10 @@ export interface Tmux {
   /** window ids in the holo session; [] when the session is gone */
   listWindowIds(): Promise<string[]>;
   /**
-   * prefix+Space → jump back to the TUI window. tmux bindings are
-   * server-global — they cannot be scoped to one session, so this is a
-   * documented deviation from the spec's "installs this binding into the
-   * session" wording.
+   * prefix+<key> (default Space, HOLO_RETURN_KEY overrides) → jump back to
+   * the TUI window. tmux bindings are server-global — they cannot be scoped
+   * to one session, so this is a documented deviation from the spec's
+   * "installs this binding into the session" wording.
    */
   installReturnBinding(): Promise<void>;
 }
@@ -125,7 +125,7 @@ export class RealTmux implements Tmux {
   async installReturnBinding(): Promise<void> {
     await this.run([
       'bind-key',
-      'Space',
+      returnBindingKey(),
       'select-window',
       '-t',
       `${this.sessionName}:tui`,

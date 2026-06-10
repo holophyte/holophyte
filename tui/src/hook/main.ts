@@ -69,11 +69,19 @@ async function main(): Promise<void> {
     let event = action.event;
     // Claude's Stop payload doesn't carry the last message — enrich from the
     // transcript tail (codex carries it directly; map.ts already set it).
+    // The assistant line can lag the Stop hook by a beat (observed in the
+    // live smoke), so retry briefly before giving up.
     if (harness === 'claude' && event.kind === 'stop') {
       const transcriptPath = payload.transcript_path;
       if (typeof transcriptPath === 'string') {
-        const lastMessage = lastAssistantMessage(transcriptPath);
-        if (lastMessage !== undefined) event = { kind: 'stop', lastMessage };
+        for (let attempt = 0; attempt < 4; attempt++) {
+          const lastMessage = lastAssistantMessage(transcriptPath);
+          if (lastMessage !== undefined) {
+            event = { kind: 'stop', lastMessage };
+            break;
+          }
+          await new Promise((resolve) => setTimeout(resolve, 200));
+        }
       }
     }
     try {

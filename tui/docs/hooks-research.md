@@ -91,6 +91,26 @@ add `turn_id`. Notable per-event fields:
   `tool_input` (e.g. `tool_input.command`); same decision output shape as
   Claude; exit 0 with no output → normal pane approval prompt proceeds.
 
+### LIVE-TEST RESULTS (2026-06-10, codex 0.137.0 installed via brew)
+
+- **`-c hooks.X=[...]` (SessionFlags) injection does NOT fire in 0.137.0** —
+  tested live with both dotted-key and whole-table forms, exec and interactive.
+  The engine's discovery lists SessionFlags as a hook source, but no hooks
+  dispatch from it in this release. The adapter's current argv is correct per
+  docs but dead against 0.137.
+- **File-based hooks DO fire** (verified live: `~/.codex/hooks.json` +
+  `--dangerously-bypass-hook-trust`, interactive TUI) — SessionStart and
+  UserPromptSubmit payloads match the schemas above exactly.
+- `codex exec` did not fire hooks at all in 0.137 (interactive only).
+- **Update prompt blocks session startup**: codex showed a 0.137→0.139
+  updater dialog before the session UI; spawn argv should include
+  `-c check_for_update_on_startup=false`.
+- NEXT STEP (in progress at pause): test whether 0.139 fixes `-c` injection
+  (`bunx @openai/codex@0.139.0` works for testing without touching the brew
+  install). If yes → keep adapter, require codex ≥ 0.139. If no → file-based
+  injection redesign (per-session CODEX_HOME or repo-layer hooks.json, both
+  invasive — decide with Ko).
+
 ### Why not `notify`
 
 `notify` fires `agent-turn-complete` only, and a per-invocation
