@@ -45,7 +45,7 @@ function parseArgs(argv: string[]): {
   const sessionId = argv[0] ?? '';
   let home: string | undefined;
   let script: string | undefined;
-  for (let i = 1; i < argv.length; i++) {
+  for (let i = 1; i < argv.length - 1; i++) {
     if (argv[i] === '--home') home = argv[++i];
     else if (argv[i] === '--script') script = argv[++i];
   }

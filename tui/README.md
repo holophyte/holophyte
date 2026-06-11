@@ -23,7 +23,7 @@ The tmux session name is `holo` (`HOLO_TMUX_SESSION` overrides).
 
 ## How it works
 
-```
+```text
 holo (CLI)
 ├── holod (daemon)        owns all state; Unix socket, NDJSON protocol
 │   ├── registry          session lifecycle state machine (stale-event guards)
@@ -63,7 +63,7 @@ holo (CLI)
 
 ## CLI
 
-```
+```text
 holo                 attach/start tmux session + TUI (starts daemon if needed)
 holo new <harness> [--cwd <path>]
 holo next            jump to top queue item (scriptable / tmux-bindable)
