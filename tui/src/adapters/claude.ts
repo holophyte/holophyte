@@ -42,14 +42,11 @@ export function hookCommand(harness: string, sessionId: string): string {
   const hookMainPath = fileURLToPath(
     new URL('../hook/main.ts', import.meta.url),
   );
-  return `HOLO_HOME=${q(holoHome())} ${q(process.execPath)} ${q(hookMainPath)} ${harness} ${sessionId}`;
+  return `HOLO_HOME=${q(holoHome())} ${q(process.execPath)} ${q(hookMainPath)} ${q(harness)} ${q(sessionId)}`;
 }
 
 /** Per-session settings object written to ~/.holo/sessions/<id>/settings.json. */
-export function buildClaudeSettings(
-  _sessionId: string,
-  hookCommand: string,
-): object {
+export function buildClaudeSettings(hookCommand: string): object {
   const hooks: Record<string, unknown> = {};
   for (const event of HOOK_EVENTS) {
     hooks[event] = [{ hooks: [{ type: 'command', command: hookCommand }] }];
@@ -89,10 +86,7 @@ export class ClaudeAdapter implements HarnessAdapter {
 
   async spawnCommand(session: Session): Promise<string[]> {
     mkdirSync(sessionDir(session.id), { recursive: true });
-    const settings = buildClaudeSettings(
-      session.id,
-      hookCommand('claude', session.id),
-    );
+    const settings = buildClaudeSettings(hookCommand('claude', session.id));
     const settingsPath = sessionSettingsPath(session.id);
     writeFileSync(settingsPath, JSON.stringify(settings, null, 2));
     return [

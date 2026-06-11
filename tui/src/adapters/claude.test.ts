@@ -35,7 +35,7 @@ describe('hookCommand', () => {
     process.env.HOLO_HOME = '/custom/holo-home';
     const mainPath = fileURLToPath(new URL('../hook/main.ts', import.meta.url));
     expect(hookCommand('claude', 'claude-1')).toBe(
-      `HOLO_HOME='/custom/holo-home' '${process.execPath}' '${mainPath}' claude claude-1`,
+      `HOLO_HOME='/custom/holo-home' '${process.execPath}' '${mainPath}' 'claude' 'claude-1'`,
     );
   });
 
@@ -53,15 +53,15 @@ describe('hookCommand', () => {
     );
   });
 
-  it('points at src/hook/main.ts', () => {
+  it('points at src/hook/main.ts and quotes harness + session id', () => {
     expect(hookCommand('codex', 'codex-2')).toMatch(
-      /\/src\/hook\/main\.ts' codex codex-2$/,
+      /\/src\/hook\/main\.ts' 'codex' 'codex-2'$/,
     );
   });
 });
 
 describe('buildClaudeSettings', () => {
-  const settings = buildClaudeSettings('claude-1', 'CMD') as {
+  const settings = buildClaudeSettings('CMD') as {
     preferredNotifChannel: string;
     hooks: Record<
       string,
@@ -168,9 +168,7 @@ describe('ClaudeAdapter', () => {
     const written = JSON.parse(readFileSync(settingsPath, 'utf8'));
     expect(written).toEqual(
       JSON.parse(
-        JSON.stringify(
-          buildClaudeSettings('claude-1', hookCommand('claude', 'claude-1')),
-        ),
+        JSON.stringify(buildClaudeSettings(hookCommand('claude', 'claude-1'))),
       ),
     );
   });
@@ -187,7 +185,7 @@ describe('ClaudeAdapter', () => {
     const adapter = new ClaudeAdapter({ configured: () => true });
     await adapter.spawnCommand(makeSession({ id: 'claude-7' }));
     const written = readFileSync(sessionSettingsPath('claude-7'), 'utf8');
-    expect(written).toContain('claude claude-7');
+    expect(written).toContain("'claude' 'claude-7'");
   });
 
   it('written hook commands carry the HOLO_HOME prefix through the JSON embedding', async () => {
