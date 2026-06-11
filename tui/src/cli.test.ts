@@ -3,16 +3,11 @@
  */
 
 import { homedir } from 'node:os';
+import type { CliDeps } from './cli';
+import { formatLs, helpText, makeEnsureDaemon, parseArgs, runCli } from './cli';
+import { holoHome, tmuxSessionName } from './paths';
 import type { Response } from './protocol';
 import type { HarnessInfo, StateSnapshot } from './types';
-import {
-  formatLs,
-  helpText,
-  makeEnsureDaemon,
-  parseArgs,
-  runCli,
-} from './cli';
-import type { CliCommand, CliDeps } from './cli';
 
 // ---------------------------------------------------------------------------
 // parseArgs
@@ -44,7 +39,11 @@ describe('parseArgs', () => {
   });
 
   it('new <harness>', () => {
-    expect(parseArgs(['new', 'claude'])).toEqual({ kind: 'new', harness: 'claude', cwd: undefined });
+    expect(parseArgs(['new', 'claude'])).toEqual({
+      kind: 'new',
+      harness: 'claude',
+      cwd: undefined,
+    });
   });
 
   it('new <harness> --cwd <path>', () => {
@@ -128,7 +127,9 @@ function makeSnapshot(overrides: Partial<StateSnapshot> = {}): StateSnapshot {
 
 describe('formatLs', () => {
   it('empty → helpful message', () => {
-    expect(formatLs(makeSnapshot(), NOW)).toBe('no sessions — run: holo new <harness>');
+    expect(formatLs(makeSnapshot(), NOW)).toBe(
+      'no sessions — run: holo new <harness>',
+    );
   });
 
   it('shows session id and status', () => {
@@ -215,12 +216,14 @@ describe('formatLs', () => {
           status: 'permission',
           createdAt: NOW,
           statusSince: NOW - 5000,
-          pendingPermission: { tool: 'Bash', input: {}, respondBy: NOW + 10000 },
+          pendingPermission: {
+            tool: 'Bash',
+            input: {},
+            respondBy: NOW + 10000,
+          },
         },
       ],
-      queue: [
-        { sessionId: 'claude-1', score: 100, reason: 'approve: Bash' },
-      ],
+      queue: [{ sessionId: 'claude-1', score: 100, reason: 'approve: Bash' }],
     });
     const out = formatLs(state, NOW);
     expect(out).toContain('approve: Bash');
@@ -355,8 +358,10 @@ function makeDeps(overrides: Partial<CliDeps> = {}): TestDeps {
   const callCounts = { ensureDaemon: 0 };
 
   const base: Omit<CliDeps, keyof typeof overrides> = {
-    request: async (_req) => ({ ok: true } as Response),
-    ensureDaemon: async () => { callCounts.ensureDaemon++; },
+    request: async (_req) => ({ ok: true }) as Response,
+    ensureDaemon: async () => {
+      callCounts.ensureDaemon++;
+    },
     tmux: {
       sessionExists: async () => false,
       ensureSession: async (_argv) => {},
@@ -385,12 +390,16 @@ function makeDeps(overrides: Partial<CliDeps> = {}): TestDeps {
 // ---------------------------------------------------------------------------
 
 describe('runCli attach', () => {
-  it('calls ensureDaemon and ensureSession', async () => {
+  it('calls ensureDaemon and ensureSession with the pane identity env', async () => {
     let ensureSessionArgv: string[] | null = null;
+    let ensureSessionEnv: Record<string, string> | undefined;
     const deps = makeDeps({
       tmux: {
         sessionExists: async () => false,
-        ensureSession: async (argv) => { ensureSessionArgv = argv; },
+        ensureSession: async (argv, env) => {
+          ensureSessionArgv = argv;
+          ensureSessionEnv = env;
+        },
         newWindow: async () => '@1',
         selectWindow: async () => {},
         listWindowIds: async () => [],
@@ -401,14 +410,23 @@ describe('runCli attach', () => {
     expect(code).toBe(0);
     expect(deps.callCounts.ensureDaemon).toBe(1);
     expect(ensureSessionArgv).toEqual(deps.tuiArgv);
+    expect(ensureSessionEnv).toEqual({
+      HOLO_HOME: holoHome(),
+      HOLO_TMUX_SESSION: tmuxSessionName(),
+    });
   });
 
   it('inside tmux: calls attachOrSwitch then selectTuiWindow', async () => {
     const calls: string[] = [];
     const deps = makeDeps({
       isInsideTmux: () => true,
-      attachOrSwitch: () => { calls.push('attach'); return 0; },
-      selectTuiWindow: async () => { calls.push('selectTui'); },
+      attachOrSwitch: () => {
+        calls.push('attach');
+        return 0;
+      },
+      selectTuiWindow: async () => {
+        calls.push('selectTui');
+      },
     });
     const code = await runCli({ kind: 'attach' }, deps);
     expect(code).toBe(0);
@@ -419,8 +437,13 @@ describe('runCli attach', () => {
     const calls: string[] = [];
     const deps = makeDeps({
       isInsideTmux: () => false,
-      attachOrSwitch: () => { calls.push('attach'); return 0; },
-      selectTuiWindow: async () => { calls.push('selectTui'); },
+      attachOrSwitch: () => {
+        calls.push('attach');
+        return 0;
+      },
+      selectTuiWindow: async () => {
+        calls.push('selectTui');
+      },
     });
     const code = await runCli({ kind: 'attach' }, deps);
     expect(code).toBe(0);
@@ -439,7 +462,18 @@ describe('runCli new', () => {
     const deps = makeDeps({
       request: async (req) => {
         if (req.cmd === 'new') requestedCwd = req.cwd;
-        return { ok: true, session: { id: 'fake-1', tmuxWindow: '@2', harness: 'fake', cwd: req.cwd ?? '', status: 'idle', createdAt: NOW, statusSince: NOW } };
+        return {
+          ok: true,
+          session: {
+            id: 'fake-1',
+            tmuxWindow: '@2',
+            harness: 'fake',
+            cwd: req.cwd ?? '',
+            status: 'idle',
+            createdAt: NOW,
+            statusSince: NOW,
+          },
+        };
       },
     });
     await runCli({ kind: 'new', harness: 'fake' }, deps);
@@ -451,7 +485,18 @@ describe('runCli new', () => {
     const deps = makeDeps({
       request: async (req) => {
         if (req.cmd === 'new') requestedCwd = req.cwd;
-        return { ok: true, session: { id: 'fake-1', tmuxWindow: '@2', harness: 'fake', cwd: req.cwd ?? '', status: 'idle', createdAt: NOW, statusSince: NOW } };
+        return {
+          ok: true,
+          session: {
+            id: 'fake-1',
+            tmuxWindow: '@2',
+            harness: 'fake',
+            cwd: req.cwd ?? '',
+            status: 'idle',
+            createdAt: NOW,
+            statusSince: NOW,
+          },
+        };
       },
     });
     await runCli({ kind: 'new', harness: 'fake', cwd: 'subdir' }, deps);
@@ -461,7 +506,18 @@ describe('runCli new', () => {
 
   it('returns exit 0 on success', async () => {
     const deps = makeDeps({
-      request: async () => ({ ok: true, session: { id: 'fake-1', tmuxWindow: '@2', harness: 'fake', cwd: '/a', status: 'idle', createdAt: NOW, statusSince: NOW } }),
+      request: async () => ({
+        ok: true,
+        session: {
+          id: 'fake-1',
+          tmuxWindow: '@2',
+          harness: 'fake',
+          cwd: '/a',
+          status: 'idle',
+          createdAt: NOW,
+          statusSince: NOW,
+        },
+      }),
     });
     const code = await runCli({ kind: 'new', harness: 'fake' }, deps);
     expect(code).toBe(0);
@@ -469,7 +525,18 @@ describe('runCli new', () => {
 
   it('prints spawned message on success', async () => {
     const deps = makeDeps({
-      request: async () => ({ ok: true, session: { id: 'fake-1', tmuxWindow: '@2', harness: 'fake', cwd: '/a', status: 'idle', createdAt: NOW, statusSince: NOW } }),
+      request: async () => ({
+        ok: true,
+        session: {
+          id: 'fake-1',
+          tmuxWindow: '@2',
+          harness: 'fake',
+          cwd: '/a',
+          status: 'idle',
+          createdAt: NOW,
+          statusSince: NOW,
+        },
+      }),
     });
     await runCli({ kind: 'new', harness: 'fake' }, deps);
     expect(deps.stdoutLines.join(' ')).toContain('fake-1');
@@ -486,18 +553,37 @@ describe('runCli new', () => {
 
   it('prints error to stderr on failure', async () => {
     const deps = makeDeps({
-      request: async () => ({ ok: false, error: 'harness not configured: fake' }),
+      request: async () => ({
+        ok: false,
+        error: 'harness not configured: fake',
+      }),
     });
     await runCli({ kind: 'new', harness: 'fake' }, deps);
-    expect(deps.stderrLines.join(' ')).toContain('harness not configured: fake');
+    expect(deps.stderrLines.join(' ')).toContain(
+      'harness not configured: fake',
+    );
   });
 
   it('outside tmux: calls attachOrSwitch on success', async () => {
     let attached = false;
     const deps = makeDeps({
-      request: async () => ({ ok: true, session: { id: 'fake-1', tmuxWindow: '@2', harness: 'fake', cwd: '/a', status: 'idle', createdAt: NOW, statusSince: NOW } }),
+      request: async () => ({
+        ok: true,
+        session: {
+          id: 'fake-1',
+          tmuxWindow: '@2',
+          harness: 'fake',
+          cwd: '/a',
+          status: 'idle',
+          createdAt: NOW,
+          statusSince: NOW,
+        },
+      }),
       isInsideTmux: () => false,
-      attachOrSwitch: () => { attached = true; return 0; },
+      attachOrSwitch: () => {
+        attached = true;
+        return 0;
+      },
     });
     await runCli({ kind: 'new', harness: 'fake' }, deps);
     expect(attached).toBe(true);
@@ -506,9 +592,23 @@ describe('runCli new', () => {
   it('inside tmux: does NOT call attachOrSwitch on success', async () => {
     let attached = false;
     const deps = makeDeps({
-      request: async () => ({ ok: true, session: { id: 'fake-1', tmuxWindow: '@2', harness: 'fake', cwd: '/a', status: 'idle', createdAt: NOW, statusSince: NOW } }),
+      request: async () => ({
+        ok: true,
+        session: {
+          id: 'fake-1',
+          tmuxWindow: '@2',
+          harness: 'fake',
+          cwd: '/a',
+          status: 'idle',
+          createdAt: NOW,
+          statusSince: NOW,
+        },
+      }),
       isInsideTmux: () => true,
-      attachOrSwitch: () => { attached = true; return 0; },
+      attachOrSwitch: () => {
+        attached = true;
+        return 0;
+      },
     });
     await runCli({ kind: 'new', harness: 'fake' }, deps);
     expect(attached).toBe(false);
@@ -518,7 +618,9 @@ describe('runCli new', () => {
     const deps = makeDeps();
     const code = await runCli({ kind: 'new', harness: 'unknown-bot' }, deps);
     expect(code).toBe(1);
-    expect(deps.stderrLines.join(' ')).toContain('unknown harness: unknown-bot');
+    expect(deps.stderrLines.join(' ')).toContain(
+      'unknown harness: unknown-bot',
+    );
     expect(deps.stderrLines.join(' ')).toContain('holo help');
   });
 });
@@ -530,7 +632,18 @@ describe('runCli new', () => {
 describe('runCli next', () => {
   it('prints jumped message on success', async () => {
     const deps = makeDeps({
-      request: async () => ({ ok: true, session: { id: 'claude-1', tmuxWindow: '@1', harness: 'claude', cwd: '/a', status: 'idle', createdAt: NOW, statusSince: NOW } }),
+      request: async () => ({
+        ok: true,
+        session: {
+          id: 'claude-1',
+          tmuxWindow: '@1',
+          harness: 'claude',
+          cwd: '/a',
+          status: 'idle',
+          createdAt: NOW,
+          statusSince: NOW,
+        },
+      }),
     });
     const code = await runCli({ kind: 'next' }, deps);
     expect(code).toBe(0);
@@ -540,21 +653,46 @@ describe('runCli next', () => {
   it('outside tmux: calls attachOrSwitch', async () => {
     let attached = false;
     const deps = makeDeps({
-      request: async () => ({ ok: true, session: { id: 'fake-1', tmuxWindow: '@1', harness: 'fake', cwd: '/a', status: 'idle', createdAt: NOW, statusSince: NOW } }),
+      request: async () => ({
+        ok: true,
+        session: {
+          id: 'fake-1',
+          tmuxWindow: '@1',
+          harness: 'fake',
+          cwd: '/a',
+          status: 'idle',
+          createdAt: NOW,
+          statusSince: NOW,
+        },
+      }),
       isInsideTmux: () => false,
-      attachOrSwitch: () => { attached = true; return 0; },
+      attachOrSwitch: () => {
+        attached = true;
+        return 0;
+      },
     });
     await runCli({ kind: 'next' }, deps);
     expect(attached).toBe(true);
   });
 
-  it('queue empty → exit 0 (not an error)', async () => {
+  it('queue empty (plain ok, no session) → exit 0 (not an error)', async () => {
     const deps = makeDeps({
-      request: async () => ({ ok: false, error: 'queue is empty' }),
+      request: async () => ({ ok: true }),
     });
     const code = await runCli({ kind: 'next' }, deps);
     expect(code).toBe(0);
     expect(deps.stdoutLines.join(' ')).toContain('queue is empty');
+    expect(deps.stderrLines).toEqual([]);
+  });
+
+  it('daemon error → stderr + exit 1', async () => {
+    const deps = makeDeps({
+      request: async () => ({ ok: false, error: 'spawn tmux ENOENT' }),
+    });
+    const code = await runCli({ kind: 'next' }, deps);
+    expect(code).toBe(1);
+    expect(deps.stderrLines.join(' ')).toContain('spawn tmux ENOENT');
+    expect(deps.stdoutLines).toEqual([]);
   });
 });
 
@@ -585,7 +723,12 @@ describe('runCli ls', () => {
   });
 
   it('calls ensureDaemon', async () => {
-    const state: StateSnapshot = { sessions: [], queue: [], harnesses: [], recentCwds: [] };
+    const state: StateSnapshot = {
+      sessions: [],
+      queue: [],
+      harnesses: [],
+      recentCwds: [],
+    };
     const deps = makeDeps({
       request: async () => ({ ok: true, state }),
     });
@@ -642,7 +785,9 @@ describe('runCli setup', () => {
         newWindow: async () => '@1',
         selectWindow: async () => {},
         listWindowIds: async () => [],
-        installReturnBinding: async () => { throw new Error('no server'); },
+        installReturnBinding: async () => {
+          throw new Error('no server');
+        },
       },
     });
     await runCli({ kind: 'setup' }, deps);
@@ -678,44 +823,76 @@ describe('makeEnsureDaemon', () => {
   it('ping-ok short-circuits — no spawn', async () => {
     let spawned = false;
     const ensureDaemon = makeEnsureDaemon({
-      spawnDetached: () => { spawned = true; },
+      spawnDetached: () => {
+        spawned = true;
+      },
       request: async () => ({ ok: true }),
       daemonArgv: ['bun', 'daemon'],
       pollIntervalMs: 10,
       timeoutMs: 100,
+      pingBackoffMs: [1, 2, 4],
     });
     await ensureDaemon();
     expect(spawned).toBe(false);
   });
 
-  it('ping-fail → spawn + polls until succeeds', async () => {
+  it('a single failed ping never spawns — retried with backoff first', async () => {
     let spawned = false;
-    let callCount = 0;
+    let pings = 0;
     const ensureDaemon = makeEnsureDaemon({
-      spawnDetached: () => { spawned = true; },
+      spawnDetached: () => {
+        spawned = true;
+      },
       request: async () => {
-        callCount++;
-        // First call (ping before spawn) throws, then after spawn
-        // we return ok on the 3rd call
-        if (callCount < 3) throw new Error('ECONNREFUSED');
+        pings++;
+        // busy daemon misses the first two pings, answers the third
+        if (pings < 3) throw new Error('daemon request timed out after 300ms');
+        return { ok: true };
+      },
+      daemonArgv: ['bun', 'daemon'],
+      pollIntervalMs: 10,
+      timeoutMs: 100,
+      pingBackoffMs: [1, 2, 4],
+    });
+    await ensureDaemon();
+    expect(spawned).toBe(false);
+    expect(pings).toBe(3);
+  });
+
+  it('all ping retries fail → spawn + polls until succeeds', async () => {
+    const spawned = { value: false };
+    let pingsBeforeSpawn = 0;
+    const ensureDaemon = makeEnsureDaemon({
+      spawnDetached: () => {
+        spawned.value = true;
+      },
+      request: async () => {
+        if (!spawned.value) {
+          pingsBeforeSpawn++;
+          throw new Error('ECONNREFUSED');
+        }
         return { ok: true };
       },
       daemonArgv: ['bun', 'daemon'],
       pollIntervalMs: 10,
       timeoutMs: 1000,
+      pingBackoffMs: [1, 2, 4],
     });
     await ensureDaemon();
-    expect(spawned).toBe(true);
-    expect(callCount).toBeGreaterThanOrEqual(3);
+    expect(spawned.value).toBe(true);
+    expect(pingsBeforeSpawn).toBe(4); // initial ping + 3 backoff retries
   });
 
   it('never succeeds → throws', async () => {
     const ensureDaemon = makeEnsureDaemon({
       spawnDetached: () => {},
-      request: async () => { throw new Error('ECONNREFUSED'); },
+      request: async () => {
+        throw new Error('ECONNREFUSED');
+      },
       daemonArgv: ['bun', 'daemon'],
       pollIntervalMs: 5,
       timeoutMs: 30,
+      pingBackoffMs: [1, 2, 4],
     });
     await expect(ensureDaemon()).rejects.toThrow('holod failed to start');
   }, 5000);

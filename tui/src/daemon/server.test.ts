@@ -4,7 +4,14 @@
  * client.ts talks to the daemon exactly like the CLI/hooks/TUI do.
  */
 
-import { existsSync, mkdtempSync, rmSync } from 'node:fs';
+import {
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  unlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import net from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -213,18 +220,20 @@ describe('subscribe', () => {
 describe('new', () => {
   it('spawns a session: window created + selected, ensureSession with tuiArgv', async () => {
     const { tmux } = await startDaemon();
+    const env = { HOLO_HOME: holoHomeDir, HOLO_TMUX_SESSION: 'holo' };
     const session = expectSession(await newSession('claude', '/repo/a'));
     expect(session.id).toBe('claude-1');
     expect(session.tmuxWindow).toBe('@1');
     expect(session.status).toBe('idle');
     expect(tmux.calls).toContainEqual({
       method: 'ensureSession',
-      args: [TUI_ARGV],
+      args: [TUI_ARGV, env],
     });
     expect(tmux.windows.get('@1')).toEqual({
       name: 'claude-1',
       cwd: '/repo/a',
       argv: ['sleep', '999'],
+      env,
     });
     expect(tmux.selected).toBe('@1'); // jump-on-spawn
     expect(find(await ls(), 'claude-1')?.tmuxWindow).toBe('@1');
@@ -345,7 +354,11 @@ describe('permission flow', () => {
     );
     await until(async () => (await status('claude-1')) === 'permission');
     expect(
-      await request({ cmd: 'respondPermission', sessionId: 'claude-1', allow: false }),
+      await request({
+        cmd: 'respondPermission',
+        sessionId: 'claude-1',
+        allow: false,
+      }),
     ).toEqual({ ok: true });
     expect(await held).toEqual({ ok: true, decision: 'deny' });
     expect(await status('claude-1')).toBe('running');
@@ -413,8 +426,8 @@ describe('permission flow', () => {
     });
   });
 
-  it('a newer permission for the same session releases the old hold as timeout', async () => {
-    await startDaemon();
+  /** First permission (Bash) held; second (Edit) arrives while it is. */
+  async function overlappingPermissions() {
     await newSession();
     clock.now += 10;
     const first = request(
@@ -430,24 +443,66 @@ describe('permission flow', () => {
     );
     await until(async () => (await status('claude-1')) === 'permission');
     clock.now += 10;
-    const second = request(
-      {
-        cmd: 'permission',
-        sessionId: 'claude-1',
-        tool: 'Edit',
-        input: 2,
-        timeoutMs: 5000,
-        ts: clock.now,
-      },
-      { timeoutMs: 4000 },
-    );
-    expect(await first).toEqual({ ok: true, decision: 'timeout' });
-    await until(
-      async () => find(await ls(), 'claude-1')?.pendingPermission?.tool === 'Edit',
-      'second hold',
-    );
-    await request({ cmd: 'respondPermission', sessionId: 'claude-1', allow: true });
-    expect(await second).toEqual({ ok: true, decision: 'allow' });
+    const second = await request({
+      cmd: 'permission',
+      sessionId: 'claude-1',
+      tool: 'Edit',
+      input: 2,
+      timeoutMs: 5000,
+      ts: clock.now,
+    });
+    return { first, second };
+  }
+
+  it('a second permission gets an immediate timeout while the first stays held and answerable', async () => {
+    await startDaemon();
+    const { first, second } = await overlappingPermissions();
+    // newer hook degrades to the in-pane dialog; the original hold is untouched
+    expect(second).toEqual({ ok: true, decision: 'timeout' });
+    expect(find(await ls(), 'claude-1')?.pendingPermission?.tool).toBe('Bash');
+    await request({
+      cmd: 'respondPermission',
+      sessionId: 'claude-1',
+      allow: true,
+    });
+    expect(await first).toEqual({ ok: true, decision: 'allow' });
+  });
+
+  it('resolving the held permission lands on needs_input — the pane is blocked on the second dialog', async () => {
+    await startDaemon();
+    const { first } = await overlappingPermissions();
+    // the Notification fired by the in-pane dialog is masked (status is
+    // 'permission') but must NOT erase the outstanding-dialog marker
+    await hook('claude-1', {
+      kind: 'notification',
+      reason: 'permission prompt',
+    });
+    await request({
+      cmd: 'respondPermission',
+      sessionId: 'claude-1',
+      allow: true,
+    });
+    expect(await first).toEqual({ ok: true, decision: 'allow' });
+    const state = await ls();
+    const session = find(state, 'claude-1');
+    expect(session?.status).toBe('needs_input');
+    expect(session?.attentionReason).toBe('permission prompt in pane: Edit');
+    expect(state.queue[0]?.sessionId).toBe('claude-1'); // visible, not stuck running
+  });
+
+  it('a later lifecycle event clears the pane-dialog state back to running', async () => {
+    await startDaemon();
+    const { first } = await overlappingPermissions();
+    await request({
+      cmd: 'respondPermission',
+      sessionId: 'claude-1',
+      allow: true,
+    });
+    await first;
+    await hook('claude-1', { kind: 'tool' }); // dialog answered — the turn resumed
+    const session = find(await ls(), 'claude-1');
+    expect(session?.status).toBe('running');
+    expect(session?.attentionReason).toBeUndefined();
   });
 
   it('held socket closing early resolves the permission as timeout', async () => {
@@ -477,12 +532,9 @@ describe('permission flow', () => {
 });
 
 describe('next / jump', () => {
-  it('next with empty queue → ok:false', async () => {
+  it('next with empty queue → plain ok, no session', async () => {
     await startDaemon();
-    expect(await request({ cmd: 'next' })).toEqual({
-      ok: false,
-      error: 'queue is empty',
-    });
+    expect(await request({ cmd: 'next' })).toEqual({ ok: true });
   });
 
   it('next selects the top-scored session window', async () => {
@@ -511,10 +563,14 @@ describe('next / jump', () => {
 });
 
 describe('sweep', () => {
-  it('marks sessions with dead windows exited, then prunes after grace', async () => {
+  it('marks sessions exited after two missing sweeps, then prunes after grace', async () => {
     const { daemon, tmux } = await startDaemon();
     await newSession();
     tmux.closeWindow('@1');
+    await daemon.sweepOnce();
+    // first miss — could be a transient bad list-windows sample
+    expect(find(await ls(), 'claude-1')?.status).toBe('idle');
+
     await daemon.sweepOnce();
     const session = find(await ls(), 'claude-1');
     expect(session?.status).toBe('exited');
@@ -524,6 +580,105 @@ describe('sweep', () => {
     clock.now += 61_000;
     await daemon.sweepOnce();
     expect(find(await ls(), 'claude-1')).toBeUndefined();
+  });
+
+  it('a window reappearing after one missed sweep resets the strike', async () => {
+    const { daemon, tmux } = await startDaemon();
+    await newSession();
+    const window = tmux.windows.get('@1');
+    if (!window) throw new Error('expected window @1');
+    tmux.closeWindow('@1');
+    await daemon.sweepOnce(); // strike one
+    tmux.windows.set('@1', window); // tmux answered again
+    await daemon.sweepOnce(); // strike cleared
+    tmux.closeWindow('@1');
+    await daemon.sweepOnce(); // strike one again — still live
+    expect(find(await ls(), 'claude-1')?.status).toBe('idle');
+    await daemon.sweepOnce();
+    expect(find(await ls(), 'claude-1')?.status).toBe('exited');
+  });
+
+  it('a rejecting listWindowIds skips the tick without touching sessions', async () => {
+    const { daemon, tmux } = await startDaemon();
+    await newSession();
+    tmux.listWindowIds = async () => {
+      throw new Error('spawn tmux EAGAIN');
+    };
+    await expect(daemon.sweepOnce()).rejects.toThrow('EAGAIN');
+    expect(find(await ls(), 'claude-1')?.status).toBe('idle');
+  });
+
+  it('re-broadcasts when aging changes scores with no registry change', async () => {
+    const { daemon } = await startDaemon();
+    await newSession(); // idle — base score 30
+    const pushes: StatePush[] = [];
+    const sub = subscribe({ onState: (push) => pushes.push(push) });
+    await until(() => pushes.length >= 1, 'initial push');
+    expect(pushes[pushes.length - 1]?.queue[0]?.score).toBe(30);
+
+    clock.now += 61_000; // one full minute → +2 aging bonus
+    await daemon.sweepOnce();
+    await until(() => pushes.length >= 2, 'aging push');
+    expect(pushes[pushes.length - 1]?.queue[0]?.score).toBe(32);
+
+    // same minute — queue identical, no extra push
+    const count = pushes.length;
+    await daemon.sweepOnce();
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(pushes.length).toBe(count);
+    sub.close();
+  });
+
+  it('re-probes harness configured flags and broadcasts changes', async () => {
+    const cursorState = { configured: false };
+    const { daemon } = await startDaemon({
+      adapters: makeAdapters({
+        cursor: {
+          id: 'cursor',
+          spawnCommand: () => ['sleep', '999'],
+          configured: () => cursorState.configured,
+          capabilities: { remotePermission: true, questionText: true },
+        },
+      }),
+    });
+    expect((await ls()).harnesses).toEqual(HARNESSES);
+    const pushes: StatePush[] = [];
+    const sub = subscribe({ onState: (push) => pushes.push(push) });
+    await until(() => pushes.length >= 1, 'initial push');
+
+    cursorState.configured = true; // "installed" while holod runs
+    await daemon.sweepOnce();
+    await until(() => pushes.length >= 2, 'harness push');
+    const fresh = [
+      { id: 'claude', configured: true },
+      { id: 'cursor', configured: true },
+    ];
+    expect(pushes[pushes.length - 1]?.harnesses).toEqual(fresh);
+    expect((await ls()).harnesses).toEqual(fresh);
+    sub.close();
+  });
+});
+
+describe('socket takeover defense', () => {
+  it('recovers from a stale socket file left by a crashed daemon', async () => {
+    writeFileSync(socketPath(), ''); // crash leaves the path occupied
+    await startDaemon();
+    expect(await request({ cmd: 'ping' })).toEqual({ ok: true });
+  });
+
+  it('stops itself when its socket file disappears, without clobbering state', async () => {
+    const { daemon } = await startDaemon();
+    await newSession();
+    unlinkSync(socketPath()); // another daemon took the path over
+    const takeoverState =
+      '{"sessions":[],"counters":{},"recentCwds":["/theirs"]}';
+    writeFileSync(statePath(), takeoverState);
+    await daemon.sweepOnce();
+    await expect(
+      request({ cmd: 'ping' }, { timeoutMs: 250 }),
+    ).rejects.toThrow();
+    // the new owner's state file was not overwritten by our shutdown persist
+    expect(readFileSync(statePath(), 'utf8')).toBe(takeoverState);
   });
 });
 

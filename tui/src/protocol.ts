@@ -54,7 +54,7 @@ export type Request =
     }
   | { cmd: 'ls' }
   | { cmd: 'new'; harness: HarnessId; cwd: string }
-  /** jump to top queue item's tmux window */
+  /** jump to top queue item's tmux window — an empty queue replies plain `{ok:true}` (no session); `ok:false` means a real failure */
   | { cmd: 'next' }
   /** jump to a specific session's tmux window */
   | { cmd: 'jump'; sessionId: string }
@@ -65,6 +65,7 @@ export type Request =
   | { cmd: 'shutdown' };
 
 export type Response =
+  /** plain ack — also `next`'s benign "queue is empty" reply */
   | { ok: true }
   | { ok: true; state: StateSnapshot }
   | { ok: true; session: Session }

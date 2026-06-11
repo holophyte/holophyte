@@ -9,7 +9,7 @@ import { existsSync, mkdirSync, unlinkSync } from 'node:fs';
 import net from 'node:net';
 import { tryRequest } from '../client';
 import { onJsonLines, writeJsonLine } from '../ndjson';
-import { holoHome, socketPath, statePath } from '../paths';
+import { holoHome, socketPath, statePath, tmuxSessionName } from '../paths';
 import type {
   PermissionDecision,
   Request,
@@ -21,6 +21,7 @@ import type {
   HarnessAdapter,
   HarnessId,
   HarnessInfo,
+  QueueItem,
   Session,
   StateSnapshot,
 } from '../types';
@@ -31,7 +32,7 @@ import { loadStateFile, saveStateFile } from './state-file';
 export interface DaemonOptions {
   tmux: Tmux;
   adapters: Record<HarnessId, HarnessAdapter>;
-  /** precomputed configured flags — avoids re-probing binaries per snapshot */
+  /** initial configured flags — re-probed against the adapters on each sweep */
   harnesses: HarnessInfo[];
   /** argv for window 0 (the TUI) when creating the tmux session */
   tuiArgv: string[];
@@ -57,17 +58,32 @@ export class Daemon {
   private sweepTimer: NodeJS.Timeout | null = null;
   private started = false;
   private stopping: Promise<void> | null = null;
+  /** another daemon took over the socket path — stop without touching its socket/state */
+  private takenOver = false;
+  /** live configured flags — seeded from opts.harnesses, re-probed on each sweep */
+  private harnesses: HarnessInfo[];
+  /** queue of the last push — aging changes scores with time, not events */
+  private lastBroadcastQueue: QueueItem[] | null = null;
+  /** window ids missing on the previous sweep — two consecutive misses terminate */
+  private missingWindows = new Set<string>();
   private readonly now: () => number;
   private readonly sweepIntervalMs: number;
   private readonly permissionMaxHoldMs: number;
   // captured once — HOLO_HOME may change under us (tests swap it per case)
   private readonly socketFile = socketPath();
   private readonly stateFile = statePath();
+  // pinned into spawned panes via tmux -e: panes otherwise inherit the tmux
+  // SERVER's env, which may carry a different HOLO_HOME than this daemon's
+  private readonly paneEnv: Record<string, string> = {
+    HOLO_HOME: holoHome(),
+    HOLO_TMUX_SESSION: tmuxSessionName(),
+  };
 
   constructor(private readonly opts: DaemonOptions) {
     this.now = opts.now ?? Date.now;
     this.sweepIntervalMs = opts.sweepIntervalMs ?? 5000;
     this.permissionMaxHoldMs = opts.permissionMaxHoldMs ?? 90_000;
+    this.harnesses = opts.harnesses;
   }
 
   async start(): Promise<void> {
@@ -77,26 +93,22 @@ export class Daemon {
       ? SessionRegistry.fromJSON(persisted)
       : new SessionRegistry();
 
-    if (existsSync(this.socketFile)) {
+    // Bind-first: let the kernel arbitrate the socket path. A check-then-
+    // unlink dance can delete a LIVE daemon's socket between check and bind.
+    try {
+      await this.listen();
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code !== 'EADDRINUSE') throw err;
       // A live daemon answers ping; a dead one left a stale socket file.
       const live = await tryRequest({ cmd: 'ping' }, { timeoutMs: 250 });
       if (live) throw new Error('holod already running');
       try {
         unlinkSync(this.socketFile);
       } catch {
-        // raced away — listen() surfaces any real problem
+        // raced away — the retry surfaces any real problem
       }
+      await this.listen();
     }
-
-    const server = net.createServer((socket) => this.onConnection(socket));
-    this.server = server;
-    await new Promise<void>((resolve, reject) => {
-      server.once('error', reject);
-      server.listen(this.socketFile, () => {
-        server.off('error', reject);
-        resolve();
-      });
-    });
     this.started = true;
 
     await this.sweepOnce();
@@ -106,6 +118,18 @@ export class Daemon {
       });
     }, this.sweepIntervalMs);
     this.sweepTimer.unref();
+  }
+
+  private listen(): Promise<void> {
+    const server = net.createServer((socket) => this.onConnection(socket));
+    return new Promise<void>((resolve, reject) => {
+      server.once('error', reject);
+      server.listen(this.socketFile, () => {
+        server.off('error', reject);
+        this.server = server;
+        resolve();
+      });
+    });
   }
 
   stop(): Promise<void> {
@@ -134,24 +158,86 @@ export class Daemon {
     if (server) {
       await new Promise<void>((resolve) => server.close(() => resolve()));
     }
-    this.persist();
-    try {
-      unlinkSync(this.socketFile);
-    } catch {
-      // already gone (node unlinks unix sockets on server close)
+    // when another daemon took over, the socket path and state.json are ITS
+    // now — persisting or unlinking here would clobber the live daemon
+    if (!this.takenOver) {
+      this.persist();
+      try {
+        unlinkSync(this.socketFile);
+      } catch {
+        // already gone (node unlinks unix sockets on server close)
+      }
     }
   }
 
   /** Reconcile against live tmux windows + prune old exited sessions. */
   async sweepOnce(): Promise<void> {
+    if (this.started && !existsSync(this.socketFile)) {
+      // Our socket file is gone — another daemon took over the path. Bow out
+      // instead of fighting it over tmux windows and state.json.
+      this.takenOver = true;
+      await this.stop();
+      return;
+    }
     const liveIds = await this.opts.tmux.listWindowIds();
+    // Two-strike termination: one bad list-windows sample must not destroy
+    // session tracking, so a first-time-missing window still counts as live.
+    const live = new Set(liveIds);
+    const missing = new Set<string>();
+    for (const session of this.registry.all()) {
+      if (session.status === 'exited' || session.tmuxWindow === '') continue;
+      if (!live.has(session.tmuxWindow)) missing.add(session.tmuxWindow);
+    }
+    const firstTimeMissing = [...missing].filter(
+      (id) => !this.missingWindows.has(id),
+    );
+    this.missingWindows = missing;
     // run both — pruning must happen even when reconcile changed nothing
-    const reconciled = this.registry.reconcile(liveIds, this.now());
+    const reconciled = this.registry.reconcile(
+      [...liveIds, ...firstTimeMissing],
+      this.now(),
+    );
     const pruned = this.registry.pruneExited(this.now());
+    const harnessesChanged = await this.refreshHarnesses();
     if (reconciled || pruned) {
       this.persist();
       this.broadcast();
+    } else if (harnessesChanged || this.queueChanged()) {
+      // aging bonus / configured-ness move with time, not with events
+      this.broadcast();
     }
+  }
+
+  /** Re-probe configured-ness — harnesses can be (un)installed while holod runs. */
+  private async refreshHarnesses(): Promise<boolean> {
+    const fresh = await Promise.all(
+      this.harnesses.map(async ({ id }) => ({
+        id,
+        configured: await this.opts.adapters[id].configured(),
+      })),
+    );
+    const changed = fresh.some(
+      (info, i) => info.configured !== this.harnesses[i]?.configured,
+    );
+    this.harnesses = fresh;
+    return changed;
+  }
+
+  /** Has the queue (order, scores, reasons) drifted since the last push? */
+  private queueChanged(): boolean {
+    const queue = buildQueue(this.registry.all(), this.now());
+    const last = this.lastBroadcastQueue;
+    if (last === null) return queue.length > 0;
+    if (queue.length !== last.length) return true;
+    return queue.some((item, i) => {
+      const prev = last[i];
+      return (
+        prev === undefined ||
+        prev.sessionId !== item.sessionId ||
+        prev.score !== item.score ||
+        prev.reason !== item.reason
+      );
+    });
   }
 
   private onConnection(socket: net.Socket): void {
@@ -175,7 +261,11 @@ export class Daemon {
         this.reply(socket, { ok: true });
         return;
       case 'hook': {
-        const changed = this.registry.applyEvent(req.sessionId, req.event, req.ts);
+        const changed = this.registry.applyEvent(
+          req.sessionId,
+          req.event,
+          req.ts,
+        );
         this.reply(socket, { ok: true }); // always ack fast, even unknown session
         if (changed) {
           this.persist();
@@ -189,10 +279,9 @@ export class Daemon {
       case 'subscribe': {
         this.subscribers.add(socket);
         socket.once('close', () => this.subscribers.delete(socket));
-        writeJsonLine(socket, {
-          type: 'state',
-          ...this.snapshot(),
-        } satisfies StatePush);
+        const push: StatePush = { type: 'state', ...this.snapshot() };
+        this.lastBroadcastQueue = push.queue;
+        writeJsonLine(socket, push);
         return;
       }
       case 'new':
@@ -203,7 +292,8 @@ export class Daemon {
         const top = queue[0];
         const session = top ? this.registry.get(top.sessionId) : undefined;
         if (!session) {
-          this.reply(socket, { ok: false, error: 'queue is empty' });
+          // empty queue is a normal outcome, not a failure — ok, no session
+          this.reply(socket, { ok: true });
           return;
         }
         await this.opts.tmux.selectWindow(session.tmuxWindow);
@@ -258,7 +348,10 @@ export class Daemon {
       | HarnessAdapter
       | undefined;
     if (!adapter) {
-      this.reply(socket, { ok: false, error: `unknown harness: ${req.harness}` });
+      this.reply(socket, {
+        ok: false,
+        error: `unknown harness: ${req.harness}`,
+      });
       return;
     }
     if (!(await adapter.configured())) {
@@ -270,13 +363,14 @@ export class Daemon {
     }
     let session: Session | undefined;
     try {
-      await this.opts.tmux.ensureSession(this.opts.tuiArgv);
+      await this.opts.tmux.ensureSession(this.opts.tuiArgv, this.paneEnv);
       session = this.registry.createSession(req.harness, req.cwd, this.now());
       const argv = await adapter.spawnCommand(session);
       const windowId = await this.opts.tmux.newWindow({
         name: session.id,
         cwd: req.cwd,
         argv,
+        env: this.paneEnv,
       });
       this.registry.setTmuxWindow(session.id, windowId);
       await this.opts.tmux.selectWindow(windowId); // jump-on-spawn per spec
@@ -307,9 +401,13 @@ export class Daemon {
   ): void {
     const holdMs = Math.min(req.timeoutMs, this.permissionMaxHoldMs);
     const respondBy = this.now() + holdMs;
-    // rare parallel-tool edge: a newer permission replaces the old hold
+    // rare parallel-tool edge: the existing hold stays remotely answerable;
+    // the newer request gets 'timeout' (silent hook exit → in-pane dialog)
+    // and the registry remembers the pane is blocked on that dialog
     if (this.holds.has(req.sessionId)) {
-      this.releaseHold(req.sessionId, 'timeout');
+      this.registry.notePaneDialog(req.sessionId, req.tool, req.ts);
+      this.reply(socket, { ok: true, decision: 'timeout' });
+      return;
     }
     const ok = this.registry.beginPermission(
       req.sessionId,
@@ -331,11 +429,13 @@ export class Daemon {
     this.holds.set(req.sessionId, { socket, timer });
     socket.once('close', () => {
       const hold = this.holds.get(req.sessionId);
-      if (!hold || hold.socket !== socket) return; // resolved or replaced
+      if (!hold || hold.socket !== socket) return; // already resolved
       this.holds.delete(req.sessionId);
       clearTimeout(hold.timer);
       // agent killed mid-hold — nothing is waiting for a decision anymore
-      if (this.registry.resolvePermission(req.sessionId, 'timeout', this.now())) {
+      if (
+        this.registry.resolvePermission(req.sessionId, 'timeout', this.now())
+      ) {
         this.persist();
         this.broadcast();
       }
@@ -373,13 +473,14 @@ export class Daemon {
     return {
       sessions,
       queue: buildQueue(sessions, this.now()),
-      harnesses: this.opts.harnesses,
+      harnesses: this.harnesses,
       recentCwds: this.registry.recentCwds(),
     };
   }
 
   private broadcast(): void {
     const push: StatePush = { type: 'state', ...this.snapshot() };
+    this.lastBroadcastQueue = push.queue;
     for (const subscriber of [...this.subscribers]) {
       try {
         writeJsonLine(subscriber, push);

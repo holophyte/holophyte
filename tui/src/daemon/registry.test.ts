@@ -104,7 +104,9 @@ describe('applyEvent transitions', () => {
   it('ready → idle awaiting first prompt', () => {
     const { registry, session } = setup();
     registry.applyEvent(session.id, { kind: 'prompt' }, T0 + 1);
-    expect(registry.applyEvent(session.id, { kind: 'ready' }, T0 + 2)).toBe(true);
+    expect(registry.applyEvent(session.id, { kind: 'ready' }, T0 + 2)).toBe(
+      true,
+    );
     expect(session.status).toBe('idle');
     expect(session.attentionReason).toBe('awaiting first prompt');
     expect(session.statusSince).toBe(T0 + 2);
@@ -112,7 +114,9 @@ describe('applyEvent transitions', () => {
 
   it('prompt → running and clears attentionReason', () => {
     const { registry, session } = setup();
-    expect(registry.applyEvent(session.id, { kind: 'prompt' }, T0 + 1)).toBe(true);
+    expect(registry.applyEvent(session.id, { kind: 'prompt' }, T0 + 1)).toBe(
+      true,
+    );
     expect(session.status).toBe('running');
     expect(session.attentionReason).toBeUndefined();
     expect(session.statusSince).toBe(T0 + 1);
@@ -120,8 +124,14 @@ describe('applyEvent transitions', () => {
 
   it('tool → running and clears attentionReason', () => {
     const { registry, session } = setup();
-    registry.applyEvent(session.id, { kind: 'notification', reason: 'waiting' }, T0 + 1);
-    expect(registry.applyEvent(session.id, { kind: 'tool' }, T0 + 2)).toBe(true);
+    registry.applyEvent(
+      session.id,
+      { kind: 'notification', reason: 'waiting' },
+      T0 + 1,
+    );
+    expect(registry.applyEvent(session.id, { kind: 'tool' }, T0 + 2)).toBe(
+      true,
+    );
     expect(session.status).toBe('running');
     expect(session.attentionReason).toBeUndefined();
   });
@@ -129,7 +139,11 @@ describe('applyEvent transitions', () => {
   it('question → needs_input with the question text', () => {
     const { registry, session } = setup();
     expect(
-      registry.applyEvent(session.id, { kind: 'question', text: 'Pick a name' }, T0 + 1),
+      registry.applyEvent(
+        session.id,
+        { kind: 'question', text: 'Pick a name' },
+        T0 + 1,
+      ),
     ).toBe(true);
     expect(session.status).toBe('needs_input');
     expect(session.attentionReason).toBe('Pick a name');
@@ -138,7 +152,11 @@ describe('applyEvent transitions', () => {
   it('notification → needs_input with the reason', () => {
     const { registry, session } = setup();
     expect(
-      registry.applyEvent(session.id, { kind: 'notification', reason: 'needs approval' }, T0 + 1),
+      registry.applyEvent(
+        session.id,
+        { kind: 'notification', reason: 'needs approval' },
+        T0 + 1,
+      ),
     ).toBe(true);
     expect(session.status).toBe('needs_input');
     expect(session.attentionReason).toBe('needs approval');
@@ -148,7 +166,11 @@ describe('applyEvent transitions', () => {
     const { registry, session } = setup();
     registry.applyEvent(session.id, { kind: 'prompt' }, T0 + 1);
     expect(
-      registry.applyEvent(session.id, { kind: 'stop', lastMessage: 'All done' }, T0 + 2),
+      registry.applyEvent(
+        session.id,
+        { kind: 'stop', lastMessage: 'All done' },
+        T0 + 2,
+      ),
     ).toBe(true);
     expect(session.status).toBe('idle');
     expect(session.attentionReason).toBe('review / next prompt');
@@ -157,7 +179,11 @@ describe('applyEvent transitions', () => {
 
   it('stop without lastMessage keeps the existing one', () => {
     const { registry, session } = setup();
-    registry.applyEvent(session.id, { kind: 'stop', lastMessage: 'First' }, T0 + 1);
+    registry.applyEvent(
+      session.id,
+      { kind: 'stop', lastMessage: 'First' },
+      T0 + 1,
+    );
     registry.applyEvent(session.id, { kind: 'prompt' }, T0 + 2);
     registry.applyEvent(session.id, { kind: 'stop' }, T0 + 3);
     expect(session.lastMessage).toBe('First');
@@ -166,7 +192,11 @@ describe('applyEvent transitions', () => {
   it('exit → exited with reason', () => {
     const { registry, session } = setup();
     expect(
-      registry.applyEvent(session.id, { kind: 'exit', reason: 'logout' }, T0 + 1),
+      registry.applyEvent(
+        session.id,
+        { kind: 'exit', reason: 'logout' },
+        T0 + 1,
+      ),
     ).toBe(true);
     expect(session.status).toBe('exited');
     expect(session.attentionReason).toBe('logout');
@@ -175,7 +205,11 @@ describe('applyEvent transitions', () => {
   it('error → error with reason', () => {
     const { registry, session } = setup();
     expect(
-      registry.applyEvent(session.id, { kind: 'error', reason: 'crashed' }, T0 + 1),
+      registry.applyEvent(
+        session.id,
+        { kind: 'error', reason: 'crashed' },
+        T0 + 1,
+      ),
     ).toBe(true);
     expect(session.status).toBe('error');
     expect(session.attentionReason).toBe('crashed');
@@ -183,8 +217,14 @@ describe('applyEvent transitions', () => {
 
   it('error is not terminal — a prompt resumes running', () => {
     const { registry, session } = setup();
-    registry.applyEvent(session.id, { kind: 'error', reason: 'crashed' }, T0 + 1);
-    expect(registry.applyEvent(session.id, { kind: 'prompt' }, T0 + 2)).toBe(true);
+    registry.applyEvent(
+      session.id,
+      { kind: 'error', reason: 'crashed' },
+      T0 + 1,
+    );
+    expect(registry.applyEvent(session.id, { kind: 'prompt' }, T0 + 2)).toBe(
+      true,
+    );
     expect(session.status).toBe('running');
   });
 
@@ -196,19 +236,31 @@ describe('applyEvent transitions', () => {
   it('returns false when nothing changes', () => {
     const { registry, session } = setup();
     // first ready is observable: 'starting…' → 'awaiting first prompt'
-    expect(registry.applyEvent(session.id, { kind: 'ready' }, T0 + 1)).toBe(true);
+    expect(registry.applyEvent(session.id, { kind: 'ready' }, T0 + 1)).toBe(
+      true,
+    );
     // a repeat ready changes nothing
-    expect(registry.applyEvent(session.id, { kind: 'ready' }, T0 + 2)).toBe(false);
+    expect(registry.applyEvent(session.id, { kind: 'ready' }, T0 + 2)).toBe(
+      false,
+    );
     expect(session.statusSince).toBe(T0);
   });
 
   it('updates statusSince only when status actually changes', () => {
     const { registry, session } = setup();
-    registry.applyEvent(session.id, { kind: 'question', text: 'First?' }, T0 + 1);
+    registry.applyEvent(
+      session.id,
+      { kind: 'question', text: 'First?' },
+      T0 + 1,
+    );
     expect(session.statusSince).toBe(T0 + 1);
     // same status, new reason — reason updates, statusSince does not
     expect(
-      registry.applyEvent(session.id, { kind: 'question', text: 'Second?' }, T0 + 2),
+      registry.applyEvent(
+        session.id,
+        { kind: 'question', text: 'Second?' },
+        T0 + 2,
+      ),
     ).toBe(true);
     expect(session.attentionReason).toBe('Second?');
     expect(session.statusSince).toBe(T0 + 1);
@@ -235,10 +287,12 @@ describe('applyEvent transitions', () => {
 });
 
 describe('stale guard', () => {
-  it('rejects a stale stop after a newer prompt', () => {
+  it('rejects a stop more than 2s staler than a newer prompt', () => {
     const { registry, session } = setup();
-    registry.applyEvent(session.id, { kind: 'prompt' }, T0 + 200);
-    expect(registry.applyEvent(session.id, { kind: 'stop' }, T0 + 150)).toBe(false);
+    registry.applyEvent(session.id, { kind: 'prompt' }, T0 + 5_000);
+    expect(registry.applyEvent(session.id, { kind: 'stop' }, T0 + 2_999)).toBe(
+      false,
+    );
     expect(session.status).toBe('running');
   });
 
@@ -246,16 +300,33 @@ describe('stale guard', () => {
     const { registry, session } = setup();
     registry.applyEvent(session.id, { kind: 'prompt' }, T0 + 100);
     expect(
-      registry.applyEvent(session.id, { kind: 'question', text: 'q' }, T0 + 100),
+      registry.applyEvent(
+        session.id,
+        { kind: 'question', text: 'q' },
+        T0 + 100,
+      ),
+    ).toBe(true);
+    expect(session.status).toBe('needs_input');
+  });
+
+  it('accepts an event stamped 1s backward (bounded clock-step skew)', () => {
+    const { registry, session } = setup();
+    registry.applyEvent(session.id, { kind: 'prompt' }, T0 + 5_000);
+    expect(
+      registry.applyEvent(
+        session.id,
+        { kind: 'question', text: 'q' },
+        T0 + 4_000,
+      ),
     ).toBe(true);
     expect(session.status).toBe('needs_input');
   });
 
   it('stale-guards beginPermission', () => {
     const { registry, session } = setup();
-    registry.applyEvent(session.id, { kind: 'prompt' }, T0 + 200);
+    registry.applyEvent(session.id, { kind: 'prompt' }, T0 + 5_000);
     expect(
-      registry.beginPermission(session.id, 'Bash', {}, T0 + 999, T0 + 150),
+      registry.beginPermission(session.id, 'Bash', {}, T0 + 9_999, T0 + 2_999),
     ).toBe(false);
     expect(session.status).toBe('running');
     expect(session.pendingPermission).toBeUndefined();
@@ -263,12 +334,16 @@ describe('stale guard', () => {
 
   it('masked events while permission still advance lastEventTs', () => {
     const { registry, session } = setup();
-    registry.beginPermission(session.id, 'Bash', {}, T0 + 999, T0 + 100);
-    // masked, but advances lastEventTs to T0+200
-    expect(registry.applyEvent(session.id, { kind: 'stop' }, T0 + 200)).toBe(false);
-    registry.resolvePermission(session.id, 'allow', T0 + 300);
-    // older than the masked event → stale
-    expect(registry.applyEvent(session.id, { kind: 'prompt' }, T0 + 150)).toBe(false);
+    registry.beginPermission(session.id, 'Bash', {}, T0 + 9_999, T0 + 100);
+    // masked, but advances lastEventTs to T0+6000
+    expect(registry.applyEvent(session.id, { kind: 'stop' }, T0 + 6_000)).toBe(
+      false,
+    );
+    registry.resolvePermission(session.id, 'allow', T0 + 6_100);
+    // more than 2s older than the masked event → stale
+    expect(
+      registry.applyEvent(session.id, { kind: 'prompt' }, T0 + 3_000),
+    ).toBe(false);
     expect(session.status).toBe('running');
   });
 });
@@ -277,7 +352,13 @@ describe('permission lifecycle', () => {
   it('beginPermission holds the session in permission state', () => {
     const { registry, session } = setup();
     expect(
-      registry.beginPermission(session.id, 'Bash', { command: 'rm -rf x' }, T0 + 999, T0 + 1),
+      registry.beginPermission(
+        session.id,
+        'Bash',
+        { command: 'rm -rf x' },
+        T0 + 999,
+        T0 + 1,
+      ),
     ).toBe(true);
     expect(session.status).toBe('permission');
     expect(session.attentionReason).toBe('approve: Bash');
@@ -292,13 +373,17 @@ describe('permission lifecycle', () => {
   it('beginPermission is rejected on exited sessions', () => {
     const { registry, session } = setup();
     registry.applyEvent(session.id, { kind: 'exit' }, T0 + 1);
-    expect(registry.beginPermission(session.id, 'Bash', {}, T0 + 999, T0 + 2)).toBe(false);
+    expect(
+      registry.beginPermission(session.id, 'Bash', {}, T0 + 999, T0 + 2),
+    ).toBe(false);
     expect(session.status).toBe('exited');
   });
 
   it('beginPermission ignores unknown sessions', () => {
     const registry = new SessionRegistry();
-    expect(registry.beginPermission('ghost-1', 'Bash', {}, T0 + 999, T0)).toBe(false);
+    expect(registry.beginPermission('ghost-1', 'Bash', {}, T0 + 999, T0)).toBe(
+      false,
+    );
   });
 
   it('allow → running, permission and reason cleared', () => {
@@ -323,7 +408,9 @@ describe('permission lifecycle', () => {
   it('timeout → needs_input pointing at the in-pane prompt', () => {
     const { registry, session } = setup();
     registry.beginPermission(session.id, 'Bash', {}, T0 + 999, T0 + 1);
-    expect(registry.resolvePermission(session.id, 'timeout', T0 + 999)).toBe(true);
+    expect(registry.resolvePermission(session.id, 'timeout', T0 + 999)).toBe(
+      true,
+    );
     expect(session.status).toBe('needs_input');
     expect(session.attentionReason).toBe('permission prompt in pane: Bash');
     expect(session.pendingPermission).toBeUndefined();
@@ -358,7 +445,13 @@ describe('permission lifecycle', () => {
   it('exit applies from permission and clears pendingPermission', () => {
     const { registry, session } = setup();
     registry.beginPermission(session.id, 'Bash', {}, T0 + 999, T0 + 1);
-    expect(registry.applyEvent(session.id, { kind: 'exit', reason: 'window closed' }, T0 + 2)).toBe(true);
+    expect(
+      registry.applyEvent(
+        session.id,
+        { kind: 'exit', reason: 'window closed' },
+        T0 + 2,
+      ),
+    ).toBe(true);
     expect(session.status).toBe('exited');
     expect(session.attentionReason).toBe('window closed');
     expect(session.pendingPermission).toBeUndefined();
@@ -367,10 +460,95 @@ describe('permission lifecycle', () => {
   it('error applies from permission and clears pendingPermission', () => {
     const { registry, session } = setup();
     registry.beginPermission(session.id, 'Bash', {}, T0 + 999, T0 + 1);
-    expect(registry.applyEvent(session.id, { kind: 'error', reason: 'agent crashed' }, T0 + 2)).toBe(true);
+    expect(
+      registry.applyEvent(
+        session.id,
+        { kind: 'error', reason: 'agent crashed' },
+        T0 + 2,
+      ),
+    ).toBe(true);
     expect(session.status).toBe('error');
     expect(session.attentionReason).toBe('agent crashed');
     expect(session.pendingPermission).toBeUndefined();
+  });
+});
+
+describe('pane-dialog marker (overlapping permissions)', () => {
+  function heldWithPaneDialog() {
+    const { registry, session } = setup();
+    registry.beginPermission(session.id, 'Bash', {}, T0 + 999, T0 + 1);
+    expect(registry.notePaneDialog(session.id, 'Edit', T0 + 2)).toBe(true);
+    return { registry, session };
+  }
+
+  it('allow lands on needs_input naming the pane tool', () => {
+    const { registry, session } = heldWithPaneDialog();
+    expect(registry.resolvePermission(session.id, 'allow', T0 + 3)).toBe(true);
+    expect(session.status).toBe('needs_input');
+    expect(session.attentionReason).toBe('permission prompt in pane: Edit');
+    expect(session.pendingPermission).toBeUndefined();
+  });
+
+  it('deny lands on needs_input too', () => {
+    const { registry, session } = heldWithPaneDialog();
+    registry.resolvePermission(session.id, 'deny', T0 + 3);
+    expect(session.status).toBe('needs_input');
+    expect(session.attentionReason).toBe('permission prompt in pane: Edit');
+  });
+
+  it('hold timeout names the pane tool, not the held one', () => {
+    const { registry, session } = heldWithPaneDialog();
+    registry.resolvePermission(session.id, 'timeout', T0 + 999);
+    expect(session.status).toBe('needs_input');
+    expect(session.attentionReason).toBe('permission prompt in pane: Edit');
+  });
+
+  it('a masked notification does not clear the marker', () => {
+    const { registry, session } = heldWithPaneDialog();
+    // Notification(permission_prompt) fired by the in-pane dialog — masked
+    expect(
+      registry.applyEvent(
+        session.id,
+        { kind: 'notification', reason: 'permission prompt' },
+        T0 + 3,
+      ),
+    ).toBe(false);
+    registry.resolvePermission(session.id, 'allow', T0 + 4);
+    expect(session.attentionReason).toBe('permission prompt in pane: Edit');
+  });
+
+  it('an applied lifecycle event clears the marker', () => {
+    const { registry, session } = heldWithPaneDialog();
+    registry.resolvePermission(session.id, 'allow', T0 + 3);
+    expect(registry.applyEvent(session.id, { kind: 'tool' }, T0 + 4)).toBe(
+      true,
+    );
+    expect(session.status).toBe('running');
+    // a fresh permission now resolves to running — the marker is gone
+    registry.beginPermission(session.id, 'Write', {}, T0 + 999, T0 + 5);
+    registry.resolvePermission(session.id, 'allow', T0 + 6);
+    expect(session.status).toBe('running');
+    expect(session.attentionReason).toBeUndefined();
+  });
+
+  it('survives resolution until a lifecycle event arrives — a third permission still lands in-pane', () => {
+    const { registry, session } = heldWithPaneDialog();
+    registry.resolvePermission(session.id, 'allow', T0 + 3);
+    // the unanswered Edit dialog still blocks the pane
+    registry.beginPermission(session.id, 'Write', {}, T0 + 999, T0 + 4);
+    registry.resolvePermission(session.id, 'allow', T0 + 5);
+    expect(session.status).toBe('needs_input');
+    expect(session.attentionReason).toBe('permission prompt in pane: Edit');
+  });
+
+  it('notePaneDialog is stale-guarded and ignores unknown/exited sessions', () => {
+    const registry = new SessionRegistry();
+    expect(registry.notePaneDialog('ghost-1', 'Edit', T0)).toBe(false);
+    const session = registry.createSession('claude', '/a', T0);
+    registry.applyEvent(session.id, { kind: 'prompt' }, T0 + 5_000);
+    expect(registry.notePaneDialog(session.id, 'Edit', T0 + 2_999)).toBe(false);
+    registry.applyEvent(session.id, { kind: 'exit' }, T0 + 6_000);
+    expect(registry.notePaneDialog(session.id, 'Edit', T0 + 7_000)).toBe(false);
   });
 });
 
@@ -378,8 +556,9 @@ describe('fromJSON / toJSON', () => {
   it('round-trips sessions, counters and recentCwds', () => {
     const registry = new SessionRegistry();
     const a = registry.createSession('claude', '/a', T0);
-    registry.createSession('codex', '/b', T0 + 1);
+    const b = registry.createSession('codex', '/b', T0 + 1);
     registry.setTmuxWindow(a.id, '@3');
+    registry.setTmuxWindow(b.id, '@4');
     registry.applyEvent(a.id, { kind: 'prompt' }, T0 + 2);
 
     const restored = SessionRegistry.fromJSON(registry.toJSON());
@@ -400,7 +579,14 @@ describe('fromJSON / toJSON', () => {
   it('demotes persisted permission sessions to needs_input', () => {
     const registry = new SessionRegistry();
     const session = registry.createSession('claude', '/a', T0);
-    registry.beginPermission(session.id, 'Bash', { command: 'ls' }, T0 + 999, T0 + 1);
+    registry.setTmuxWindow(session.id, '@2');
+    registry.beginPermission(
+      session.id,
+      'Bash',
+      { command: 'ls' },
+      T0 + 999,
+      T0 + 1,
+    );
 
     const restored = SessionRegistry.fromJSON(registry.toJSON());
     const demoted = restored.get(session.id);
@@ -414,18 +600,35 @@ describe('fromJSON / toJSON', () => {
   it('restores running sessions as-is', () => {
     const registry = new SessionRegistry();
     const session = registry.createSession('claude', '/a', T0);
+    registry.setTmuxWindow(session.id, '@2');
     registry.applyEvent(session.id, { kind: 'prompt' }, T0 + 1);
     const restored = SessionRegistry.fromJSON(registry.toJSON());
     expect(restored.get(session.id)?.status).toBe('running');
   });
 
+  it('drops persisted sessions that never got a tmux window', () => {
+    const registry = new SessionRegistry();
+    const half = registry.createSession('claude', '/a', T0); // tmuxWindow ''
+    const spawned = registry.createSession('claude', '/b', T0);
+    registry.setTmuxWindow(spawned.id, '@2');
+
+    const restored = SessionRegistry.fromJSON(registry.toJSON());
+    expect(restored.get(half.id)).toBeUndefined();
+    expect(restored.get(spawned.id)).toBeDefined();
+    // dropped sessions never free their id — counters persist independently
+    expect(restored.createSession('claude', '/a', T0).id).toBe('claude-3');
+  });
+
   it('resets the stale guard across restarts', () => {
     const registry = new SessionRegistry();
     const session = registry.createSession('claude', '/a', T0);
-    registry.applyEvent(session.id, { kind: 'prompt' }, T0 + 500);
+    registry.setTmuxWindow(session.id, '@2');
+    registry.applyEvent(session.id, { kind: 'prompt' }, T0 + 5_000);
     const restored = SessionRegistry.fromJSON(registry.toJSON());
-    // lastEventTs isn't persisted — older ts is accepted after restore
-    expect(restored.applyEvent(session.id, { kind: 'stop' }, T0 + 100)).toBe(true);
+    // lastEventTs isn't persisted — a >2s-older ts is accepted after restore
+    expect(restored.applyEvent(session.id, { kind: 'stop' }, T0 + 100)).toBe(
+      true,
+    );
   });
 
   it('caps restored recentCwds at 10', () => {

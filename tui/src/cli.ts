@@ -6,12 +6,12 @@
  * directly for cold-start speed. It appears only in the help epilog.
  */
 
-import { resolve } from 'node:path';
 import { homedir } from 'node:os';
-import { holoHome, returnBindingKey } from './paths';
+import { resolve } from 'node:path';
 import type { request } from './client';
-import type { HarnessId, HarnessInfo, StateSnapshot } from './types';
+import { holoHome, returnBindingKey, tmuxSessionName } from './paths';
 import type { Tmux } from './tmux';
+import type { HarnessId, HarnessInfo, StateSnapshot } from './types';
 
 // ---------------------------------------------------------------------------
 // Command types
@@ -106,7 +106,9 @@ function fmtElapsed(ms: number): string {
 
 function shortenHome(p: string): string {
   const home = homedir();
-  return p.startsWith(home + '/') || p === home ? '~' + p.slice(home.length) : p;
+  return p.startsWith(home + '/') || p === home
+    ? '~' + p.slice(home.length)
+    : p;
 }
 
 export function formatLs(state: StateSnapshot, now: number): string {
@@ -150,7 +152,9 @@ export function formatLs(state: StateSnapshot, now: number): string {
   }
 
   const queued = state.queue.length;
-  lines.push(`${state.sessions.length} session${state.sessions.length === 1 ? '' : 's'} · ${queued} queued`);
+  lines.push(
+    `${state.sessions.length} session${state.sessions.length === 1 ? '' : 's'} · ${queued} queued`,
+  );
   return lines.join('\n');
 }
 
@@ -188,7 +192,12 @@ export async function runCli(cmd: CliCommand, deps: CliDeps): Promise<number> {
   switch (cmd.kind) {
     case 'attach': {
       await deps.ensureDaemon();
-      await deps.tmux.ensureSession(deps.tuiArgv);
+      // pin our identity into the pane — it otherwise inherits the tmux
+      // SERVER's env, which may carry a different HOLO_HOME
+      await deps.tmux.ensureSession(deps.tuiArgv, {
+        HOLO_HOME: holoHome(),
+        HOLO_TMUX_SESSION: tmuxSessionName(),
+      });
       if (deps.isInsideTmux()) {
         deps.attachOrSwitch();
         await deps.selectTuiWindow();
@@ -207,7 +216,11 @@ export async function runCli(cmd: CliCommand, deps: CliDeps): Promise<number> {
       }
       await deps.ensureDaemon();
       const cwd = resolve(cmd.cwd ?? process.cwd());
-      const res = await deps.request({ cmd: 'new', harness: cmd.harness as HarnessId, cwd });
+      const res = await deps.request({
+        cmd: 'new',
+        harness: cmd.harness as HarnessId,
+        cwd,
+      });
       if (res.ok && 'session' in res) {
         deps.stdout(`spawned ${res.session.id} in ${res.session.tmuxWindow}`);
         if (!deps.isInsideTmux()) {
@@ -230,9 +243,13 @@ export async function runCli(cmd: CliCommand, deps: CliDeps): Promise<number> {
         }
         return 0;
       }
-      // queue empty is not an error
-      deps.stdout(res.ok ? 'queue is empty — all agents running' : res.error);
-      return 0;
+      if (res.ok) {
+        // plain ok with no session = empty queue — not an error
+        deps.stdout('queue is empty — all agents running');
+        return 0;
+      }
+      deps.stderr(res.error);
+      return 1;
     }
 
     case 'ls': {
@@ -258,7 +275,9 @@ export async function runCli(cmd: CliCommand, deps: CliDeps): Promise<number> {
           `tmux return binding installed (prefix+${returnBindingKey()} → TUI window)`,
         );
       } catch {
-        deps.stdout('tmux server not running — binding installs on first `holo`');
+        deps.stdout(
+          'tmux server not running — binding installs on first `holo`',
+        );
       }
 
       // Print harness table
@@ -307,17 +326,30 @@ export function makeEnsureDaemon(opts: {
   pollIntervalMs?: number;
   /** total timeout in ms — default 3000 */
   timeoutMs?: number;
+  /** delays between ping retries before spawning — default [300, 600, 1200] */
+  pingBackoffMs?: number[];
 }): () => Promise<void> {
   const pollIntervalMs = opts.pollIntervalMs ?? 100;
   const timeoutMs = opts.timeoutMs ?? 3000;
+  const pingBackoffMs = opts.pingBackoffMs ?? [300, 600, 1200];
 
-  return async () => {
-    // Fast path: daemon already running
+  const ping = async (): Promise<boolean> => {
     try {
       const res = await opts.request({ cmd: 'ping' }, { timeoutMs: 300 });
-      if (res.ok) return;
+      return res.ok;
     } catch {
-      // fall through to spawn
+      return false;
+    }
+  };
+
+  return async () => {
+    // Fast path: daemon already running. Never spawn on a single failed
+    // ping — a live daemon under load can miss one, and spawning a rival
+    // would let it unlink the live daemon's socket and take over.
+    if (await ping()) return;
+    for (const delayMs of pingBackoffMs) {
+      await new Promise<void>((resolve) => setTimeout(resolve, delayMs));
+      if (await ping()) return;
     }
 
     const { mkdirSync } = await import('node:fs');

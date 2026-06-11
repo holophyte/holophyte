@@ -19,17 +19,31 @@ export interface RegistryJSON {
 
 const MAX_RECENT_CWDS = 10;
 
+// Hook stamps come from independent processes on a steppable wall clock.
+// Ordering only needs to disambiguate sub-second hook races; a strict guard
+// would silently freeze event acceptance for the duration of a macOS clock
+// step. 2s tolerates the step while still catching genuinely stale events.
+const SKEW_MS = 2000;
+
 export class SessionRegistry {
   private sessions = new Map<string, Session>();
   private counters: Record<string, number> = {};
   private cwds: string[] = [];
-  /** per-session monotonic stale guard — events with ts < lastEventTs are rejected */
+  /** per-session stale guard — events more than SKEW_MS behind lastEventTs are rejected */
   private lastEventTs = new Map<string, number>();
+  /** sessionId → tool whose permission degraded to the in-pane dialog while another was held */
+  private paneDialogs = new Map<string, string>();
 
   static fromJSON(data: RegistryJSON): SessionRegistry {
     const registry = new SessionRegistry();
     for (const persisted of data.sessions) {
       const session: Session = { ...persisted };
+      if (session.tmuxWindow === '') {
+        // Half-created sessions don't survive a daemon restart — no spawn
+        // can be in flight at restore time, and reconcile() never sweeps an
+        // empty window id, so restoring one would leave a phantom forever.
+        continue;
+      }
       if (session.status === 'permission') {
         // Held permission connections don't survive a daemon restart — the
         // agent-side hook fell through to the in-pane dialog.
@@ -108,6 +122,10 @@ export class SessionRegistry {
       return false;
     }
 
+    // An event that applies past the mask means the pane is delivering hooks
+    // again — an outstanding in-pane dialog can't still be blocking it.
+    this.paneDialogs.delete(id);
+
     switch (event.kind) {
       case 'ready':
         return this.transition(session, 'idle', 'awaiting first prompt', ts);
@@ -119,7 +137,12 @@ export class SessionRegistry {
       case 'notification':
         return this.transition(session, 'needs_input', event.reason, ts);
       case 'stop': {
-        let changed = this.transition(session, 'idle', 'review / next prompt', ts);
+        let changed = this.transition(
+          session,
+          'idle',
+          'review / next prompt',
+          ts,
+        );
         if (
           event.lastMessage !== undefined &&
           session.lastMessage !== event.lastMessage
@@ -151,6 +174,20 @@ export class SessionRegistry {
     return true;
   }
 
+  /**
+   * A second permission arrived while another was already held: its hook got
+   * 'timeout' and degraded to the in-pane dialog. Recorded so resolving the
+   * held permission lands on needs_input — the pane is blocked on that dialog
+   * and no further hooks fire until it's answered. Cleared by the next
+   * applied lifecycle event. Stale-guarded like applyEvent.
+   */
+  notePaneDialog(id: string, tool: string, ts: number): boolean {
+    const session = this.sessions.get(id);
+    if (!session || !this.acceptEvent(session, ts)) return false;
+    this.paneDialogs.set(id, tool);
+    return true;
+  }
+
   /** Resolve a held permission. Only valid while status === 'permission'. */
   resolvePermission(
     id: string,
@@ -161,7 +198,17 @@ export class SessionRegistry {
     if (!session || session.status !== 'permission') return false;
     const tool = session.pendingPermission?.tool ?? 'unknown';
     session.pendingPermission = undefined;
-    if (outcome === 'timeout') {
+    const paneTool = this.paneDialogs.get(id);
+    if (paneTool !== undefined) {
+      // Another tool's dialog is blocking the pane — whatever this outcome,
+      // the session needs eyes, not 'running'.
+      this.transition(
+        session,
+        'needs_input',
+        `permission prompt in pane: ${paneTool}`,
+        now,
+      );
+    } else if (outcome === 'timeout') {
       // The agent-side hook fell through to the in-pane dialog.
       this.transition(
         session,
@@ -196,6 +243,7 @@ export class SessionRegistry {
       if (session.status === 'exited' && session.statusSince < now - graceMs) {
         this.sessions.delete(id);
         this.lastEventTs.delete(id);
+        this.paneDialogs.delete(id);
         changed = true;
       }
     }
@@ -203,13 +251,13 @@ export class SessionRegistry {
   }
 
   /**
-   * Shared stale/terminal guard. Accepted events (ts >= lastEventTs, session
-   * not exited) advance lastEventTs — including events later masked by a held
-   * permission.
+   * Shared stale/terminal guard. Events more than SKEW_MS behind the last
+   * accepted event are rejected; accepted events (session not exited) update
+   * lastEventTs — including events later masked by a held permission.
    */
   private acceptEvent(session: Session, ts: number): boolean {
     const last = this.lastEventTs.get(session.id);
-    if (last !== undefined && ts < last) return false;
+    if (last !== undefined && ts < last - SKEW_MS) return false;
     if (session.status === 'exited') return false; // nothing revives an exited session
     this.lastEventTs.set(session.id, ts);
     return true;

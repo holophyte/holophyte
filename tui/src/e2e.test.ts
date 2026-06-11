@@ -7,22 +7,16 @@
  * See spec.md "Testing" section.
  */
 
-import {
-  mkdtempSync,
-  rmSync,
-} from 'node:fs';
+import { type ChildProcess, spawn } from 'node:child_process';
+import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import {
-  ChildProcess,
-  spawn,
-} from 'node:child_process';
-import { request, subscribe } from './client';
-import type { StatePush } from './protocol';
-import { FakeTmux } from './tmux';
 import { FakeAdapter } from './adapters/fake';
 import { stubAdapter } from './adapters/stubs';
+import { request, subscribe } from './client';
 import { Daemon } from './daemon/server';
+import type { StatePush } from './protocol';
+import { FakeTmux } from './tmux';
 import type { HarnessAdapter, HarnessId, HarnessInfo, Session } from './types';
 
 // ---------------------------------------------------------------------------
@@ -40,7 +34,9 @@ function unconfiguredAdapter(id: HarnessId): HarnessAdapter {
   };
 }
 
-function makeAdapters(fakeAdapter: FakeAdapter): Record<HarnessId, HarnessAdapter> {
+function makeAdapters(
+  fakeAdapter: FakeAdapter,
+): Record<HarnessId, HarnessAdapter> {
   return {
     fake: fakeAdapter,
     claude: unconfiguredAdapter('claude'),
@@ -99,9 +95,16 @@ const FAKE_SCRIPT = JSON.stringify([
   { delayMs: 50, event: { kind: 'tool' } },
   {
     delayMs: 50,
-    permission: { tool: 'Bash', input: { command: 'rm -rf /tmp/x' }, timeoutMs: 5000 },
+    permission: {
+      tool: 'Bash',
+      input: { command: 'rm -rf /tmp/x' },
+      timeoutMs: 5000,
+    },
   },
-  { delayMs: 50, event: { kind: 'stop', lastMessage: 'fake agent: work complete' } },
+  {
+    delayMs: 50,
+    event: { kind: 'stop', lastMessage: 'fake agent: work complete' },
+  },
 ]);
 
 beforeEach(async () => {
@@ -158,7 +161,11 @@ it('FakeAgent full lifecycle with permission', async () => {
   await waitFor(pushes, (p) => p.sessions !== undefined, 2000, 'initial push');
 
   // 2. Spawn a fake session
-  const spawnRes = await request({ cmd: 'new', harness: 'fake', cwd: holoHomeDir });
+  const spawnRes = await request({
+    cmd: 'new',
+    harness: 'fake',
+    cwd: holoHomeDir,
+  });
   if (!spawnRes.ok || !('session' in spawnRes)) {
     throw new Error(`spawn failed: ${JSON.stringify(spawnRes)}`);
   }
@@ -177,7 +184,11 @@ it('FakeAgent full lifecycle with permission', async () => {
   const childOut: string[] = [];
   child = spawn(execPath, childArgs, {
     stdio: ['ignore', 'pipe', 'pipe'],
-    env: { ...process.env, HOLO_HOME: holoHomeDir, HOLO_FAKE_SCRIPT: FAKE_SCRIPT },
+    env: {
+      ...process.env,
+      HOLO_HOME: holoHomeDir,
+      HOLO_FAKE_SCRIPT: FAKE_SCRIPT,
+    },
   });
   child.stdout?.on('data', (chunk: Buffer) => {
     childOut.push(chunk.toString());
@@ -229,7 +240,11 @@ it('FakeAgent full lifecycle with permission', async () => {
   expect(queueTop?.score).toBeGreaterThanOrEqual(100);
 
   // 5. Approve the permission
-  const respondRes = await request({ cmd: 'respondPermission', sessionId, allow: true });
+  const respondRes = await request({
+    cmd: 'respondPermission',
+    sessionId,
+    allow: true,
+  });
   expect(respondRes.ok).toBe(true);
 
   // 6. Child should output 'allow'
@@ -256,7 +271,9 @@ it('FakeAgent full lifecycle with permission', async () => {
     pushes,
     (p) => {
       const s = findSession(p, sessionId);
-      return s?.status === 'idle' && s.lastMessage === 'fake agent: work complete';
+      return (
+        s?.status === 'idle' && s.lastMessage === 'fake agent: work complete'
+      );
     },
     2000,
     'idle with lastMessage',
@@ -272,7 +289,9 @@ it('FakeAgent full lifecycle with permission', async () => {
   // FakeTmux still has the window — close it manually
   fakeTmux.closeWindow(windowId);
 
-  // Trigger a sweep — this should detect the window is gone and mark exited
+  // Two sweeps — a window must be missing twice in a row before its session
+  // is terminated (one bad list-windows sample must not kill tracking)
+  await daemon!.sweepOnce();
   await daemon!.sweepOnce();
 
   // 10. Wait for exited state
