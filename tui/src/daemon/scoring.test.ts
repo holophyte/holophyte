@@ -18,20 +18,35 @@ function makeSession(overrides: Partial<Session> & { id: string }): Session {
 
 describe('scoreSession', () => {
   it('applies effort weights per status', () => {
-    expect(scoreSession(makeSession({ id: 'a', status: 'permission' }), NOW)).toBe(100);
-    expect(scoreSession(makeSession({ id: 'a', status: 'needs_input' }), NOW)).toBe(60);
-    expect(scoreSession(makeSession({ id: 'a', status: 'error' }), NOW)).toBe(50);
-    expect(scoreSession(makeSession({ id: 'a', status: 'idle' }), NOW)).toBe(30);
+    expect(
+      scoreSession(makeSession({ id: 'a', status: 'permission' }), NOW),
+    ).toBe(100);
+    expect(
+      scoreSession(makeSession({ id: 'a', status: 'needs_input' }), NOW),
+    ).toBe(60);
+    expect(scoreSession(makeSession({ id: 'a', status: 'error' }), NOW)).toBe(
+      50,
+    );
+    expect(scoreSession(makeSession({ id: 'a', status: 'idle' }), NOW)).toBe(
+      30,
+    );
   });
 
   it('scores ineligible statuses as 0', () => {
-    expect(scoreSession(makeSession({ id: 'a', status: 'running' }), NOW)).toBe(0);
-    expect(scoreSession(makeSession({ id: 'a', status: 'exited' }), NOW)).toBe(0);
+    expect(scoreSession(makeSession({ id: 'a', status: 'running' }), NOW)).toBe(
+      0,
+    );
+    expect(scoreSession(makeSession({ id: 'a', status: 'exited' }), NOW)).toBe(
+      0,
+    );
   });
 
   it('adds +2 per full minute waiting', () => {
     const s = (sinceAgoMs: number) =>
-      scoreSession(makeSession({ id: 'a', status: 'idle', statusSince: NOW - sinceAgoMs }), NOW);
+      scoreSession(
+        makeSession({ id: 'a', status: 'idle', statusSince: NOW - sinceAgoMs }),
+        NOW,
+      );
     expect(s(0)).toBe(30);
     expect(s(MIN - 1)).toBe(30); // partial minute doesn't count
     expect(s(MIN)).toBe(32); // exactly one full minute
@@ -41,14 +56,21 @@ describe('scoreSession', () => {
 
   it('caps the aging bonus at +40', () => {
     const s = (sinceAgoMs: number) =>
-      scoreSession(makeSession({ id: 'a', status: 'idle', statusSince: NOW - sinceAgoMs }), NOW);
+      scoreSession(
+        makeSession({ id: 'a', status: 'idle', statusSince: NOW - sinceAgoMs }),
+        NOW,
+      );
     expect(s(20 * MIN)).toBe(70);
     expect(s(21 * MIN)).toBe(70);
     expect(s(1000 * MIN)).toBe(70);
   });
 
   it('clamps a future statusSince to zero aging', () => {
-    const session = makeSession({ id: 'a', status: 'idle', statusSince: NOW + 5 * MIN });
+    const session = makeSession({
+      id: 'a',
+      status: 'idle',
+      statusSince: NOW + 5 * MIN,
+    });
     expect(scoreSession(session, NOW)).toBe(30);
   });
 });
@@ -67,7 +89,9 @@ describe('buildQueue', () => {
   });
 
   it('returns empty for no eligible sessions', () => {
-    expect(buildQueue([makeSession({ id: 'a', status: 'running' })], NOW)).toEqual([]);
+    expect(
+      buildQueue([makeSession({ id: 'a', status: 'running' })], NOW),
+    ).toEqual([]);
     expect(buildQueue([], NOW)).toEqual([]);
   });
 
@@ -78,7 +102,11 @@ describe('buildQueue', () => {
           id: 'claude-1',
           status: 'permission',
           attentionReason: 'approve: Bash',
-          pendingPermission: { tool: 'Bash', input: { command: 'ls' }, respondBy: NOW + 1000 },
+          pendingPermission: {
+            tool: 'Bash',
+            input: { command: 'ls' },
+            respondBy: NOW + 1000,
+          },
         }),
       ],
       NOW,
@@ -88,21 +116,54 @@ describe('buildQueue', () => {
 
   it('falls back to attentionReason then "approve" for permission without pendingPermission', () => {
     const withReason = buildQueue(
-      [makeSession({ id: 'a', status: 'permission', attentionReason: 'approve: Edit' })],
+      [
+        makeSession({
+          id: 'a',
+          status: 'permission',
+          attentionReason: 'approve: Edit',
+        }),
+      ],
       NOW,
     );
     expect(withReason[0]?.reason).toBe('approve: Edit');
-    const bare = buildQueue([makeSession({ id: 'a', status: 'permission' })], NOW);
+    const bare = buildQueue(
+      [makeSession({ id: 'a', status: 'permission' })],
+      NOW,
+    );
     expect(bare[0]?.reason).toBe('approve');
   });
 
   it('computes reasons per status with fallbacks', () => {
     const reason = (session: Session) => buildQueue([session], NOW)[0]?.reason;
-    expect(reason(makeSession({ id: 'a', status: 'needs_input', attentionReason: 'Pick a name' }))).toBe('Pick a name');
-    expect(reason(makeSession({ id: 'a', status: 'needs_input' }))).toBe('needs input');
-    expect(reason(makeSession({ id: 'a', status: 'idle', attentionReason: 'awaiting first prompt' }))).toBe('awaiting first prompt');
-    expect(reason(makeSession({ id: 'a', status: 'idle' }))).toBe('review / next prompt');
-    expect(reason(makeSession({ id: 'a', status: 'error', attentionReason: 'crashed' }))).toBe('crashed');
+    expect(
+      reason(
+        makeSession({
+          id: 'a',
+          status: 'needs_input',
+          attentionReason: 'Pick a name',
+        }),
+      ),
+    ).toBe('Pick a name');
+    expect(reason(makeSession({ id: 'a', status: 'needs_input' }))).toBe(
+      'needs input',
+    );
+    expect(
+      reason(
+        makeSession({
+          id: 'a',
+          status: 'idle',
+          attentionReason: 'awaiting first prompt',
+        }),
+      ),
+    ).toBe('awaiting first prompt');
+    expect(reason(makeSession({ id: 'a', status: 'idle' }))).toBe(
+      'review / next prompt',
+    );
+    expect(
+      reason(
+        makeSession({ id: 'a', status: 'error', attentionReason: 'crashed' }),
+      ),
+    ).toBe('crashed');
     expect(reason(makeSession({ id: 'a', status: 'error' }))).toBe('error');
   });
 
@@ -116,32 +177,72 @@ describe('buildQueue', () => {
       ],
       NOW,
     );
-    expect(queue.map((q) => q.sessionId)).toEqual(['claude-2', 'claude-3', 'claude-4', 'claude-1']);
+    expect(queue.map((q) => q.sessionId)).toEqual([
+      'claude-2',
+      'claude-3',
+      'claude-4',
+      'claude-1',
+    ]);
   });
 
   it('breaks score ties by older statusSince first', () => {
     // both needs_input at the aging cap → identical scores
     const queue = buildQueue(
       [
-        makeSession({ id: 'claude-1', status: 'needs_input', statusSince: NOW - 25 * MIN }),
-        makeSession({ id: 'claude-2', status: 'needs_input', statusSince: NOW - 30 * MIN }),
+        makeSession({
+          id: 'claude-1',
+          status: 'needs_input',
+          statusSince: NOW - 25 * MIN,
+        }),
+        makeSession({
+          id: 'claude-2',
+          status: 'needs_input',
+          statusSince: NOW - 30 * MIN,
+        }),
       ],
       NOW,
     );
     expect(queue.map((q) => q.sessionId)).toEqual(['claude-2', 'claude-1']);
   });
 
-  it('breaks cross-status score ties by older statusSince first', () => {
-    // permission (100 + 0 aging) vs needs_input (60 + 40 capped aging)
+  it('ranks a fresh permission above an aged needs_input on a score tie', () => {
+    // permission (100 + 0 aging) ties needs_input (60 + 40 capped aging) —
+    // "permissions jump the queue" wins over the statusSince tie-break
     const queue = buildQueue(
       [
+        makeSession({
+          id: 'claude-2',
+          status: 'needs_input',
+          statusSince: NOW - 20 * MIN,
+        }),
         makeSession({ id: 'claude-1', status: 'permission', statusSince: NOW }),
-        makeSession({ id: 'claude-2', status: 'needs_input', statusSince: NOW - 20 * MIN }),
       ],
       NOW,
     );
     expect(queue[0]?.score).toBe(100);
     expect(queue[1]?.score).toBe(100);
+    expect(queue.map((q) => q.sessionId)).toEqual(['claude-1', 'claude-2']);
+  });
+
+  it('breaks score ties between non-permission statuses by older statusSince', () => {
+    // error aged 5 min (50 + 10) ties a fresh needs_input (60 + 0)
+    const queue = buildQueue(
+      [
+        makeSession({
+          id: 'claude-1',
+          status: 'needs_input',
+          statusSince: NOW,
+        }),
+        makeSession({
+          id: 'claude-2',
+          status: 'error',
+          statusSince: NOW - 5 * MIN,
+        }),
+      ],
+      NOW,
+    );
+    expect(queue[0]?.score).toBe(60);
+    expect(queue[1]?.score).toBe(60);
     expect(queue.map((q) => q.sessionId)).toEqual(['claude-2', 'claude-1']);
   });
 
@@ -155,12 +256,22 @@ describe('buildQueue', () => {
       ],
       NOW,
     );
-    expect(queue.map((q) => q.sessionId)).toEqual(['claude-1', 'claude-2', 'codex-1']);
+    expect(queue.map((q) => q.sessionId)).toEqual([
+      'claude-1',
+      'claude-2',
+      'codex-1',
+    ]);
   });
 
   it('includes the score on each item', () => {
     const queue = buildQueue(
-      [makeSession({ id: 'a', status: 'needs_input', statusSince: NOW - 3 * MIN })],
+      [
+        makeSession({
+          id: 'a',
+          status: 'needs_input',
+          statusSince: NOW - 3 * MIN,
+        }),
+      ],
       NOW,
     );
     expect(queue[0]?.score).toBe(66);

@@ -39,6 +39,7 @@ export function buildQueue(sessions: Session[], now: number): QueueItem[] {
     .sort(
       (a, b) =>
         b.score - a.score ||
+        statusRank(b.session.status) - statusRank(a.session.status) ||
         a.session.statusSince - b.session.statusSince ||
         compareIds(a.session.id, b.session.id),
     )
@@ -65,6 +66,12 @@ function queueReason(session: Session): string {
       // unreachable — filtered to eligible statuses above
       return session.attentionReason ?? '';
   }
+}
+
+// Spec: "permissions jump the queue" — a fresh permission must outrank an
+// aged needs_input even when capped aging makes the scores tie at 100.
+function statusRank(status: SessionStatus): number {
+  return status === 'permission' ? 1 : 0;
 }
 
 function compareIds(a: string, b: string): number {
