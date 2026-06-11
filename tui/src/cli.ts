@@ -202,6 +202,10 @@ export async function runCli(cmd: CliCommand, deps: CliDeps): Promise<number> {
         deps.attachOrSwitch();
         await deps.selectTuiWindow();
       } else {
+        // select BEFORE attaching — attach-session blocks until detach, and
+        // the session's current window may be an agent window from a prior
+        // `holo next`/jump
+        await deps.selectTuiWindow();
         deps.attachOrSwitch();
       }
       return 0;

@@ -433,7 +433,7 @@ describe('runCli attach', () => {
     expect(calls).toEqual(['attach', 'selectTui']);
   });
 
-  it('outside tmux: calls attachOrSwitch only', async () => {
+  it('outside tmux: selects the tui window BEFORE attaching (attach blocks)', async () => {
     const calls: string[] = [];
     const deps = makeDeps({
       isInsideTmux: () => false,
@@ -447,8 +447,7 @@ describe('runCli attach', () => {
     });
     const code = await runCli({ kind: 'attach' }, deps);
     expect(code).toBe(0);
-    expect(calls).toEqual(['attach']);
-    expect(calls).not.toContain('selectTui');
+    expect(calls).toEqual(['selectTui', 'attach']);
   });
 });
 
