@@ -7,7 +7,7 @@ import { spawnSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { sessionDir, sessionSettingsPath } from '../paths';
+import { holoHome, sessionDir, sessionSettingsPath } from '../paths';
 import type { HarnessAdapter, Session } from '../types';
 
 const HOOK_EVENTS = [
@@ -31,15 +31,23 @@ function q(arg: string): string {
   return `'${arg.replace(/'/g, "'\\''")}'`;
 }
 
-/** The shell command injected for every hook: <bun> <main.ts> <harness> <sessionId>. */
+/**
+ * The shell command injected for every hook:
+ *   HOLO_HOME=<home> <bun> <main.ts> <harness> <sessionId>
+ * HOLO_HOME is resolved here, in the daemon process — hooks spawned inside
+ * tmux inherit the tmux SERVER's environment, so without the prefix a
+ * non-default home would make them dial the wrong daemon socket.
+ */
 export function hookCommand(harness: string, sessionId: string): string {
-  const hookMainPath = fileURLToPath(new URL('../hook/main.ts', import.meta.url));
-  return `${q(process.execPath)} ${q(hookMainPath)} ${harness} ${sessionId}`;
+  const hookMainPath = fileURLToPath(
+    new URL('../hook/main.ts', import.meta.url),
+  );
+  return `HOLO_HOME=${q(holoHome())} ${q(process.execPath)} ${q(hookMainPath)} ${harness} ${sessionId}`;
 }
 
 /** Per-session settings object written to ~/.holo/sessions/<id>/settings.json. */
 export function buildClaudeSettings(
-  sessionId: string,
+  _sessionId: string,
   hookCommand: string,
 ): object {
   const hooks: Record<string, unknown> = {};

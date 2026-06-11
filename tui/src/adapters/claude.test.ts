@@ -24,10 +24,32 @@ function makeSession(overrides: Partial<Session> = {}): Session {
 }
 
 describe('hookCommand', () => {
-  it('quotes bun and the hook main path, then appends harness + session id', () => {
+  const savedHoloHome = process.env.HOLO_HOME;
+
+  afterEach(() => {
+    if (savedHoloHome === undefined) delete process.env.HOLO_HOME;
+    else process.env.HOLO_HOME = savedHoloHome;
+  });
+
+  it('prefixes the generation-time HOLO_HOME, then bun + hook main + harness + session id', () => {
+    process.env.HOLO_HOME = '/custom/holo-home';
     const mainPath = fileURLToPath(new URL('../hook/main.ts', import.meta.url));
     expect(hookCommand('claude', 'claude-1')).toBe(
-      `'${process.execPath}' '${mainPath}' claude claude-1`,
+      `HOLO_HOME='/custom/holo-home' '${process.execPath}' '${mainPath}' claude claude-1`,
+    );
+  });
+
+  it('pins HOLO_HOME to ~/.holo when the env var is unset', () => {
+    delete process.env.HOLO_HOME;
+    expect(hookCommand('claude', 'claude-1')).toMatch(
+      /^HOLO_HOME='[^ ]*\/\.holo' /,
+    );
+  });
+
+  it('shell-quotes a home path containing single quotes', () => {
+    process.env.HOLO_HOME = "/tmp/ko's home";
+    expect(hookCommand('claude', 'claude-1')).toMatch(
+      /^HOLO_HOME='\/tmp\/ko'\\''s home' /,
     );
   });
 
@@ -43,7 +65,9 @@ describe('buildClaudeSettings', () => {
     preferredNotifChannel: string;
     hooks: Record<
       string,
-      Array<{ hooks: Array<{ type: string; command: string; timeout?: number }> }>
+      Array<{
+        hooks: Array<{ type: string; command: string; timeout?: number }>;
+      }>
     >;
   };
 
@@ -114,13 +138,19 @@ describe('ClaudeAdapter', () => {
   });
 
   it('configured() uses the injected checker', () => {
-    expect(new ClaudeAdapter({ configured: () => true }).configured()).toBe(true);
-    expect(new ClaudeAdapter({ configured: () => false }).configured()).toBe(false);
+    expect(new ClaudeAdapter({ configured: () => true }).configured()).toBe(
+      true,
+    );
+    expect(new ClaudeAdapter({ configured: () => false }).configured()).toBe(
+      false,
+    );
   });
 
   it('spawnCommand writes settings under HOLO_HOME and returns the claude argv', async () => {
     const adapter = new ClaudeAdapter({ configured: () => true });
-    const session = makeSession({ harnessSessionId: 'a1b2c3d4-0000-4000-8000-000000000000' });
+    const session = makeSession({
+      harnessSessionId: 'a1b2c3d4-0000-4000-8000-000000000000',
+    });
 
     const argv = await adapter.spawnCommand(session);
     const settingsPath = sessionSettingsPath('claude-1');
@@ -158,5 +188,12 @@ describe('ClaudeAdapter', () => {
     await adapter.spawnCommand(makeSession({ id: 'claude-7' }));
     const written = readFileSync(sessionSettingsPath('claude-7'), 'utf8');
     expect(written).toContain('claude claude-7');
+  });
+
+  it('written hook commands carry the HOLO_HOME prefix through the JSON embedding', async () => {
+    const adapter = new ClaudeAdapter({ configured: () => true });
+    await adapter.spawnCommand(makeSession());
+    const written = readFileSync(sessionSettingsPath('claude-1'), 'utf8');
+    expect(written).toContain(`HOLO_HOME='${holoHomeDir}'`);
   });
 });
