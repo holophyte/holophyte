@@ -13,8 +13,22 @@ export type TmuxRunner = (
 ) => Promise<{ status: number; stdout: string; stderr: string }>;
 
 /**
- * Runs `tmux <args>`. Non-zero exit resolves with its status — callers decide
- * what failure means. Rejects only when the tmux binary itself is missing.
+ * pure helper for defaultRunner — execFile reports "tmux ran and exited
+ * non-zero" with a numeric error code, but spawn-level failures (ENOENT,
+ * EAGAIN, EMFILE, ...) with a string code. Returns null for those: tmux never
+ * answered, so the outcome must not be read as a tmux exit.
+ */
+export function execExitStatus(error: {
+  code?: number | string | null;
+}): number | null {
+  return typeof error.code === 'number' ? error.code : null;
+}
+
+/**
+ * Runs `tmux <args>`. A real tmux exit resolves with its status — callers
+ * decide what failure means. Rejects when tmux could not be asked at all
+ * (missing binary, fork/fd pressure), so transient spawn failures are never
+ * mistaken for tmux answers.
  */
 export const defaultRunner: TmuxRunner = (args) =>
   new Promise((resolve, reject) => {
@@ -23,24 +37,39 @@ export const defaultRunner: TmuxRunner = (args) =>
         resolve({ status: 0, stdout, stderr });
         return;
       }
-      // execFile error code: number = exit status, 'ENOENT' = binary missing
-      const code = (error as { code?: number | string }).code;
-      if (code === 'ENOENT') {
+      const status = execExitStatus(error as { code?: number | string });
+      if (status === null) {
         reject(error);
         return;
       }
-      resolve({ status: typeof code === 'number' ? code : 1, stdout, stderr });
+      resolve({ status, stdout, stderr });
     });
   });
 
+/** -e KEY=VALUE flags for new-session/new-window (tmux >= 3.2) so spawned panes inherit the daemon's identity */
+function envFlags(env?: Record<string, string>): string[] {
+  return Object.entries(env ?? {}).flatMap(([key, value]) => [
+    '-e',
+    `${key}=${value}`,
+  ]);
+}
+
 export interface Tmux {
   sessionExists(): Promise<boolean>;
-  /** create the holo session (detached, window "tui") if missing; always (re)install the return binding */
-  ensureSession(tuiArgv: string[]): Promise<void>;
+  /**
+   * create the holo session (detached, window "tui") if missing; respawn the
+   * tui window if it died (TUI quit); always (re)install the return binding
+   */
+  ensureSession(tuiArgv: string[], env?: Record<string, string>): Promise<void>;
   /** spawn an agent window; returns the stable window id (e.g. "@3") */
-  newWindow(opts: { name: string; cwd: string; argv: string[] }): Promise<string>;
+  newWindow(opts: {
+    name: string;
+    cwd: string;
+    argv: string[];
+    env?: Record<string, string>;
+  }): Promise<string>;
   selectWindow(windowId: string): Promise<void>;
-  /** window ids in the holo session; [] when the session is gone */
+  /** window ids in the holo session; [] when the session is gone; rejects when tmux could not be asked */
   listWindowIds(): Promise<string[]>;
   /**
    * prefix+<key> (default Space, HOLO_RETURN_KEY overrides) → jump back to
@@ -62,7 +91,10 @@ export class RealTmux implements Tmux {
     return status === 0;
   }
 
-  async ensureSession(tuiArgv: string[]): Promise<void> {
+  async ensureSession(
+    tuiArgv: string[],
+    env?: Record<string, string>,
+  ): Promise<void> {
     if (!(await this.sessionExists())) {
       await this.run([
         'new-session',
@@ -71,16 +103,45 @@ export class RealTmux implements Tmux {
         this.sessionName,
         '-n',
         'tui',
+        ...envFlags(env),
+        shellQuote(tuiArgv),
+      ]);
+    } else if (!(await this.hasTuiWindow())) {
+      // quitting the TUI kills its window while agent windows keep the
+      // session alive — respawn it (detached; the attach path / return
+      // binding handle selection) so `holo` can re-enter
+      await this.run([
+        'new-window',
+        '-d',
+        '-t',
+        `${this.sessionName}:`,
+        '-n',
+        'tui',
+        ...envFlags(env),
         shellQuote(tuiArgv),
       ]);
     }
     await this.installReturnBinding();
   }
 
+  private async hasTuiWindow(): Promise<boolean> {
+    const { status, stdout } = await this.run([
+      'list-windows',
+      '-t',
+      this.sessionName,
+      '-F',
+      '#{window_name}',
+    ]);
+    return (
+      status === 0 && stdout.split('\n').some((line) => line.trim() === 'tui')
+    );
+  }
+
   async newWindow(opts: {
     name: string;
     cwd: string;
     argv: string[];
+    env?: Record<string, string>;
   }): Promise<string> {
     // trailing "<session>:" target = "next free index in this session"
     const { status, stdout, stderr } = await this.run([
@@ -95,6 +156,7 @@ export class RealTmux implements Tmux {
       '-P',
       '-F',
       '#{window_id}',
+      ...envFlags(opts.env),
       shellQuote(opts.argv),
     ]);
     if (status !== 0) {
@@ -115,7 +177,9 @@ export class RealTmux implements Tmux {
       '-F',
       '#{window_id}',
     ]);
-    if (status !== 0) return []; // session gone
+    // session gone — panes die with the tmux server, so "exited" is correct.
+    // Spawn-level failures reject in the runner instead and propagate.
+    if (status !== 0) return [];
     return stdout
       .split('\n')
       .map((line) => line.trim())
@@ -137,6 +201,7 @@ export interface FakeWindow {
   name: string;
   cwd: string;
   argv: string[];
+  env?: Record<string, string>;
 }
 
 /** In-memory Tmux for daemon tests — no tmux server involved. */
@@ -144,6 +209,8 @@ export class FakeTmux implements Tmux {
   readonly windows = new Map<string, FakeWindow>();
   readonly calls: Array<{ method: string; args: unknown[] }> = [];
   selected: string | null = null;
+  /** models the dedicated "tui" window apart from agent windows so agent window ids stay stable */
+  tuiWindow: { argv: string[]; env?: Record<string, string> } | null = null;
   private created = false;
   private nextId = 1;
 
@@ -151,22 +218,36 @@ export class FakeTmux implements Tmux {
     return this.created;
   }
 
-  async ensureSession(tuiArgv: string[]): Promise<void> {
-    this.calls.push({ method: 'ensureSession', args: [tuiArgv] });
+  async ensureSession(
+    tuiArgv: string[],
+    env?: Record<string, string>,
+  ): Promise<void> {
+    // record env only when given so exact call assertions stay stable
+    this.calls.push({
+      method: 'ensureSession',
+      args: env === undefined ? [tuiArgv] : [tuiArgv, env],
+    });
     this.created = true;
+    if (this.tuiWindow === null) {
+      this.tuiWindow = { argv: [...tuiArgv] };
+      if (env) this.tuiWindow.env = { ...env };
+    }
   }
 
   async newWindow(opts: {
     name: string;
     cwd: string;
     argv: string[];
+    env?: Record<string, string>;
   }): Promise<string> {
     const id = `@${this.nextId++}`;
-    this.windows.set(id, {
+    const window: FakeWindow = {
       name: opts.name,
       cwd: opts.cwd,
       argv: [...opts.argv],
-    });
+    };
+    if (opts.env) window.env = { ...opts.env };
+    this.windows.set(id, window);
     return id;
   }
 
@@ -186,6 +267,11 @@ export class FakeTmux implements Tmux {
   closeWindow(id: string): void {
     this.windows.delete(id);
     if (this.selected === id) this.selected = null;
+  }
+
+  /** test helper: simulate the TUI process quitting (its window dies with it) */
+  closeTuiWindow(): void {
+    this.tuiWindow = null;
   }
 }
 
@@ -213,9 +299,15 @@ export function pickAttachArgs(insideTmux: boolean, name: string): string[] {
  * Attach the current terminal to the holo session (blocks until detach).
  * Returns the tmux exit status.
  */
-export function attachOrSwitch(sessionName: string = tmuxSessionName()): number {
-  const result = spawnSync('tmux', pickAttachArgs(isInsideTmux(), sessionName), {
-    stdio: 'inherit',
-  });
+export function attachOrSwitch(
+  sessionName: string = tmuxSessionName(),
+): number {
+  const result = spawnSync(
+    'tmux',
+    pickAttachArgs(isInsideTmux(), sessionName),
+    {
+      stdio: 'inherit',
+    },
+  );
   return result.status ?? 1;
 }
