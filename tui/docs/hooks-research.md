@@ -62,8 +62,8 @@ Hooks are stable + enabled by default (`codex features list`). Supported:
 `Stop`. **No SessionEnd, no Notification** — session end is detected by the
 daemon's tmux liveness sweep.
 
-Per-invocation injection (verified parsing locally; end-to-end firing of
-`-c`-injected hooks is source-verified but not live-tested — flagged risk):
+Per-invocation injection (live-verified against codex **0.139**; dead in
+0.137 — see LIVE-TEST RESULTS below; holo requires codex ≥ 0.139):
 
 ```bash
 codex -C <cwd> \
@@ -105,11 +105,19 @@ add `turn_id`. Notable per-event fields:
 - **Update prompt blocks session startup**: codex showed a 0.137→0.139
   updater dialog before the session UI; spawn argv should include
   `-c check_for_update_on_startup=false`.
-- NEXT STEP (in progress at pause): test whether 0.139 fixes `-c` injection
-  (`bunx @openai/codex@0.139.0` works for testing without touching the brew
-  install). If yes → keep adapter, require codex ≥ 0.139. If no → file-based
-  injection redesign (per-session CODEX_HOME or repo-layer hooks.json, both
-  invasive — decide with Ko).
+### LIVE-TEST RESULTS (2026-06-10, codex 0.139.0 via `bunx @openai/codex@0.139.0`)
+
+- **`-c hooks.X=[...]` injection WORKS in 0.139 interactive mode** — marker
+  test in an isolated `tmux -L` server fired SessionStart, UserPromptSubmit,
+  and Stop hooks with the exact argv shape the adapter builds (dotted-key
+  `-c` overrides + `--dangerously-bypass-hook-trust`). The 0.137 failure is
+  a fixed upstream bug, not an adapter defect.
+- `codex exec` still fires no hooks in 0.139 — irrelevant for holo (always
+  spawns the interactive TUI in tmux).
+- Decision: keep the `-c` injection adapter, **require codex ≥ 0.139**, and
+  pass `-c check_for_update_on_startup=false` (the update dialog otherwise
+  blocks session startup). The brew install (0.137) was NOT upgraded — Codex
+  Computer Use depends on it; surface the upgrade to Ko separately.
 
 ### Why not `notify`
 
