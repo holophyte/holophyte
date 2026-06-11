@@ -20,14 +20,24 @@ export interface PreviewPaneProps {
   now: number;
 }
 
-export function PreviewPane({ session, reason, runningCount, diffStat, now }: PreviewPaneProps) {
+export function PreviewPane({
+  session,
+  reason,
+  runningCount,
+  diffStat,
+  now,
+}: PreviewPaneProps) {
   const cwd = session?.cwd;
+  const statusSince = session?.statusSince;
   const [diff, setDiff] = useState('');
 
-  // External system (git subprocess) — refetch when the selected cwd changes.
+  // External system (git subprocess) — refetch when the selected cwd changes,
+  // and on every status transition (statusSince bumps) so a session that kept
+  // editing files doesn't show the diff captured at selection time forever.
   // The `alive` flag guards against out-of-order resolutions: the cleanup for
-  // the previous cwd runs before the next effect, so a slow stale fetch can
-  // never overwrite the current cwd's result.
+  // the previous fetch runs before the next effect, so a slow stale fetch can
+  // never overwrite the current result.
+  // biome-ignore lint/correctness/useExhaustiveDependencies(statusSince): statusSince is a deliberate refetch trigger — it bumps on every status transition even though it is unused in the effect body.
   useEffect(() => {
     if (cwd === undefined) return;
     let alive = true;
@@ -43,7 +53,7 @@ export function PreviewPane({ session, reason, runningCount, diffStat, now }: Pr
     return () => {
       alive = false;
     };
-  }, [cwd, diffStat]);
+  }, [cwd, diffStat, statusSince]);
 
   if (!session) {
     return (
@@ -61,20 +71,35 @@ export function PreviewPane({ session, reason, runningCount, diffStat, now }: Pr
         <span attributes={DIM}> {session.cwd}</span>
       </text>
       <text>
-        <span fg="yellow">{reason ?? session.attentionReason ?? statusLabel(session.status)}</span>
+        <span fg="yellow">
+          {reason ?? session.attentionReason ?? statusLabel(session.status)}
+        </span>
         <span attributes={DIM}>
           {' '}
-          · {statusLabel(session.status)} {formatElapsed(now - session.statusSince)}
+          · {statusLabel(session.status)}{' '}
+          {formatElapsed(now - session.statusSince)}
         </span>
       </text>
       {permission ? (
-        <box flexDirection="column" border borderStyle="rounded" borderColor="yellow" paddingX={1} flexShrink={0}>
+        <box
+          flexDirection="column"
+          border
+          borderStyle="rounded"
+          borderColor="yellow"
+          paddingX={1}
+          flexShrink={0}
+        >
           <text>
             <span attributes={BOLD}>permission: </span>
             <span fg="yellow">{permission.tool}</span>
           </text>
           <text>
-            <span attributes={DIM}>{String(JSON.stringify(permission.input) ?? '').slice(0, MAX_INPUT_CHARS)}</span>
+            <span attributes={DIM}>
+              {String(JSON.stringify(permission.input) ?? '').slice(
+                0,
+                MAX_INPUT_CHARS,
+              )}
+            </span>
           </text>
           <text>
             <span fg="green">[a]pprove</span>
@@ -85,25 +110,31 @@ export function PreviewPane({ session, reason, runningCount, diffStat, now }: Pr
       ) : null}
       {session.lastMessage !== undefined ? (
         <box flexDirection="column" flexShrink={0}>
-          <text>{' '}</text>
+          <text> </text>
           <text>
             <span attributes={DIM}>last message</span>
           </text>
-          {session.lastMessage.split('\n').slice(0, MAX_MESSAGE_LINES).map((line, i) => (
-            // biome-ignore lint/suspicious/noArrayIndexKey: static line list
-            <text key={i}>{line || ' '}</text>
-          ))}
+          {session.lastMessage
+            .split('\n')
+            .slice(0, MAX_MESSAGE_LINES)
+            .map((line, i) => (
+              // biome-ignore lint/suspicious/noArrayIndexKey: static line list
+              <text key={i}>{line || ' '}</text>
+            ))}
         </box>
       ) : null}
       <box flexDirection="column" flexShrink={0}>
-        <text>{' '}</text>
+        <text> </text>
         <text>
           <span attributes={DIM}>git diff --stat</span>
         </text>
-        {(diff || '…').split('\n').slice(0, MAX_DIFF_LINES).map((line, i) => (
-          // biome-ignore lint/suspicious/noArrayIndexKey: static line list
-          <text key={i}>{line || ' '}</text>
-        ))}
+        {(diff || '…')
+          .split('\n')
+          .slice(0, MAX_DIFF_LINES)
+          .map((line, i) => (
+            // biome-ignore lint/suspicious/noArrayIndexKey: static line list
+            <text key={i}>{line || ' '}</text>
+          ))}
       </box>
     </box>
   );
