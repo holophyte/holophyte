@@ -20,18 +20,32 @@ export function request(
   const timeoutMs = opts.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   return new Promise((resolve, reject) => {
     const socket = net.createConnection(socketPath());
+    let settled = false;
     const timer = setTimeout(() => {
+      settled = true;
       socket.destroy();
       reject(new Error(`daemon request timed out after ${timeoutMs}ms`));
     }, timeoutMs);
     socket.on('error', (err) => {
+      if (settled) return;
+      settled = true;
       clearTimeout(timer);
       reject(err);
+    });
+    // a clean peer FIN (daemon crash mid-request) emits 'close' with no
+    // 'error' — without this the promise would hang until the timer
+    socket.on('close', () => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      reject(new Error('connection closed before response'));
     });
     socket.on('connect', () => {
       writeJsonLine(socket, req);
     });
     onJsonLines(socket, (value) => {
+      if (settled) return;
+      settled = true;
       clearTimeout(timer);
       socket.end();
       resolve(value as Response);

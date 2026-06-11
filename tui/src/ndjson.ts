@@ -9,9 +9,12 @@ export function onJsonLines(
   socket: Socket,
   onValue: (value: unknown) => void,
 ): void {
+  // setEncoding routes reads through string_decoder, which carries multi-byte
+  // UTF-8 sequences split across chunk boundaries instead of corrupting them
+  socket.setEncoding('utf8');
   let buf = '';
-  socket.on('data', (chunk: Buffer | string) => {
-    buf += chunk.toString();
+  socket.on('data', (chunk: string) => {
+    buf += chunk;
     let idx = buf.indexOf('\n');
     while (idx !== -1) {
       const line = buf.slice(0, idx);
