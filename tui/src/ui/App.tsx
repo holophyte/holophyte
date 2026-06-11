@@ -175,17 +175,22 @@ export function App({
     }
   });
 
-  // Scan the filesystem only while the picker is open.
+  // Scan the filesystem once per modal open — not on every state push while
+  // the picker is up (the scan is synchronous readdir + stat per entry).
+  const devRepos = useMemo(
+    () => (modalOpen ? scanDevRepos(devRoot) : []),
+    [modalOpen, devRoot],
+  );
   const candidates = useMemo(
     () =>
       modalOpen
         ? buildCwdCandidates(
             push?.sessions ?? [],
             push?.recentCwds ?? [],
-            scanDevRepos(devRoot),
+            devRepos,
           )
         : [],
-    [modalOpen, push, devRoot],
+    [modalOpen, push, devRepos],
   );
 
   const handleSpawn = async (

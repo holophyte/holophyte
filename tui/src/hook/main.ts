@@ -84,7 +84,10 @@ async function main(): Promise<void> {
             event = { kind: 'stop', lastMessage };
             break;
           }
-          await new Promise((resolve) => setTimeout(resolve, 200));
+          // no sleep after the final attempt — Claude waits on this hook
+          if (attempt < 3) {
+            await new Promise((resolve) => setTimeout(resolve, 200));
+          }
         }
       }
     }
