@@ -1,5 +1,5 @@
-import { createTextAttributes } from '@opentui/core';
 import { basename } from 'node:path';
+import { createTextAttributes } from '@opentui/core';
 import type { Session, SessionStatus } from '../types';
 
 const BOLD = createTextAttributes({ bold: true });
@@ -46,7 +46,12 @@ export function statusColor(status: SessionStatus): string {
   }
 }
 
-export function SessionsPane({ sessions, selectedId, focused, now }: SessionsPaneProps) {
+export function SessionsPane({
+  sessions,
+  selectedId,
+  focused,
+  now,
+}: SessionsPaneProps) {
   return (
     <box flexDirection="column" flexShrink={0} overflow="hidden">
       <text>
@@ -63,14 +68,19 @@ export function SessionsPane({ sessions, selectedId, focused, now }: SessionsPan
             <box key={session.id} flexDirection="column">
               <text>
                 <span>{selected ? '›' : ' '}</span>
-                <span fg={statusColor(session.status)}>{statusDot(session.status)} </span>
-                <span attributes={selected ? BOLD : undefined}>{session.id}</span>
+                <span fg={statusColor(session.status)}>
+                  {statusDot(session.status)}{' '}
+                </span>
+                <span attributes={selected ? BOLD : undefined}>
+                  {session.id}
+                </span>
                 <span attributes={DIM}> {basename(session.cwd)}</span>
               </text>
               <text>
                 <span attributes={DIM}>
                   {'   '}
-                  {statusLabel(session.status)} {formatElapsed(now - session.statusSince)}
+                  {statusLabel(session.status)}{' '}
+                  {formatElapsed(now - session.statusSince)}
                 </span>
               </text>
             </box>

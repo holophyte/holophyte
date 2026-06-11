@@ -54,7 +54,11 @@ async function main(): Promise<void> {
   let payload: Record<string, unknown> | undefined;
   try {
     const parsed: unknown = JSON.parse(raw);
-    if (parsed !== null && typeof parsed === 'object' && !Array.isArray(parsed)) {
+    if (
+      parsed !== null &&
+      typeof parsed === 'object' &&
+      !Array.isArray(parsed)
+    ) {
       payload = parsed as Record<string, unknown>;
     }
   } catch {

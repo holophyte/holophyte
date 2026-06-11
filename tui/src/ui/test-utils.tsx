@@ -1,8 +1,8 @@
 /** Bramble-style wrappers around @opentui/react's testRender. */
 
+import { testRender } from '@opentui/react/test-utils';
 import type { ReactNode } from 'react';
 import { act } from 'react';
-import { testRender } from '@opentui/react/test-utils';
 
 export async function renderFrame(node: ReactNode): Promise<{
   frame: string;

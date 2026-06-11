@@ -5,7 +5,9 @@ import { describe, expect, it } from 'vitest';
 import type { Session } from '../types';
 import { buildCwdCandidates, scanDevRepos } from './cwd-candidates';
 
-function session(over: Partial<Session> & Pick<Session, 'id' | 'cwd'>): Session {
+function session(
+  over: Partial<Session> & Pick<Session, 'id' | 'cwd'>,
+): Session {
   return {
     harness: 'claude',
     tmuxWindow: '@1',
@@ -24,7 +26,12 @@ describe('buildCwdCandidates', () => {
       session({ id: 'codex-1', cwd: '/b' }),
     ];
     const out = buildCwdCandidates(sessions, ['/recent'], ['/dev/repo']);
-    expect(out.map((c) => c.path)).toEqual(['/a', '/b', '/recent', '/dev/repo']);
+    expect(out.map((c) => c.path)).toEqual([
+      '/a',
+      '/b',
+      '/recent',
+      '/dev/repo',
+    ]);
     expect(out[0]?.annotation).toBe('★ 2 active');
     expect(out[1]?.annotation).toBe('★ 1 active');
     expect(out[2]?.annotation).toBe('recent');
@@ -59,7 +66,11 @@ describe('buildCwdCandidates', () => {
 
   it('shortens the home dir to ~ in labels', () => {
     const home = homedir();
-    const out = buildCwdCandidates([], [join(home, 'Development', 'relos'), '/opt/x', home], []);
+    const out = buildCwdCandidates(
+      [],
+      [join(home, 'Development', 'relos'), '/opt/x', home],
+      [],
+    );
     expect(out[0]?.label).toBe('~/Development/relos');
     expect(out[1]?.label).toBe('/opt/x');
     expect(out[2]?.label).toBe('~');
@@ -74,7 +85,10 @@ describe('scanDevRepos', () => {
     writeFileSync(join(root, 'alpha', '.git'), 'gitdir: elsewhere'); // worktree-style
     mkdirSync(join(root, 'plain')); // no .git
     writeFileSync(join(root, 'stray.txt'), 'x'); // not a dir
-    expect(scanDevRepos(root)).toEqual([join(root, 'alpha'), join(root, 'beta')]);
+    expect(scanDevRepos(root)).toEqual([
+      join(root, 'alpha'),
+      join(root, 'beta'),
+    ]);
   });
 
   it('returns [] when the root is unreadable', () => {

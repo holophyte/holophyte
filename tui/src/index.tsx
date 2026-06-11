@@ -1,4 +1,5 @@
 #!/usr/bin/env bun
+
 /**
  * holo CLI entry point — thin dispatcher.
  *
@@ -6,15 +7,15 @@
  * graph lean (no OpenTUI overhead on `holo new/ls/next/setup`).
  */
 
-import { fileURLToPath } from 'node:url';
-import { openSync, mkdirSync } from 'node:fs';
 import { spawn } from 'node:child_process';
-import { parseArgs, makeEnsureDaemon, runCli } from './cli';
+import { mkdirSync, openSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { harnessInfos } from './adapters';
 import type { CliDeps } from './cli';
+import { makeEnsureDaemon, parseArgs, runCli } from './cli';
 import { request } from './client';
 import { holoHome } from './paths';
 import { attachOrSwitch, isInsideTmux, RealTmux } from './tmux';
-import { harnessInfos } from './adapters';
 
 const thisFilePath = fileURLToPath(import.meta.url);
 const tuiArgv = [process.execPath, thisFilePath, 'tui'];
@@ -62,7 +63,14 @@ if (cmd.kind === 'daemon') {
     process.exit(143);
   });
 
-  root.render(React.createElement(App, { onQuit: () => { shutdown(); process.exit(0); } }));
+  root.render(
+    React.createElement(App, {
+      onQuit: () => {
+        shutdown();
+        process.exit(0);
+      },
+    }),
+  );
   renderer.start();
 
   // Block until the renderer is destroyed (onQuit path or signal).

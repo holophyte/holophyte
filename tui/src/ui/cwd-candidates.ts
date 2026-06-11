@@ -31,7 +31,11 @@ export function buildCwdCandidates(
   const add = (path: string, annotation?: string) => {
     if (seen.has(path)) return; // first occurrence carries the best annotation
     seen.add(path);
-    out.push({ path, label: shortenHome(path), ...(annotation !== undefined ? { annotation } : {}) });
+    out.push({
+      path,
+      label: shortenHome(path),
+      ...(annotation !== undefined ? { annotation } : {}),
+    });
   };
 
   const active = [...activeCounts.entries()].sort(

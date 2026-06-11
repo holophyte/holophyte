@@ -27,7 +27,13 @@ export function lastAssistantMessage(
     const buf = Buffer.alloc(readBytes);
     let offset = 0;
     while (offset < readBytes) {
-      const n = readSync(fd, buf, offset, readBytes - offset, position + offset);
+      const n = readSync(
+        fd,
+        buf,
+        offset,
+        readBytes - offset,
+        position + offset,
+      );
       if (n <= 0) break;
       offset += n;
     }

@@ -1,4 +1,10 @@
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { Session } from '../types';
@@ -68,7 +74,11 @@ describe('loadStateFile', () => {
     const path = join(dir, 'state.json');
     writeFileSync(
       path,
-      JSON.stringify({ sessions: 'nope', counters: [1, 2], recentCwds: { a: 1 } }),
+      JSON.stringify({
+        sessions: 'nope',
+        counters: [1, 2],
+        recentCwds: { a: 1 },
+      }),
     );
     expect(loadStateFile(path)).toEqual({
       sessions: [],
@@ -114,7 +124,11 @@ describe('saveStateFile', () => {
   it('atomically replaces an existing file', () => {
     const path = join(dir, 'state.json');
     saveStateFile(path, sampleData());
-    const updated: RegistryJSON = { sessions: [], counters: { claude: 9 }, recentCwds: [] };
+    const updated: RegistryJSON = {
+      sessions: [],
+      counters: { claude: 9 },
+      recentCwds: [],
+    };
     saveStateFile(path, updated);
     expect(loadStateFile(path)).toEqual(updated);
   });

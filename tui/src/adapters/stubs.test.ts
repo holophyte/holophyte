@@ -13,7 +13,10 @@ const session: Session = {
 };
 
 describe('stubAdapter', () => {
-  it.each(['cursor', 'devin'] as const)('%s is unconfigured with no capabilities', (id) => {
+  it.each([
+    'cursor',
+    'devin',
+  ] as const)('%s is unconfigured with no capabilities', (id) => {
     const adapter = stubAdapter(id);
     expect(adapter.id).toBe(id);
     expect(adapter.configured()).toBe(false);

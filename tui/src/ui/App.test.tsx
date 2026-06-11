@@ -18,9 +18,15 @@ class FakeGateway implements Gateway {
   requests: Request[] = [];
   nextResponse: Response = { ok: true };
   subscribeCount = 0;
-  private handlers: { onState: (s: StatePush) => void; onClose?: () => void } | null = null;
+  private handlers: {
+    onState: (s: StatePush) => void;
+    onClose?: () => void;
+  } | null = null;
 
-  subscribe(handlers: { onState: (s: StatePush) => void; onClose?: () => void }) {
+  subscribe(handlers: {
+    onState: (s: StatePush) => void;
+    onClose?: () => void;
+  }) {
     this.subscribeCount += 1;
     this.handlers = handlers;
     return {
@@ -94,17 +100,33 @@ async function mount() {
 }
 
 const needsInput = () =>
-  session({ id: 'claude-1', status: 'needs_input', attentionReason: 'Clarify naming convention' });
+  session({
+    id: 'claude-1',
+    status: 'needs_input',
+    attentionReason: 'Clarify naming convention',
+  });
 const running = () =>
-  session({ id: 'codex-1', harness: 'codex', cwd: '/Users/x/Development/holophyte' });
+  session({
+    id: 'codex-1',
+    harness: 'codex',
+    cwd: '/Users/x/Development/holophyte',
+  });
 const idle = () =>
-  session({ id: 'claude-2', status: 'idle', attentionReason: 'review / next prompt' });
+  session({
+    id: 'claude-2',
+    status: 'idle',
+    attentionReason: 'review / next prompt',
+  });
 const withPermission = () =>
   session({
     id: 'claude-1',
     status: 'permission',
     attentionReason: 'approve: Bash',
-    pendingPermission: { tool: 'Bash', input: { command: 'rm -rf node_modules' }, respondBy: Date.now() + 30_000 },
+    pendingPermission: {
+      tool: 'Bash',
+      input: { command: 'rm -rf node_modules' },
+      respondBy: Date.now() + 30_000,
+    },
   });
 
 describe('App', () => {
@@ -180,10 +202,18 @@ describe('App', () => {
     expect(frame()).toContain('[a]pprove');
     input.pressKey('a');
     await update();
-    expect(gw.requests).toContainEqual({ cmd: 'respondPermission', sessionId: 'claude-1', allow: true });
+    expect(gw.requests).toContainEqual({
+      cmd: 'respondPermission',
+      sessionId: 'claude-1',
+      allow: true,
+    });
     input.pressKey('d');
     await update();
-    expect(gw.requests).toContainEqual({ cmd: 'respondPermission', sessionId: 'claude-1', allow: false });
+    expect(gw.requests).toContainEqual({
+      cmd: 'respondPermission',
+      sessionId: 'claude-1',
+      allow: false,
+    });
     unmount();
   });
 
@@ -192,7 +222,9 @@ describe('App', () => {
     await push(snapshot([needsInput(), running()]));
     input.pressKey('a');
     await update();
-    expect(gw.requests.filter((r) => r.cmd === 'respondPermission')).toHaveLength(0);
+    expect(
+      gw.requests.filter((r) => r.cmd === 'respondPermission'),
+    ).toHaveLength(0);
     unmount();
   });
 

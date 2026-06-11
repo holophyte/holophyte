@@ -10,9 +10,16 @@ export interface StatusBarProps {
 
 export function StatusBar({ daemon }: StatusBarProps) {
   return (
-    <box flexDirection="row" justifyContent="space-between" paddingX={1} flexShrink={0}>
+    <box
+      flexDirection="row"
+      justifyContent="space-between"
+      paddingX={1}
+      flexShrink={0}
+    >
       <text>
-        <span attributes={DIM}>n:new enter:open j/k:nav a/d:perm tab:focus q:quit</span>
+        <span attributes={DIM}>
+          n:new enter:open j/k:nav a/d:perm tab:focus q:quit
+        </span>
       </text>
       <text>
         {daemon === 'up' ? (

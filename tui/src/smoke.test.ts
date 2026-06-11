@@ -33,7 +33,8 @@ const REPO_ROOT = fileURLToPath(new URL('../..', import.meta.url)); // pre-trust
 const TMUX_SOCKET = `holo-smoke-${process.pid}`;
 
 /** every tmux call goes to the isolated -L server */
-const runner: TmuxRunner = (args) => defaultRunner(['-L', TMUX_SOCKET, ...args]);
+const runner: TmuxRunner = (args) =>
+  defaultRunner(['-L', TMUX_SOCKET, ...args]);
 
 const PROMPT = 'Reply with exactly: ok. Do not use any tools.';
 
@@ -127,11 +128,19 @@ describe.skipIf(!ANY)('real-harness smoke (HOLO_SMOKE gated)', () => {
     if (home) rmSync(home, { recursive: true, force: true });
   });
 
-  it.skipIf(!RUN_CLAUDE)('claude: spawn → ready → running → idle', async () => {
-    await lifecycle('claude');
-  }, 240_000);
+  it.skipIf(!RUN_CLAUDE)(
+    'claude: spawn → ready → running → idle',
+    async () => {
+      await lifecycle('claude');
+    },
+    240_000,
+  );
 
-  it.skipIf(!RUN_CODEX)('codex: spawn → ready → running → idle', async () => {
-    await lifecycle('codex');
-  }, 240_000);
+  it.skipIf(!RUN_CODEX)(
+    'codex: spawn → ready → running → idle',
+    async () => {
+      await lifecycle('codex');
+    },
+    240_000,
+  );
 });

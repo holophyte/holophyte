@@ -11,7 +11,12 @@ export interface QueuePaneProps {
   runningCount: number;
 }
 
-export function QueuePane({ queue, selectedId, focused, runningCount }: QueuePaneProps) {
+export function QueuePane({
+  queue,
+  selectedId,
+  focused,
+  runningCount,
+}: QueuePaneProps) {
   return (
     <box flexDirection="column" flexShrink={0} overflow="hidden">
       <text>
@@ -19,7 +24,10 @@ export function QueuePane({ queue, selectedId, focused, runningCount }: QueuePan
       </text>
       {queue.length === 0 ? (
         <text>
-          <span attributes={DIM}> nothing needs you ({runningCount} running)</span>
+          <span attributes={DIM}>
+            {' '}
+            nothing needs you ({runningCount} running)
+          </span>
         </text>
       ) : (
         queue.map((item, i) => {

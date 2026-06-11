@@ -8,7 +8,9 @@ import { fileURLToPath } from 'node:url';
 import { holoHome } from '../paths';
 import type { HarnessAdapter, Session } from '../types';
 
-const fakeAgentPath = fileURLToPath(new URL('./fake-agent.ts', import.meta.url));
+const fakeAgentPath = fileURLToPath(
+  new URL('./fake-agent.ts', import.meta.url),
+);
 
 export class FakeAdapter implements HarnessAdapter {
   readonly id = 'fake' as const;

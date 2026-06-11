@@ -29,7 +29,9 @@ export function makeDiffStat(exec: ExecFileLike = execFile): DiffStatRunner {
           resolve('working tree clean');
           return;
         }
-        resolve(text.length > MAX_CHARS ? `${text.slice(0, MAX_CHARS)}…` : text);
+        resolve(
+          text.length > MAX_CHARS ? `${text.slice(0, MAX_CHARS)}…` : text,
+        );
       });
     });
 }

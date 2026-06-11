@@ -1,6 +1,6 @@
 import { createTextAttributes } from '@opentui/core';
-import { useEffect, useMemo, useRef, useState } from 'react';
 import { useKeyboard, useTerminalDimensions } from '@opentui/react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { StatePush } from '../protocol';
 import type { HarnessId } from '../types';
 import { buildCwdCandidates, scanDevRepos } from './cwd-candidates';
@@ -12,7 +12,7 @@ import type { SpawnResult } from './NewSessionModal';
 import { NewSessionModal } from './NewSessionModal';
 import { PreviewPane } from './PreviewPane';
 import { QueuePane } from './QueuePane';
-import { SessionsPane, formatElapsed, statusLabel } from './SessionsPane';
+import { formatElapsed, SessionsPane, statusLabel } from './SessionsPane';
 import type { DaemonStatus } from './StatusBar';
 import { StatusBar } from './StatusBar';
 
@@ -38,7 +38,12 @@ function effectiveId(ids: string[], selectedId: string | null): string | null {
   return ids[0] ?? null;
 }
 
-export function App({ gateway = liveGateway, onQuit, devRoot, diffStat = gitDiffStat }: AppProps) {
+export function App({
+  gateway = liveGateway,
+  onQuit,
+  devRoot,
+  diffStat = gitDiffStat,
+}: AppProps) {
   const dims = useTerminalDimensions();
   const [push, setPush] = useState<StatePush | null>(null);
   const [daemon, setDaemon] = useState<DaemonStatus>('connecting');
@@ -93,9 +98,14 @@ export function App({ gateway = liveGateway, onQuit, devRoot, diffStat = gitDiff
   const sessionIds = sessions.map((s) => s.id);
   const focusedIds = focus === 'queue' ? queueIds : sessionIds;
   const selected = effectiveId(focusedIds, selectedId);
-  const previewSession = selected !== null ? (sessions.find((s) => s.id === selected) ?? null) : null;
+  const previewSession =
+    selected !== null
+      ? (sessions.find((s) => s.id === selected) ?? null)
+      : null;
   const previewReason =
-    selected !== null ? (queue.find((q) => q.sessionId === selected)?.reason ?? null) : null;
+    selected !== null
+      ? (queue.find((q) => q.sessionId === selected)?.reason ?? null)
+      : null;
 
   // Keyboard handlers fire between commits — route reads through a ref so
   // they never act on stale state (bramble pattern).
@@ -108,7 +118,9 @@ export function App({ gateway = liveGateway, onQuit, devRoot, diffStat = gitDiff
     const l = live.current;
     if (l.push === null) return;
     const ids =
-      l.focus === 'queue' ? l.push.queue.map((q) => q.sessionId) : l.push.sessions.map((s) => s.id);
+      l.focus === 'queue'
+        ? l.push.queue.map((q) => q.sessionId)
+        : l.push.sessions.map((s) => s.id);
     const current = effectiveId(ids, l.selectedId);
     if (current === null) return;
     const idx = ids.indexOf(current);
@@ -141,7 +153,9 @@ export function App({ gateway = liveGateway, onQuit, devRoot, diffStat = gitDiff
     }
     if (l.push === null) return;
     const ids =
-      l.focus === 'queue' ? l.push.queue.map((q) => q.sessionId) : l.push.sessions.map((s) => s.id);
+      l.focus === 'queue'
+        ? l.push.queue.map((q) => q.sessionId)
+        : l.push.sessions.map((s) => s.id);
     const id = effectiveId(ids, l.selectedId);
     if (id === null) return;
     if (key.name === 'return' || key.name === 'enter') {
@@ -152,7 +166,11 @@ export function App({ gateway = liveGateway, onQuit, devRoot, diffStat = gitDiff
       const session = l.push.sessions.find((s) => s.id === id);
       if (session?.pendingPermission === undefined) return;
       void gateway
-        .request({ cmd: 'respondPermission', sessionId: id, allow: key.name === 'a' })
+        .request({
+          cmd: 'respondPermission',
+          sessionId: id,
+          allow: key.name === 'a',
+        })
         .catch(() => {});
     }
   });
@@ -161,12 +179,19 @@ export function App({ gateway = liveGateway, onQuit, devRoot, diffStat = gitDiff
   const candidates = useMemo(
     () =>
       modalOpen
-        ? buildCwdCandidates(push?.sessions ?? [], push?.recentCwds ?? [], scanDevRepos(devRoot))
+        ? buildCwdCandidates(
+            push?.sessions ?? [],
+            push?.recentCwds ?? [],
+            scanDevRepos(devRoot),
+          )
         : [],
     [modalOpen, push, devRoot],
   );
 
-  const handleSpawn = async (harness: HarnessId, cwd: string): Promise<SpawnResult> => {
+  const handleSpawn = async (
+    harness: HarnessId,
+    cwd: string,
+  ): Promise<SpawnResult> => {
     try {
       const res = await gateway.request({ cmd: 'new', harness, cwd });
       if (res.ok) {
@@ -175,7 +200,10 @@ export function App({ gateway = liveGateway, onQuit, devRoot, diffStat = gitDiff
       }
       return { ok: false, error: res.error };
     } catch (err) {
-      return { ok: false, error: err instanceof Error ? err.message : String(err) };
+      return {
+        ok: false,
+        error: err instanceof Error ? err.message : String(err),
+      };
     }
   };
 
@@ -196,10 +224,20 @@ export function App({ gateway = liveGateway, onQuit, devRoot, diffStat = gitDiff
           overflow="hidden"
           paddingX={0}
         >
-          <SessionsPane sessions={sessions} selectedId={selected} focused={focus === 'sessions'} now={now} />
-          <text>{' '}</text>
-          <QueuePane queue={queue} selectedId={selected} focused={focus === 'queue'} runningCount={runningCount} />
-          <text>{' '}</text>
+          <SessionsPane
+            sessions={sessions}
+            selectedId={selected}
+            focused={focus === 'sessions'}
+            now={now}
+          />
+          <text> </text>
+          <QueuePane
+            queue={queue}
+            selectedId={selected}
+            focused={focus === 'queue'}
+            runningCount={runningCount}
+          />
+          <text> </text>
           <text>
             <span attributes={BOLD}>{'  '}CONTEXT</span>
           </text>
@@ -230,7 +268,13 @@ export function App({ gateway = liveGateway, onQuit, devRoot, diffStat = gitDiff
             </text>
           )}
         </box>
-        <box flexGrow={1} flexDirection="column" border borderStyle="single" overflow="hidden">
+        <box
+          flexGrow={1}
+          flexDirection="column"
+          border
+          borderStyle="single"
+          overflow="hidden"
+        >
           {push === null ? (
             <box padding={1}>
               <text>
