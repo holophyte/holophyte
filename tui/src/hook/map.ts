@@ -36,8 +36,15 @@ export function mapHook(
   payload: Record<string, unknown>,
 ): HookAction {
   switch (payload.hook_event_name) {
-    case 'SessionStart':
+    case 'SessionStart': {
+      // Claude fires SessionStart(source 'compact') mid-turn after
+      // auto-compaction; mapping it to ready would flip a running
+      // session to idle. The agent is still working — ignore.
+      if (harness === 'claude' && payload.source === 'compact') {
+        return { type: 'ignore' };
+      }
       return { type: 'event', event: { kind: 'ready' } };
+    }
 
     case 'UserPromptSubmit':
       return { type: 'event', event: { kind: 'prompt' } };
@@ -84,6 +91,14 @@ export function mapHook(
       // Claude-only; codex has no SessionEnd hook (research doc).
       if (harness !== 'claude') return { type: 'ignore' };
       const reason = payload.reason;
+      // /clear and in-app /resume fire SessionEnd but the claude
+      // process survives — a SessionStart('clear'/'resume') follows
+      // and re-emits ready. Mapping these to exit would permanently
+      // orphan a live session (exited sessions can't be revived).
+      // The daemon's tmux liveness sweep backstops real deaths.
+      if (reason === 'clear' || reason === 'resume') {
+        return { type: 'ignore' };
+      }
       return {
         type: 'event',
         event:

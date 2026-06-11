@@ -24,6 +24,18 @@ describe('mapHook', () => {
         payload: { hook_event_name: 'SessionStart' },
         expected: { type: 'event', event: { kind: 'ready' } },
       },
+      {
+        name: 'claude SessionStart source clear → ready',
+        harness: 'claude',
+        payload: { hook_event_name: 'SessionStart', source: 'clear' },
+        expected: { type: 'event', event: { kind: 'ready' } },
+      },
+      {
+        name: 'claude SessionStart source compact → ignore (mid-turn, agent still working)',
+        harness: 'claude',
+        payload: { hook_event_name: 'SessionStart', source: 'compact' },
+        expected: { type: 'ignore' },
+      },
 
       // UserPromptSubmit → prompt
       {
@@ -93,7 +105,10 @@ describe('mapHook', () => {
       {
         name: 'AskUserQuestion missing tool_input → fallback text',
         harness: 'claude',
-        payload: { hook_event_name: 'PreToolUse', tool_name: 'AskUserQuestion' },
+        payload: {
+          hook_event_name: 'PreToolUse',
+          tool_name: 'AskUserQuestion',
+        },
         expected: {
           type: 'event',
           event: { kind: 'question', text: 'agent asked a question' },
@@ -179,7 +194,10 @@ describe('mapHook', () => {
         },
         expected: {
           type: 'event',
-          event: { kind: 'notification', reason: 'Claude is waiting for your input' },
+          event: {
+            kind: 'notification',
+            reason: 'Claude is waiting for your input',
+          },
         },
       },
       {
@@ -275,6 +293,30 @@ describe('mapHook', () => {
         },
       },
       {
+        name: 'claude SessionEnd reason logout → exit with reason',
+        harness: 'claude',
+        payload: { hook_event_name: 'SessionEnd', reason: 'logout' },
+        expected: { type: 'event', event: { kind: 'exit', reason: 'logout' } },
+      },
+      {
+        name: 'claude SessionEnd reason clear → ignore (process survives /clear)',
+        harness: 'claude',
+        payload: { hook_event_name: 'SessionEnd', reason: 'clear' },
+        expected: { type: 'ignore' },
+      },
+      {
+        name: 'claude SessionEnd reason resume → ignore (process survives in-app /resume)',
+        harness: 'claude',
+        payload: { hook_event_name: 'SessionEnd', reason: 'resume' },
+        expected: { type: 'ignore' },
+      },
+      {
+        name: 'claude SessionEnd missing reason → exit without reason',
+        harness: 'claude',
+        payload: { hook_event_name: 'SessionEnd' },
+        expected: { type: 'event', event: { kind: 'exit' } },
+      },
+      {
         name: 'claude SessionEnd non-string reason → exit without reason',
         harness: 'claude',
         payload: { hook_event_name: 'SessionEnd', reason: 123 },
@@ -359,13 +401,21 @@ describe('mapHook', () => {
   it('never throws on malformed payloads', () => {
     const garbage: Array<Record<string, unknown>> = [
       { hook_event_name: 'PreToolUse', tool_name: null, tool_input: null },
-      { hook_event_name: 'PreToolUse', tool_name: 'AskUserQuestion', tool_input: 'x' },
+      {
+        hook_event_name: 'PreToolUse',
+        tool_name: 'AskUserQuestion',
+        tool_input: 'x',
+      },
       {
         hook_event_name: 'PreToolUse',
         tool_name: 'AskUserQuestion',
         tool_input: { questions: [null] },
       },
-      { hook_event_name: 'Notification', notification_type: null, message: null },
+      {
+        hook_event_name: 'Notification',
+        notification_type: null,
+        message: null,
+      },
       { hook_event_name: 'Stop', last_assistant_message: { nested: true } },
       { hook_event_name: 'SessionEnd', reason: { o: 1 } },
       { hook_event_name: 'PermissionRequest' },
