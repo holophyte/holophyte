@@ -68,10 +68,11 @@ export function renderStatusLine(
   if (top === undefined) {
     segments.push(`${pointer} #[dim]nothing needs you#[default]`);
   } else {
-    // session ids are daemon-generated ("claude-1"); only reasons carry
-    // arbitrary agent output and need sanitizing
+    // session ids are daemon-generated ("claude-1") and harmless today —
+    // sanitized anyway so a future harness name containing '#' or '%'
+    // can't silently inject a style sequence or strftime directive
     segments.push(
-      `${pointer} ${top.sessionId} #[dim]${sanitizeStatusText(top.reason, REASON_MAX)}#[default]`,
+      `${pointer} ${sanitizeStatusText(top.sessionId, REASON_MAX)} #[dim]${sanitizeStatusText(top.reason, REASON_MAX)}#[default]`,
     );
   }
   return segments.join(' ');

@@ -121,6 +121,14 @@ describe('renderStatusLine', () => {
       `${BRAND} #[fg=yellow]1 need#[default] ${POINTER} claude-1 #[dim]##(rm -rf ~)#[default]`,
     );
   });
+
+  it('sanitizes the top session id (future-proofing harness names)', () => {
+    const sessions = [session('my#harness-1', 'idle')];
+    const queue = [item('my#harness-1', 30, 'review / next prompt')];
+    expect(renderStatusLine(sessions, queue)).toContain(
+      `${POINTER} my##harness-1 `,
+    );
+  });
 });
 
 describe('STATUS_STOPPED_LINE', () => {
