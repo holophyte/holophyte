@@ -58,8 +58,9 @@ holo (CLI)
 | `tab` | toggle focus sessions ↔ queue |
 | `q` | quit TUI (daemon + sessions keep running) |
 
-`prefix+Space` in tmux returns to the TUI window from any agent window
-(installed by `holo` / `holo setup`; note: tmux bindings are server-global).
+`prefix+Space` in tmux returns to the TUI window from any agent window —
+with the default tmux prefix that's **`ctrl-b` then `Space`** (installed by
+`holo` / `holo setup`; note: tmux bindings are server-global).
 
 ## CLI
 

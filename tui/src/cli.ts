@@ -276,7 +276,7 @@ export async function runCli(cmd: CliCommand, deps: CliDeps): Promise<number> {
       try {
         await deps.tmux.installReturnBinding();
         deps.stdout(
-          `tmux return binding installed (prefix+${returnBindingKey()} → TUI window)`,
+          `tmux return binding installed (prefix+${returnBindingKey()} → TUI window; with the default ctrl-b prefix that's ctrl-b ${returnBindingKey()})`,
         );
       } catch {
         deps.stdout(
