@@ -368,6 +368,7 @@ function makeDeps(overrides: Partial<CliDeps> = {}): TestDeps {
       newWindow: async (_opts) => '@1',
       selectWindow: async (_id) => {},
       listWindowIds: async () => [],
+      setStatusRight: async () => {},
       installReturnBinding: async () => {},
     },
     tuiArgv: ['bun', 'index.tsx', 'tui'],
@@ -403,6 +404,7 @@ describe('runCli attach', () => {
         newWindow: async () => '@1',
         selectWindow: async () => {},
         listWindowIds: async () => [],
+        setStatusRight: async () => {},
         installReturnBinding: async () => {},
       },
     });
@@ -749,6 +751,7 @@ describe('runCli setup', () => {
         newWindow: async () => '@1',
         selectWindow: async () => {},
         listWindowIds: async () => [],
+        setStatusRight: async () => {},
         installReturnBinding: async () => {},
       },
     });
@@ -769,6 +772,7 @@ describe('runCli setup', () => {
         newWindow: async () => '@1',
         selectWindow: async () => {},
         listWindowIds: async () => [],
+        setStatusRight: async () => {},
         installReturnBinding: async () => {},
       },
     });
@@ -784,6 +788,7 @@ describe('runCli setup', () => {
         newWindow: async () => '@1',
         selectWindow: async () => {},
         listWindowIds: async () => [],
+        setStatusRight: async () => {},
         installReturnBinding: async () => {
           throw new Error('no server');
         },
