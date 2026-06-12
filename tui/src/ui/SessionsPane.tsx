@@ -1,6 +1,7 @@
 import { basename } from 'node:path';
 import { createTextAttributes } from '@opentui/core';
 import type { Session, SessionStatus } from '../types';
+import { ACCENT } from './theme';
 
 const BOLD = createTextAttributes({ bold: true });
 const DIM = createTextAttributes({ dim: true });
@@ -55,7 +56,10 @@ export function SessionsPane({
   return (
     <box flexDirection="column" flexShrink={0} overflow="hidden">
       <text>
-        <span attributes={BOLD}>{focused ? '▸ ' : '  '}SESSIONS</span>
+        <span fg={ACCENT} attributes={BOLD}>
+          {focused ? '▸ ' : '  '}
+        </span>
+        <span attributes={BOLD}>SESSIONS</span>
       </text>
       {sessions.length === 0 ? (
         <text>
@@ -67,7 +71,7 @@ export function SessionsPane({
           return (
             <box key={session.id} flexDirection="column">
               <text>
-                <span>{selected ? '›' : ' '}</span>
+                <span fg={ACCENT}>{selected ? '›' : ' '}</span>
                 <span fg={statusColor(session.status)}>
                   {statusDot(session.status)}{' '}
                 </span>

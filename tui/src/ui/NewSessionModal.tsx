@@ -7,6 +7,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type { HarnessId, HarnessInfo } from '../types';
 import type { CwdCandidate } from './cwd-candidates';
 import { fuzzyMatch } from './fuzzy';
+import { ACCENT } from './theme';
 
 const BOLD = createTextAttributes({ bold: true });
 const DIM = createTextAttributes({ dim: true });
@@ -249,7 +250,7 @@ export function NewSessionModal({
           <text> </text>
           {harnesses.map((h, i) => (
             <text key={h.id}>
-              <span>{i === harnessIdx ? '› ' : '  '}</span>
+              <span fg={ACCENT}>{i === harnessIdx ? '› ' : '  '}</span>
               <span attributes={DIM}>[{i + 1}] </span>
               {h.configured ? (
                 <>
@@ -308,7 +309,7 @@ export function NewSessionModal({
               ) : (
                 filtered.slice(offset, offset + MAX_ROWS).map((c, i) => (
                   <text key={c.path}>
-                    <span>{offset + i === hi ? '› ' : '  '}</span>
+                    <span fg={ACCENT}>{offset + i === hi ? '› ' : '  '}</span>
                     <span attributes={offset + i === hi ? BOLD : undefined}>
                       {c.label}
                     </span>

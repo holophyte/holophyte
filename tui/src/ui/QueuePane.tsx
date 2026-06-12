@@ -1,5 +1,6 @@
 import { createTextAttributes } from '@opentui/core';
 import type { QueueItem } from '../types';
+import { ACCENT } from './theme';
 
 const BOLD = createTextAttributes({ bold: true });
 const DIM = createTextAttributes({ dim: true });
@@ -20,7 +21,10 @@ export function QueuePane({
   return (
     <box flexDirection="column" flexShrink={0} overflow="hidden">
       <text>
-        <span attributes={BOLD}>{focused ? '▸ ' : '  '}QUEUE</span>
+        <span fg={ACCENT} attributes={BOLD}>
+          {focused ? '▸ ' : '  '}
+        </span>
+        <span attributes={BOLD}>QUEUE</span>
       </text>
       {queue.length === 0 ? (
         <text>
@@ -35,7 +39,7 @@ export function QueuePane({
           return (
             <box key={item.sessionId} flexDirection="column">
               <text>
-                <span>{selected ? '› ' : '  '}</span>
+                <span fg={ACCENT}>{selected ? '› ' : '  '}</span>
                 <span attributes={selected ? BOLD : undefined}>
                   {i + 1}. {item.sessionId}
                 </span>
