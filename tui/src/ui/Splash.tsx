@@ -27,7 +27,8 @@ const ART_WIDTH = 26;
 // Full tier needs sidebar(30) + pane border(2) + art(26) + margin cols, and
 // 14 content rows + status bar/border/banner chrome. Thresholds are on
 // terminal dims — Splash only ever renders in the main pane, so the 30-col
-// sidebar is baked in rather than plumbed through props.
+// sidebar width (App.tsx SIDEBAR_WIDTH) is baked in rather than plumbed
+// through props. Update these if SIDEBAR_WIDTH changes.
 const MIN_FULL_WIDTH = 62;
 const MIN_FULL_HEIGHT = 20;
 
