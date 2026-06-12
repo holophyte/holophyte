@@ -48,6 +48,9 @@ interface Hold {
   timer: NodeJS.Timeout;
 }
 
+/** longest stop() waits for the tombstone status write before giving up */
+const TOMBSTONE_DEADLINE_MS = 1000;
+
 export class Daemon {
   private registry = new SessionRegistry();
   private server: net.Server | null = null;
@@ -198,11 +201,17 @@ export class Daemon {
       // honest tombstone — counts are no longer live. Routed through the chain
       // so a content write queued before it can't land after it (writes queued
       // later are blocked by pushStatusLine's stopping guard); awaited because
-      // main.ts calls process.exit right after stop() resolves.
+      // main.ts calls process.exit right after stop() resolves — but raced
+      // against a deadline so a wedged tmux can't hold shutdown hostage.
       this.statusChain = this.statusChain
         .then(() => this.opts.tmux.setStatusRight(STATUS_STOPPED_LINE))
         .catch(() => {});
-      await this.statusChain;
+      await Promise.race([
+        this.statusChain,
+        new Promise<void>((resolve) => {
+          setTimeout(resolve, TOMBSTONE_DEADLINE_MS).unref();
+        }),
+      ]);
     }
   }
 
