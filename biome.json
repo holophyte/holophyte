@@ -9,7 +9,8 @@
       "e2e/**",
       "vitest.config.ts",
       "playwright.config.ts",
-      ".storybook/**"
+      ".storybook/**",
+      "!!.claude/worktrees"
     ]
   },
   "linter": {

@@ -188,6 +188,7 @@ scripts/                   → Shared shell scripts (convex-local, dev-local, wo
 - Biome doesn't understand CSS `theme()` function — use `var()` instead
 - `useSemanticElements` biome rule is set to "warn" (kanban board needs div-based drag-drop)
 - `bunfig.toml` configures `bun-plugin-tailwind` under `[serve.static]`
+- **npm `bun` package must never land in node_modules** — `bun-plugin-tailwind` peer-depends on the npm `bun` package; if auto-installed, its stale binary in `node_modules/.bin` shadows the system bun inside every `bun run` script (PATH gets `node_modules/.bin` prepended), causing version-skew bugs (e.g. bun 1.3.9 silently broke Unix-socket `EADDRINUSE` in tui daemon tests). `bunfig.toml` sets `[install] peer = false` to prevent this. If `node_modules/.bin/bun` ever reappears, delete it and `node_modules/bun`, then `bun install`. Trade-off: peer deps no longer auto-install repo-wide — when adding a package that legitimately needs a peer not already in `package.json`, add that peer as an explicit dependency.
 - Pre-commit hooks configured via `.githooks/` — `prepare` script in package.json sets `core.hooksPath` on `bun install`
 - `bun run --watch` swallows subprocess stderr — run `bun src/server.ts` directly when debugging SDK session issues
 - **`CONVEX_DEPLOY_KEY` overrides `--dev-deployment local`** — if set in the environment, `convex dev --configure existing --dev-deployment local` silently provisions a cloud deployment instead. E2E scripts unset it before provisioning.
