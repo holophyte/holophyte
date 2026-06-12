@@ -10,7 +10,8 @@
       "vitest.config.ts",
       "playwright.config.ts",
       ".storybook/**",
-      "!!**/tui"
+      "!!**/tui",
+      "!!.claude/worktrees"
     ]
   },
   "linter": {
