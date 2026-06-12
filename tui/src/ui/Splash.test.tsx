@@ -1,13 +1,6 @@
-import { mkdtempSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { beforeAll, describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { Splash } from './Splash';
 import { renderSetup } from './test-utils';
-
-beforeAll(() => {
-  process.env.HOLO_HOME = mkdtempSync(join(tmpdir(), 'holo-ui-'));
-});
 
 // Widest art row — contiguous across the color seam in the char frame.
 const WIDE_ROW = '████████████▌▐████████████';
