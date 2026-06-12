@@ -874,6 +874,13 @@ describe('status line', () => {
     expect(tmux.statusRight).toBe(STATUS_STOPPED_LINE);
   });
 
+  it('stop() resolves even when the tombstone write hangs', async () => {
+    const { daemon, tmux } = await startDaemon();
+    // wedged tmux: the write never settles — the deadline must unblock stop()
+    tmux.setStatusRight = () => new Promise<void>(() => {});
+    await daemon.stop();
+  });
+
   it("never touches the new owner's line after a takeover", async () => {
     const { daemon, tmux } = await startDaemon();
     await newSession();
