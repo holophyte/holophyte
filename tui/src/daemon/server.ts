@@ -7,7 +7,6 @@
 
 import { existsSync, mkdirSync, unlinkSync } from 'node:fs';
 import net from 'node:net';
-import { tryRequest } from '../client';
 import { onJsonLines, writeJsonLine } from '../ndjson';
 import { holoHome, socketPath, statePath, tmuxSessionName } from '../paths';
 import type {
@@ -99,8 +98,9 @@ export class Daemon {
       await this.listen();
     } catch (err) {
       if ((err as NodeJS.ErrnoException).code !== 'EADDRINUSE') throw err;
-      // A live daemon answers ping; a dead one left a stale socket file.
-      const live = await tryRequest({ cmd: 'ping' }, { timeoutMs: 250 });
+      // A stale socket file (dead daemon) refuses connections; a live daemon
+      // accepts them even when too busy to reply promptly.
+      const live = await this.probeSocketListener();
       if (live) throw new Error('holod already running');
       try {
         unlinkSync(this.socketFile);
@@ -118,6 +118,29 @@ export class Daemon {
       });
     }, this.sweepIntervalMs);
     this.sweepTimer.unref();
+  }
+
+  /**
+   * Liveness probe for an EADDRINUSE socket path. Connect success — not a
+   * reply — is the live signal: a busy daemon's starved event loop can delay
+   * a ping reply past any deadline, but the kernel accepts the connection
+   * regardless, while a dead daemon's stale file refuses it (ECONNREFUSED,
+   * or ENOTSOCK when a crash left a regular file behind).
+   * Ambiguity (connect hanging on a full backlog) counts as live — unlinking
+   * the socket is the dangerous branch.
+   */
+  private probeSocketListener(): Promise<boolean> {
+    return new Promise((resolve) => {
+      const socket = net.createConnection(this.socketFile);
+      const finish = (alive: boolean) => {
+        clearTimeout(timer);
+        socket.destroy();
+        resolve(alive);
+      };
+      const timer = setTimeout(() => finish(true), 1000);
+      socket.once('connect', () => finish(true));
+      socket.once('error', () => finish(false));
+    });
   }
 
   private listen(): Promise<void> {

@@ -191,6 +191,28 @@ describe('Daemon basics', () => {
     await expect(second.start()).rejects.toThrow('holod already running');
   });
 
+  it('refuses to start even when the live daemon never replies', async () => {
+    // a listener that accepts connections but answers nothing — what a live
+    // daemon looks like when its event loop is starved under load. Connect
+    // success alone must count as live, or the socket gets stolen.
+    const silent = net.createServer();
+    await new Promise<void>((resolve) => silent.listen(socketPath(), resolve));
+    try {
+      const second = new Daemon({
+        tmux: new FakeTmux(),
+        adapters: makeAdapters(),
+        harnesses: HARNESSES,
+        tuiArgv: TUI_ARGV,
+        now: () => clock.now,
+        sweepIntervalMs: 3_600_000,
+      });
+      await expect(second.start()).rejects.toThrow('holod already running');
+      expect(existsSync(socketPath())).toBe(true);
+    } finally {
+      await new Promise((resolve) => silent.close(resolve));
+    }
+  });
+
   it('shutdown command stops the daemon and removes the socket', async () => {
     await startDaemon();
     expect(await request({ cmd: 'shutdown' })).toEqual({ ok: true });
