@@ -46,6 +46,10 @@ holo (CLI)
   (codex has no end hook; the sweep also covers hard kills).
 - **Queue scoring**: permission 100, needs_input 60, error 50, idle 30, plus
   +2/min waiting (capped +40). Quick wins first; no panic UI.
+- **Empty board = splash**: with zero sessions the main pane shows the
+  holophyte sprout splash, and on first connect to an empty board the
+  new-session picker opens automatically — `esc` dismisses it and it will not
+  reopen on its own (press `n` to bring it back).
 
 ## TUI keys (window 0 only — zero key capture inside agent windows)
 
