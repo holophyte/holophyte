@@ -1,0 +1,27 @@
+{
+  "name": "holophyte-tui",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "holo": "./src/index.tsx"
+  },
+  "scripts": {
+    "dev": "bun src/index.tsx",
+    "test": "bun node_modules/vitest/vitest.mjs run",
+    "test:watch": "bun node_modules/vitest/vitest.mjs",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@opentui/core": "^0.2.3",
+    "@opentui/react": "^0.2.3",
+    "react": "^19.2.6",
+    "zod": "^3.23.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/react": "^19.0.0",
+    "typescript": "^5.6.0",
+    "vitest": "^2.1.0"
+  }
+}
