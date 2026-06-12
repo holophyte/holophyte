@@ -15,10 +15,13 @@ export async function renderFrame(node: ReactNode): Promise<{
   };
 }
 
-export async function renderSetup(node: ReactNode) {
+export async function renderSetup(
+  node: ReactNode,
+  opts?: { width?: number; height?: number },
+) {
   const setup = await testRender(node, {
-    width: 100,
-    height: 50,
+    width: opts?.width ?? 100,
+    height: opts?.height ?? 50,
     targetFps: 60,
   });
   await act(async () => {

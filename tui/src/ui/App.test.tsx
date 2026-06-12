@@ -244,4 +244,77 @@ describe('App', () => {
     expect(frame()).toContain('New Session');
     unmount();
   });
+
+  // Splash sentinels: never assert on 'holo' here — FakeGateway cwds contain
+  // '/Users/x/Development/holophyte'. Use the tagline or the widest art row.
+  // The centered modal occludes the art's middle rows, so never assert art
+  // rows while the modal is open.
+  const TAGLINE = 'what should I look at next?';
+  const WIDE_ROW = '████████████▌▐████████████';
+
+  it('shows the connecting splash before the first push', async () => {
+    const { frame, unmount } = await mount();
+    const out = frame();
+    expect(out).toContain(TAGLINE);
+    expect(out).toContain('connecting to daemon…');
+    expect(out).not.toContain('New Session');
+    unmount();
+  });
+
+  it('auto-opens the picker on an empty first snapshot', async () => {
+    const { push, input, frame, update, unmount } = await mount();
+    await push(snapshot([]));
+    expect(frame()).toContain('New Session');
+    // The very first keystroke drives session creation.
+    input.pressKey('1');
+    await update();
+    expect(frame()).toContain('New claude session — where?');
+    unmount();
+  });
+
+  it('esc is final — the picker never auto-reopens, manual n still works', async () => {
+    const { push, input, frame, update, unmount } = await mount();
+    await push(snapshot([]));
+    await input.pressEscape();
+    await update();
+    const out = frame();
+    expect(out).toContain('n: new session');
+    expect(out).toContain(WIDE_ROW);
+    expect(out).not.toContain('New Session');
+    await push(snapshot([]));
+    expect(frame()).not.toContain('New Session');
+    input.pressKey('n');
+    await update();
+    expect(frame()).toContain('New Session');
+    unmount();
+  });
+
+  it('non-empty first snapshot never auto-opens; later drain shows the splash without the modal', async () => {
+    const { push, frame, unmount } = await mount();
+    await push(snapshot([running()]));
+    const board = frame();
+    expect(board).toContain('codex-1');
+    expect(board).not.toContain('New Session');
+    expect(board).not.toContain(TAGLINE);
+    await push(snapshot([]));
+    const splash = frame();
+    expect(splash).toContain(TAGLINE);
+    expect(splash).toContain(WIDE_ROW);
+    expect(splash).not.toContain('New Session');
+    unmount();
+  });
+
+  it('disconnected banner and the splash coexist', async () => {
+    const { push, gw, input, frame, update, unmount } = await mount();
+    await push(snapshot([]));
+    await input.pressEscape();
+    await act(async () => {
+      gw.dropConnection();
+    });
+    await update();
+    const out = frame();
+    expect(out).toContain('daemon disconnected — retrying…');
+    expect(out).toContain(TAGLINE);
+    unmount();
+  });
 });

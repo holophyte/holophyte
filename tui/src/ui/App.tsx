@@ -13,6 +13,7 @@ import { NewSessionModal } from './NewSessionModal';
 import { PreviewPane } from './PreviewPane';
 import { QueuePane } from './QueuePane';
 import { formatElapsed, SessionsPane, statusLabel } from './SessionsPane';
+import { Splash } from './Splash';
 import type { DaemonStatus } from './StatusBar';
 import { StatusBar } from './StatusBar';
 
@@ -52,6 +53,11 @@ export function App({
   const [modalOpen, setModalOpen] = useState(false);
   const [now, setNow] = useState(() => Date.now());
 
+  // One-shot: auto-open the picker if the FIRST snapshot says the board is
+  // empty. A ref, not state — read/flipped inside the subscription handler;
+  // must never re-arm on reconnect, esc, or later sessions-all-exited pushes.
+  const autoOpened = useRef(false);
+
   // Subscription lifecycle — external system: subscribe on mount, retry every
   // second after the connection drops until the daemon is back.
   useEffect(() => {
@@ -65,6 +71,10 @@ export function App({
           onState: (s) => {
             setPush(s);
             setDaemon('up');
+            if (!autoOpened.current) {
+              autoOpened.current = true;
+              if (s.sessions.length === 0) setModalOpen(true);
+            }
           },
           onClose: () => {
             sub = null;
@@ -281,11 +291,9 @@ export function App({
           overflow="hidden"
         >
           {push === null ? (
-            <box padding={1}>
-              <text>
-                <span attributes={DIM}>connecting to daemon…</span>
-              </text>
-            </box>
+            <Splash mode="connecting" />
+          ) : sessions.length === 0 ? (
+            <Splash mode="empty" />
           ) : (
             <PreviewPane
               session={previewSession}

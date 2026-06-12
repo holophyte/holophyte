@@ -51,6 +51,10 @@ holo (CLI)
   and the top queue item are visible in every agent window. It's pushed on
   every state change, re-asserted each 5s sweep (heals a recreated session),
   and reset to "holod stopped" on graceful daemon stop.
+- **Empty board = splash**: with zero sessions the main pane shows the
+  holophyte sprout splash, and on first connect to an empty board the
+  new-session picker opens automatically — `esc` dismisses it and it will not
+  reopen on its own (press `n` to bring it back).
 
 ## TUI keys (window 0 only — zero key capture inside agent windows)
 
