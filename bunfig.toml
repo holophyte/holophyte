@@ -1,2 +1,10 @@
+[install]
+# Don't auto-install peer deps: bun-plugin-tailwind peer-depends on the npm
+# `bun` package, which lands a stale bun BINARY in node_modules/.bin that
+# shadows the system bun inside every `bun run` script (PATH gets
+# node_modules/.bin prepended). bun 1.3.9 from that package silently broke
+# unix-socket EADDRINUSE semantics in the tui daemon tests.
+peer = false
+
 [serve.static]
 plugins = ["bun-plugin-tailwind"]
