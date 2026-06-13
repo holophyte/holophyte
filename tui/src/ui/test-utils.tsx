@@ -3,6 +3,47 @@
 import { testRender } from '@opentui/react/test-utils';
 import type { ReactNode } from 'react';
 import { act } from 'react';
+import type { Request, Response, StatePush } from '../protocol';
+import type { Gateway } from './gateway';
+
+/** In-memory Gateway for UI tests — records requests, drives state pushes. */
+export class FakeGateway implements Gateway {
+  requests: Request[] = [];
+  nextResponse: Response = { ok: true };
+  subscribeCount = 0;
+  private handlers: {
+    onState: (s: StatePush) => void;
+    onClose?: () => void;
+  } | null = null;
+
+  subscribe(handlers: {
+    onState: (s: StatePush) => void;
+    onClose?: () => void;
+  }) {
+    this.subscribeCount += 1;
+    this.handlers = handlers;
+    return {
+      close: () => {
+        this.handlers = null;
+      },
+    };
+  }
+
+  async request(req: Request): Promise<Response> {
+    this.requests.push(req);
+    return this.nextResponse;
+  }
+
+  pushState(s: StatePush) {
+    this.handlers?.onState(s);
+  }
+
+  dropConnection() {
+    const handlers = this.handlers;
+    this.handlers = null;
+    handlers?.onClose?.();
+  }
+}
 
 export async function renderFrame(node: ReactNode): Promise<{
   frame: string;

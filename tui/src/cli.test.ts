@@ -38,6 +38,20 @@ describe('parseArgs', () => {
     expect(parseArgs(['daemon'])).toEqual({ kind: 'daemon' });
   });
 
+  it('sidebar → sidebar (no session)', () => {
+    expect(parseArgs(['sidebar'])).toEqual({
+      kind: 'sidebar',
+      sessionId: undefined,
+    });
+  });
+
+  it('sidebar --session <id>', () => {
+    expect(parseArgs(['sidebar', '--session', 'claude-1'])).toEqual({
+      kind: 'sidebar',
+      sessionId: 'claude-1',
+    });
+  });
+
   it('new <harness>', () => {
     expect(parseArgs(['new', 'claude'])).toEqual({
       kind: 'new',
@@ -365,8 +379,15 @@ function makeDeps(overrides: Partial<CliDeps> = {}): TestDeps {
     tmux: {
       sessionExists: async () => false,
       ensureSession: async (_argv) => {},
-      newWindow: async (_opts) => '@1',
+      newWindow: async (_opts) => ({
+        windowId: '@1',
+        paneId: '%1',
+        width: 200,
+      }),
       selectWindow: async (_id) => {},
+      setKillWindowOnPaneDeath: async () => true,
+      splitSidebar: async () => {},
+      selectPane: async () => {},
       listWindowIds: async () => [],
       setStatusRight: async () => {},
       installReturnBinding: async () => {},
@@ -401,8 +422,11 @@ describe('runCli attach', () => {
           ensureSessionArgv = argv;
           ensureSessionEnv = env;
         },
-        newWindow: async () => '@1',
+        newWindow: async () => ({ windowId: '@1', paneId: '%1', width: 200 }),
         selectWindow: async () => {},
+        setKillWindowOnPaneDeath: async () => true,
+        splitSidebar: async () => {},
+        selectPane: async () => {},
         listWindowIds: async () => [],
         setStatusRight: async () => {},
         installReturnBinding: async () => {},
@@ -748,8 +772,11 @@ describe('runCli setup', () => {
       tmux: {
         sessionExists: async () => false,
         ensureSession: async () => {},
-        newWindow: async () => '@1',
+        newWindow: async () => ({ windowId: '@1', paneId: '%1', width: 200 }),
         selectWindow: async () => {},
+        setKillWindowOnPaneDeath: async () => true,
+        splitSidebar: async () => {},
+        selectPane: async () => {},
         listWindowIds: async () => [],
         setStatusRight: async () => {},
         installReturnBinding: async () => {},
@@ -769,8 +796,11 @@ describe('runCli setup', () => {
       tmux: {
         sessionExists: async () => false,
         ensureSession: async () => {},
-        newWindow: async () => '@1',
+        newWindow: async () => ({ windowId: '@1', paneId: '%1', width: 200 }),
         selectWindow: async () => {},
+        setKillWindowOnPaneDeath: async () => true,
+        splitSidebar: async () => {},
+        selectPane: async () => {},
         listWindowIds: async () => [],
         setStatusRight: async () => {},
         installReturnBinding: async () => {},
@@ -785,8 +815,11 @@ describe('runCli setup', () => {
       tmux: {
         sessionExists: async () => false,
         ensureSession: async () => {},
-        newWindow: async () => '@1',
+        newWindow: async () => ({ windowId: '@1', paneId: '%1', width: 200 }),
         selectWindow: async () => {},
+        setKillWindowOnPaneDeath: async () => true,
+        splitSidebar: async () => {},
+        selectPane: async () => {},
         listWindowIds: async () => [],
         setStatusRight: async () => {},
         installReturnBinding: async () => {

@@ -11,6 +11,8 @@ export interface SessionsPaneProps {
   selectedId: string | null;
   focused: boolean;
   now: number;
+  /** message shown when there are no sessions (sidebar has no `n` key) */
+  emptyHint?: string;
 }
 
 export function formatElapsed(ms: number): string {
@@ -52,6 +54,7 @@ export function SessionsPane({
   selectedId,
   focused,
   now,
+  emptyHint = 'none — n to spawn',
 }: SessionsPaneProps) {
   return (
     <box flexDirection="column" flexShrink={0} overflow="hidden">
@@ -63,7 +66,7 @@ export function SessionsPane({
       </text>
       {sessions.length === 0 ? (
         <text>
-          <span attributes={DIM}> none — n to spawn</span>
+          <span attributes={DIM}> {emptyHint}</span>
         </text>
       ) : (
         sessions.map((session) => {
