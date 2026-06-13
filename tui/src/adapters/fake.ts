@@ -32,4 +32,15 @@ export class FakeAdapter implements HarnessAdapter {
         : []),
     ];
   }
+
+  resumeCommand(session: Session): string[] {
+    if (session.harnessSessionId === undefined) {
+      throw new Error('fake resume requires a captured conversation id');
+    }
+    return [
+      ...this.spawnCommand(session),
+      '--resume',
+      session.harnessSessionId,
+    ];
+  }
 }

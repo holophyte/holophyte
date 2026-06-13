@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { describe, expect, it } from 'vitest';
 import type { Session } from '../types';
 import { hookCommand } from './claude';
 import {
@@ -187,6 +188,52 @@ describe('CodexAdapter', () => {
     const argv = await adapter.spawnCommand(makeSession());
     expect(argv.join(' ')).not.toContain('notify');
     expect(adapter.setup).toBeUndefined();
+  });
+
+  it('resumeCommand puts the verified global flags BEFORE the resume subcommand', async () => {
+    const adapter = new CodexAdapter({ configured: () => true });
+    const session = makeSession({ harnessSessionId: 'conv-uuid-7' });
+    const command = hookCommand('codex', 'codex-1');
+
+    // flag placement parse-verified against codex 0.139.0 — see
+    // docs/hooks-research.md "codex resume flag placement"
+    expect(await adapter.resumeCommand(session)).toEqual([
+      'codex',
+      '-C',
+      '/Users/ko/Development/relos',
+      '-c',
+      'check_for_update_on_startup=false',
+      '-c',
+      codexHookOverride('UserPromptSubmit', command),
+      '-c',
+      codexHookOverride('PreToolUse', command),
+      '-c',
+      codexHookOverride('PermissionRequest', command, 150),
+      '-c',
+      codexHookOverride('Stop', command),
+      '-c',
+      codexHookOverride('SessionStart', command),
+      '--dangerously-bypass-hook-trust',
+      'resume',
+      'conv-uuid-7',
+    ]);
+  });
+
+  it('resumeCommand argv is spawnCommand argv plus the resume subcommand', async () => {
+    const adapter = new CodexAdapter({ configured: () => true });
+    const session = makeSession({ harnessSessionId: 'conv-uuid-7' });
+    expect(await adapter.resumeCommand(session)).toEqual([
+      ...(await adapter.spawnCommand(session)),
+      'resume',
+      'conv-uuid-7',
+    ]);
+  });
+
+  it('resumeCommand throws without a captured conversation id', async () => {
+    const adapter = new CodexAdapter({ configured: () => true });
+    await expect(adapter.resumeCommand(makeSession())).rejects.toThrow(
+      /requires a captured conversation id/,
+    );
   });
 
   it('each -c value is a single argv element parseable as key=value', async () => {

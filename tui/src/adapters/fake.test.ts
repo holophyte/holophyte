@@ -2,6 +2,7 @@
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, sep } from 'node:path';
+import { describe, expect, it } from 'vitest';
 import type { Session } from '../types';
 import { FakeAdapter } from './fake';
 
@@ -68,5 +69,21 @@ describe('FakeAdapter', () => {
       '--script',
       script,
     ]);
+  });
+
+  it('resumeCommand is spawnCommand plus --resume <conversation id>', () => {
+    const adapter = new FakeAdapter();
+    const session = makeSession({ harnessSessionId: 'conv-9' });
+    expect(adapter.resumeCommand(session)).toEqual([
+      ...adapter.spawnCommand(session),
+      '--resume',
+      'conv-9',
+    ]);
+  });
+
+  it('resumeCommand throws without a captured conversation id', () => {
+    expect(() => new FakeAdapter().resumeCommand(makeSession())).toThrow(
+      /requires a captured conversation id/,
+    );
   });
 });

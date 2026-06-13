@@ -3,6 +3,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { describe, expect, it } from 'vitest';
 import { sessionSettingsPath } from '../paths';
 import type { Session } from '../types';
 import { buildClaudeSettings, ClaudeAdapter, hookCommand } from './claude';
@@ -193,5 +194,40 @@ describe('ClaudeAdapter', () => {
     await adapter.spawnCommand(makeSession());
     const written = readFileSync(sessionSettingsPath('claude-1'), 'utf8');
     expect(written).toContain(`HOLO_HOME='${holoHomeDir}'`);
+  });
+
+  it('resumeCommand returns claude --resume with settings written under the NEW session id', async () => {
+    const adapter = new ClaudeAdapter({ configured: () => true });
+    const session = makeSession({
+      id: 'claude-9',
+      harnessSessionId: 'a1b2c3d4-0000-4000-8000-000000000000',
+    });
+
+    const argv = await adapter.resumeCommand(session);
+    const settingsPath = sessionSettingsPath('claude-9');
+
+    expect(argv).toEqual([
+      'claude',
+      '--resume',
+      'a1b2c3d4-0000-4000-8000-000000000000',
+      '--settings',
+      settingsPath,
+    ]);
+    expect(existsSync(settingsPath)).toBe(true);
+    // injected hooks must target the NEW holo session id, not the old one
+    const written = readFileSync(settingsPath, 'utf8');
+    expect(written).toContain("'claude' 'claude-9'");
+    expect(JSON.parse(written)).toEqual(
+      JSON.parse(
+        JSON.stringify(buildClaudeSettings(hookCommand('claude', 'claude-9'))),
+      ),
+    );
+  });
+
+  it('resumeCommand throws without a captured conversation id', async () => {
+    const adapter = new ClaudeAdapter({ configured: () => true });
+    await expect(adapter.resumeCommand(makeSession())).rejects.toThrow(
+      /requires a captured conversation id/,
+    );
   });
 });

@@ -77,10 +77,9 @@ export class CodexAdapter implements HarnessAdapter {
     return this.isConfigured();
   }
 
-  async spawnCommand(session: Session): Promise<string[]> {
+  private hookFlags(session: Session): string[] {
     const command = hookCommand('codex', session.id);
     return [
-      'codex',
       '-C',
       session.cwd,
       // The update dialog otherwise blocks session startup.
@@ -103,6 +102,24 @@ export class CodexAdapter implements HarnessAdapter {
       // Required: non-managed injected hooks are otherwise skipped until
       // interactively trusted via /hooks.
       '--dangerously-bypass-hook-trust',
+    ];
+  }
+
+  async spawnCommand(session: Session): Promise<string[]> {
+    return ['codex', ...this.hookFlags(session)];
+  }
+
+  // Globals-before-subcommand order, parse-verified against codex 0.139.0
+  // (docs/hooks-research.md, codex resume flag placement).
+  async resumeCommand(session: Session): Promise<string[]> {
+    if (session.harnessSessionId === undefined) {
+      throw new Error('codex resume requires a captured conversation id');
+    }
+    return [
+      'codex',
+      ...this.hookFlags(session),
+      'resume',
+      session.harnessSessionId,
     ];
   }
 }
