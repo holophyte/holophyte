@@ -200,7 +200,7 @@ describe('CodexAdapter', () => {
     expect(await adapter.resumeCommand(session)).toEqual([
       'codex',
       '-C',
-      '/Users/ko/Development/relos',
+      session.cwd,
       '-c',
       'check_for_update_on_startup=false',
       '-c',
