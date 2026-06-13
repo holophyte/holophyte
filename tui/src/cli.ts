@@ -47,7 +47,7 @@ export function parseArgs(argv: string[]): CliCommand {
       return { kind: 'daemon' };
     case 'sidebar': {
       let sessionId: string | undefined;
-      const tail = [second, ...rest];
+      const tail: string[] = [...(second ? [second] : []), ...rest];
       for (let i = 0; i < tail.length; i++) {
         if (tail[i] === '--session' && tail[i + 1]) {
           sessionId = tail[i + 1];
