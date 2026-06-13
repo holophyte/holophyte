@@ -1,10 +1,9 @@
+import { describe, expect, it } from 'vitest';
 import type { Session } from '../types';
 import type { RegistryJSON } from './registry';
-import { SessionRegistry } from './registry';
+import { EXITED_GRACE_MS, SessionRegistry } from './registry';
 
 const T0 = 1_000_000;
-const UUID_RE =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function setup(now = T0) {
   const registry = new SessionRegistry();
@@ -27,13 +26,12 @@ describe('createSession', () => {
     expect(session.lastMessage).toBeUndefined();
   });
 
-  it('assigns a UUID harnessSessionId to every harness', () => {
+  it('createSession leaves harnessSessionId unset (capture-only)', () => {
     const registry = new SessionRegistry();
     const claude = registry.createSession('claude', '/a', T0);
     const codex = registry.createSession('codex', '/a', T0);
-    expect(claude.harnessSessionId).toMatch(UUID_RE);
-    expect(codex.harnessSessionId).toMatch(UUID_RE);
-    expect(claude.harnessSessionId).not.toBe(codex.harnessSessionId);
+    expect(claude.harnessSessionId).toBeUndefined();
+    expect(codex.harnessSessionId).toBeUndefined();
   });
 
   it('numbers ids per harness independently', () => {
@@ -46,7 +44,7 @@ describe('createSession', () => {
   it('never reuses ids after pruning', () => {
     const { registry, session } = setup();
     registry.applyEvent(session.id, { kind: 'exit' }, T0 + 1);
-    registry.pruneExited(T0 + 120_000);
+    registry.pruneExited(T0 + EXITED_GRACE_MS + 2);
     expect(registry.get('claude-1')).toBeUndefined();
     expect(registry.createSession('claude', '/a', T0).id).toBe('claude-2');
   });
@@ -639,6 +637,65 @@ describe('fromJSON / toJSON', () => {
     };
     expect(SessionRegistry.fromJSON(data).recentCwds()).toHaveLength(10);
   });
+
+  it('drops bogus codex ids from pre-v1 state but keeps claude ids', () => {
+    // pre-v1 files have no version and minted a random UUID for every harness;
+    // codex never received it (no --session-id) so resuming on it would fail.
+    const data: RegistryJSON = {
+      sessions: [
+        {
+          id: 'codex-1',
+          harness: 'codex',
+          cwd: '/a',
+          tmuxWindow: '@1',
+          status: 'exited',
+          createdAt: T0,
+          statusSince: T0,
+          harnessSessionId: 'bogus-pre-v1-uuid',
+        },
+        {
+          id: 'claude-1',
+          harness: 'claude',
+          cwd: '/b',
+          tmuxWindow: '@2',
+          status: 'exited',
+          createdAt: T0,
+          statusSince: T0,
+          harnessSessionId: 'real-claude-session-id',
+        },
+      ],
+      counters: { codex: 1, claude: 1 },
+      recentCwds: [],
+    };
+    const restored = SessionRegistry.fromJSON(data);
+    expect(restored.get('codex-1')?.harnessSessionId).toBeUndefined();
+    expect(restored.get('claude-1')?.harnessSessionId).toBe(
+      'real-claude-session-id',
+    );
+  });
+
+  it('keeps codex ids from v1 state (already hook-captured)', () => {
+    const data: RegistryJSON = {
+      version: 1,
+      sessions: [
+        {
+          id: 'codex-1',
+          harness: 'codex',
+          cwd: '/a',
+          tmuxWindow: '@1',
+          status: 'exited',
+          createdAt: T0,
+          statusSince: T0,
+          harnessSessionId: 'captured-codex-id',
+        },
+      ],
+      counters: { codex: 1 },
+      recentCwds: [],
+    };
+    expect(
+      SessionRegistry.fromJSON(data).get('codex-1')?.harnessSessionId,
+    ).toBe('captured-codex-id');
+  });
 });
 
 describe('reconcile', () => {
@@ -690,7 +747,7 @@ describe('pruneExited', () => {
     const registry = new SessionRegistry();
     const session = registry.createSession('claude', '/a', T0);
     registry.applyEvent(session.id, { kind: 'exit' }, T0);
-    expect(registry.pruneExited(T0 + 60_001)).toBe(true);
+    expect(registry.pruneExited(T0 + EXITED_GRACE_MS + 1)).toBe(true);
     expect(registry.get(session.id)).toBeUndefined();
     expect(registry.all()).toEqual([]);
   });
@@ -699,7 +756,7 @@ describe('pruneExited', () => {
     const registry = new SessionRegistry();
     const session = registry.createSession('claude', '/a', T0);
     registry.applyEvent(session.id, { kind: 'exit' }, T0);
-    expect(registry.pruneExited(T0 + 60_000)).toBe(false); // not strictly older
+    expect(registry.pruneExited(T0 + EXITED_GRACE_MS)).toBe(false); // not strictly older
     expect(registry.get(session.id)).toBeDefined();
   });
 
@@ -711,5 +768,158 @@ describe('pruneExited', () => {
     expect(registry.pruneExited(T0 + 11, 10)).toBe(true);
     expect(registry.get(idle.id)).toBeDefined();
     expect(registry.get(gone.id)).toBeUndefined();
+  });
+});
+
+describe('ready capture', () => {
+  it('sets harnessSessionId and returns true even when status did not change', () => {
+    const { registry, session } = setup();
+    registry.applyEvent(
+      session.id,
+      { kind: 'ready', harnessSessionId: 'conv-1' },
+      T0 + 1,
+    );
+    expect(session.harnessSessionId).toBe('conv-1');
+    // status/reason unchanged — only the new id forces true
+    expect(
+      registry.applyEvent(
+        session.id,
+        { kind: 'ready', harnessSessionId: 'conv-2' },
+        T0 + 2,
+      ),
+    ).toBe(true);
+  });
+
+  it('overwrites a differing id (in-app /clear and /resume re-fire SessionStart)', () => {
+    const { registry, session } = setup();
+    registry.applyEvent(
+      session.id,
+      { kind: 'ready', harnessSessionId: 'conv-1' },
+      T0 + 1,
+    );
+    registry.applyEvent(
+      session.id,
+      { kind: 'ready', harnessSessionId: 'conv-2' },
+      T0 + 2,
+    );
+    expect(session.harnessSessionId).toBe('conv-2');
+  });
+
+  it('a plain ready leaves an existing id untouched', () => {
+    const { registry, session } = setup();
+    registry.applyEvent(
+      session.id,
+      { kind: 'ready', harnessSessionId: 'conv-1' },
+      T0 + 1,
+    );
+    expect(registry.applyEvent(session.id, { kind: 'ready' }, T0 + 2)).toBe(
+      false,
+    );
+    expect(session.harnessSessionId).toBe('conv-1');
+  });
+
+  it('rejects capture from a stale ready', () => {
+    const { registry, session } = setup();
+    registry.applyEvent(session.id, { kind: 'prompt' }, T0 + 5_000);
+    expect(
+      registry.applyEvent(
+        session.id,
+        { kind: 'ready', harnessSessionId: 'stale-conv' },
+        T0 + 2_999,
+      ),
+    ).toBe(false);
+    expect(session.harnessSessionId).toBeUndefined();
+  });
+
+  it('skips capture while masked by a held permission', () => {
+    const { registry, session } = setup();
+    registry.beginPermission(session.id, 'Bash', {}, T0 + 999, T0 + 1);
+    expect(
+      registry.applyEvent(
+        session.id,
+        { kind: 'ready', harnessSessionId: 'conv-1' },
+        T0 + 2,
+      ),
+    ).toBe(false);
+    expect(session.harnessSessionId).toBeUndefined();
+  });
+
+  it('rejects capture on exited sessions', () => {
+    const { registry, session } = setup();
+    registry.applyEvent(session.id, { kind: 'exit' }, T0 + 1);
+    expect(
+      registry.applyEvent(
+        session.id,
+        { kind: 'ready', harnessSessionId: 'conv-1' },
+        T0 + 10,
+      ),
+    ).toBe(false);
+    expect(session.harnessSessionId).toBeUndefined();
+  });
+
+  it('round-trips the captured id through toJSON/fromJSON', () => {
+    const { registry, session } = setup();
+    registry.setTmuxWindow(session.id, '@2');
+    registry.applyEvent(
+      session.id,
+      { kind: 'ready', harnessSessionId: 'conv-1' },
+      T0 + 1,
+    );
+    const restored = SessionRegistry.fromJSON(registry.toJSON());
+    expect(restored.get(session.id)?.harnessSessionId).toBe('conv-1');
+  });
+});
+
+describe('adoptLineage', () => {
+  it('copies harnessSessionId and lastMessage onto an existing session', () => {
+    const { registry, session } = setup();
+    registry.adoptLineage(session.id, {
+      harnessSessionId: 'conv-1',
+      lastMessage: 'prior tail',
+    });
+    expect(session.harnessSessionId).toBe('conv-1');
+    expect(session.lastMessage).toBe('prior tail');
+  });
+
+  it('leaves an existing lastMessage untouched when lineage omits it', () => {
+    const { registry, session } = setup();
+    registry.applyEvent(
+      session.id,
+      { kind: 'stop', lastMessage: 'kept' },
+      T0 + 1,
+    );
+    registry.adoptLineage(session.id, { harnessSessionId: 'conv-1' });
+    expect(session.harnessSessionId).toBe('conv-1');
+    expect(session.lastMessage).toBe('kept');
+  });
+
+  it('is a no-op on unknown ids', () => {
+    const registry = new SessionRegistry();
+    expect(() =>
+      registry.adoptLineage('ghost-1', { harnessSessionId: 'conv-1' }),
+    ).not.toThrow();
+  });
+});
+
+describe('remove', () => {
+  it('deletes only the target session', () => {
+    const registry = new SessionRegistry();
+    const a = registry.createSession('claude', '/a', T0);
+    const b = registry.createSession('claude', '/b', T0);
+    registry.applyEvent(a.id, { kind: 'exit' }, T0 + 1);
+    registry.applyEvent(b.id, { kind: 'exit' }, T0 + 1);
+    expect(registry.remove(a.id)).toBe(true);
+    expect(registry.get(a.id)).toBeUndefined();
+    expect(registry.get(b.id)?.status).toBe('exited');
+  });
+
+  it('returns false for unknown ids', () => {
+    expect(new SessionRegistry().remove('ghost-1')).toBe(false);
+  });
+
+  it('never frees the removed id — counters still advance', () => {
+    const { registry, session } = setup();
+    registry.remove(session.id);
+    expect(registry.createSession('claude', '/a', T0).id).toBe('claude-2');
   });
 });

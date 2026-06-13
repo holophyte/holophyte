@@ -38,7 +38,7 @@ export interface Session {
   createdAt: number;
   /** when `status` last changed — drives elapsed display + aging bonus */
   statusSince: number;
-  /** harness-native session id (e.g. claude --session-id UUID), when supported */
+  /** harness-native conversation id, captured from the SessionStart hook payload (claude also pins it at spawn via --session-id) */
   harnessSessionId?: string;
 }
 
@@ -73,6 +73,12 @@ export interface HarnessAdapter {
    * hooks) — hence async is allowed.
    */
   spawnCommand(session: Session): string[] | Promise<string[]>;
+  /**
+   * argv that resumes session.harnessSessionId's conversation in a fresh
+   * process. Absent → this harness cannot resume. Like spawnCommand, may
+   * write per-session config first — hence async is allowed.
+   */
+  resumeCommand?(session: Session): string[] | Promise<string[]>;
   /** one-time global setup (config writes) — only if unavoidable */
   setup?(): Promise<void>;
   /** whether this harness is usable on this machine (binary on PATH etc.) */

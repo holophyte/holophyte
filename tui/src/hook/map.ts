@@ -43,7 +43,14 @@ export function mapHook(
       if (harness === 'claude' && payload.source === 'compact') {
         return { type: 'ignore' };
       }
-      return { type: 'event', event: { kind: 'ready' } };
+      const sid = payload.session_id;
+      return {
+        type: 'event',
+        event:
+          typeof sid === 'string' && sid !== ''
+            ? { kind: 'ready', harnessSessionId: sid }
+            : { kind: 'ready' },
+      };
     }
 
     case 'UserPromptSubmit':

@@ -84,17 +84,37 @@ export class ClaudeAdapter implements HarnessAdapter {
     return this.isConfigured();
   }
 
-  async spawnCommand(session: Session): Promise<string[]> {
-    mkdirSync(sessionDir(session.id), { recursive: true });
-    const settings = buildClaudeSettings(hookCommand('claude', session.id));
-    const settingsPath = sessionSettingsPath(session.id);
+  private writeSettings(sessionId: string): string {
+    mkdirSync(sessionDir(sessionId), { recursive: true });
+    const settings = buildClaudeSettings(hookCommand('claude', sessionId));
+    const settingsPath = sessionSettingsPath(sessionId);
     writeFileSync(settingsPath, JSON.stringify(settings, null, 2));
+    return settingsPath;
+  }
+
+  async spawnCommand(session: Session): Promise<string[]> {
     return [
       'claude',
       '--session-id',
       session.harnessSessionId ?? randomUUID(),
       '--settings',
-      settingsPath,
+      this.writeSettings(session.id),
+    ];
+  }
+
+  // Deliberately no --session-id alongside --resume (composition unverified);
+  // the SessionStart capture recovers the resumed conversation's actual id
+  // whether claude keeps it or forks a new one.
+  async resumeCommand(session: Session): Promise<string[]> {
+    if (session.harnessSessionId === undefined) {
+      throw new Error('claude resume requires a captured conversation id');
+    }
+    return [
+      'claude',
+      '--resume',
+      session.harnessSessionId,
+      '--settings',
+      this.writeSettings(session.id),
     ];
   }
 }

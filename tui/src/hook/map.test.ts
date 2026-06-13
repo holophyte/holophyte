@@ -1,3 +1,4 @@
+import { describe, expect, it } from 'vitest';
 import type { HookAction } from './map';
 import { mapHook } from './map';
 
@@ -34,6 +35,56 @@ describe('mapHook', () => {
         name: 'claude SessionStart source compact → ignore (mid-turn, agent still working)',
         harness: 'claude',
         payload: { hook_event_name: 'SessionStart', source: 'compact' },
+        expected: { type: 'ignore' },
+      },
+
+      // SessionStart conversation-id capture (drives resume lineage)
+      {
+        name: 'claude SessionStart with session_id → ready with harnessSessionId',
+        harness: 'claude',
+        payload: {
+          hook_event_name: 'SessionStart',
+          source: 'startup',
+          session_id: 'abc',
+        },
+        expected: {
+          type: 'event',
+          event: { kind: 'ready', harnessSessionId: 'abc' },
+        },
+      },
+      {
+        name: 'codex SessionStart with session_id → ready with harnessSessionId',
+        harness: 'codex',
+        payload: { hook_event_name: 'SessionStart', session_id: 'abc' },
+        expected: {
+          type: 'event',
+          event: { kind: 'ready', harnessSessionId: 'abc' },
+        },
+      },
+      {
+        name: 'SessionStart with non-string session_id → plain ready',
+        harness: 'codex',
+        payload: { hook_event_name: 'SessionStart', session_id: 42 },
+        expected: { type: 'event', event: { kind: 'ready' } },
+      },
+      {
+        name: 'SessionStart with empty session_id → plain ready',
+        harness: 'claude',
+        payload: {
+          hook_event_name: 'SessionStart',
+          source: 'startup',
+          session_id: '',
+        },
+        expected: { type: 'event', event: { kind: 'ready' } },
+      },
+      {
+        name: 'claude SessionStart source compact with session_id → still ignore',
+        harness: 'claude',
+        payload: {
+          hook_event_name: 'SessionStart',
+          source: 'compact',
+          session_id: 'abc',
+        },
         expected: { type: 'ignore' },
       },
 
