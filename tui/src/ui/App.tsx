@@ -1,7 +1,6 @@
 import { createTextAttributes } from '@opentui/core';
 import { useKeyboard, useTerminalDimensions } from '@opentui/react';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { StatePush } from '../protocol';
 import type { HarnessId } from '../types';
 import { buildCwdCandidates, scanDevRepos } from './cwd-candidates';
 import type { DiffStatRunner } from './diffstat';
@@ -14,14 +13,14 @@ import { PreviewPane } from './PreviewPane';
 import { QueuePane } from './QueuePane';
 import { formatElapsed, SessionsPane, statusLabel } from './SessionsPane';
 import { Splash } from './Splash';
-import type { DaemonStatus } from './StatusBar';
 import { StatusBar } from './StatusBar';
+import { effectiveId } from './selection';
+import { useDaemonState } from './useDaemonState';
 
 const BOLD = createTextAttributes({ bold: true });
 const DIM = createTextAttributes({ dim: true });
 
 const SIDEBAR_WIDTH = 30;
-const RETRY_MS = 1000;
 
 export interface AppProps {
   gateway?: Gateway;
@@ -33,12 +32,6 @@ export interface AppProps {
 
 type Focus = 'queue' | 'sessions';
 
-/** Selected id if still present in the list, else the first item (clamp). */
-function effectiveId(ids: string[], selectedId: string | null): string | null {
-  if (selectedId !== null && ids.includes(selectedId)) return selectedId;
-  return ids[0] ?? null;
-}
-
 export function App({
   gateway = liveGateway,
   onQuit,
@@ -46,60 +39,21 @@ export function App({
   diffStat = gitDiffStat,
 }: AppProps) {
   const dims = useTerminalDimensions();
-  const [push, setPush] = useState<StatePush | null>(null);
-  const [daemon, setDaemon] = useState<DaemonStatus>('connecting');
   const [focus, setFocus] = useState<Focus>('queue');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
-  const [now, setNow] = useState(() => Date.now());
 
   // One-shot: auto-open the picker if the FIRST snapshot says the board is
   // empty. A ref, not state — read/flipped inside the subscription handler;
   // must never re-arm on reconnect, esc, or later sessions-all-exited pushes.
   const autoOpened = useRef(false);
 
-  // Subscription lifecycle — external system: subscribe on mount, retry every
-  // second after the connection drops until the daemon is back.
-  useEffect(() => {
-    let disposed = false;
-    let sub: { close(): void } | null = null;
-    let retry: ReturnType<typeof setTimeout> | null = null;
-    const connect = () => {
-      if (disposed) return;
-      try {
-        sub = gateway.subscribe({
-          onState: (s) => {
-            setPush(s);
-            setDaemon('up');
-            if (!autoOpened.current) {
-              autoOpened.current = true;
-              if (s.sessions.length === 0) setModalOpen(true);
-            }
-          },
-          onClose: () => {
-            sub = null;
-            setDaemon('down');
-            retry = setTimeout(connect, RETRY_MS);
-          },
-        });
-      } catch {
-        setDaemon('down');
-        retry = setTimeout(connect, RETRY_MS);
-      }
-    };
-    connect();
-    return () => {
-      disposed = true;
-      if (retry !== null) clearTimeout(retry);
-      sub?.close();
-    };
-  }, [gateway]);
-
-  // 1s tick so elapsed-in-state displays stay current.
-  useEffect(() => {
-    const timer = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(timer);
-  }, []);
+  const { push, daemon, now } = useDaemonState(gateway, (s) => {
+    if (!autoOpened.current) {
+      autoOpened.current = true;
+      if (s.sessions.length === 0) setModalOpen(true);
+    }
+  });
 
   const sessions = push?.sessions ?? [];
   const queue = push?.queue ?? [];

@@ -4,53 +4,14 @@ import { join } from 'node:path';
 import { act } from 'react';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { buildQueue } from '../daemon/scoring';
-import type { Request, Response, StatePush } from '../protocol';
+import type { StatePush } from '../protocol';
 import type { Session } from '../types';
 import { App } from './App';
-import type { Gateway } from './gateway';
-import { renderSetup } from './test-utils';
+import { FakeGateway, renderSetup } from './test-utils';
 
 beforeAll(() => {
   process.env.HOLO_HOME = mkdtempSync(join(tmpdir(), 'holo-ui-'));
 });
-
-class FakeGateway implements Gateway {
-  requests: Request[] = [];
-  nextResponse: Response = { ok: true };
-  subscribeCount = 0;
-  private handlers: {
-    onState: (s: StatePush) => void;
-    onClose?: () => void;
-  } | null = null;
-
-  subscribe(handlers: {
-    onState: (s: StatePush) => void;
-    onClose?: () => void;
-  }) {
-    this.subscribeCount += 1;
-    this.handlers = handlers;
-    return {
-      close: () => {
-        this.handlers = null;
-      },
-    };
-  }
-
-  async request(req: Request): Promise<Response> {
-    this.requests.push(req);
-    return this.nextResponse;
-  }
-
-  pushState(s: StatePush) {
-    this.handlers?.onState(s);
-  }
-
-  dropConnection() {
-    const handlers = this.handlers;
-    this.handlers = null;
-    handlers?.onClose?.();
-  }
-}
 
 function session(over: Partial<Session> & Pick<Session, 'id'>): Session {
   const now = Date.now();

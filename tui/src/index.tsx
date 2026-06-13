@@ -29,15 +29,15 @@ if (cmd.kind === 'daemon') {
   // `holo ls`.
   await import('./daemon/main');
   // daemon/main.ts never returns (it sets up signal handlers)
-} else if (cmd.kind === 'tui') {
+} else if (cmd.kind === 'tui' || cmd.kind === 'sidebar') {
   // OpenTUI renderer — dynamic import keeps it out of the fast-path bundle.
-  const [{ createCliRenderer }, { createRoot }, React, { App }] =
-    await Promise.all([
-      import('@opentui/core'),
-      import('@opentui/react'),
-      import('react'),
-      import('./ui/App'),
-    ]);
+  // The component (full TUI vs. per-window sidebar) is chosen by the import.
+  const [{ createCliRenderer }, { createRoot }, React, ui] = await Promise.all([
+    import('@opentui/core'),
+    import('@opentui/react'),
+    import('react'),
+    cmd.kind === 'tui' ? import('./ui/App') : import('./ui/Sidebar'),
+  ]);
 
   const renderer = await createCliRenderer({
     screenMode: 'alternate-screen',
@@ -63,13 +63,17 @@ if (cmd.kind === 'daemon') {
     process.exit(143);
   });
 
+  const onQuit = () => {
+    shutdown();
+    process.exit(0);
+  };
   root.render(
-    React.createElement(App, {
-      onQuit: () => {
-        shutdown();
-        process.exit(0);
-      },
-    }),
+    'App' in ui
+      ? React.createElement(ui.App, { onQuit })
+      : React.createElement(ui.Sidebar, {
+          onQuit,
+          sessionId: cmd.kind === 'sidebar' ? cmd.sessionId : undefined,
+        }),
   );
   renderer.start();
 

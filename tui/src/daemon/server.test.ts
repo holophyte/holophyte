@@ -262,6 +262,8 @@ describe('new', () => {
       name: 'claude-1',
       cwd: '/repo/a',
       argv: ['sleep', '999'],
+      agentPane: '%1',
+      deathTrap: false, // sidebar-less default config
       env,
     });
     expect(tmux.selected).toBe('@1'); // jump-on-spawn
@@ -339,7 +341,9 @@ describe('resume', () => {
     expect(session.lastMessage).toBe('prior tail'); // preview shows the prior tail while booting
     expect(session.tmuxWindow).toBe('@2');
     const env = { HOLO_HOME: holoHomeDir, HOLO_TMUX_SESSION: 'holo' };
-    expect(tmux.windows.get('@2')).toEqual({
+    // toMatchObject: the window also carries sidebar bookkeeping (agentPane,
+    // deathTrap) merged in from the sidebar feature — not this test's concern
+    expect(tmux.windows.get('@2')).toMatchObject({
       name: 'claude-2',
       cwd: '/repo/a',
       argv: ['resume-bin', 'conv-1', 'claude-2'],
@@ -975,6 +979,7 @@ describe('restart persistence', () => {
     await startDaemon({ tmux });
     const state = await ls();
     expect(find(state, 'claude-1')?.status).toBe('idle');
+    expect(find(state, 'claude-1')?.agentPane).toBe('%1'); // survives restart
     expect(state.recentCwds).toEqual(['/repo/a']);
     const session = expectSession(await newSession('claude', '/repo/b'));
     expect(session.id).toBe('claude-2'); // counter never reused
@@ -1192,5 +1197,144 @@ describe('status line', () => {
       method: 'setStatusRight',
       args: [STATUS_STOPPED_LINE],
     });
+  });
+});
+
+describe('sidebar', () => {
+  const SIDEBAR_ARGV = ['bun', '/holo/index.tsx', 'sidebar'];
+
+  function callMethods(tmux: FakeTmux): string[] {
+    return tmux.calls.map((c) => c.method);
+  }
+
+  it('spawn arms the trap and splits a sidebar (trap before split)', async () => {
+    const { tmux } = await startDaemon({ sidebarArgv: SIDEBAR_ARGV });
+    const env = { HOLO_HOME: holoHomeDir, HOLO_TMUX_SESSION: 'holo' };
+    const session = expectSession(await newSession('claude', '/repo/a'));
+    expect(session.agentPane).toBe('%1');
+    const window = tmux.windows.get('@1');
+    expect(window?.deathTrap).toBe(true);
+    expect(window?.sidebar).toEqual({
+      argv: [...SIDEBAR_ARGV, '--session', 'claude-1'],
+      widthCols: 30,
+      env,
+    });
+    const methods = callMethods(tmux);
+    expect(methods.indexOf('setKillWindowOnPaneDeath')).toBeLessThan(
+      methods.indexOf('splitSidebar'),
+    );
+    expect(tmux.selected).toBe('@1');
+  });
+
+  it('skips the sidebar when the window is too narrow', async () => {
+    const tmux = new FakeTmux();
+    tmux.windowWidth = 80;
+    await startDaemon({ sidebarArgv: SIDEBAR_ARGV, tmux });
+    expect(expectSession(await newSession('claude', '/repo/a')).id).toBe(
+      'claude-1',
+    );
+    const methods = callMethods(tmux);
+    expect(methods).not.toContain('setKillWindowOnPaneDeath');
+    expect(methods).not.toContain('splitSidebar');
+  });
+
+  it('makes no trap/split calls when sidebarArgv is absent', async () => {
+    const { tmux } = await startDaemon();
+    await newSession('claude', '/repo/a');
+    const methods = callMethods(tmux);
+    expect(methods).not.toContain('setKillWindowOnPaneDeath');
+    expect(methods).not.toContain('splitSidebar');
+  });
+
+  it('degrades to no split when the trap fails to arm; spawn still ok', async () => {
+    const tmux = new FakeTmux();
+    tmux.trapResult = false;
+    await startDaemon({ sidebarArgv: SIDEBAR_ARGV, tmux });
+    const session = expectSession(await newSession('claude', '/repo/a'));
+    expect(session.id).toBe('claude-1');
+    expect(callMethods(tmux)).not.toContain('splitSidebar');
+    expect(await status('claude-1')).toBe('idle'); // session live
+  });
+
+  it('degrades to no sidebar when split throws; no rollback', async () => {
+    const tmux = new FakeTmux();
+    tmux.splitSidebar = async () => {
+      throw new Error('boom');
+    };
+    await startDaemon({ sidebarArgv: SIDEBAR_ARGV, tmux });
+    const session = expectSession(await newSession('claude', '/repo/a'));
+    expect(session.id).toBe('claude-1');
+    expect(await status('claude-1')).toBe('idle');
+    expect(tmux.windows.get('@1')).toBeDefined(); // window survives
+  });
+
+  it('CRUX: agent death closes the trapped window; sweep marks exited then prunes', async () => {
+    const { daemon, tmux } = await startDaemon({ sidebarArgv: SIDEBAR_ARGV });
+    await newSession('claude', '/repo/a');
+    expect(tmux.windows.get('@1')?.sidebar).toBeDefined();
+
+    tmux.exitAgentPane('@1'); // pane-died trap fires → whole window closes
+    await daemon.sweepOnce();
+    expect(await status('claude-1')).toBe('idle'); // first miss — still live
+    await daemon.sweepOnce();
+    const session = find(await ls(), 'claude-1');
+    expect(session?.status).toBe('exited');
+    expect(session?.attentionReason).toBe('window closed');
+
+    clock.now += 31 * 60_000; // past the 30-min exited grace (resume retention)
+    await daemon.sweepOnce();
+    expect(find(await ls(), 'claude-1')).toBeUndefined();
+  });
+
+  it('a sidebar dying alone keeps the session live', async () => {
+    const { daemon, tmux } = await startDaemon({ sidebarArgv: SIDEBAR_ARGV });
+    await newSession('claude', '/repo/a');
+    tmux.closeSidebarPane('@1'); // user prefix+x on the sidebar / `q`
+    await daemon.sweepOnce();
+    await daemon.sweepOnce();
+    expect(await status('claude-1')).toBe('idle');
+  });
+
+  it('jump focuses the agent pane, not the sidebar', async () => {
+    const { tmux } = await startDaemon({ sidebarArgv: SIDEBAR_ARGV });
+    await newSession('claude', '/repo/a');
+    await request({ cmd: 'jump', sessionId: 'claude-1' });
+    expect(tmux.selected).toBe('@1');
+    expect(tmux.selectedPane).toBe('%1');
+  });
+
+  it('next focuses the agent pane', async () => {
+    const { tmux } = await startDaemon({ sidebarArgv: SIDEBAR_ARGV });
+    await newSession('claude', '/repo/a');
+    await request({ cmd: 'next' });
+    expect(tmux.selectedPane).toBe('%1');
+  });
+
+  it('jump on a pre-sidebar session (no agentPane) never selects a pane', async () => {
+    // hand-written pre-sidebar state.json: a session with no agentPane
+    writeFileSync(
+      statePath(),
+      JSON.stringify({
+        sessions: [
+          {
+            id: 'claude-1',
+            harness: 'claude',
+            cwd: '/repo/a',
+            tmuxWindow: '@1',
+            status: 'idle',
+            attentionReason: 'awaiting first prompt',
+            createdAt: clock.now,
+            statusSince: clock.now,
+            harnessSessionId: '00000000-0000-0000-0000-000000000000',
+          },
+        ],
+        counters: { claude: 1 },
+        recentCwds: ['/repo/a'],
+      }),
+    );
+    const { tmux } = await startDaemon({ sidebarArgv: SIDEBAR_ARGV });
+    await request({ cmd: 'jump', sessionId: 'claude-1' });
+    expect(tmux.selected).toBe('@1');
+    expect(tmux.selectedPane).toBeNull(); // no agentPane → no selectPane
   });
 });

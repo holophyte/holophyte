@@ -223,15 +223,17 @@ describe('RealTmux', () => {
   });
 
   describe('newWindow', () => {
-    it('builds the full argv with a single quoted shell-command and returns the trimmed window id', async () => {
-      const { runner, calls } = fakeRunner([{ status: 0, stdout: '@3\n' }]);
+    it('builds the full argv with a single quoted shell-command and returns id, pane, width', async () => {
+      const { runner, calls } = fakeRunner([
+        { status: 0, stdout: '@3 %7 211\n' },
+      ]);
       const tmux = new RealTmux(runner, 'holo');
-      const id = await tmux.newWindow({
+      const result = await tmux.newWindow({
         name: 'claude-1',
         cwd: '/tmp/repo',
         argv: ['claude', '--session-id', 'abc 123'],
       });
-      expect(id).toBe('@3');
+      expect(result).toEqual({ windowId: '@3', paneId: '%7', width: 211 });
       expect(calls).toEqual([
         [
           'new-window',
@@ -244,7 +246,7 @@ describe('RealTmux', () => {
           '/tmp/repo',
           '-P',
           '-F',
-          '#{window_id}',
+          '#{window_id} #{pane_id} #{window_width}',
           "'claude' '--session-id' 'abc 123'",
         ],
       ]);
@@ -260,8 +262,34 @@ describe('RealTmux', () => {
       ).rejects.toThrow("can't find session: holo");
     });
 
+    it('throws on malformed output (too few fields)', async () => {
+      const { runner } = fakeRunner([{ status: 0, stdout: '@3 %7\n' }]);
+      const tmux = new RealTmux(runner, 'holo');
+      await expect(
+        tmux.newWindow({ name: 'x', cwd: '/tmp', argv: ['true'] }),
+      ).rejects.toThrow('malformed output');
+    });
+
+    it('throws on malformed output (NaN width)', async () => {
+      const { runner } = fakeRunner([{ status: 0, stdout: '@3 %7 wide\n' }]);
+      const tmux = new RealTmux(runner, 'holo');
+      await expect(
+        tmux.newWindow({ name: 'x', cwd: '/tmp', argv: ['true'] }),
+      ).rejects.toThrow('malformed output');
+    });
+
+    it('throws on empty output', async () => {
+      const { runner } = fakeRunner([{ status: 0, stdout: '\n' }]);
+      const tmux = new RealTmux(runner, 'holo');
+      await expect(
+        tmux.newWindow({ name: 'x', cwd: '/tmp', argv: ['true'] }),
+      ).rejects.toThrow('malformed output');
+    });
+
     it('passes env as -e KEY=VALUE flags', async () => {
-      const { runner, calls } = fakeRunner([{ status: 0, stdout: '@4\n' }]);
+      const { runner, calls } = fakeRunner([
+        { status: 0, stdout: '@4 %9 80\n' },
+      ]);
       const tmux = new RealTmux(runner, 'holo');
       await tmux.newWindow({
         name: 'claude-1',
@@ -281,7 +309,7 @@ describe('RealTmux', () => {
           '/tmp/repo',
           '-P',
           '-F',
-          '#{window_id}',
+          '#{window_id} #{pane_id} #{window_width}',
           '-e',
           'HOLO_HOME=/tmp/h',
           '-e',
@@ -298,6 +326,102 @@ describe('RealTmux', () => {
       const tmux = new RealTmux(runner, 'holo');
       await tmux.selectWindow('@2');
       expect(calls).toEqual([['select-window', '-t', '@2']]);
+    });
+  });
+
+  describe('setKillWindowOnPaneDeath', () => {
+    it('arms hook then remain-on-exit and returns true when both succeed', async () => {
+      const { runner, calls } = fakeRunner([{ status: 0 }, { status: 0 }]);
+      const tmux = new RealTmux(runner, 'holo');
+      await expect(tmux.setKillWindowOnPaneDeath('%1', '@1')).resolves.toBe(
+        true,
+      );
+      expect(calls).toEqual([
+        ['set-hook', '-p', '-t', '%1', 'pane-died', 'kill-window -t @1'],
+        ['set-option', '-p', '-t', '%1', 'remain-on-exit', 'on'],
+      ]);
+    });
+
+    it('returns false and never makes the second call when the hook fails', async () => {
+      const { runner, calls } = fakeRunner([{ status: 1 }]);
+      const tmux = new RealTmux(runner, 'holo');
+      await expect(tmux.setKillWindowOnPaneDeath('%1', '@1')).resolves.toBe(
+        false,
+      );
+      expect(calls).toHaveLength(1);
+    });
+
+    it('returns false when remain-on-exit fails', async () => {
+      const { runner, calls } = fakeRunner([{ status: 0 }, { status: 1 }]);
+      const tmux = new RealTmux(runner, 'holo');
+      await expect(tmux.setKillWindowOnPaneDeath('%1', '@1')).resolves.toBe(
+        false,
+      );
+      expect(calls).toHaveLength(2);
+    });
+
+    it('propagates a runner rejection', async () => {
+      const runner: TmuxRunner = async () => {
+        throw new Error('tmux ENOENT');
+      };
+      const tmux = new RealTmux(runner, 'holo');
+      await expect(tmux.setKillWindowOnPaneDeath('%1', '@1')).rejects.toThrow(
+        'ENOENT',
+      );
+    });
+  });
+
+  describe('splitSidebar', () => {
+    it('builds the exact split-window argv (no -P, no -c)', async () => {
+      const { runner, calls } = fakeRunner([{ status: 0 }]);
+      const tmux = new RealTmux(runner, 'holo');
+      await tmux.splitSidebar({
+        paneId: '%7',
+        argv: ['bun', '/holo/index.tsx', 'sidebar', '--session', 'claude-1'],
+        widthCols: 30,
+        env: { HOLO_HOME: '/tmp/h', HOLO_TMUX_SESSION: 'holo' },
+      });
+      expect(calls).toEqual([
+        [
+          'split-window',
+          '-d',
+          '-h',
+          '-l',
+          '30',
+          '-t',
+          '%7',
+          '-e',
+          'HOLO_HOME=/tmp/h',
+          '-e',
+          'HOLO_TMUX_SESSION=holo',
+          "'bun' '/holo/index.tsx' 'sidebar' '--session' 'claude-1'",
+        ],
+      ]);
+    });
+
+    it('throws with status and stderr on failure', async () => {
+      const { runner } = fakeRunner([
+        { status: 1, stderr: 'no space for new pane\n' },
+      ]);
+      const tmux = new RealTmux(runner, 'holo');
+      await expect(
+        tmux.splitSidebar({ paneId: '%1', argv: ['x'], widthCols: 30 }),
+      ).rejects.toThrow('split-window failed (1): no space for new pane');
+    });
+  });
+
+  describe('selectPane', () => {
+    it('runs select-pane with the pane id', async () => {
+      const { runner, calls } = fakeRunner([{}]);
+      const tmux = new RealTmux(runner, 'holo');
+      await tmux.selectPane('%1');
+      expect(calls).toEqual([['select-pane', '-t', '%1']]);
+    });
+
+    it('resolves even on a non-zero exit', async () => {
+      const { runner } = fakeRunner([{ status: 1 }]);
+      const tmux = new RealTmux(runner, 'holo');
+      await expect(tmux.selectPane('%1')).resolves.toBeUndefined();
     });
   });
 
@@ -486,27 +610,36 @@ describe('FakeTmux', () => {
 
   it('round-trips newWindow → listWindowIds → closeWindow → listWindowIds', async () => {
     const tmux = new FakeTmux();
-    const id1 = await tmux.newWindow({
+    const w1 = await tmux.newWindow({
       name: 'claude-1',
       cwd: '/tmp/a',
       argv: ['claude'],
     });
-    const id2 = await tmux.newWindow({
+    const w2 = await tmux.newWindow({
       name: 'codex-1',
       cwd: '/tmp/b',
       argv: ['codex', '-C', '/tmp/b'],
     });
-    expect(id1).toBe('@1');
-    expect(id2).toBe('@2');
+    expect(w1).toEqual({ windowId: '@1', paneId: '%1', width: 200 });
+    expect(w2).toEqual({ windowId: '@2', paneId: '%2', width: 200 });
     expect(tmux.windows.get('@1')).toEqual({
       name: 'claude-1',
       cwd: '/tmp/a',
       argv: ['claude'],
+      agentPane: '%1',
+      deathTrap: false,
     });
     await expect(tmux.listWindowIds()).resolves.toEqual(['@1', '@2']);
 
     tmux.closeWindow('@1');
     await expect(tmux.listWindowIds()).resolves.toEqual(['@2']);
+  });
+
+  it('newWindow returns the windowWidth prop', async () => {
+    const tmux = new FakeTmux();
+    tmux.windowWidth = 80;
+    const w = await tmux.newWindow({ name: 'w', cwd: '/t', argv: ['x'] });
+    expect(w.width).toBe(80);
   });
 
   it('newWindow records env on the window', async () => {
@@ -521,31 +654,146 @@ describe('FakeTmux', () => {
       name: 'claude-1',
       cwd: '/tmp/a',
       argv: ['claude'],
+      agentPane: '%1',
+      deathTrap: false,
       env: { HOLO_HOME: '/tmp/h' },
     });
   });
 
   it('selectWindow tracks the selected window id', async () => {
     const tmux = new FakeTmux();
-    const id = await tmux.newWindow({ name: 'w', cwd: '/tmp', argv: ['true'] });
-    await tmux.selectWindow(id);
-    expect(tmux.selected).toBe(id);
+    const { windowId } = await tmux.newWindow({
+      name: 'w',
+      cwd: '/tmp',
+      argv: ['true'],
+    });
+    await tmux.selectWindow(windowId);
+    expect(tmux.selected).toBe(windowId);
   });
 
   it('closeWindow clears selection when the selected window dies', async () => {
     const tmux = new FakeTmux();
-    const id = await tmux.newWindow({ name: 'w', cwd: '/tmp', argv: ['true'] });
-    await tmux.selectWindow(id);
-    tmux.closeWindow(id);
+    const { windowId } = await tmux.newWindow({
+      name: 'w',
+      cwd: '/tmp',
+      argv: ['true'],
+    });
+    await tmux.selectWindow(windowId);
+    tmux.closeWindow(windowId);
     expect(tmux.selected).toBeNull();
   });
 
   it('never reuses window ids after close', async () => {
     const tmux = new FakeTmux();
-    const id1 = await tmux.newWindow({ name: 'a', cwd: '/t', argv: ['x'] });
-    tmux.closeWindow(id1);
-    const id2 = await tmux.newWindow({ name: 'b', cwd: '/t', argv: ['y'] });
-    expect(id2).toBe('@2');
+    const { windowId } = await tmux.newWindow({
+      name: 'a',
+      cwd: '/t',
+      argv: ['x'],
+    });
+    tmux.closeWindow(windowId);
+    const w2 = await tmux.newWindow({ name: 'b', cwd: '/t', argv: ['y'] });
+    expect(w2.windowId).toBe('@2');
+  });
+
+  it('mints pane ids %1, %2, … never reused', async () => {
+    const tmux = new FakeTmux();
+    const a = await tmux.newWindow({ name: 'a', cwd: '/t', argv: ['x'] });
+    expect(a.paneId).toBe('%1');
+    tmux.closeWindow(a.windowId);
+    const b = await tmux.newWindow({ name: 'b', cwd: '/t', argv: ['y'] });
+    expect(b.paneId).toBe('%2');
+  });
+
+  it('setKillWindowOnPaneDeath records the call, arms the trap, and respects trapResult', async () => {
+    const tmux = new FakeTmux();
+    const w = await tmux.newWindow({ name: 'a', cwd: '/t', argv: ['x'] });
+    await expect(
+      tmux.setKillWindowOnPaneDeath(w.paneId, w.windowId),
+    ).resolves.toBe(true);
+    expect(tmux.windows.get(w.windowId)?.deathTrap).toBe(true);
+    expect(tmux.calls).toContainEqual({
+      method: 'setKillWindowOnPaneDeath',
+      args: [w.paneId, w.windowId],
+    });
+
+    tmux.trapResult = false;
+    const w2 = await tmux.newWindow({ name: 'b', cwd: '/t', argv: ['y'] });
+    await expect(
+      tmux.setKillWindowOnPaneDeath(w2.paneId, w2.windowId),
+    ).resolves.toBe(false);
+    expect(tmux.windows.get(w2.windowId)?.deathTrap).toBe(false);
+  });
+
+  it('setKillWindowOnPaneDeath returns false for an unknown window or pane', async () => {
+    const tmux = new FakeTmux();
+    const w = await tmux.newWindow({ name: 'a', cwd: '/t', argv: ['x'] });
+    await expect(tmux.setKillWindowOnPaneDeath(w.paneId, '@99')).resolves.toBe(
+      false,
+    );
+    await expect(
+      tmux.setKillWindowOnPaneDeath('%99', w.windowId),
+    ).resolves.toBe(false);
+  });
+
+  it('splitSidebar records the call and sets .sidebar; throws on unknown pane', async () => {
+    const tmux = new FakeTmux();
+    const w = await tmux.newWindow({ name: 'a', cwd: '/t', argv: ['x'] });
+    await tmux.splitSidebar({
+      paneId: w.paneId,
+      argv: ['bun', 'sidebar'],
+      widthCols: 30,
+      env: { HOLO_HOME: '/tmp/h' },
+    });
+    expect(tmux.windows.get(w.windowId)?.sidebar).toEqual({
+      argv: ['bun', 'sidebar'],
+      widthCols: 30,
+      env: { HOLO_HOME: '/tmp/h' },
+    });
+    expect(tmux.calls.some((c) => c.method === 'splitSidebar')).toBe(true);
+    await expect(
+      tmux.splitSidebar({ paneId: '%99', argv: ['x'], widthCols: 30 }),
+    ).rejects.toThrow('no such pane');
+  });
+
+  it('selectPane records the call and sets selectedPane', async () => {
+    const tmux = new FakeTmux();
+    await tmux.selectPane('%5');
+    expect(tmux.selectedPane).toBe('%5');
+    expect(tmux.calls).toContainEqual({ method: 'selectPane', args: ['%5'] });
+  });
+
+  it('exitAgentPane closes the window when the trap is armed', async () => {
+    const tmux = new FakeTmux();
+    const w = await tmux.newWindow({ name: 'a', cwd: '/t', argv: ['x'] });
+    await tmux.setKillWindowOnPaneDeath(w.paneId, w.windowId);
+    await tmux.splitSidebar({ paneId: w.paneId, argv: ['s'], widthCols: 30 });
+    tmux.exitAgentPane(w.windowId);
+    await expect(tmux.listWindowIds()).resolves.toEqual([]);
+  });
+
+  it('exitAgentPane closes the window when there is no sidebar (last pane)', async () => {
+    const tmux = new FakeTmux();
+    const w = await tmux.newWindow({ name: 'a', cwd: '/t', argv: ['x'] });
+    tmux.exitAgentPane(w.windowId);
+    await expect(tmux.listWindowIds()).resolves.toEqual([]);
+  });
+
+  it('exitAgentPane LEAKS sidebar-only when untrapped with a sidebar', async () => {
+    const tmux = new FakeTmux();
+    const w = await tmux.newWindow({ name: 'a', cwd: '/t', argv: ['x'] });
+    await tmux.splitSidebar({ paneId: w.paneId, argv: ['s'], widthCols: 30 });
+    tmux.exitAgentPane(w.windowId);
+    await expect(tmux.listWindowIds()).resolves.toEqual([w.windowId]);
+    expect(tmux.windows.get(w.windowId)?.agentPane).toBe('');
+    expect(tmux.windows.get(w.windowId)?.sidebar).toBeDefined();
+  });
+
+  it('closeSidebarPane deletes .sidebar', async () => {
+    const tmux = new FakeTmux();
+    const w = await tmux.newWindow({ name: 'a', cwd: '/t', argv: ['x'] });
+    await tmux.splitSidebar({ paneId: w.paneId, argv: ['s'], widthCols: 30 });
+    tmux.closeSidebarPane(w.windowId);
+    expect(tmux.windows.get(w.windowId)?.sidebar).toBeUndefined();
   });
 });
 

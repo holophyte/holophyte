@@ -36,6 +36,8 @@ export interface DaemonOptions {
   harnesses: HarnessInfo[];
   /** argv for window 0 (the TUI) when creating the tmux session */
   tuiArgv: string[];
+  /** argv for the per-agent-window sidebar pane (`holo sidebar`). Absent ⇒ sidebars disabled. */
+  sidebarArgv?: string[];
   /** injectable clock for tests, default epoch-ms now */
   now?: () => number;
   sweepIntervalMs?: number;
@@ -50,6 +52,10 @@ interface Hold {
 
 /** longest stop() waits for the tombstone status write before giving up */
 const TOMBSTONE_DEADLINE_MS = 1000;
+
+/** sidebar pane width; the agent must keep ≥80 cols beside it + 1 separator col → 80+1+30 */
+const SIDEBAR_COLS = 30;
+const MIN_SIDEBAR_WINDOW_COLS = 111;
 
 export class Daemon {
   private registry = new SessionRegistry();
@@ -353,7 +359,7 @@ export class Daemon {
           this.reply(socket, { ok: true });
           return;
         }
-        await this.opts.tmux.selectWindow(session.tmuxWindow);
+        await this.focusSession(session);
         this.reply(socket, { ok: true, session });
         return;
       }
@@ -366,7 +372,7 @@ export class Daemon {
           });
           return;
         }
-        await this.opts.tmux.selectWindow(session.tmuxWindow);
+        await this.focusSession(session);
         this.reply(socket, { ok: true, session });
         return;
       }
@@ -423,14 +429,20 @@ export class Daemon {
       await this.opts.tmux.ensureSession(this.opts.tuiArgv, this.paneEnv);
       session = this.registry.createSession(req.harness, req.cwd, this.now());
       const argv = await adapter.spawnCommand(session);
-      const windowId = await this.opts.tmux.newWindow({
+      const spawned = await this.opts.tmux.newWindow({
         name: session.id,
         cwd: req.cwd,
         argv,
         env: this.paneEnv,
       });
-      this.registry.setTmuxWindow(session.id, windowId);
-      await this.opts.tmux.selectWindow(windowId); // jump-on-spawn per spec
+      this.registry.setTmuxWindow(session.id, spawned.windowId, spawned.paneId);
+      await this.opts.tmux.selectWindow(spawned.windowId); // jump-on-spawn per spec
+      await this.trySpawnSidebar(
+        session,
+        spawned.windowId,
+        spawned.paneId,
+        spawned.width,
+      );
     } catch (err) {
       if (session) this.removeSession(session.id);
       this.persist(); // keep counters/recentCwds consistent on disk
@@ -444,6 +456,50 @@ export class Daemon {
       ok: true,
       session: this.registry.get(session.id) ?? session,
     });
+  }
+
+  /**
+   * Best-effort sidebar. Trap-then-split ordering is load-bearing: the split
+   * happens only after the kill-window trap is armed on the agent pane, so a
+   * sidebar can never outlive its agent and hold the window (and the session)
+   * alive past the sweep. Any failure degrades to no sidebar — never a failed
+   * spawn, never an untrapped split.
+   */
+  private async trySpawnSidebar(
+    session: Session,
+    windowId: string,
+    agentPane: string,
+    width: number,
+  ): Promise<void> {
+    const argv = this.opts.sidebarArgv;
+    if (!argv || width < MIN_SIDEBAR_WINDOW_COLS) return;
+    try {
+      if (
+        !(await this.opts.tmux.setKillWindowOnPaneDeath(agentPane, windowId))
+      ) {
+        return;
+      }
+      await this.opts.tmux.splitSidebar({
+        paneId: agentPane,
+        argv: [...argv, '--session', session.id],
+        widthCols: SIDEBAR_COLS,
+        env: this.paneEnv, // same HOLO_HOME/HOLO_TMUX_SESSION pinning as agent panes
+      });
+    } catch (err) {
+      console.error('holod sidebar spawn failed:', err);
+    }
+  }
+
+  /**
+   * Focus a session's window, landing on the agent pane (not the sidebar).
+   * agentPane is absent on pre-sidebar persisted state and sidebar-less
+   * spawns, where window selection is enough.
+   */
+  private async focusSession(session: Session): Promise<void> {
+    await this.opts.tmux.selectWindow(session.tmuxWindow);
+    if (session.agentPane !== undefined) {
+      await this.opts.tmux.selectPane(session.agentPane);
+    }
   }
 
   /**
@@ -507,7 +563,6 @@ export class Daemon {
         return;
       }
       let session: Session | undefined;
-      let windowId: string;
       try {
         await this.opts.tmux.ensureSession(this.opts.tuiArgv, this.paneEnv);
         session = this.registry.createSession(harness, cwd, this.now());
@@ -520,13 +575,24 @@ export class Daemon {
         const argv = await adapter.resumeCommand(
           this.registry.get(session.id) ?? session,
         );
-        windowId = await this.opts.tmux.newWindow({
+        // resumed sessions get the same window/pane/sidebar treatment as new
+        const spawned = await this.opts.tmux.newWindow({
           name: session.id,
           cwd,
           argv,
           env: this.paneEnv,
         });
-        this.registry.setTmuxWindow(session.id, windowId);
+        this.registry.setTmuxWindow(
+          session.id,
+          spawned.windowId,
+          spawned.paneId,
+        );
+        await this.trySpawnSidebar(
+          session,
+          spawned.windowId,
+          spawned.paneId,
+          spawned.width,
+        );
       } catch (err) {
         if (session) this.registry.remove(session.id); // old exited record untouched — retryable
         this.persist(); // keep counters consistent on disk
@@ -538,7 +604,8 @@ export class Daemon {
       this.persist();
       this.broadcast();
       try {
-        await this.opts.tmux.selectWindow(windowId); // jump-on-spawn, same feel as handleNew
+        // jump-on-spawn, landing on the agent pane — same feel as handleNew
+        await this.focusSession(this.registry.get(session.id) ?? session);
       } catch {
         // selection is cosmetic — the resumed session is live and tracked;
         // rolling back here would orphan a process that's consuming the conversation

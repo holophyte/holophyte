@@ -21,6 +21,7 @@ export type CliCommand =
   | { kind: 'attach' }
   | { kind: 'tui' }
   | { kind: 'daemon' }
+  | { kind: 'sidebar'; sessionId?: string }
   | { kind: 'new'; harness: string; cwd?: string }
   | { kind: 'next' }
   | { kind: 'ls' }
@@ -44,6 +45,17 @@ export function parseArgs(argv: string[]): CliCommand {
       return { kind: 'tui' };
     case 'daemon':
       return { kind: 'daemon' };
+    case 'sidebar': {
+      let sessionId: string | undefined;
+      const tail: string[] = [...(second ? [second] : []), ...rest];
+      for (let i = 0; i < tail.length; i++) {
+        if (tail[i] === '--session' && tail[i + 1]) {
+          sessionId = tail[i + 1];
+          i++;
+        }
+      }
+      return { kind: 'sidebar', sessionId };
+    }
     case 'new': {
       if (!second) return { kind: 'help' };
       let cwd: string | undefined;
@@ -312,7 +324,7 @@ export async function runCli(cmd: CliCommand, deps: CliDeps): Promise<number> {
       return 1;
     }
 
-    // 'tui' and 'daemon' are handled in index.tsx
+    // 'tui', 'daemon', and 'sidebar' are handled in index.tsx
     default:
       return 0;
   }

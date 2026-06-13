@@ -61,6 +61,17 @@ holo (CLI)
   holophyte sprout splash, and on first connect to an empty board the
   new-session picker opens automatically — `esc` dismisses it and it will not
   reopen on its own (press `n` to bring it back).
+- **Per-agent-window sidebar**: each agent window gets a 30-col live board pane
+  (`holo sidebar`) beside the agent, so you can see and act on the queue without
+  jumping back to the TUI. The agent pane carries a tmux-native death trap (a
+  pane-scoped `pane-died` hook + `remain-on-exit`) so the whole window — sidebar
+  included — still dies the moment the agent process exits; holod's liveness
+  sweep is unchanged. The sidebar is skipped when the window is narrower than
+  111 cols (it needs 80 for the agent + 1 separator + 30) or when
+  `HOLO_SIDEBAR=0` is set on the daemon's environment. The width is read at
+  spawn time, so a session started while a wide-terminal client is attached
+  (the usual `n`-in-the-TUI path) gets a sidebar; one spawned via `holo new`
+  against a still-detached session sees tmux's 80-col default and is skipped.
 
 ## TUI keys (window 0 only — zero key capture inside agent windows)
 
@@ -78,6 +89,29 @@ holo (CLI)
 with the default tmux prefix that's **`ctrl-b` then `Space`** (installed by
 `holo` / `holo setup`; note: tmux bindings are server-global).
 
+## Sidebar keys (the 30-col pane beside each agent — only when tmux-focused)
+
+| Key | Action |
+|---|---|
+| `j/k` (or arrows) | navigate the queue |
+| `enter` | jump to the selected session's window |
+| `a` / `d` | approve / deny a pending permission on the selected item |
+| `q` | close the sidebar pane (the window and agent are unaffected) |
+
+The sidebar receives keys only when you deliberately tmux-focus it; while you
+type in the agent pane it stays read-only.
+
+**Tips:**
+- **`prefix+z` zooms the agent pane fullscreen** (press again to restore) — use
+  it when you want the whole window for the agent, instead of killing the
+  sidebar.
+- **Kill an agent session with `prefix+&` (the whole window) or by exiting the
+  agent — never `prefix+x` on the agent pane.** A pane-kill bypasses the
+  `pane-died` death trap and strands the window sidebar-only; the session then
+  goes stale until you close the window. If the terminal is resized below 111
+  cols both panes get squeezed — zoom with `prefix+z` or close the sidebar
+  with `q`.
+
 ## CLI
 
 ```text
@@ -89,9 +123,9 @@ holo setup           install tmux binding, report harness configuration
 ```
 
 Internal subcommands: `holo tui` (window-0 process), `holo daemon` (foreground
-daemon, for debugging). The spec's `holo hook` is intentionally not a
-subcommand — injected hooks invoke `src/hook/main.ts` directly so the hot path
-skips CLI dispatch.
+daemon, for debugging), `holo sidebar` (the per-agent-window board pane, spawned
+by holod). The spec's `holo hook` is intentionally not a subcommand — injected
+hooks invoke `src/hook/main.ts` directly so the hot path skips CLI dispatch.
 
 ## Development
 
