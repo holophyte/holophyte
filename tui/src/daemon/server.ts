@@ -545,9 +545,9 @@ export class Daemon {
   }
 
   /**
-   * Optimistic latch: a failed write claims success for at most one sweep
-   * interval — bounded by the per-sweep re-assert. The catch keeps the chain
-   * resolved and the daemon alive through any tmux failure.
+   * Dedupe latch: a failed write un-latches so the next state change retries
+   * immediately; the per-sweep re-assert stays the backstop. The catch keeps
+   * the chain resolved and the daemon alive through any tmux failure.
    */
   private pushStatusLine(line: string): void {
     // a continuation resuming after stop() began (in-flight sweep, spawn)
@@ -558,7 +558,12 @@ export class Daemon {
     this.lastStatusLine = line;
     this.statusChain = this.statusChain
       .then(() => this.opts.tmux.setStatusRight(line))
-      .catch((err) => console.error('holod status line update failed:', err));
+      .catch((err) => {
+        // a failed write must not claim success — un-latch so the next
+        // broadcast retries before the sweep gets to it
+        this.lastStatusLine = null;
+        console.error('holod status line update failed:', err);
+      });
   }
 
   private persist(): void {

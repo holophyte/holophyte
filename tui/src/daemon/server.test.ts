@@ -881,6 +881,40 @@ describe('status line', () => {
     await daemon.stop();
   });
 
+  it('a failed write un-latches so the next broadcast retries before the sweep', async () => {
+    const { tmux } = await startDaemon();
+    await newSession('claude', '/repo/a');
+    await newSession('claude', '/repo/b');
+    await hook('claude-1', { kind: 'prompt' });
+    clock.now += 10;
+    await hook('claude-1', { kind: 'stop', lastMessage: 'x' });
+    clock.now += 10;
+    await hook('claude-2', { kind: 'prompt' });
+    clock.now += 10;
+    await until(
+      () => tmux.statusRight?.includes('1 run 1 idle') === true,
+      'mixed status line',
+    );
+    // next write fails at the spawn level (tmux could not be asked)
+    const original = tmux.setStatusRight.bind(tmux);
+    tmux.setStatusRight = async () => {
+      tmux.setStatusRight = original;
+      throw new Error('boom');
+    };
+    await hook('claude-2', { kind: 'stop', lastMessage: 'a' }); // "2 idle" render fails
+    await until(
+      () => tmux.setStatusRight === original,
+      'failed write attempted',
+    );
+    clock.now += 10;
+    // byte-identical render (only lastMessage changed) must retry, not dedupe
+    await hook('claude-2', { kind: 'stop', lastMessage: 'b' });
+    await until(
+      () => tmux.statusRight?.includes('2 idle') === true,
+      'retried status line',
+    );
+  });
+
   it("never touches the new owner's line after a takeover", async () => {
     const { daemon, tmux } = await startDaemon();
     await newSession();
