@@ -136,6 +136,14 @@ export function App({
           allow: key.name === 'a',
         })
         .catch(() => {});
+      return;
+    }
+    if (key.name === 'r') {
+      // exited sessions never appear in the queue (buildQueue filters them),
+      // so this status gate alone restricts 'r' to the SESSIONS pane
+      const session = l.push.sessions.find((s) => s.id === id);
+      if (session?.status !== 'exited') return; // pressed elsewhere: silent ignore
+      void gateway.request({ cmd: 'resume', sessionId: id }).catch(() => {});
     }
   });
 

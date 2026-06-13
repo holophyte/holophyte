@@ -5,7 +5,6 @@
  * state-file.ts for load/save).
  */
 
-import { randomUUID } from 'node:crypto';
 import type { SessionEvent } from '../protocol';
 import type { HarnessId, Session, SessionStatus } from '../types';
 
@@ -15,9 +14,17 @@ export interface RegistryJSON {
   counters: Record<string, number>;
   /** most-recent-first spawn targets, deduped, capped */
   recentCwds: string[];
+  /** state-file schema version; absent ⇒ pre-v1 (see fromJSON migration) */
+  version?: number;
 }
 
 const MAX_RECENT_CWDS = 10;
+
+/** current state-file schema version, written by toJSON */
+export const STATE_VERSION = 1;
+
+/** exited sessions stay resumable for this long before the sweep prunes them */
+export const EXITED_GRACE_MS = 30 * 60_000;
 
 // Hook stamps come from independent processes on a steppable wall clock.
 // Ordering only needs to disambiguate sub-second hook races; a strict guard
@@ -36,8 +43,17 @@ export class SessionRegistry {
 
   static fromJSON(data: RegistryJSON): SessionRegistry {
     const registry = new SessionRegistry();
+    // Pre-v1 state files minted a random UUID as harnessSessionId for EVERY
+    // harness, but codex never received it (it has no --session-id), so that id
+    // is bogus and would make `codex resume` fail. Drop it on load — a live
+    // codex session recaptures its real id from the next SessionStart hook.
+    // claude's pre-v1 id WAS its real --session-id, so it stays resumable.
+    const legacy = (data.version ?? 0) < 1;
     for (const persisted of data.sessions) {
       const session: Session = { ...persisted };
+      if (legacy && session.harness === 'codex') {
+        session.harnessSessionId = undefined;
+      }
       if (session.tmuxWindow === '') {
         // Half-created sessions don't survive a daemon restart — no spawn
         // can be in flight at restore time, and reconcile() never sweeps an
@@ -60,6 +76,7 @@ export class SessionRegistry {
 
   toJSON(): RegistryJSON {
     return {
+      version: STATE_VERSION,
       sessions: this.all().map((session) => ({ ...session })),
       counters: { ...this.counters },
       recentCwds: [...this.cwds],
@@ -80,7 +97,6 @@ export class SessionRegistry {
       attentionReason: 'starting…',
       createdAt: now,
       statusSince: now,
-      harnessSessionId: randomUUID(),
     };
     this.sessions.set(session.id, session);
     this.touchCwd(cwd);
@@ -129,8 +145,22 @@ export class SessionRegistry {
     this.paneDialogs.delete(id);
 
     switch (event.kind) {
-      case 'ready':
-        return this.transition(session, 'idle', 'awaiting first prompt', ts);
+      case 'ready': {
+        let changed = this.transition(
+          session,
+          'idle',
+          'awaiting first prompt',
+          ts,
+        );
+        if (
+          event.harnessSessionId !== undefined &&
+          event.harnessSessionId !== session.harnessSessionId
+        ) {
+          session.harnessSessionId = event.harnessSessionId;
+          changed = true; // forces persist — codex resume must survive a daemon restart
+        }
+        return changed;
+      }
       case 'prompt':
       case 'tool':
         return this.transition(session, 'running', undefined, ts);
@@ -238,8 +268,28 @@ export class SessionRegistry {
     return changed;
   }
 
+  /** Copy resume lineage onto a freshly minted session. No-op on unknown id. */
+  adoptLineage(
+    id: string,
+    lineage: { harnessSessionId: string; lastMessage?: string },
+  ): void {
+    const session = this.sessions.get(id);
+    if (!session) return;
+    session.harnessSessionId = lineage.harnessSessionId;
+    if (lineage.lastMessage !== undefined) {
+      session.lastMessage = lineage.lastMessage;
+    }
+  }
+
+  /** Targeted removal — resume's old-record drop and failed-spawn rollback. */
+  remove(id: string): boolean {
+    this.lastEventTs.delete(id);
+    this.paneDialogs.delete(id);
+    return this.sessions.delete(id);
+  }
+
   /** Drop exited sessions older than the grace period. */
-  pruneExited(now: number, graceMs = 60_000): boolean {
+  pruneExited(now: number, graceMs = EXITED_GRACE_MS): boolean {
     let changed = false;
     for (const [id, session] of this.sessions) {
       if (session.status === 'exited' && session.statusSince < now - graceMs) {

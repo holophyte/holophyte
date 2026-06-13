@@ -89,6 +89,13 @@ const withPermission = () =>
       respondBy: Date.now() + 30_000,
     },
   });
+const exited = () =>
+  session({
+    id: 'claude-9',
+    status: 'exited',
+    attentionReason: 'window closed',
+    harnessSessionId: 'conv-9',
+  });
 
 describe('App', () => {
   it('renders sessions, queue, and reasons from a pushed snapshot', async () => {
@@ -186,6 +193,49 @@ describe('App', () => {
     expect(
       gw.requests.filter((r) => r.cmd === 'respondPermission'),
     ).toHaveLength(0);
+    unmount();
+  });
+
+  it('r resumes the selected exited session in the sessions pane', async () => {
+    const { push, input, gw, update, unmount } = await mount();
+    await push(snapshot([running(), exited()]));
+    input.pressTab(); // queue → sessions focus
+    await update();
+    input.pressKey('j'); // codex-1 → claude-9 (exited)
+    await update();
+    input.pressKey('r');
+    await update();
+    expect(gw.requests).toContainEqual({
+      cmd: 'resume',
+      sessionId: 'claude-9',
+    });
+    unmount();
+  });
+
+  it('r does nothing when the selected session is not exited', async () => {
+    const { push, input, gw, update, unmount } = await mount();
+    await push(snapshot([running(), exited()]));
+    input.pressTab(); // sessions focus, codex-1 (running) selected
+    await update();
+    input.pressKey('r');
+    await update();
+    expect(gw.requests.filter((r) => r.cmd === 'resume')).toHaveLength(0);
+    unmount();
+  });
+
+  it('r does nothing with queue focus (exited sessions never queue)', async () => {
+    const { push, input, gw, update, unmount } = await mount();
+    await push(snapshot([needsInput(), exited()]));
+    input.pressKey('r'); // queue focus, claude-1 (needs_input) selected
+    await update();
+    expect(gw.requests.filter((r) => r.cmd === 'resume')).toHaveLength(0);
+    unmount();
+  });
+
+  it('shows the r:resume hint in the status bar', async () => {
+    const { push, frame, unmount } = await mount();
+    await push(snapshot([running()]));
+    expect(frame()).toContain('r:resume');
     unmount();
   });
 

@@ -21,15 +21,19 @@ interface Step {
 }
 
 // Timeline: ready @0ms, prompt @500ms, tool @1000ms, stop @2500ms.
-const DEFAULT_SCRIPT: Step[] = [
-  { delayMs: 0, event: { kind: 'ready' } },
-  { delayMs: 500, event: { kind: 'prompt' } },
-  { delayMs: 500, event: { kind: 'tool' } },
-  {
-    delayMs: 1500,
-    event: { kind: 'stop', lastMessage: 'fake agent: work complete' },
-  },
-];
+// ready carries a deterministic conversation id (a resumed agent echoes the
+// inherited one) so lineage continuity is observable end-to-end.
+function defaultScript(convId: string): Step[] {
+  return [
+    { delayMs: 0, event: { kind: 'ready', harnessSessionId: convId } },
+    { delayMs: 500, event: { kind: 'prompt' } },
+    { delayMs: 500, event: { kind: 'tool' } },
+    {
+      delayMs: 1500,
+      event: { kind: 'stop', lastMessage: 'fake agent: work complete' },
+    },
+  ];
+}
 
 const DEFAULT_PERMISSION_HOLD_MS = 90000;
 
@@ -41,15 +45,18 @@ function parseArgs(argv: string[]): {
   sessionId: string;
   home?: string;
   script?: string;
+  resume?: string;
 } {
   const sessionId = argv[0] ?? '';
   let home: string | undefined;
   let script: string | undefined;
+  let resume: string | undefined;
   for (let i = 1; i < argv.length - 1; i++) {
     if (argv[i] === '--home') home = argv[++i];
     else if (argv[i] === '--script') script = argv[++i];
+    else if (argv[i] === '--resume') resume = argv[++i];
   }
-  return { sessionId, home, script };
+  return { sessionId, home, script, resume };
 }
 
 function parseScript(json: string | undefined): Step[] | undefined {
@@ -72,14 +79,15 @@ function parseScript(json: string | undefined): Step[] | undefined {
 }
 
 async function run(): Promise<void> {
-  const { sessionId, home, script } = parseArgs(process.argv.slice(2));
+  const { sessionId, home, script, resume } = parseArgs(process.argv.slice(2));
   // Must be set before any client call — paths.ts reads HOLO_HOME lazily.
   if (home) process.env.HOLO_HOME = home;
 
   process.on('SIGTERM', () => process.exit(0));
   process.on('SIGINT', () => process.exit(0));
 
-  const steps = parseScript(script) ?? DEFAULT_SCRIPT;
+  const steps =
+    parseScript(script) ?? defaultScript(resume ?? `${sessionId}-conv`);
   for (const step of steps) {
     if (step.delayMs > 0) await sleep(step.delayMs);
     if (step.event) {

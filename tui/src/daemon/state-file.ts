@@ -26,6 +26,8 @@ export function loadStateFile(path: string): RegistryJSON | null {
   if (!isPlainObject(parsed)) return null;
   // Minimal shape validation — fill missing/mistyped fields with defaults.
   return {
+    // absent ⇒ 0, which triggers fromJSON's pre-v1 codex-id migration
+    version: typeof parsed.version === 'number' ? parsed.version : 0,
     sessions: Array.isArray(parsed.sessions)
       ? (parsed.sessions as Session[])
       : [],
