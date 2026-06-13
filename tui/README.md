@@ -48,7 +48,8 @@ holo (CLI)
   resumable with `r` — a fresh process in a fresh window continues the prior
   conversation (`claude --resume`, `codex resume`). Conversation ids are
   captured from each harness's `SessionStart` hook payload (`session_id`);
-  harnesses without resume support (cursor/devin) ignore `r`.
+  harnesses without resume support (cursor/devin) reject the request with
+  "harness cannot resume".
 - **Queue scoring**: permission 100, needs_input 60, error 50, idle 30, plus
   +2/min waiting (capped +40). Quick wins first; no panic UI.
 - **Ambient status line**: holod owns the holo tmux session's `status-right`
