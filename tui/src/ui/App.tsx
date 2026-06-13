@@ -14,6 +14,7 @@ import { QueuePane } from './QueuePane';
 import { formatElapsed, SessionsPane, statusLabel } from './SessionsPane';
 import { Splash } from './Splash';
 import { StatusBar } from './StatusBar';
+import { effectiveId } from './selection';
 import { useDaemonState } from './useDaemonState';
 
 const BOLD = createTextAttributes({ bold: true });
@@ -30,15 +31,6 @@ export interface AppProps {
 }
 
 type Focus = 'queue' | 'sessions';
-
-/** Selected id if still present in the list, else the first item (clamp). */
-export function effectiveId(
-  ids: string[],
-  selectedId: string | null,
-): string | null {
-  if (selectedId !== null && ids.includes(selectedId)) return selectedId;
-  return ids[0] ?? null;
-}
 
 export function App({
   gateway = liveGateway,

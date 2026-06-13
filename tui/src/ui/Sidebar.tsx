@@ -8,11 +8,11 @@
 import { createTextAttributes } from '@opentui/core';
 import { useKeyboard, useTerminalDimensions } from '@opentui/react';
 import { useEffect, useRef, useState } from 'react';
-import { effectiveId } from './App';
 import type { Gateway } from './gateway';
 import { liveGateway } from './gateway';
 import { QueuePane } from './QueuePane';
 import { SessionsPane } from './SessionsPane';
+import { effectiveId } from './selection';
 import { ACCENT } from './theme';
 import { useDaemonState } from './useDaemonState';
 
@@ -120,7 +120,7 @@ export function Sidebar({
       />
       <box flexGrow={1} />
       <text>
-        <span attributes={DIM}>↵ jump  a/d </span>
+        <span attributes={DIM}>↵ jump a/d </span>
         {daemon === 'up' ? (
           <span fg="green">●</span>
         ) : daemon === 'connecting' ? (
