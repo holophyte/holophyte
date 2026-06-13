@@ -15,6 +15,7 @@ import {
 import net from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { describe, expect, it } from 'vitest';
 import { request, subscribe } from '../client';
 import { writeJsonLine } from '../ndjson';
 import { socketPath, statePath } from '../paths';
@@ -27,6 +28,7 @@ import type {
   Session,
   StateSnapshot,
 } from '../types';
+import { EXITED_GRACE_MS } from './registry';
 import { Daemon, type DaemonOptions } from './server';
 import { STATUS_STOPPED_LINE } from './status-line';
 
@@ -45,11 +47,15 @@ function fakeAdapter(
   opts: {
     configured?: boolean;
     spawn?: (session: Session) => string[] | Promise<string[]>;
+    resume?: (session: Session) => string[] | Promise<string[]>;
   } = {},
 ): HarnessAdapter {
   return {
     id,
     spawnCommand: opts.spawn ?? (() => ['sleep', '999']),
+    // wired only when provided — adapters without it exercise the
+    // cannot-resume path
+    ...(opts.resume ? { resumeCommand: opts.resume } : {}),
     configured: () => opts.configured ?? true,
     capabilities: { remotePermission: true, questionText: true },
   };
@@ -283,6 +289,258 @@ describe('new', () => {
     expect(expectError(res)).toMatch(/boom/);
     expect((await ls()).sessions).toEqual([]);
     expect(tmux.windows.size).toBe(0);
+  });
+});
+
+describe('resume', () => {
+  const resumeArgv = (s: Session) => [
+    'resume-bin',
+    s.harnessSessionId ?? '',
+    s.id,
+  ];
+
+  /** Spawn claude-1, capture conv-1 via ready, kill its window → exited. */
+  async function exitedSession(
+    daemon: Daemon,
+    tmux: FakeTmux,
+    opts: { ready?: unknown } = {},
+  ): Promise<void> {
+    await newSession('claude', '/repo/a');
+    await hook(
+      'claude-1',
+      opts.ready ?? { kind: 'ready', harnessSessionId: 'conv-1' },
+    );
+    tmux.closeWindow('@1');
+    await daemon.sweepOnce();
+    await daemon.sweepOnce(); // two-strike termination
+    expect(await status('claude-1')).toBe('exited');
+  }
+
+  it('mints a fresh session that continues the conversation, drops the old record', async () => {
+    const { daemon, tmux } = await startDaemon({
+      adapters: makeAdapters({
+        claude: fakeAdapter('claude', { resume: resumeArgv }),
+      }),
+    });
+    await newSession('claude', '/repo/a');
+    await hook('claude-1', { kind: 'ready', harnessSessionId: 'conv-1' });
+    await hook('claude-1', { kind: 'stop', lastMessage: 'prior tail' });
+    tmux.closeWindow('@1');
+    await daemon.sweepOnce();
+    await daemon.sweepOnce();
+    expect(await status('claude-1')).toBe('exited');
+
+    const session = expectSession(
+      await request({ cmd: 'resume', sessionId: 'claude-1' }),
+    );
+    expect(session.id).toBe('claude-2');
+    expect(session.status).toBe('idle');
+    expect(session.harnessSessionId).toBe('conv-1');
+    expect(session.lastMessage).toBe('prior tail'); // preview shows the prior tail while booting
+    expect(session.tmuxWindow).toBe('@2');
+    const env = { HOLO_HOME: holoHomeDir, HOLO_TMUX_SESSION: 'holo' };
+    expect(tmux.windows.get('@2')).toEqual({
+      name: 'claude-2',
+      cwd: '/repo/a',
+      argv: ['resume-bin', 'conv-1', 'claude-2'],
+      env,
+    });
+    expect(tmux.selected).toBe('@2'); // jump-on-spawn
+    const state = await ls();
+    expect(find(state, 'claude-1')).toBeUndefined();
+    expect(state.sessions).toHaveLength(1);
+  });
+
+  it('unknown session → ok:false, nothing spawned', async () => {
+    const { tmux } = await startDaemon();
+    expect(
+      expectError(await request({ cmd: 'resume', sessionId: 'ghost-1' })),
+    ).toMatch(/unknown session/);
+    expect((await ls()).sessions).toEqual([]);
+    expect(tmux.windows.size).toBe(0);
+  });
+
+  it('non-exited session → ok:false, nothing spawned', async () => {
+    const { tmux } = await startDaemon({
+      adapters: makeAdapters({
+        claude: fakeAdapter('claude', { resume: resumeArgv }),
+      }),
+    });
+    await newSession('claude', '/repo/a');
+    expect(
+      expectError(await request({ cmd: 'resume', sessionId: 'claude-1' })),
+    ).toMatch(/not exited/);
+    expect((await ls()).sessions).toHaveLength(1);
+    expect(tmux.windows.size).toBe(1);
+  });
+
+  it('adapter without resumeCommand → ok:false, nothing spawned', async () => {
+    const { daemon, tmux } = await startDaemon(); // default fakeAdapter: no resume
+    await exitedSession(daemon, tmux);
+    expect(
+      expectError(await request({ cmd: 'resume', sessionId: 'claude-1' })),
+    ).toMatch(/cannot resume/);
+    expect((await ls()).sessions).toHaveLength(1);
+    expect(tmux.windows.size).toBe(0);
+  });
+
+  it('unconfigured harness with resume support → ok:false, nothing spawned', async () => {
+    const state = { configured: true };
+    const { daemon, tmux } = await startDaemon({
+      adapters: makeAdapters({
+        claude: {
+          id: 'claude',
+          spawnCommand: () => ['sleep', '999'],
+          resumeCommand: resumeArgv,
+          configured: () => state.configured,
+          capabilities: { remotePermission: true, questionText: true },
+        },
+      }),
+    });
+    await exitedSession(daemon, tmux);
+    state.configured = false; // uninstalled while exited
+    expect(
+      expectError(await request({ cmd: 'resume', sessionId: 'claude-1' })),
+    ).toMatch(/not configured/);
+    expect((await ls()).sessions).toHaveLength(1);
+    expect(tmux.windows.size).toBe(0);
+  });
+
+  it('exited session that never reported a conversation id → ok:false', async () => {
+    const { daemon, tmux } = await startDaemon({
+      adapters: makeAdapters({
+        claude: fakeAdapter('claude', { resume: resumeArgv }),
+      }),
+    });
+    await exitedSession(daemon, tmux, { ready: { kind: 'ready' } });
+    expect(
+      expectError(await request({ cmd: 'resume', sessionId: 'claude-1' })),
+    ).toMatch(/no conversation id/);
+    expect((await ls()).sessions).toHaveLength(1);
+    expect(tmux.windows.size).toBe(0);
+  });
+
+  it('a throwing resumeCommand rolls back the new session and spares every exited one', async () => {
+    const { daemon, tmux } = await startDaemon({
+      adapters: makeAdapters({
+        claude: fakeAdapter('claude', {
+          resume: () => {
+            throw new Error('resume boom');
+          },
+        }),
+      }),
+    });
+    await newSession('claude', '/repo/a'); // claude-1 @1
+    await newSession('claude', '/repo/b'); // claude-2 @2
+    await hook('claude-1', { kind: 'ready', harnessSessionId: 'conv-1' });
+    await hook('claude-2', { kind: 'ready', harnessSessionId: 'conv-2' });
+    tmux.closeWindow('@1');
+    tmux.closeWindow('@2');
+    await daemon.sweepOnce();
+    await daemon.sweepOnce();
+    expect(await status('claude-1')).toBe('exited');
+    expect(await status('claude-2')).toBe('exited');
+
+    const res = await request({ cmd: 'resume', sessionId: 'claude-1' });
+    expect(expectError(res)).toMatch(/resume boom/);
+    // the old removeSession pruned ALL exited sessions with zero grace —
+    // both records surviving is the regression guard
+    const state = await ls();
+    expect(find(state, 'claude-1')?.status).toBe('exited');
+    expect(find(state, 'claude-2')?.status).toBe('exited');
+    expect(state.sessions).toHaveLength(2); // no half-created claude-3
+    expect(tmux.windows.size).toBe(0);
+  });
+
+  it('selectWindow failure after the spawn is non-fatal', async () => {
+    const { daemon, tmux } = await startDaemon({
+      adapters: makeAdapters({
+        claude: fakeAdapter('claude', { resume: resumeArgv }),
+      }),
+    });
+    await exitedSession(daemon, tmux);
+    const orig = tmux.selectWindow.bind(tmux);
+    tmux.selectWindow = async () => {
+      tmux.selectWindow = orig; // throw once
+      throw new Error('select boom');
+    };
+    const session = expectSession(
+      await request({ cmd: 'resume', sessionId: 'claude-1' }),
+    );
+    expect(session.id).toBe('claude-2');
+    const state = await ls();
+    expect(find(state, 'claude-2')).toBeDefined();
+    expect(find(state, 'claude-1')).toBeUndefined();
+  });
+
+  it('a second resume while one is in flight is rejected', async () => {
+    let release = () => {};
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const entered = { value: false };
+    const { daemon, tmux } = await startDaemon({
+      adapters: makeAdapters({
+        claude: fakeAdapter('claude', {
+          resume: async (s) => {
+            entered.value = true;
+            await gate;
+            return resumeArgv(s);
+          },
+        }),
+      }),
+    });
+    await exitedSession(daemon, tmux);
+
+    const first = request({ cmd: 'resume', sessionId: 'claude-1' });
+    await until(() => entered.value, 'first resume in flight');
+    expect(
+      expectError(await request({ cmd: 'resume', sessionId: 'claude-1' })),
+    ).toMatch(/in flight/);
+    release();
+    expect(expectSession(await first).id).toBe('claude-2');
+  });
+
+  it('captured conversation ids survive a daemon restart', async () => {
+    const adapters = () =>
+      makeAdapters({
+        claude: fakeAdapter('claude', { resume: resumeArgv }),
+      });
+    const { daemon, tmux } = await startDaemon({ adapters: adapters() });
+    await newSession('claude', '/repo/a');
+    await hook('claude-1', { kind: 'ready', harnessSessionId: 'conv-1' });
+    await daemon.stop();
+
+    const second = await startDaemon({ tmux, adapters: adapters() });
+    tmux.closeWindow('@1');
+    await second.daemon.sweepOnce();
+    await second.daemon.sweepOnce();
+    const session = expectSession(
+      await request({ cmd: 'resume', sessionId: 'claude-1' }),
+    );
+    expect(session.harnessSessionId).toBe('conv-1');
+    expect(tmux.windows.get('@2')?.argv).toEqual([
+      'resume-bin',
+      'conv-1',
+      'claude-2',
+    ]);
+  });
+
+  it('exited sessions outlive the old 60s horizon and prune after the grace', async () => {
+    const { daemon, tmux } = await startDaemon();
+    await newSession('claude', '/repo/a');
+    tmux.closeWindow('@1');
+    await daemon.sweepOnce();
+    await daemon.sweepOnce();
+    expect(await status('claude-1')).toBe('exited');
+
+    clock.now += 61_000; // pre-feature grace — must no longer prune
+    await daemon.sweepOnce();
+    expect(await status('claude-1')).toBe('exited');
+
+    clock.now += EXITED_GRACE_MS;
+    await daemon.sweepOnce();
+    expect(find(await ls(), 'claude-1')).toBeUndefined();
   });
 });
 
@@ -600,7 +858,7 @@ describe('sweep', () => {
     expect(session?.attentionReason).toBe('window closed');
     expect((await ls()).queue).toEqual([]); // exited never queues
 
-    clock.now += 61_000;
+    clock.now += EXITED_GRACE_MS + 1_000;
     await daemon.sweepOnce();
     expect(find(await ls(), 'claude-1')).toBeUndefined();
   });

@@ -18,7 +18,7 @@ export function StatusBar({ daemon }: StatusBarProps) {
     >
       <text>
         <span attributes={DIM}>
-          n:new enter:open j/k:nav a:approve d:deny tab:focus q:quit
+          n:new enter:open j/k:nav a:approve d:deny r:resume tab:focus q:quit
         </span>
       </text>
       <text>

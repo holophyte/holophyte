@@ -58,6 +58,8 @@ export class Daemon {
   private readonly connections = new Set<net.Socket>();
   /** held permission connections, keyed by sessionId */
   private readonly holds = new Map<string, Hold>();
+  /** old-session ids with a resume spawn in flight — blocks double-resume */
+  private readonly resuming = new Set<string>();
   private sweepTimer: NodeJS.Timeout | null = null;
   private started = false;
   private stopping: Promise<void> | null = null;
@@ -339,6 +341,9 @@ export class Daemon {
       case 'new':
         await this.handleNew(socket, req);
         return;
+      case 'resume':
+        await this.handleResume(socket, req);
+        return;
       case 'next': {
         const queue = buildQueue(this.registry.all(), this.now());
         const top = queue[0];
@@ -441,6 +446,112 @@ export class Daemon {
     });
   }
 
+  /**
+   * Respawn an exited session's conversation: mint a fresh session carrying
+   * the old one's lineage, spawn via the adapter's resumeCommand, drop the
+   * old record on success. Mirrors handleNew's skeleton deliberately — a
+   * shared spawn helper is deferred until the sibling server.ts branch lands.
+   */
+  private async handleResume(
+    socket: net.Socket,
+    req: { sessionId: string },
+  ): Promise<void> {
+    const old = this.registry.get(req.sessionId);
+    if (!old) {
+      this.reply(socket, {
+        ok: false,
+        error: `unknown session: ${req.sessionId}`,
+      });
+      return;
+    }
+    if (old.status !== 'exited') {
+      this.reply(socket, {
+        ok: false,
+        error: `session not exited: ${req.sessionId}`,
+      });
+      return;
+    }
+    const adapter = this.opts.adapters[old.harness] as
+      | HarnessAdapter
+      | undefined;
+    if (!adapter?.resumeCommand) {
+      this.reply(socket, {
+        ok: false,
+        error: `harness cannot resume: ${old.harness}`,
+      });
+      return;
+    }
+    if (old.harnessSessionId === undefined) {
+      this.reply(socket, {
+        ok: false,
+        error: `no conversation id captured for ${req.sessionId}`,
+      });
+      return;
+    }
+    if (this.resuming.has(req.sessionId)) {
+      this.reply(socket, {
+        ok: false,
+        error: `resume already in flight: ${req.sessionId}`,
+      });
+      return;
+    }
+    // capture lineage before any await — a sweep could prune `old` mid-flight
+    const { harness, cwd, harnessSessionId, lastMessage } = old;
+    this.resuming.add(req.sessionId);
+    try {
+      if (!(await adapter.configured())) {
+        this.reply(socket, {
+          ok: false,
+          error: `harness not configured: ${harness}`,
+        });
+        return;
+      }
+      let session: Session | undefined;
+      let windowId: string;
+      try {
+        await this.opts.tmux.ensureSession(this.opts.tuiArgv, this.paneEnv);
+        session = this.registry.createSession(harness, cwd, this.now());
+        // adopted BEFORE spawning: if the resumed process dies at boot, the
+        // new session exits still carrying the conversation id — retryable
+        this.registry.adoptLineage(session.id, {
+          harnessSessionId,
+          lastMessage,
+        });
+        const argv = await adapter.resumeCommand(
+          this.registry.get(session.id) ?? session,
+        );
+        windowId = await this.opts.tmux.newWindow({
+          name: session.id,
+          cwd,
+          argv,
+          env: this.paneEnv,
+        });
+        this.registry.setTmuxWindow(session.id, windowId);
+      } catch (err) {
+        if (session) this.registry.remove(session.id); // old exited record untouched — retryable
+        this.persist(); // keep counters consistent on disk
+        this.broadcast();
+        this.reply(socket, { ok: false, error: String(err) });
+        return;
+      }
+      this.registry.remove(req.sessionId); // lineage adopted — drop the old record now
+      this.persist();
+      this.broadcast();
+      try {
+        await this.opts.tmux.selectWindow(windowId); // jump-on-spawn, same feel as handleNew
+      } catch {
+        // selection is cosmetic — the resumed session is live and tracked;
+        // rolling back here would orphan a process that's consuming the conversation
+      }
+      this.reply(socket, {
+        ok: true,
+        session: this.registry.get(session.id) ?? session,
+      });
+    } finally {
+      this.resuming.delete(req.sessionId);
+    }
+  }
+
   private handlePermission(
     socket: net.Socket,
     req: {
@@ -509,15 +620,9 @@ export class Daemon {
     this.reply(hold.socket, { ok: true, decision });
   }
 
-  /**
-   * Failed-spawn cleanup. The registry has no targeted remove, so mark the
-   * session exited and prune with zero grace. May also drop other
-   * already-exited sessions slightly early — harmless, they're terminal.
-   */
+  /** Failed-spawn cleanup — targeted removal of the half-created session. */
   private removeSession(id: string): void {
-    const ts = this.now();
-    this.registry.applyEvent(id, { kind: 'exit', reason: 'spawn failed' }, ts);
-    this.registry.pruneExited(ts + 1, 0);
+    this.registry.remove(id);
   }
 
   private snapshot(): StateSnapshot {
