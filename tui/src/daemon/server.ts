@@ -27,6 +27,7 @@ import type {
 import { SessionRegistry } from './registry';
 import { buildQueue } from './scoring';
 import { loadStateFile, saveStateFile } from './state-file';
+import { renderStatusLine, STATUS_STOPPED_LINE } from './status-line';
 
 export interface DaemonOptions {
   tmux: Tmux;
@@ -47,6 +48,9 @@ interface Hold {
   timer: NodeJS.Timeout;
 }
 
+/** longest stop() waits for the tombstone status write before giving up */
+const TOMBSTONE_DEADLINE_MS = 1000;
+
 export class Daemon {
   private registry = new SessionRegistry();
   private server: net.Server | null = null;
@@ -63,6 +67,10 @@ export class Daemon {
   private harnesses: HarnessInfo[];
   /** queue of the last push — aging changes scores with time, not events */
   private lastBroadcastQueue: QueueItem[] | null = null;
+  /** rendered line of the last push — dedupe, cleared each sweep so the line is re-asserted */
+  private lastStatusLine: string | null = null;
+  /** serializes set-option calls so rapid broadcasts can't land out of order */
+  private statusChain: Promise<void> = Promise.resolve();
   /** window ids missing on the previous sweep — two consecutive misses terminate */
   private missingWindows = new Set<string>();
   private readonly now: () => number;
@@ -181,8 +189,8 @@ export class Daemon {
     if (server) {
       await new Promise<void>((resolve) => server.close(() => resolve()));
     }
-    // when another daemon took over, the socket path and state.json are ITS
-    // now — persisting or unlinking here would clobber the live daemon
+    // when another daemon took over, the socket path, state.json, and the
+    // status line are ITS now — touching them here would clobber the live daemon
     if (!this.takenOver) {
       this.persist();
       try {
@@ -190,6 +198,20 @@ export class Daemon {
       } catch {
         // already gone (node unlinks unix sockets on server close)
       }
+      // honest tombstone — counts are no longer live. Routed through the chain
+      // so a content write queued before it can't land after it (writes queued
+      // later are blocked by pushStatusLine's stopping guard); awaited because
+      // main.ts calls process.exit right after stop() resolves — but raced
+      // against a deadline so a wedged tmux can't hold shutdown hostage.
+      this.statusChain = this.statusChain
+        .then(() => this.opts.tmux.setStatusRight(STATUS_STOPPED_LINE))
+        .catch(() => {});
+      await Promise.race([
+        this.statusChain,
+        new Promise<void>((resolve) => {
+          setTimeout(resolve, TOMBSTONE_DEADLINE_MS).unref();
+        }),
+      ]);
     }
   }
 
@@ -202,6 +224,10 @@ export class Daemon {
       await this.stop();
       return;
     }
+    // session options die with the tmux session and set-option against a
+    // missing session is a silent no-op — re-assert once per sweep so a
+    // recreated or externally clobbered holo session heals within one tick
+    this.lastStatusLine = null;
     const liveIds = await this.opts.tmux.listWindowIds();
     // Two-strike termination: one bad list-windows sample must not destroy
     // session tracking, so a first-time-missing window still counts as live.
@@ -228,6 +254,9 @@ export class Daemon {
     } else if (harnessesChanged || this.queueChanged()) {
       // aging bonus / configured-ness move with time, not with events
       this.broadcast();
+    } else {
+      const snap = this.snapshot();
+      this.pushStatusLine(renderStatusLine(snap.sessions, snap.queue));
     }
   }
 
@@ -512,6 +541,29 @@ export class Daemon {
         subscriber.destroy();
       }
     }
+    this.pushStatusLine(renderStatusLine(push.sessions, push.queue));
+  }
+
+  /**
+   * Dedupe latch: a failed write un-latches so the next state change retries
+   * immediately; the per-sweep re-assert stays the backstop. The catch keeps
+   * the chain resolved and the daemon alive through any tmux failure.
+   */
+  private pushStatusLine(line: string): void {
+    // a continuation resuming after stop() began (in-flight sweep, spawn)
+    // must not chain a live-content write onto the tombstone — doStop writes
+    // the tombstone through the chain directly, so this blocks only content
+    if (this.stopping) return;
+    if (line === this.lastStatusLine) return;
+    this.lastStatusLine = line;
+    this.statusChain = this.statusChain
+      .then(() => this.opts.tmux.setStatusRight(line))
+      .catch((err) => {
+        // a failed write must not claim success — un-latch so the next
+        // broadcast retries before the sweep gets to it
+        this.lastStatusLine = null;
+        console.error('holod status line update failed:', err);
+      });
   }
 
   private persist(): void {

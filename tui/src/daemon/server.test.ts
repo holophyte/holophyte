@@ -28,6 +28,7 @@ import type {
   StateSnapshot,
 } from '../types';
 import { Daemon, type DaemonOptions } from './server';
+import { STATUS_STOPPED_LINE } from './status-line';
 
 const HARNESSES: HarnessInfo[] = [
   { id: 'claude', configured: true },
@@ -719,5 +720,219 @@ describe('restart persistence', () => {
     expect(state.recentCwds).toEqual(['/repo/a']);
     const session = expectSession(await newSession('claude', '/repo/b'));
     expect(session.id).toBe('claude-2'); // counter never reused
+  });
+});
+
+describe('status line', () => {
+  const NO_SESSIONS_LINE =
+    '#[fg=#4EA876,bold]holo#[default] #[dim]no sessions#[default]';
+
+  function statusCalls(tmux: FakeTmux) {
+    return tmux.calls.filter((call) => call.method === 'setStatusRight');
+  }
+
+  it('asserts the line on daemon start', async () => {
+    const { tmux } = await startDaemon();
+    await until(() => tmux.statusRight !== null, 'initial status line');
+    expect(tmux.statusRight).toBe(NO_SESSIONS_LINE);
+  });
+
+  it('updates on spawn with the top queue item', async () => {
+    const { tmux } = await startDaemon();
+    await newSession();
+    await until(
+      () => tmux.statusRight?.includes('1 idle') === true,
+      'spawn status line',
+    );
+    expect(tmux.statusRight).toContain('claude-1');
+    expect(tmux.statusRight).toContain('starting…');
+  });
+
+  it('shows permission counts, then releases back to running', async () => {
+    const { tmux } = await startDaemon();
+    await newSession();
+    await hook('claude-1', { kind: 'prompt' });
+    clock.now += 10;
+    const held = request(
+      {
+        cmd: 'permission',
+        sessionId: 'claude-1',
+        tool: 'Bash',
+        input: null,
+        timeoutMs: 5000,
+        ts: clock.now,
+      },
+      { timeoutMs: 4000 },
+    );
+    await until(async () => (await status('claude-1')) === 'permission');
+    await until(
+      () => tmux.statusRight?.includes('1 perm') === true,
+      'permission status line',
+    );
+    expect(tmux.statusRight).toContain('#[fg=yellow,bold]1 perm#[default]');
+    expect(tmux.statusRight).toContain('approve: Bash');
+
+    await request({
+      cmd: 'respondPermission',
+      sessionId: 'claude-1',
+      allow: true,
+    });
+    expect(await held).toEqual({ ok: true, decision: 'allow' });
+    await until(
+      () =>
+        tmux.statusRight?.includes('1 run') === true &&
+        tmux.statusRight.includes('nothing needs you'),
+      'released status line',
+    );
+  });
+
+  it('dedupes byte-identical renders between sweeps', async () => {
+    const { tmux } = await startDaemon();
+    await newSession();
+    await hook('claude-1', { kind: 'prompt' });
+    await hook('claude-1', { kind: 'stop', lastMessage: 'a' });
+    await until(
+      () => tmux.statusRight?.includes('review / next prompt') === true,
+      'idle status line',
+    );
+    const count = statusCalls(tmux).length;
+    // lastMessage changes → registry change + broadcast, render identical
+    await hook('claude-1', { kind: 'stop', lastMessage: 'b' });
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(statusCalls(tmux).length).toBe(count);
+  });
+
+  it('re-asserts the identical line once per sweep', async () => {
+    const { daemon, tmux } = await startDaemon();
+    await newSession();
+    await until(
+      () => tmux.statusRight?.includes('claude-1') === true,
+      'spawn status line',
+    );
+    const before = statusCalls(tmux);
+    const last = before[before.length - 1];
+    await daemon.sweepOnce();
+    await until(
+      () => statusCalls(tmux).length === before.length + 1,
+      're-assert call',
+    );
+    expect(statusCalls(tmux)[before.length]).toEqual(last);
+  });
+
+  it('keeps serving when setStatusRight rejects and heals on the next sweep', async () => {
+    const { daemon, tmux } = await startDaemon();
+    await newSession();
+    await until(
+      () => tmux.statusRight?.includes('claude-1') === true,
+      'spawn status line',
+    );
+    const orig = tmux.setStatusRight.bind(tmux);
+    tmux.setStatusRight = async () => {
+      throw new Error('boom');
+    };
+    expect(await hook('claude-1', { kind: 'prompt' })).toEqual({ ok: true });
+    await daemon.sweepOnce();
+    expect(await request({ cmd: 'ping' })).toEqual({ ok: true });
+    expect(tmux.statusRight).toContain('starting…'); // stale while tmux is down
+
+    tmux.setStatusRight = orig;
+    await daemon.sweepOnce();
+    await until(
+      () => tmux.statusRight?.includes('1 run') === true,
+      'healed status line',
+    );
+  });
+
+  it('writes the stopped tombstone on graceful stop', async () => {
+    const { daemon, tmux } = await startDaemon();
+    await until(() => tmux.statusRight !== null, 'initial status line');
+    await daemon.stop();
+    expect(tmux.statusRight).toBe(STATUS_STOPPED_LINE);
+  });
+
+  it('a spawn resuming after stop() cannot overwrite the tombstone', async () => {
+    const { daemon, tmux } = await startDaemon();
+    // hold the spawn mid-flight so its broadcast resumes after stop()
+    let release = () => {};
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const origNewWindow = tmux.newWindow.bind(tmux);
+    tmux.newWindow = async (opts) => {
+      const id = await origNewWindow(opts);
+      await gate;
+      return id;
+    };
+    const pending = newSession().catch(() => {}); // stop() drops the connection
+    await until(() => tmux.windows.size === 1, 'window creation');
+    await daemon.stop();
+    expect(tmux.statusRight).toBe(STATUS_STOPPED_LINE);
+
+    release(); // the spawn's persist/broadcast now runs after the tombstone
+    await pending;
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(tmux.statusRight).toBe(STATUS_STOPPED_LINE);
+  });
+
+  it('stop() resolves even when the tombstone write hangs', async () => {
+    const { daemon, tmux } = await startDaemon();
+    // wedged tmux: the write never settles — the deadline must unblock stop()
+    tmux.setStatusRight = () => new Promise<void>(() => {});
+    await daemon.stop();
+  });
+
+  it('a failed write un-latches so the next broadcast retries before the sweep', async () => {
+    const { tmux } = await startDaemon();
+    await newSession('claude', '/repo/a');
+    await newSession('claude', '/repo/b');
+    await hook('claude-1', { kind: 'prompt' });
+    clock.now += 10;
+    await hook('claude-1', { kind: 'stop', lastMessage: 'x' });
+    clock.now += 10;
+    await hook('claude-2', { kind: 'prompt' });
+    clock.now += 10;
+    await until(
+      () => tmux.statusRight?.includes('1 run 1 idle') === true,
+      'mixed status line',
+    );
+    // next write fails at the spawn level (tmux could not be asked)
+    const original = tmux.setStatusRight.bind(tmux);
+    tmux.setStatusRight = async () => {
+      tmux.setStatusRight = original;
+      throw new Error('boom');
+    };
+    await hook('claude-2', { kind: 'stop', lastMessage: 'a' }); // "2 idle" render fails
+    await until(
+      () => tmux.setStatusRight === original,
+      'failed write attempted',
+    );
+    clock.now += 10;
+    // byte-identical render (only lastMessage changed) must retry, not dedupe
+    await hook('claude-2', { kind: 'stop', lastMessage: 'b' });
+    await until(
+      () => tmux.statusRight?.includes('2 idle') === true,
+      'retried status line',
+    );
+  });
+
+  it("never touches the new owner's line after a takeover", async () => {
+    const { daemon, tmux } = await startDaemon();
+    await newSession();
+    await until(
+      () => tmux.statusRight?.includes('claude-1') === true,
+      'spawn status line',
+    );
+    const before = tmux.statusRight;
+    unlinkSync(socketPath()); // another daemon took the path over
+    writeFileSync(statePath(), '{"sessions":[],"counters":{},"recentCwds":[]}');
+    await daemon.sweepOnce();
+    await expect(
+      request({ cmd: 'ping' }, { timeoutMs: 250 }),
+    ).rejects.toThrow();
+    expect(tmux.statusRight).toBe(before);
+    expect(tmux.calls).not.toContainEqual({
+      method: 'setStatusRight',
+      args: [STATUS_STOPPED_LINE],
+    });
   });
 });

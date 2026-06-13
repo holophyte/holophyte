@@ -72,6 +72,13 @@ export interface Tmux {
   /** window ids in the holo session; [] when the session is gone; rejects when tmux could not be asked */
   listWindowIds(): Promise<string[]>;
   /**
+   * Session-scoped status line (status-right + status-right-length 80),
+   * owned by holod. Resolves even on non-zero tmux exit (session doesn't
+   * exist yet — nothing to update; the daemon's sweep re-asserts once it
+   * does); rejects only when tmux could not be asked at all.
+   */
+  setStatusRight(text: string): Promise<void>;
+  /**
    * prefix+<key> (default Space, HOLO_RETURN_KEY overrides) → jump back to
    * the TUI window. tmux bindings are server-global — they cannot be scoped
    * to one session, so this is a documented deviation from the spec's
@@ -186,6 +193,27 @@ export class RealTmux implements Tmux {
       .filter((line) => line !== '');
   }
 
+  async setStatusRight(text: string): Promise<void> {
+    // one invocation, two commands — the lone ';' is tmux's command separator
+    // (execFile, no shell, passed literally). Re-sending the length on every
+    // call makes a recreated session self-heal past tmux's 40-col default
+    // status-right-length, which silently truncates. Non-zero exit is ignored
+    // (session gone is normal); spawn-level rejections propagate.
+    await this.run([
+      'set-option',
+      '-t',
+      this.sessionName,
+      'status-right-length',
+      '80',
+      ';',
+      'set-option',
+      '-t',
+      this.sessionName,
+      'status-right',
+      text,
+    ]);
+  }
+
   async installReturnBinding(): Promise<void> {
     await this.run([
       'bind-key',
@@ -209,6 +237,7 @@ export class FakeTmux implements Tmux {
   readonly windows = new Map<string, FakeWindow>();
   readonly calls: Array<{ method: string; args: unknown[] }> = [];
   selected: string | null = null;
+  statusRight: string | null = null;
   /** models the dedicated "tui" window apart from agent windows so agent window ids stay stable */
   tuiWindow: { argv: string[]; env?: Record<string, string> } | null = null;
   private created = false;
@@ -257,6 +286,11 @@ export class FakeTmux implements Tmux {
 
   async listWindowIds(): Promise<string[]> {
     return [...this.windows.keys()];
+  }
+
+  async setStatusRight(text: string): Promise<void> {
+    this.calls.push({ method: 'setStatusRight', args: [text] });
+    this.statusRight = text;
   }
 
   async installReturnBinding(): Promise<void> {

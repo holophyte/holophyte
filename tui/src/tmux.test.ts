@@ -338,6 +338,58 @@ describe('RealTmux', () => {
     });
   });
 
+  describe('setStatusRight', () => {
+    it('sets status-right-length and status-right in one invocation', async () => {
+      const { runner, calls } = fakeRunner([{}]);
+      const tmux = new RealTmux(runner, 'holo');
+      await tmux.setStatusRight('#[dim]x#[default]');
+      expect(calls).toEqual([
+        [
+          'set-option',
+          '-t',
+          'holo',
+          'status-right-length',
+          '80',
+          ';',
+          'set-option',
+          '-t',
+          'holo',
+          'status-right',
+          '#[dim]x#[default]',
+        ],
+      ]);
+    });
+
+    it('uses the configured session name', async () => {
+      const { runner, calls } = fakeRunner([{}]);
+      const tmux = new RealTmux(runner, 'custom');
+      await tmux.setStatusRight('x');
+      expect(calls).toEqual([
+        [
+          'set-option',
+          '-t',
+          'custom',
+          'status-right-length',
+          '80',
+          ';',
+          'set-option',
+          '-t',
+          'custom',
+          'status-right',
+          'x',
+        ],
+      ]);
+    });
+
+    it('resolves on non-zero exit (session gone is normal)', async () => {
+      const { runner } = fakeRunner([
+        { status: 1, stderr: 'session not found' },
+      ]);
+      const tmux = new RealTmux(runner, 'holo');
+      await expect(tmux.setStatusRight('x')).resolves.toBeUndefined();
+    });
+  });
+
   describe('installReturnBinding', () => {
     it('binds prefix+Space to select the tui window', async () => {
       const { runner, calls } = fakeRunner([{}]);
@@ -422,6 +474,14 @@ describe('FakeTmux', () => {
     const tmux = new FakeTmux();
     await tmux.installReturnBinding();
     expect(tmux.calls).toEqual([{ method: 'installReturnBinding', args: [] }]);
+  });
+
+  it('setStatusRight records the call and stores the text', async () => {
+    const tmux = new FakeTmux();
+    expect(tmux.statusRight).toBeNull();
+    await tmux.setStatusRight('text');
+    expect(tmux.statusRight).toBe('text');
+    expect(tmux.calls).toEqual([{ method: 'setStatusRight', args: ['text'] }]);
   });
 
   it('round-trips newWindow → listWindowIds → closeWindow → listWindowIds', async () => {

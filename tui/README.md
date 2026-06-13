@@ -46,6 +46,11 @@ holo (CLI)
   (codex has no end hook; the sweep also covers hard kills).
 - **Queue scoring**: permission 100, needs_input 60, error 50, idle 30, plus
   +2/min waiting (capped +40). Quick wins first; no panic UI.
+- **Ambient status line**: holod owns the holo tmux session's `status-right`
+  (session-scoped — your global tmux config is untouched), so attention counts
+  and the top queue item are visible in every agent window. It's pushed on
+  every state change, re-asserted each 5s sweep (heals a recreated session),
+  and reset to "holod stopped" on graceful daemon stop.
 - **Empty board = splash**: with zero sessions the main pane shows the
   holophyte sprout splash, and on first connect to an empty board the
   new-session picker opens automatically — `esc` dismisses it and it will not
