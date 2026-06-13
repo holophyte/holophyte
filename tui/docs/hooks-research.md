@@ -130,6 +130,15 @@ does and more, so holo leaves `notify` alone entirely.
 
 - No `--session-id` equivalent — codex generates a UUIDv7; capture it from
   the `SessionStart` hook payload (`session_id`) if needed for `codex resume`.
+- **`codex resume` flag placement (verified 2026-06-12, codex 0.139.0)**:
+  `-C`, `-c`, and `--dangerously-bypass-hook-trust` are global args — they
+  appear in both `codex --help` and `codex resume --help`, and BOTH orders
+  parse (`codex -C <dir> -c <kv> --dangerously-bypass-hook-trust resume <id>`
+  and `codex resume -C <dir> ... <id>`; parse-checked via trailing `--help`).
+  holo uses the globals-before-subcommand form:
+  `codex <hook flags> resume <session_id>`. Live hook firing on a resumed
+  session not yet verified — if codex ignores `-c hooks.*` on `resume`, the
+  resumed session loses hooks (sweep still tracks exit).
 - `-C <dir>` sets the working root; appears as `cwd` in every hook payload.
 - The TUI process stays alive between turns: one process = one session.
   Process/window exit = session end.
