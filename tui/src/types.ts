@@ -29,6 +29,13 @@ export interface Session {
   cwd: string;
   /** tmux window id (e.g. "@3") — stable across window renames/reorders */
   tmuxWindow: string;
+  /**
+   * tmux pane id of the agent's pane (e.g. "%5") — jump/next focus target when
+   * a sidebar pane exists. Liveness keys on tmuxWindow ONLY: the pane-died trap
+   * makes the window die with the agent. Absent on sessions persisted by
+   * pre-sidebar daemons and on sidebar-less spawns.
+   */
+  agentPane?: string;
   status: SessionStatus;
   /** "Approve database migration", "Clarify naming convention", ... */
   attentionReason?: string;

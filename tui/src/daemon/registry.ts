@@ -87,9 +87,11 @@ export class SessionRegistry {
     return session;
   }
 
-  setTmuxWindow(id: string, windowId: string): void {
+  setTmuxWindow(id: string, windowId: string, agentPane?: string): void {
     const session = this.sessions.get(id);
-    if (session) session.tmuxWindow = windowId;
+    if (!session) return;
+    session.tmuxWindow = windowId;
+    if (agentPane !== undefined) session.agentPane = agentPane;
   }
 
   get(id: string): Session | undefined {

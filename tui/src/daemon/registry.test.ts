@@ -98,6 +98,14 @@ describe('get / all / setTmuxWindow', () => {
     expect(registry.get(session.id)?.tmuxWindow).toBe('@7');
     expect(() => registry.setTmuxWindow('nope', '@9')).not.toThrow();
   });
+
+  it('setTmuxWindow sets agentPane when given, leaves it undefined otherwise', () => {
+    const { registry, session } = setup();
+    registry.setTmuxWindow(session.id, '@1');
+    expect(registry.get(session.id)?.agentPane).toBeUndefined();
+    registry.setTmuxWindow(session.id, '@1', '%1');
+    expect(registry.get(session.id)?.agentPane).toBe('%1');
+  });
 });
 
 describe('applyEvent transitions', () => {
@@ -565,6 +573,14 @@ describe('fromJSON / toJSON', () => {
     expect(restored.toJSON()).toEqual(registry.toJSON());
     expect(restored.get('claude-1')?.status).toBe('running');
     expect(restored.recentCwds()).toEqual(['/b', '/a']);
+  });
+
+  it('round-trips agentPane', () => {
+    const registry = new SessionRegistry();
+    const a = registry.createSession('claude', '/a', T0);
+    registry.setTmuxWindow(a.id, '@1', '%1');
+    const restored = SessionRegistry.fromJSON(registry.toJSON());
+    expect(restored.get('claude-1')?.agentPane).toBe('%1');
   });
 
   it('continues id numbering after a restore', () => {
