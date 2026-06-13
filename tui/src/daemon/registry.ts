@@ -14,9 +14,14 @@ export interface RegistryJSON {
   counters: Record<string, number>;
   /** most-recent-first spawn targets, deduped, capped */
   recentCwds: string[];
+  /** state-file schema version; absent ⇒ pre-v1 (see fromJSON migration) */
+  version?: number;
 }
 
 const MAX_RECENT_CWDS = 10;
+
+/** current state-file schema version, written by toJSON */
+export const STATE_VERSION = 1;
 
 /** exited sessions stay resumable for this long before the sweep prunes them */
 export const EXITED_GRACE_MS = 30 * 60_000;
@@ -38,8 +43,17 @@ export class SessionRegistry {
 
   static fromJSON(data: RegistryJSON): SessionRegistry {
     const registry = new SessionRegistry();
+    // Pre-v1 state files minted a random UUID as harnessSessionId for EVERY
+    // harness, but codex never received it (it has no --session-id), so that id
+    // is bogus and would make `codex resume` fail. Drop it on load — a live
+    // codex session recaptures its real id from the next SessionStart hook.
+    // claude's pre-v1 id WAS its real --session-id, so it stays resumable.
+    const legacy = (data.version ?? 0) < 1;
     for (const persisted of data.sessions) {
       const session: Session = { ...persisted };
+      if (legacy && session.harness === 'codex') {
+        session.harnessSessionId = undefined;
+      }
       if (session.tmuxWindow === '') {
         // Half-created sessions don't survive a daemon restart — no spawn
         // can be in flight at restore time, and reconcile() never sweeps an
@@ -62,6 +76,7 @@ export class SessionRegistry {
 
   toJSON(): RegistryJSON {
     return {
+      version: STATE_VERSION,
       sessions: this.all().map((session) => ({ ...session })),
       counters: { ...this.counters },
       recentCwds: [...this.cwds],

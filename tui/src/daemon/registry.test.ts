@@ -637,6 +637,65 @@ describe('fromJSON / toJSON', () => {
     };
     expect(SessionRegistry.fromJSON(data).recentCwds()).toHaveLength(10);
   });
+
+  it('drops bogus codex ids from pre-v1 state but keeps claude ids', () => {
+    // pre-v1 files have no version and minted a random UUID for every harness;
+    // codex never received it (no --session-id) so resuming on it would fail.
+    const data: RegistryJSON = {
+      sessions: [
+        {
+          id: 'codex-1',
+          harness: 'codex',
+          cwd: '/a',
+          tmuxWindow: '@1',
+          status: 'exited',
+          createdAt: T0,
+          statusSince: T0,
+          harnessSessionId: 'bogus-pre-v1-uuid',
+        },
+        {
+          id: 'claude-1',
+          harness: 'claude',
+          cwd: '/b',
+          tmuxWindow: '@2',
+          status: 'exited',
+          createdAt: T0,
+          statusSince: T0,
+          harnessSessionId: 'real-claude-session-id',
+        },
+      ],
+      counters: { codex: 1, claude: 1 },
+      recentCwds: [],
+    };
+    const restored = SessionRegistry.fromJSON(data);
+    expect(restored.get('codex-1')?.harnessSessionId).toBeUndefined();
+    expect(restored.get('claude-1')?.harnessSessionId).toBe(
+      'real-claude-session-id',
+    );
+  });
+
+  it('keeps codex ids from v1 state (already hook-captured)', () => {
+    const data: RegistryJSON = {
+      version: 1,
+      sessions: [
+        {
+          id: 'codex-1',
+          harness: 'codex',
+          cwd: '/a',
+          tmuxWindow: '@1',
+          status: 'exited',
+          createdAt: T0,
+          statusSince: T0,
+          harnessSessionId: 'captured-codex-id',
+        },
+      ],
+      counters: { codex: 1 },
+      recentCwds: [],
+    };
+    expect(
+      SessionRegistry.fromJSON(data).get('codex-1')?.harnessSessionId,
+    ).toBe('captured-codex-id');
+  });
 });
 
 describe('reconcile', () => {

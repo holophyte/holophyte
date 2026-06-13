@@ -8,7 +8,7 @@ import {
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { Session } from '../types';
-import type { RegistryJSON } from './registry';
+import { type RegistryJSON, STATE_VERSION } from './registry';
 import { loadStateFile, saveStateFile } from './state-file';
 
 let dir: string;
@@ -35,6 +35,7 @@ function sampleData(): RegistryJSON {
     harnessSessionId: 'b9a5e1c0-0000-4000-8000-000000000000',
   };
   return {
+    version: STATE_VERSION,
     sessions: [session],
     counters: { claude: 1 },
     recentCwds: ['/repo/a'],
@@ -64,6 +65,7 @@ describe('loadStateFile', () => {
     const path = join(dir, 'state.json');
     writeFileSync(path, '{}');
     expect(loadStateFile(path)).toEqual({
+      version: 0,
       sessions: [],
       counters: {},
       recentCwds: [],
@@ -81,6 +83,7 @@ describe('loadStateFile', () => {
       }),
     );
     expect(loadStateFile(path)).toEqual({
+      version: 0,
       sessions: [],
       counters: {},
       recentCwds: [],
@@ -91,6 +94,7 @@ describe('loadStateFile', () => {
     const path = join(dir, 'state.json');
     writeFileSync(path, JSON.stringify({ counters: { claude: 3 } }));
     expect(loadStateFile(path)).toEqual({
+      version: 0,
       sessions: [],
       counters: { claude: 3 },
       recentCwds: [],
@@ -125,6 +129,7 @@ describe('saveStateFile', () => {
     const path = join(dir, 'state.json');
     saveStateFile(path, sampleData());
     const updated: RegistryJSON = {
+      version: STATE_VERSION,
       sessions: [],
       counters: { claude: 9 },
       recentCwds: [],
