@@ -31,7 +31,7 @@ import type { HarnessId, Session, StateSnapshot } from './types';
  * - error         → error
  */
 export type SessionEvent =
-  | { kind: 'ready' }
+  | { kind: 'ready'; harnessSessionId?: string }
   | { kind: 'prompt' }
   | { kind: 'tool' }
   | { kind: 'question'; text: string }
@@ -58,6 +58,8 @@ export type Request =
   | { cmd: 'next' }
   /** jump to a specific session's tmux window */
   | { cmd: 'jump'; sessionId: string }
+  /** respawn an exited session's conversation in a fresh window — mints a new session, drops the old record */
+  | { cmd: 'resume'; sessionId: string }
   | { cmd: 'respondPermission'; sessionId: string; allow: boolean }
   | { cmd: 'subscribe' }
   | { cmd: 'ping' }
