@@ -62,7 +62,10 @@ holo (CLI)
   included — still dies the moment the agent process exits; holod's liveness
   sweep is unchanged. The sidebar is skipped when the window is narrower than
   111 cols (it needs 80 for the agent + 1 separator + 30) or when
-  `HOLO_SIDEBAR=0` is set on the daemon's environment.
+  `HOLO_SIDEBAR=0` is set on the daemon's environment. The width is read at
+  spawn time, so a session started while a wide-terminal client is attached
+  (the usual `n`-in-the-TUI path) gets a sidebar; one spawned via `holo new`
+  against a still-detached session sees tmux's 80-col default and is skipped.
 
 ## TUI keys (window 0 only — zero key capture inside agent windows)
 
