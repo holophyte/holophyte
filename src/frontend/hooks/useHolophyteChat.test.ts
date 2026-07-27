@@ -66,12 +66,15 @@ describe('useHolophyteChat — status mapping', () => {
     ['running', 'streaming'],
     ['waiting_input', 'streaming'],
     ['failed', 'error'],
-  ] as const)('maps sessionStatus %s → status %s', (sessionStatus, expected) => {
-    const { result } = renderHook(() =>
-      useHolophyteChat(makeProps({ sessionStatus })),
-    );
-    expect(result.current.status).toBe(expected);
-  });
+  ] as const)(
+    'maps sessionStatus %s → status %s',
+    (sessionStatus, expected) => {
+      const { result } = renderHook(() =>
+        useHolophyteChat(makeProps({ sessionStatus })),
+      );
+      expect(result.current.status).toBe(expected);
+    },
+  );
 });
 
 // ---------------------------------------------------------------------------
