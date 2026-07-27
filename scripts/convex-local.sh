@@ -92,7 +92,7 @@ else
 fi
 
 # After the Convex backend is up, set INTERNAL_API_SECRET on it in the background.
-# This runs concurrently with `convex dev --local` (which blocks in the foreground).
+# This runs concurrently with `convex dev` (which blocks in the foreground).
 set_convex_secret() {
   for i in $(seq 1 30); do
     if curl -sf "http://127.0.0.1:$CONVEX_CLOUD_PORT" >/dev/null 2>&1; then
@@ -140,7 +140,7 @@ if [ "$NEEDS_RECONFIGURE" = true ]; then
   fi
 else
   echo "Starting local Convex (cloud=$CONVEX_CLOUD_PORT, site=$CONVEX_SITE_PORT)..."
-  bunx convex dev --local \
+  bunx convex dev \
     --local-cloud-port "$CONVEX_CLOUD_PORT" \
     --local-site-port "$CONVEX_SITE_PORT"
 fi

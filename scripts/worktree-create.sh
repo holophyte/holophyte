@@ -178,7 +178,7 @@ fi
 # `convex dev --once` exits after deploying, but `convex env set` needs a
 # running backend. Start one in the background, set env vars, then stop it.
 echo "Starting local Convex for environment setup..."
-cd "$WORKTREE_PATH" && "$BUN_BIN" x convex dev --local \
+cd "$WORKTREE_PATH" && "$BUN_BIN" x convex dev \
   --local-cloud-port "$CONVEX_CLOUD_PORT" \
   --local-site-port "$CONVEX_SITE_PORT" &
 CONVEX_BG_PID=$!

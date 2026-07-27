@@ -128,7 +128,7 @@ if curl -sf "http://127.0.0.1:$CONVEX_CLOUD_PORT" >/dev/null 2>&1; then
   info "Convex backend already running on port $CONVEX_CLOUD_PORT"
 else
   echo "Starting temporary Convex backend for env var setup..."
-  cd "$REPO_ROOT" && bunx convex dev --local \
+  cd "$REPO_ROOT" && bunx convex dev \
     --local-cloud-port "$CONVEX_CLOUD_PORT" \
     --local-site-port "$CONVEX_SITE_PORT" &
   CONVEX_BG_PID=$!

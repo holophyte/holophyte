@@ -130,14 +130,16 @@ start_e2e_convex() {
   rm -f "$ENV_LOCAL"
 
   # Provision local backend and deploy functions synchronously
-  cd "$REPO_ROOT" && bunx convex dev --local \
+  # (--configure new --dev-deployment local replaces the removed --local flag, convex 1.40+)
+  cd "$REPO_ROOT" && bunx convex dev --configure new \
+    --dev-deployment local \
     --local-cloud-port "$cloud_port" \
     --local-site-port "$site_port" \
     --codegen disable \
     --once
 
   # Start background Convex (reads .env.local for deployment config)
-  cd "$REPO_ROOT" && bunx convex dev --local \
+  cd "$REPO_ROOT" && bunx convex dev \
     --local-cloud-port "$cloud_port" \
     --local-site-port "$site_port" \
     --codegen disable &
