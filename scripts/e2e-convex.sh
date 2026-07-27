@@ -122,18 +122,21 @@ start_e2e_convex() {
   # Enable anonymous local development — skips login prompts in CI.
   export CONVEX_AGENT_MODE=anonymous
 
-  # Back up .env.local and pre-write a fresh anonymous local config.
+  # Back up .env.local and clear it plus CONVEX_DEPLOYMENT.
+  # Convex 1.42+ anonymous path (per CLI tip): "clear CONVEX_DEPLOYMENT to try
+  # without creating an account." Both --configure new and a pre-written
+  # CONVEX_DEPLOYMENT=local:* trigger the Device name auth prompt; neither
+  # CONVEX_AGENT_MODE=anonymous nor pre-writing .env.local suppresses it.
+  # With CONVEX_DEPLOYMENT unset and no --configure, convex dev auto-provisions
+  # a fresh anonymous local backend without any authentication.
   if [ -f "$ENV_LOCAL" ]; then
     cp "$ENV_LOCAL" "$ENV_BACKUP"
   fi
-  # Pre-write .env.local with a unique local deployment name so convex dev
-  # doesn't need --configure (which prompts for "Device name" in convex 1.42+
-  # even when CONVEX_AGENT_MODE=anonymous is set). Each run gets a timestamped
-  # name to ensure a fresh database.
-  printf 'CONVEX_DEPLOYMENT=local:e2e-%s\nCONVEX_URL=http://127.0.0.1:%s\n' "$(date +%s)" "$cloud_port" > "$ENV_LOCAL"
+  rm -f "$ENV_LOCAL"
+  unset CONVEX_DEPLOYMENT
 
-  # Deploy functions synchronously — no --configure needed since .env.local
-  # already specifies the local deployment.
+  # Deploy functions synchronously in anonymous mode (no --configure, no
+  # CONVEX_DEPLOYMENT — convex dev auto-creates an anonymous local deployment).
   cd "$REPO_ROOT" && bunx convex dev \
     --local-cloud-port "$cloud_port" \
     --local-site-port "$site_port" \
