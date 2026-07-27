@@ -122,17 +122,19 @@ start_e2e_convex() {
   # Enable anonymous local development — skips login prompts in CI.
   export CONVEX_AGENT_MODE=anonymous
 
-  # Back up .env.local and clear it so the CLI provisions a fresh
-  # anonymous local backend.
+  # Back up .env.local and pre-write a fresh anonymous local config.
   if [ -f "$ENV_LOCAL" ]; then
     cp "$ENV_LOCAL" "$ENV_BACKUP"
   fi
-  rm -f "$ENV_LOCAL"
+  # Pre-write .env.local with a unique local deployment name so convex dev
+  # doesn't need --configure (which prompts for "Device name" in convex 1.42+
+  # even when CONVEX_AGENT_MODE=anonymous is set). Each run gets a timestamped
+  # name to ensure a fresh database.
+  printf 'CONVEX_DEPLOYMENT=local:e2e-%s\nCONVEX_URL=http://127.0.0.1:%s\n' "$(date +%s)" "$cloud_port" > "$ENV_LOCAL"
 
-  # Provision local backend and deploy functions synchronously
-  # (--configure new --dev-deployment local replaces the removed --local flag, convex 1.40+)
-  cd "$REPO_ROOT" && bunx convex dev --configure new \
-    --dev-deployment local \
+  # Deploy functions synchronously — no --configure needed since .env.local
+  # already specifies the local deployment.
+  cd "$REPO_ROOT" && bunx convex dev \
     --local-cloud-port "$cloud_port" \
     --local-site-port "$site_port" \
     --codegen disable \
