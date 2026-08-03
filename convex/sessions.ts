@@ -546,7 +546,7 @@ export const claimQueued = internalMutation({
   args: { id: v.id('sessions') },
   handler: async (ctx, args) => {
     const session = await ctx.db.get(args.id);
-    if (!session || session.status !== 'queued') return { ok: false };
+    if (session?.status !== 'queued') return { ok: false };
     await ctx.db.patch(args.id, {
       status: 'running',
       lastActivityAt: Date.now(),
@@ -762,7 +762,7 @@ export const companionClaimQueued = mutation({
   handler: async (ctx, args) => {
     if (isLocalDevMode()) {
       const session = await ctx.db.get(args.id);
-      if (!session || session.status !== 'queued') return { ok: false };
+      if (session?.status !== 'queued') return { ok: false };
     } else {
       const { session } = await requireSessionOwnership(ctx, args.id);
       if (session.status !== 'queued') return { ok: false };

@@ -7,17 +7,12 @@ describe('isPermissionMode', () => {
     expect(isPermissionMode(mode)).toBe(true);
   });
 
-  it.each([
-    null,
-    undefined,
-    '',
-    'bypass ',
-    'BYPASS',
-    'unknown',
-    42,
-  ])('rejects %p', (value) => {
-    expect(isPermissionMode(value)).toBe(false);
-  });
+  it.each([null, undefined, '', 'bypass ', 'BYPASS', 'unknown', 42])(
+    'rejects %p',
+    (value) => {
+      expect(isPermissionMode(value)).toBe(false);
+    },
+  );
 });
 
 describe('defaultPermissionModeFor', () => {

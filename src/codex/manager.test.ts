@@ -470,8 +470,9 @@ describe('codex/manager', () => {
       );
     });
     if (insertCalls.length > 0) {
-      const firstBatchIndex = (insertCalls[0]?.[1] as { batchIndex: number })
-        .batchIndex;
+      const firstBatchIndex = (
+        insertCalls[0]?.[1] as { batchIndex: number } | undefined
+      )?.batchIndex;
       expect(firstBatchIndex).toBe(7);
     }
   });
@@ -705,29 +706,32 @@ describe('codex/manager', () => {
     ['default', 'untrusted'],
     ['safe-auto', 'on-request'],
     ['bypass', 'never'],
-  ] as const)('maps permissionMode %s to approvalPolicy %s', async (mode, expectedPolicy) => {
-    const client = makeClientStub();
-    mockCreateClient.mockResolvedValue(client);
+  ] as const)(
+    'maps permissionMode %s to approvalPolicy %s',
+    async (mode, expectedPolicy) => {
+      const client = makeClientStub();
+      mockCreateClient.mockResolvedValue(client);
 
-    const { startSession } = await import('./manager');
+      const { startSession } = await import('./manager');
 
-    await startSession({
-      sessionId: `codex-mode-${mode}`,
-      repoPath: '/tmp/repo',
-      prompt: 'check policy',
-      permissionMode: mode,
-      reasoningEffort: 'medium',
-    });
+      await startSession({
+        sessionId: `codex-mode-${mode}`,
+        repoPath: '/tmp/repo',
+        prompt: 'check policy',
+        permissionMode: mode,
+        reasoningEffort: 'medium',
+      });
 
-    await new Promise((r) => setTimeout(r, 30));
+      await new Promise((r) => setTimeout(r, 30));
 
-    expect(client.thread.start).toHaveBeenCalledWith(
-      expect.objectContaining({ approvalPolicy: expectedPolicy }),
-    );
-    expect(client.turn.start).toHaveBeenCalledWith(
-      expect.objectContaining({ approvalPolicy: expectedPolicy }),
-    );
-  });
+      expect(client.thread.start).toHaveBeenCalledWith(
+        expect.objectContaining({ approvalPolicy: expectedPolicy }),
+      );
+      expect(client.turn.start).toHaveBeenCalledWith(
+        expect.objectContaining({ approvalPolicy: expectedPolicy }),
+      );
+    },
+  );
 
   it('persists Codex item approvals keyed by itemId (not request.id) so the frontend can match by tool item', async () => {
     const client = makeClientStub();
@@ -847,40 +851,43 @@ describe('codex/manager', () => {
     // session thread has nothing to attach to in the existing approval UI.
     'applyPatchApproval',
     'execCommandApproval',
-  ])('denies unsupported approval method %s without writing a pendingApprovals row', async (method) => {
-    // Phase 0 limitation: structured methods need response payloads (answers,
-    // content, permission scopes) the UI can't yet collect. Auto-approving
-    // them with empty defaults is unsafe; deny immediately and surface the
-    // failure to the agent so it can retry or fall back. Rich UI is Phase 0.1+.
-    const client = makeClientStub();
-    mockCreateClient.mockResolvedValue(client);
+  ])(
+    'denies unsupported approval method %s without writing a pendingApprovals row',
+    async (method) => {
+      // Phase 0 limitation: structured methods need response payloads (answers,
+      // content, permission scopes) the UI can't yet collect. Auto-approving
+      // them with empty defaults is unsafe; deny immediately and surface the
+      // failure to the agent so it can retry or fall back. Rich UI is Phase 0.1+.
+      const client = makeClientStub();
+      mockCreateClient.mockResolvedValue(client);
 
-    const { startSession } = await import('./manager');
-    await startSession({
-      sessionId: `codex-structured-${method.replace(/\W/g, '-')}`,
-      repoPath: '/tmp/repo',
-      prompt: 'kick off',
-      permissionMode: 'default',
-      reasoningEffort: 'medium',
-    });
-    await new Promise((r) => setTimeout(r, 30));
+      const { startSession } = await import('./manager');
+      await startSession({
+        sessionId: `codex-structured-${method.replace(/\W/g, '-')}`,
+        repoPath: '/tmp/repo',
+        prompt: 'kick off',
+        permissionMode: 'default',
+        reasoningEffort: 'medium',
+      });
+      await new Promise((r) => setTimeout(r, 30));
 
-    const inboundRequest = makeApprovalRequest(method, 'req-struct-1', {});
-    const response = (await client.invokeApproval(
-      inboundRequest,
-    )) as ApprovalResponse;
+      const inboundRequest = makeApprovalRequest(method, 'req-struct-1', {});
+      const response = (await client.invokeApproval(
+        inboundRequest,
+      )) as ApprovalResponse;
 
-    expect(response.decision).toBe('deny');
-    expect(inboundRequest.deny).toHaveBeenCalledTimes(1);
-    expect(inboundRequest.approve).not.toHaveBeenCalled();
+      expect(response.decision).toBe('deny');
+      expect(inboundRequest.deny).toHaveBeenCalledTimes(1);
+      expect(inboundRequest.approve).not.toHaveBeenCalled();
 
-    // Must not persist — no pendingApprovals row written for structured methods.
-    const createCall = mockMutation.mock.calls.find((call) => {
-      const arg = call[1] as Record<string, unknown> | undefined;
-      return arg && arg.requestId === 'req-struct-1';
-    });
-    expect(createCall).toBeUndefined();
-  });
+      // Must not persist — no pendingApprovals row written for structured methods.
+      const createCall = mockMutation.mock.calls.find((call) => {
+        const arg = call[1] as Record<string, unknown> | undefined;
+        return arg && arg.requestId === 'req-struct-1';
+      });
+      expect(createCall).toBeUndefined();
+    },
+  );
 
   it('returns request.deny() when persisting the approval fails', async () => {
     const client = makeClientStub();
