@@ -79,7 +79,7 @@
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
     "codex-app-server-client": "^0.1.5",
-    "convex": "^1.43.0",
+    "convex": "1.40.0",
     "lucide-react": "^1.28.0",
     "motion": "^12.43.0",
     "nanoid": "^5.1.16",
@@ -113,6 +113,6 @@
     "ws": "^8.21.1",
     "shell-quote": "^1.10.0",
     "undici": "^7.28.0",
-    "linkify-it": "^6.1.0"
+    "linkify-it": "^5.0.0"
   }
 }
